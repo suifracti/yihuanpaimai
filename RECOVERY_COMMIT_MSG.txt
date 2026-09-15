@@ -1,0 +1,45 @@
+recovery: 从损坏仓库工作树恢复的源码基线（非原历史延续）
+
+来源
+  本仓库不是原仓库的历史延续。原仓库 D:\yihuanpaimai\.git 的对象库已损坏
+  （.git/objects/pack/ 仅剩 multi-pack-index 与 pack-64c9077cc24ac9ba34df82c5e0d7d1fc8b15963b.idx，
+   pack-*.pack 数据文件缺失，git log 返回 "fatal: bad object HEAD"），
+  故本仓库的源码取自其【当前工作树】，按 .gitignore 语义排除生成物后重建。
+  未伪造任何旧 commit 历史。
+
+最后已知历史 HEAD（原仓库，已不可读）
+  2c81f9aad1ec2edef064390a4509a6e7a1a64929
+  git fsck --full: error: refs/heads/main: invalid sha1 pointer 2c81f9aad1ec2edef064390a4509a6e7a1a64929
+
+旧损坏 .git 的只读取证封存位置
+  D:\yihuanpaimai-recovery\_forensic\old_git_damaged_20260916
+  （封存内容：.git 逐字节副本、refs/logs/config/index、objects/info、objects/pack 剩余文件、
+    当前工作树全量 manifest relativePath/size/sha256、git fsck --full 原始输出）
+  已确认 .git/config 无 [remote ...] 段，git remote -v 输出为空 -> 无远端。
+  未执行 git gc / git repack / git prune / git reset / git checkout / git clean。
+
+本轮（边界 2 缺口 1/2/3 闭合）g3fix 改动清单
+  - core/quality_sell_selection.py: 逐色 provenance 层：VALID_SELECTION_SOURCES / normalize_quality_sell_selection_sources / sources_from_aggregate / manual_override_colors / aggregate_selection_source / merge_quality_sell_selection / apply_single_color_override
+  - core/current_match.py: FACT_KEYS+empty_facts 增 qualitySellSelectionSources；_coerce_value 分支；apply_facts 逐色合并(protected=any_manual)+派生键拒写；acquisition 逐色刷新；to_canonical 输出三键
+  - core/canonical_match_record.py: FORBIDDEN_ROOT_LEGACY_FIELDS 增 qualitySellSelectionSources；settlement→record 逐色规范化 + 聚合派生；新增校验码
+  - core/canonical_history_store.py: 两处保留列表增 qualitySellSelectionSources（draft-merge 与 archive-sidecar）
+  - core/auto_archiver.py: quality-sell 块（503–536）读取/规范化逐色来源并写三键
+  - core/vision_pipeline.py: 缺口 3 断点 1 修复：_attach_settlement_ledger 把三个键提升出 ledger 到 settlement/current_context
+  - app/main_view_state.py: 缺口 3 断点 2 修复：HistoryRecordProjection 增三字段 + to_payload 输出 + _project_record 提取
+  - core/main_window.js: 历史详情渲染逐色来源标记（默认/视觉/人工）与 (逐色来源)
+  - tests/test_bottom_quality_sell_selection.py: 新增身份不漂移用例、逐色 A→D 用例、五跳链路锁定用例（10 项全通过）
+  - docs/plans/2026-09-05-project-replan.md: canonical 14 项编号恢复；缺口 1/2/3 结论；7 项回归归因；git 损坏记录（未改 7.1）
+  - docs/reports/2026-09-15-e2e-isolated-trial-acceptance.md: 第 4 节 8 项非 canonical 清单就地撤回
+  - docs/reports/2026-09-16-boundary2-three-gaps-closure.md: 本轮外审报告（新增）
+  - build/boundary2_audit_20260916/*: 缺口 1/2 审计脚本与产物（本轮新增，见 Vault Evidence）
+  - build/boundary2_g3fix_20260916/*: 缺口 3 最小修复验证、PYZ A/B、bundle 往返脚本与报告（本轮新增，见 Vault Evidence）
+
+冻结候选（完整 SHA256）
+  路径     : D:\yihuanpaimai\build\isolated_trial_ux_fixes_20260916_2c81f9a_g3fix\dist\异环拍卖助手\异环拍卖助手.exe
+  SHA256   : cc086845f1597edf34bdc0254415e7b69aefe040fc8cbb437e06aba92b768afe
+  大小     : 7459953 bytes
+  隔离标记 : {"profile":"isolated-trial-v1","codeRevision":"2c81f9a_g3fix"}
+
+后续
+  若日后找到远端或备份，应恢复真实旧历史并把本 recovery 工作树迁回；
+  不得把本 commit 当作原历史。
