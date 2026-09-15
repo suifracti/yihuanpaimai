@@ -1,0 +1,7 @@
+# 识别进程启动与恢复保护
+
+bbd3e05为start/stop_vision_worker增加共用重入锁，避免多个窗口同时请求启动时创建重复识别进程。Popen返回或失败后关闭父进程日志句柄，子进程保留自己的句柄。
+
+build/vision_process_recovery_20260913/tests.json：2项PASS，3.828秒，无跳过。并发4请求经真实生产启动函数，仅创建1个受控Windows Python子进程；真实终止该子进程后poll状态为exited，再次启动创建不同PID且running；生成的进程全部回收。第二项注入Popen失败，验证日志句柄关闭及随后重试成功。
+
+受控子进程仅sleep，不是实际vision worker。因此这里证明启动串行与退出后再次启动能力，不证明真实OCR崩溃/GUI恢复/自动重启策略。本轮源码变更尚未重建，最新冻结包仍4ae2f5f。下一步继续真实识别进程退出后的可见提示与恢复入口验证，再推进连续链及延迟。P3 PARTIAL，完整试用/P5未完成；v13未覆盖。

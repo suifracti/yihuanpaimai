@@ -1,0 +1,21 @@
+{
+  "kind": "DEVELOPER_FIXTURE_EXPECTATION",
+  "notGroundTruth": true,
+  "notTrainingLabel": true,
+  "schema": "warehouse-physical-ledger-fixture-v1",
+  "note": "Engineering regression for the 8s-12s-16s VERIFIED DOWN chain. Not reviewed truth.",
+  "source": {
+    "path": "C:\\Users\\Administrator\\Videos\\2026-08-25 21-58-33.mkv",
+    "sha256": "792d82a772a985831f8cf054a32be4d84bf9da3484396c8ec647b5f24f19c637"
+  },
+  "chain": [
+    {"id": "seg8", "file": "../warehouse_overlap_v1/pair_a_prev.png", "timecodeSec": 8.0, "scrollState": "TOP"},
+    {"id": "seg12", "file": "../warehouse_overlap_v1/pair_a_next.png", "timecodeSec": 12.0, "scrollState": "MIDDLE"},
+    {"id": "seg16", "file": "../warehouse_overlap_v1/pair_b_next.png", "timecodeSec": 16.0, "scrollState": "MIDDLE"}
+  ],
+  "expect": {
+    "verifiedOffsets": [-90, -120],
+    "sharedWideLeftTrackMinObservations": 3,
+    "sharedWideLeftWidth": 5
+  }
+}

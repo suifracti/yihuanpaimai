@@ -1,0 +1,85 @@
+{
+  "schemaVersion": "v06-solver-compatibility.v1",
+  "translationVersion": "v06-solver-compatibility.2026-08-22.v1",
+  "catalogVersion": "venue-box-catalog.alpha.2026-08-22.v1",
+  "consumer": "v06_solver",
+  "sourceAuthorities": [
+    {
+      "authority": "V06_PRODUCTION_CODE",
+      "path": "lab/index.html",
+      "sha256": "7159027a60481de576593704629d543fb52b49e857a758492a07b5b439155627",
+      "references": ["VENUE_ALIASES", "VENUE_BOXES", "BOX_ALIASES", "LOW_TIER_PRIOR"]
+    },
+    {
+      "authority": "V06_BUSINESS_SOT",
+      "path": "assets/business_sot_v06.json",
+      "sha256": "a0a580e01c050d88070cb206c64d395b3b0c1afbdbb3e2703e3b5642af4c8e0b",
+      "references": ["venues", "boxesByVenue", "observedBoxes.gaoji", "boxAliases"]
+    }
+  ],
+  "venueTranslations": [
+    {
+      "consumer": "v06_solver",
+      "catalogVersion": "venue-box-catalog.alpha.2026-08-22.v1",
+      "currentId": "venue-haibei",
+      "currentDisplayName": "海贝场",
+      "legacyIdentifier": "初级场 · 海贝场",
+      "resultingLowTierPrior": 8000,
+      "sourceAuthority": "V06_PRODUCTION_CODE",
+      "sourceReference": "lab/index.html:VENUE_ALIASES+LOW_TIER_PRIOR",
+      "translationVersion": "v06-solver-compatibility.2026-08-22.v1",
+      "status": "COMPATIBILITY_TRANSLATION"
+    },
+    {
+      "consumer": "v06_solver",
+      "catalogVersion": "venue-box-catalog.alpha.2026-08-22.v1",
+      "currentId": "venue-shanhu",
+      "currentDisplayName": "珊瑚场",
+      "legacyIdentifier": "中级场 · 珊瑚场",
+      "resultingLowTierPrior": 12000,
+      "sourceAuthority": "V06_PRODUCTION_CODE",
+      "sourceReference": "lab/index.html:VENUE_ALIASES+LOW_TIER_PRIOR",
+      "translationVersion": "v06-solver-compatibility.2026-08-22.v1",
+      "status": "COMPATIBILITY_TRANSLATION"
+    },
+    {
+      "consumer": "v06_solver",
+      "catalogVersion": "venue-box-catalog.alpha.2026-08-22.v1",
+      "currentId": "venue-zhenzhu",
+      "currentDisplayName": "真珠场",
+      "legacyIdentifier": "高级场 · 真珠场",
+      "resultingLowTierPrior": 30000,
+      "sourceAuthority": "V06_PRODUCTION_CODE",
+      "sourceReference": "lab/index.html:VENUE_ALIASES+LOW_TIER_PRIOR",
+      "translationVersion": "v06-solver-compatibility.2026-08-22.v1",
+      "status": "COMPATIBILITY_TRANSLATION"
+    }
+  ],
+  "boxTranslations": [
+    {"consumer":"v06_solver","catalogVersion":"venue-box-catalog.alpha.2026-08-22.v1","catalogVenueId":"venue-haibei","currentId":"box-haibei-damaged-package","legacyIdentifier":"破损的包裹 · 紫色提升","semantic":"紫色提升","sourceAuthority":"V06_PRODUCTION_CODE","sourceReference":"lab/index.html:VENUE_BOXES+BOX_ALIASES","translationVersion":"v06-solver-compatibility.2026-08-22.v1","status":"COMPATIBILITY_TRANSLATION"},
+    {"consumer":"v06_solver","catalogVersion":"venue-box-catalog.alpha.2026-08-22.v1","catalogVenueId":"venue-haibei","currentId":"box-haibei-complete-package","legacyIdentifier":"完整的包裹 · 金色提升","semantic":"金色提升","sourceAuthority":"V06_PRODUCTION_CODE","sourceReference":"lab/index.html:VENUE_BOXES+BOX_ALIASES","translationVersion":"v06-solver-compatibility.2026-08-22.v1","status":"COMPATIBILITY_TRANSLATION"},
+    {"consumer":"v06_solver","catalogVersion":"venue-box-catalog.alpha.2026-08-22.v1","catalogVenueId":"venue-haibei","currentId":"box-haibei-waterlogged-package","legacyIdentifier":"浸水的包裹 · 紫色提升","semantic":"紫色提升","sourceAuthority":"V06_PRODUCTION_CODE","sourceReference":"lab/index.html:VENUE_BOXES+BOX_ALIASES","translationVersion":"v06-solver-compatibility.2026-08-22.v1","status":"COMPATIBILITY_TRANSLATION"},
+    {"consumer":"v06_solver","catalogVersion":"venue-box-catalog.alpha.2026-08-22.v1","catalogVenueId":"venue-haibei","currentId":"box-haibei-unnamed-package","legacyIdentifier":"无名包裹 · 红色提升","semantic":"红色提升","sourceAuthority":"V06_PRODUCTION_CODE","sourceReference":"lab/index.html:VENUE_BOXES+BOX_ALIASES","translationVersion":"v06-solver-compatibility.2026-08-22.v1","status":"COMPATIBILITY_TRANSLATION"},
+
+    {"consumer":"v06_solver","catalogVersion":"venue-box-catalog.alpha.2026-08-22.v1","catalogVenueId":"venue-shanhu","currentId":"box-shanhu-mechanical","legacyIdentifier":"机械宝箱 · 科技类概率提升","semantic":"科技类概率提升","sourceAuthority":"V06_PRODUCTION_CODE","sourceReference":"lab/index.html:VENUE_BOXES+BOX_ALIASES","translationVersion":"v06-solver-compatibility.2026-08-22.v1","status":"COMPATIBILITY_TRANSLATION"},
+    {"consumer":"v06_solver","catalogVersion":"venue-box-catalog.alpha.2026-08-22.v1","catalogVenueId":"venue-shanhu","currentId":"box-shanhu-food","legacyIdentifier":"美食宝箱 · 食品类概率提升","semantic":"食品类概率提升","sourceAuthority":"V06_PRODUCTION_CODE","sourceReference":"lab/index.html:VENUE_BOXES+BOX_ALIASES","translationVersion":"v06-solver-compatibility.2026-08-22.v1","status":"COMPATIBILITY_TRANSLATION"},
+    {"consumer":"v06_solver","catalogVersion":"venue-box-catalog.alpha.2026-08-22.v1","catalogVenueId":"venue-shanhu","currentId":"box-shanhu-wood","legacyIdentifier":"实木宝箱 · 中级藏品概率提升","semantic":"中级藏品概率提升","sourceAuthority":"V06_PRODUCTION_CODE","sourceReference":"lab/index.html:VENUE_BOXES+BOX_ALIASES","translationVersion":"v06-solver-compatibility.2026-08-22.v1","status":"COMPATIBILITY_TRANSLATION"},
+    {"consumer":"v06_solver","catalogVersion":"venue-box-catalog.alpha.2026-08-22.v1","catalogVenueId":"venue-shanhu","currentId":"box-shanhu-glass","legacyIdentifier":"琉璃宝箱 · 宝石类概率提升","semantic":"宝石类概率提升","sourceAuthority":"V06_PRODUCTION_CODE","sourceReference":"lab/index.html:VENUE_BOXES+BOX_ALIASES","translationVersion":"v06-solver-compatibility.2026-08-22.v1","status":"COMPATIBILITY_TRANSLATION"},
+    {"consumer":"v06_solver","catalogVersion":"venue-box-catalog.alpha.2026-08-22.v1","catalogVenueId":"venue-shanhu","currentId":"box-shanhu-leather","legacyIdentifier":"皮制宝箱 · 高级藏品概率提升","semantic":"高级藏品概率提升","sourceAuthority":"V06_PRODUCTION_CODE","sourceReference":"lab/index.html:VENUE_BOXES+BOX_ALIASES","translationVersion":"v06-solver-compatibility.2026-08-22.v1","status":"COMPATIBILITY_TRANSLATION"},
+    {"consumer":"v06_solver","catalogVersion":"venue-box-catalog.alpha.2026-08-22.v1","catalogVenueId":"venue-shanhu","currentId":"box-shanhu-mother-of-pearl","legacyIdentifier":"螺钿宝箱 · 古董类概率提升","semantic":"古董类概率提升","sourceAuthority":"V06_PRODUCTION_CODE","sourceReference":"lab/index.html:VENUE_BOXES+BOX_ALIASES","translationVersion":"v06-solver-compatibility.2026-08-22.v1","status":"COMPATIBILITY_TRANSLATION"},
+
+    {"consumer":"v06_solver","catalogVersion":"venue-box-catalog.alpha.2026-08-22.v1","catalogVenueId":"venue-zhenzhu","currentId":"box-zhenzhu-complete-safe","legacyIdentifier":"完整的保险箱（高级藏品概率提升）","semantic":"高级藏品概率提升","sourceAuthority":"V06_BUSINESS_SOT","sourceReference":"assets/business_sot_v06.json#/observedBoxes/gaoji/0","translationVersion":"v06-solver-compatibility.2026-08-22.v1","status":"COMPATIBILITY_TRANSLATION"},
+    {"consumer":"v06_solver","catalogVersion":"venue-box-catalog.alpha.2026-08-22.v1","catalogVenueId":"venue-zhenzhu","currentId":"box-zhenzhu-brilliant-safe","legacyIdentifier":"璀璨的保险箱（宝石类概率提升）","semantic":"宝石类概率提升","sourceAuthority":"V06_BUSINESS_SOT","sourceReference":"assets/business_sot_v06.json#/observedBoxes/gaoji/1","translationVersion":"v06-solver-compatibility.2026-08-22.v1","status":"COMPATIBILITY_TRANSLATION"},
+    {"consumer":"v06_solver","catalogVersion":"venue-box-catalog.alpha.2026-08-22.v1","catalogVenueId":"venue-zhenzhu","currentId":"box-zhenzhu-classical-safe","legacyIdentifier":"古典的保险箱（古董类概率提升）","semantic":"古董类概率提升","sourceAuthority":"V06_BUSINESS_SOT","sourceReference":"assets/business_sot_v06.json#/observedBoxes/gaoji/2","translationVersion":"v06-solver-compatibility.2026-08-22.v1","status":"COMPATIBILITY_TRANSLATION"},
+    {"consumer":"v06_solver","catalogVersion":"venue-box-catalog.alpha.2026-08-22.v1","catalogVenueId":"venue-zhenzhu","currentId":"box-zhenzhu-precision-safe","legacyIdentifier":"精工的保险箱（科技类概率提升）","semantic":"科技类概率提升","sourceAuthority":"V06_BUSINESS_SOT","sourceReference":"assets/business_sot_v06.json#/observedBoxes/gaoji/3","translationVersion":"v06-solver-compatibility.2026-08-22.v1","status":"COMPATIBILITY_TRANSLATION"},
+    {"consumer":"v06_solver","catalogVersion":"venue-box-catalog.alpha.2026-08-22.v1","catalogVenueId":"venue-zhenzhu","currentId":"box-zhenzhu-whimsical-safe","legacyIdentifier":"奇趣的保险箱（食品类概率提升）","semantic":"食品类概率提升","sourceAuthority":"V06_BUSINESS_SOT","sourceReference":"assets/business_sot_v06.json#/observedBoxes/gaoji/4","translationVersion":"v06-solver-compatibility.2026-08-22.v1","status":"COMPATIBILITY_TRANSLATION"},
+    {"consumer":"v06_solver","catalogVersion":"venue-box-catalog.alpha.2026-08-22.v1","catalogVenueId":"venue-zhenzhu","currentId":"box-zhenzhu-rusted-safe","legacyIdentifier":"锈蚀的保险箱（中级藏品概率提升）","semantic":"中级藏品概率提升","sourceAuthority":"V06_BUSINESS_SOT","sourceReference":"assets/business_sot_v06.json#/observedBoxes/gaoji/5","translationVersion":"v06-solver-compatibility.2026-08-22.v1","status":"COMPATIBILITY_TRANSLATION"}
+  ],
+  "unknownBox": {
+    "consumer": "v06_solver",
+    "currentId": null,
+    "legacyIdentifier": null,
+    "semantic": "NO_BOX_EFFECT",
+    "status": "UNKNOWN_NO_BOX_EFFECT"
+  }
+}

@@ -1,0 +1,242 @@
+{
+  "version": 1,
+  "referenceSize": [
+    1920,
+    1080
+  ],
+  "groups": {
+    "OPEN_WORLD": {
+      "anchors": [
+        {
+          "image": "open_world-0.png",
+          "rect": [
+            1504,
+            79,
+            1535,
+            101
+          ],
+          "mode": "gray",
+          "source": "C:\\Users\\Administrator\\AppData\\Local\\Temp\\codex-clipboard-0beb004d-0486-49f3-9b10-870c7abba461.png"
+        },
+        {
+          "image": "open_world-1.png",
+          "rect": [
+            1587,
+            79,
+            1618,
+            101
+          ],
+          "mode": "gray",
+          "source": "C:\\Users\\Administrator\\AppData\\Local\\Temp\\codex-clipboard-0beb004d-0486-49f3-9b10-870c7abba461.png"
+        }
+      ],
+      "threshold": 0.83
+    },
+    "CITY_TYCOON_HUB": {
+      "anchors": [
+        {
+          "image": "city_tycoon_hub-0.png",
+          "rect": [
+            112,
+            39,
+            251,
+            83
+          ],
+          "mode": "gray",
+          "source": "C:\\Users\\Administrator\\AppData\\Local\\Temp\\codex-clipboard-583e451b-f71b-4f77-8dd1-8412d838a17e.png"
+        }
+      ],
+      "threshold": 0.83
+    },
+    "CITY_LEISURE_MENU": {
+      "anchors": [
+        {
+          "image": "city_leisure_menu-0.png",
+          "rect": [
+            406,
+            137,
+            650,
+            196
+          ],
+          "mode": "gray",
+          "source": "C:\\Users\\Administrator\\AppData\\Local\\Temp\\codex-clipboard-f2757656-f922-47e7-a188-d4809a7acf40.png"
+        }
+      ],
+      "threshold": 0.83
+    },
+    "WORLD_MAP": {
+      "anchors": [
+        {
+          "image": "world_map-0.png",
+          "rect": [
+            61,
+            923,
+            156,
+            1003
+          ],
+          "mode": "gray",
+          "source": "C:\\Users\\Administrator\\AppData\\Local\\Temp\\codex-clipboard-01a9503c-0a89-492d-90f1-b215d2d863ae.png"
+        },
+        {
+          "image": "world_map-1.png",
+          "rect": [
+            1503,
+            36,
+            1555,
+            82
+          ],
+          "mode": "gray",
+          "source": "C:\\Users\\Administrator\\AppData\\Local\\Temp\\codex-clipboard-01a9503c-0a89-492d-90f1-b215d2d863ae.png"
+        }
+      ],
+      "threshold": 0.83
+    },
+    "AUCTION_LOBBY": {
+      "anchors": [
+        {
+          "image": "auction_lobby-0.png",
+          "rect": [
+            113,
+            42,
+            246,
+            82
+          ],
+          "mode": "gray",
+          "source": "C:\\Users\\Administrator\\AppData\\Local\\Temp\\codex-clipboard-f3a47354-31b4-4e28-8248-4e0dd60414af.png"
+        },
+        {
+          "image": "auction_lobby-1.png",
+          "rect": [
+            887,
+            49,
+            980,
+            79
+          ],
+          "mode": "gray",
+          "source": "C:\\Users\\Administrator\\AppData\\Local\\Temp\\codex-clipboard-f3a47354-31b4-4e28-8248-4e0dd60414af.png"
+        }
+      ],
+      "threshold": 0.83,
+      "phaseAnchors": [
+        {
+          "image": "matching-success.png",
+          "rect": [
+            922,
+            94,
+            1008,
+            121
+          ],
+          "phase": "MATCHING_SUCCESS"
+        }
+      ]
+    },
+    "IN_AUCTION": {
+      "anchors": [
+        {
+          "image": "in_auction-0.png",
+          "rect": [
+            838,
+            170,
+            930,
+            203
+          ],
+          "mode": "gray",
+          "source": "D:\\yihuanpaimai\\build\\diagnosis_20260908_sessions\\2026-09-08 13-40-43-090.jpg"
+        },
+        {
+          "image": "in_auction-1.png",
+          "rect": [
+            992,
+            170,
+            1026,
+            203
+          ],
+          "mode": "gray",
+          "source": "D:\\yihuanpaimai\\build\\diagnosis_20260908_sessions\\2026-09-08 13-40-43-090.jpg"
+        }
+      ],
+      "threshold": 0.83
+    },
+    "SETTLEMENT": {
+      "anchors": [
+        {
+          "image": "settlement-0.png",
+          "rect": [
+            78,
+            145,
+            329,
+            203
+          ],
+          "mode": "gray",
+          "source": "D:\\yihuanpaimai\\build\\diagnosis_20260908_sessions\\2026-09-08 13-40-43-150.jpg"
+        }
+      ],
+      "threshold": 0.83
+    },
+    "AUCTION_LOADING": {
+      "anchors": [
+        {
+          "image": "auction_loading-0.png",
+          "rect": [
+            1480,
+            937,
+            1720,
+            1040
+          ],
+          "mode": "gray",
+          "source": "D:\\yihuanpaimai\\build\\diagnosis_20260908_sessions\\keyboard\\2026-09-08 14-40-37-075.jpg"
+        }
+      ],
+      "threshold": 0.74
+    },
+    "TOOL_REPLENISH": {
+      "anchors": [
+        {
+          "image": "tool_replenish-0.png",
+          "rect": [
+            48,
+            137,
+            162,
+            179
+          ],
+          "mode": "gray",
+          "source": "D:\\yihuanpaimai\\build\\diagnosis_20260908_sessions\\keyboard\\detail-194.jpg"
+        }
+      ],
+      "threshold": 0.83,
+      "padding": 48
+    },
+    "TOOL_REPLENISH_CONFIRM": {
+      "anchors": [
+        {
+          "image": "tool_replenish_confirm-0.png",
+          "rect": [
+            1050,
+            495,
+            1199,
+            538
+          ],
+          "mode": "gray",
+          "source": "D:\\yihuanpaimai\\build\\diagnosis_20260908_sessions\\keyboard\\detail-196.jpg"
+        }
+      ],
+      "threshold": 0.83
+    },
+    "HELPER_SELECTION": {
+      "anchors": [
+        {
+          "image": "helper_selection-0.png",
+          "rect": [
+            215,
+            106,
+            430,
+            149
+          ],
+          "mode": "gray",
+          "source": "D:\\yihuanpaimai\\build\\diagnosis_20260908_sessions\\keyboard\\detail-062.jpg"
+        }
+      ],
+      "threshold": 0.83
+    }
+  }
+}

@@ -1,0 +1,89 @@
+{
+  "contractVersion": "geometry-contract-v1",
+  "pathBase": "repository_root",
+  "description": "Large-parent regression: a 3x3 item and a 4x5 item are each represented by one physical instance and must not fan out to multiple queue slots.",
+  "sources": [
+    {
+      "sourceId": "src-regression-rep01",
+      "sourcePath": "assets/settlement_frames/sec_488.jpg",
+      "width": 1920,
+      "height": 1080,
+      "sceneType": "settlement_inventory",
+      "inventoryEligible": true,
+      "inventoryRoi": {
+        "x": 1400,
+        "y": 240,
+        "width": 480,
+        "height": 460,
+        "coordinateSpace": "source_pixel"
+      },
+      "coordinateSpace": "source_pixel"
+    }
+  ],
+  "instances": [
+    {
+      "instanceId": "inst-regression-new-flavor-parent",
+      "sourceId": "src-regression-rep01",
+      "bbox": [1744, 480, 1872, 608],
+      "bboxCoordinateSpace": "source_pixel",
+      "footprint": {
+        "widthCells": 3,
+        "heightCells": 3
+      },
+      "canonicalItemId": null,
+      "observationLabel": "新口味上市！ large-parent observation",
+      "contentVerification": {
+        "contentVerified": true,
+        "reviewStatus": "reviewed_consistent",
+        "evidenceType": "manual_review",
+        "scope": "crop_instance_binding_only",
+        "note": "Regression assertion covers physical parent binding only; it does not promote canonical item truth."
+      }
+    },
+    {
+      "instanceId": "inst-regression-giovanni-statue-parent",
+      "sourceId": "src-regression-rep01",
+      "bbox": [1664, 288, 1728, 416],
+      "bboxCoordinateSpace": "source_pixel",
+      "footprint": {
+        "widthCells": 4,
+        "heightCells": 5
+      },
+      "canonicalItemId": null,
+      "observationLabel": "乔望尼金雕像 large-parent observation",
+      "contentVerification": {
+        "contentVerified": true,
+        "reviewStatus": "reviewed_consistent",
+        "evidenceType": "manual_review",
+        "scope": "crop_instance_binding_only",
+        "note": "Regression assertion covers physical parent binding only; it does not promote canonical item truth."
+      }
+    }
+  ],
+  "queueSlots": [
+    {
+      "queueId": "queue-regression-new-flavor-a",
+      "instanceId": "inst-regression-new-flavor-parent",
+      "cropPath": "experiments/vision_benchmark_v1/crops/crop_REP-01_s03.png",
+      "legacyLocalOrdinal": "REP-01/s03"
+    },
+    {
+      "queueId": "queue-regression-new-flavor-b",
+      "instanceId": "inst-regression-new-flavor-parent",
+      "cropPath": "experiments/vision_benchmark_v1/crops/crop_REP-01_s03.png",
+      "legacyLocalOrdinal": "REP-01/s11"
+    },
+    {
+      "queueId": "queue-regression-statue-a",
+      "instanceId": "inst-regression-giovanni-statue-parent",
+      "cropPath": "experiments/vision_benchmark_v1/crops/crop_REP-01_s06.png",
+      "legacyLocalOrdinal": "REP-01/s06"
+    },
+    {
+      "queueId": "queue-regression-statue-b",
+      "instanceId": "inst-regression-giovanni-statue-parent",
+      "cropPath": "experiments/vision_benchmark_v1/crops/crop_REP-01_s06.png",
+      "legacyLocalOrdinal": "REP-01/s13"
+    }
+  ]
+}

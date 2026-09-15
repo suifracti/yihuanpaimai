@@ -1,0 +1,25 @@
+{
+  "schemaVersion": "venue-box-catalog-evidence.v1",
+  "evidenceId": "operator-confirmed-box-bootstrap-2026-08-22",
+  "gameBuild": "live-build-observed-2026-08-22",
+  "capturedAt": "2026-08-22T18:00:00+08:00",
+  "evidenceType": "OPERATOR_ASSERTION",
+  "sourcePath": "assets/venue_box_catalog_v1/operator_assertions/2026-08-22-box-bootstrap-source.json",
+  "sourceSha256": "6644d62d68dc1b564ba331fa3a4f33df2bb750ec0b46191d003638c389441951",
+  "reviewer": "project-owner",
+  "reviewStatus": "APPROVED",
+  "classification": "OPERATOR_ASSERTED_CURRENT",
+  "operatorConfidence": "CONFIRMED",
+  "claims": [
+    {"claimType":"VENUE_BOX_MEMBERSHIP","rawGameText":"海贝场 / 破损的包裹","venueDisplayName":"海贝场","boxDisplayName":"破损的包裹"},
+    {"claimType":"VENUE_BOX_MEMBERSHIP","rawGameText":"海贝场 / 完整的包裹","venueDisplayName":"海贝场","boxDisplayName":"完整的包裹"},
+    {"claimType":"VENUE_BOX_MEMBERSHIP","rawGameText":"海贝场 / 浸水的包裹","venueDisplayName":"海贝场","boxDisplayName":"浸水的包裹"},
+    {"claimType":"VENUE_BOX_MEMBERSHIP","rawGameText":"海贝场 / 无名包裹","venueDisplayName":"海贝场","boxDisplayName":"无名包裹"},
+    {"claimType":"VENUE_BOX_MEMBERSHIP","rawGameText":"珊瑚场 / 机械宝箱","venueDisplayName":"珊瑚场","boxDisplayName":"机械宝箱"},
+    {"claimType":"VENUE_BOX_MEMBERSHIP","rawGameText":"珊瑚场 / 美食宝箱","venueDisplayName":"珊瑚场","boxDisplayName":"美食宝箱"},
+    {"claimType":"VENUE_BOX_MEMBERSHIP","rawGameText":"珊瑚场 / 实木宝箱","venueDisplayName":"珊瑚场","boxDisplayName":"实木宝箱"},
+    {"claimType":"VENUE_BOX_MEMBERSHIP","rawGameText":"珊瑚场 / 琉璃宝箱","venueDisplayName":"珊瑚场","boxDisplayName":"琉璃宝箱"},
+    {"claimType":"VENUE_BOX_MEMBERSHIP","rawGameText":"珊瑚场 / 皮制宝箱","venueDisplayName":"珊瑚场","boxDisplayName":"皮制宝箱"},
+    {"claimType":"VENUE_BOX_MEMBERSHIP","rawGameText":"珊瑚场 / 螺钿宝箱","venueDisplayName":"珊瑚场","boxDisplayName":"螺钿宝箱"}
+  ]
+}

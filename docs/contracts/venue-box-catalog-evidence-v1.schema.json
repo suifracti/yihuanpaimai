@@ -1,0 +1,84 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://yihuanpaimai.local/schemas/venue-box-catalog-evidence-v1.schema.json",
+  "title": "VenueBoxCatalogEvidence v1",
+  "type": "object",
+  "required": [
+    "schemaVersion",
+    "evidenceId",
+    "gameBuild",
+    "capturedAt",
+    "evidenceType",
+    "sourcePath",
+    "sourceSha256",
+    "reviewer",
+    "reviewStatus",
+    "classification",
+    "claims"
+  ],
+  "properties": {
+    "schemaVersion": { "const": "venue-box-catalog-evidence.v1" },
+    "evidenceId": { "type": "string", "pattern": "^[a-z0-9][a-z0-9._-]{2,127}$" },
+    "gameBuild": { "type": "string", "minLength": 1 },
+    "capturedAt": { "type": "string", "format": "date-time" },
+    "evidenceType": {
+      "enum": [
+        "CURRENT_GAME_FULL_UI",
+        "CURRENT_GAME_SESSION",
+        "LEGACY_GAME_CAPTURE",
+        "PROJECT_DERIVED_CROP",
+        "USER_PROVIDED_STATEMENT",
+        "OPERATOR_ASSERTION",
+        "CURRENT_GAME_BOX_OBSERVATION"
+      ]
+    },
+    "sourcePath": { "type": "string", "minLength": 1 },
+    "sourceSha256": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
+    "reviewer": { "type": "string", "minLength": 1 },
+    "reviewStatus": { "enum": ["APPROVED", "REJECTED", "PENDING"] },
+    "classification": {
+      "enum": [
+        "CURRENT_GAME_VALID",
+        "LEGACY_GAME_EVIDENCE",
+        "DERIVED_ONLY",
+        "USER_PROVIDED_TRUTH_CLUE",
+        "OPERATOR_ASSERTED_CURRENT",
+        "CURRENT_GAME_OBSERVED",
+        "UNVERIFIED"
+      ]
+    },
+    "operatorConfidence": { "enum": ["CONFIRMED", "PROBABLE", null] },
+    "claims": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "required": ["claimType", "rawGameText"],
+        "properties": {
+          "claimType": {
+            "enum": [
+              "VENUE_DISPLAY_NAME",
+              "VENUE_SELECTABLE",
+              "VENUE_TIER",
+              "VENUE_ASSET_REQUIREMENT",
+              "VENUE_ENTRY_COST",
+              "BOX_DISPLAY_NAME",
+              "BOX_EFFECT_TEXT",
+              "VENUE_BOX_MEMBERSHIP",
+              "VENUE_OPTION_SET",
+              "BOX_OPTION_SET"
+            ]
+          },
+          "rawGameText": { "type": "string", "minLength": 1 },
+          "venueDisplayName": { "type": ["string", "null"] },
+          "boxDisplayName": { "type": ["string", "null"] },
+          "value": {
+            "type": ["string", "number", "integer", "boolean", "null"]
+          }
+        },
+        "additionalProperties": false
+      }
+    }
+  },
+  "additionalProperties": false
+}

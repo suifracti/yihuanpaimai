@@ -1,0 +1,88 @@
+{
+  "schemaVersion": "venue-box-catalog-evidence.v1",
+  "evidenceId": "current-game-2026-08-22-venue-selection-full",
+  "gameBuild": "live-build-observed-2026-08-22",
+  "capturedAt": "2026-08-22T14:15:49+08:00",
+  "evidenceType": "CURRENT_GAME_FULL_UI",
+  "sourcePath": "assets/venue_box_catalog_v1/current_game_evidence/2026-08-22/venue-selection-full.png",
+  "sourceSha256": "b397a7bd921aeba6ed165f8ba972641d864672dd9b43c5d04d39179bb1d3d8da",
+  "reviewer": "user-provided-and-codex-visual-review",
+  "reviewStatus": "APPROVED",
+  "classification": "CURRENT_GAME_VALID",
+  "claims": [
+    {
+      "claimType": "VENUE_DISPLAY_NAME",
+      "rawGameText": "海贝场",
+      "venueDisplayName": "海贝场"
+    },
+    {
+      "claimType": "VENUE_DISPLAY_NAME",
+      "rawGameText": "珊瑚场",
+      "venueDisplayName": "珊瑚场"
+    },
+    {
+      "claimType": "VENUE_DISPLAY_NAME",
+      "rawGameText": "真珠场",
+      "venueDisplayName": "真珠场"
+    },
+    {
+      "claimType": "VENUE_SELECTABLE",
+      "rawGameText": "海贝场",
+      "venueDisplayName": "海贝场",
+      "value": true
+    },
+    {
+      "claimType": "VENUE_SELECTABLE",
+      "rawGameText": "珊瑚场",
+      "venueDisplayName": "珊瑚场",
+      "value": true
+    },
+    {
+      "claimType": "VENUE_SELECTABLE",
+      "rawGameText": "真珠场",
+      "venueDisplayName": "真珠场",
+      "value": true
+    },
+    {
+      "claimType": "VENUE_ASSET_REQUIREMENT",
+      "rawGameText": "资产需求 0",
+      "venueDisplayName": "海贝场",
+      "value": 0
+    },
+    {
+      "claimType": "VENUE_ASSET_REQUIREMENT",
+      "rawGameText": "资产需求 1,000,000",
+      "venueDisplayName": "珊瑚场",
+      "value": 1000000
+    },
+    {
+      "claimType": "VENUE_ASSET_REQUIREMENT",
+      "rawGameText": "资产需求 5,000,000",
+      "venueDisplayName": "真珠场",
+      "value": 5000000
+    },
+    {
+      "claimType": "VENUE_ENTRY_COST",
+      "rawGameText": "入场费用 0",
+      "venueDisplayName": "海贝场",
+      "value": 0
+    },
+    {
+      "claimType": "VENUE_ENTRY_COST",
+      "rawGameText": "入场费用 5,000",
+      "venueDisplayName": "珊瑚场",
+      "value": 5000
+    },
+    {
+      "claimType": "VENUE_ENTRY_COST",
+      "rawGameText": "入场费用 20,000",
+      "venueDisplayName": "真珠场",
+      "value": 20000
+    },
+    {
+      "claimType": "VENUE_OPTION_SET",
+      "rawGameText": "海贝场；珊瑚场；真珠场",
+      "value": "海贝场|珊瑚场|真珠场"
+    }
+  ]
+}

@@ -1,0 +1,21 @@
+{
+  "evaluationDate": "2026-08-20T14:08:00+08:00",
+  "benchmarkVersion": "1.0.0",
+  "benchmarkMode": "model_agreement_and_consistency_benchmark",
+  "verifiedSlotsEvaluated": 0,
+  "independentGroundTruthCount": 0,
+  "accuracyReportingStatus": "INSUFFICIENT_INDEPENDENT_TRUTH_DO_NOT_REPORT_ACCURACY",
+  "modelReadiness": {
+    "geminiPilotPredictionsFrozen": true,
+    "geminiFrozenSlotsCount": 43,
+    "gptBlindRunReady": true,
+    "agreementEvaluationReady": true
+  },
+  "agreementMetrics": {
+    "geminiGptAgreementRate": null,
+    "top3OverlapRate": null,
+    "qualityAgreementRate": null,
+    "redDetectionAgreementRate": null
+  },
+  "note": "Top-1 accuracy cannot be claimed until independent human verification or pre-existing slot ground truth is recorded."
+}

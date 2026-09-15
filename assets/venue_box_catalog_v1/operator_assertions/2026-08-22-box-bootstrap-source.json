@@ -1,0 +1,30 @@
+{
+  "assertionVersion": "operator-box-bootstrap.v1",
+  "assertedAt": "2026-08-22T18:00:00+08:00",
+  "operator": "project-owner",
+  "statements": [
+    {
+      "scope": "venue-haibei-box-membership",
+      "confidence": "CONFIRMED",
+      "statement": "The v0.6 four-package mapping remains the Alpha baseline for 海贝场.",
+      "sourceAuthority": "assets/business_sot_v06.json derived from lab/index.html VENUE_BOXES and BOX_ALIASES"
+    },
+    {
+      "scope": "venue-shanhu-box-membership",
+      "confidence": "CONFIRMED",
+      "statement": "The v0.6 six-box mapping remains the Alpha baseline for 珊瑚场.",
+      "sourceAuthority": "assets/business_sot_v06.json derived from lab/index.html VENUE_BOXES and BOX_ALIASES"
+    },
+    {
+      "scope": "venue-zhenzhu-insurance-membership",
+      "confidence": "PROBABLE",
+      "statement": "The six legacy-observed insurance boxes are probably the Alpha baseline for 真珠场.",
+      "sourceAuthority": "assets/business_sot_v06.json observedBoxes plus legacy game screenshots"
+    }
+  ],
+  "limitations": [
+    "This assertion is not CURRENT_GAME_VALID screenshot evidence.",
+    "The box set is not asserted current-complete.",
+    "Progressive evidence collection is passive and natural; dedicated grinding is not required."
+  ]
+}

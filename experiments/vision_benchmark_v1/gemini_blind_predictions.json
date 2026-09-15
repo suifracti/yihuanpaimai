@@ -1,0 +1,647 @@
+[
+  {
+    "benchmarkId": "BM1-01",
+    "slotId": "slot_01",
+    "top1": {
+      "name": "九格小食",
+      "itemId": "red_jiugexiaoshi",
+      "quality": "red"
+    },
+    "top3": [
+      "red_jiugexiaoshi",
+      "red_yicuyouhuo",
+      "gold_dabing"
+    ],
+    "confidence": "high"
+  },
+  {
+    "benchmarkId": "BM1-01",
+    "slotId": "slot_02",
+    "top1": {
+      "name": "万有星仪",
+      "itemId": "gold_wanyouxingyi",
+      "quality": "gold"
+    },
+    "top3": [
+      "gold_wanyouxingyi",
+      "gold_qiaowangnijindiaoxiang",
+      "purple_arespaobuji"
+    ],
+    "confidence": "high"
+  },
+  {
+    "benchmarkId": "BM1-01",
+    "slotId": "slot_03",
+    "top1": {
+      "name": "心猎铁骑L3",
+      "itemId": "red_xinlietieqi_l3",
+      "quality": "red"
+    },
+    "top3": [
+      "red_xinlietieqi_l3",
+      "red_xinlietieqi_l2",
+      "purple_xinlietieqi_l1"
+    ],
+    "confidence": "high"
+  },
+  {
+    "benchmarkId": "BM1-01",
+    "slotId": "slot_04",
+    "top1": {
+      "name": "史莱姆随心泥",
+      "itemId": "purple_slime_mud",
+      "quality": "purple"
+    },
+    "top3": [
+      "purple_slime_mud",
+      "gold_guanzhuangsuixinni",
+      "purple_lvdongdanche"
+    ],
+    "confidence": "high"
+  },
+  {
+    "benchmarkId": "BM1-01",
+    "slotId": "slot_05",
+    "top1": {
+      "name": "艺术画「深林」",
+      "itemId": "blue_yishuhua_shenlin",
+      "quality": "blue"
+    },
+    "top3": [
+      "blue_yishuhua_shenlin",
+      "blue_yishuhua_haian",
+      "white_pailidexiangkuang"
+    ],
+    "confidence": "high"
+  },
+  {
+    "benchmarkId": "BM1-01",
+    "slotId": "slot_06",
+    "top1": {
+      "name": "红药水",
+      "itemId": "purple_hongyaoshui",
+      "quality": "purple"
+    },
+    "top3": [
+      "purple_hongyaoshui",
+      "purple_chengjieweijiu",
+      "red_xiahongzuan"
+    ],
+    "confidence": "high"
+  },
+  {
+    "benchmarkId": "BM1-01",
+    "slotId": "slot_07",
+    "top1": {
+      "name": "智能手机",
+      "itemId": "blue_zhinengshouji",
+      "quality": "blue"
+    },
+    "top3": [
+      "blue_zhinengshouji",
+      "blue_zhinengchongdianqi",
+      "white_dianyingkaquan"
+    ],
+    "confidence": "high"
+  },
+  {
+    "benchmarkId": "BM1-01",
+    "slotId": "slot_08",
+    "top1": {
+      "name": "电影卡券",
+      "itemId": "white_dianyingkaquan",
+      "quality": "white"
+    },
+    "top3": [
+      "white_dianyingkaquan",
+      "blue_zhinengshouji",
+      "white_zhezhibaozhi"
+    ],
+    "confidence": "medium"
+  },
+  {
+    "benchmarkId": "BM1-01",
+    "slotId": "slot_09",
+    "top1": {
+      "name": "霞红钻",
+      "itemId": "purple_xiahongzuan",
+      "quality": "purple"
+    },
+    "top3": [
+      "purple_xiahongzuan",
+      "red_chixinshuidi",
+      "purple_youlingtai"
+    ],
+    "confidence": "high"
+  },
+  {
+    "benchmarkId": "BM1-01",
+    "slotId": "slot_10",
+    "top1": {
+      "name": "月白沙",
+      "itemId": "purple_yuebaisha",
+      "quality": "purple"
+    },
+    "top3": [
+      "purple_yuebaisha",
+      "white_shuijingqiyuanqiu",
+      "purple_taomu"
+    ],
+    "confidence": "medium"
+  },
+  {
+    "benchmarkId": "BM1-01",
+    "slotId": "slot_11",
+    "top1": {
+      "name": "留声奖杯",
+      "itemId": "purple_liushengjiangbei",
+      "quality": "purple"
+    },
+    "top3": [
+      "purple_liushengjiangbei",
+      "purple_liushengjiangzuo",
+      "gold_jinwan"
+    ],
+    "confidence": "high"
+  },
+  {
+    "benchmarkId": "BM1-01",
+    "slotId": "slot_12",
+    "top1": {
+      "name": "金碗",
+      "itemId": "gold_jinwan",
+      "quality": "gold"
+    },
+    "top3": [
+      "gold_jinwan",
+      "white_huadiaowan",
+      "gold_liushengjilaba"
+    ],
+    "confidence": "high"
+  },
+  {
+    "benchmarkId": "BM1-01",
+    "slotId": "slot_13",
+    "top1": {
+      "name": "草莓软糖",
+      "itemId": "white_caomeiruantang",
+      "quality": "white"
+    },
+    "top3": [
+      "white_caomeiruantang",
+      "white_caomeitangguo",
+      "purple_yuebaisha"
+    ],
+    "confidence": "medium"
+  },
+  {
+    "benchmarkId": "BM1-01",
+    "slotId": "slot_14",
+    "top1": {
+      "name": "珍珠蚌",
+      "itemId": "purple_zhenzhubang",
+      "quality": "purple"
+    },
+    "top3": [
+      "purple_zhenzhubang",
+      "purple_youlingtai",
+      "green_liulidanzhu"
+    ],
+    "confidence": "high"
+  },
+  {
+    "benchmarkId": "BM1-01",
+    "slotId": "slot_15",
+    "top1": {
+      "name": "小木桌",
+      "itemId": "green_xiaomuzhuo",
+      "quality": "green"
+    },
+    "top3": [
+      "green_xiaomuzhuo",
+      "blue_fuguonandeng",
+      "white_saokingweichen"
+    ],
+    "confidence": "medium"
+  },
+  {
+    "benchmarkId": "BM1-04",
+    "slotId": "slot_01",
+    "top1": {
+      "name": "赤尾鱼",
+      "itemId": "red_chiweiyu",
+      "quality": "red"
+    },
+    "top3": [
+      "red_chiweiyu",
+      "red_jinjinlidiaoxiang",
+      "red_pendragon"
+    ],
+    "confidence": "high"
+  },
+  {
+    "benchmarkId": "BM1-04",
+    "slotId": "slot_02",
+    "top1": {
+      "name": "艺术画「深林」",
+      "itemId": "blue_yishuhua_shenlin",
+      "quality": "blue"
+    },
+    "top3": [
+      "blue_yishuhua_shenlin",
+      "blue_yishuhua_haian",
+      "white_pailidexiangkuang"
+    ],
+    "confidence": "high"
+  },
+  {
+    "benchmarkId": "BM1-04",
+    "slotId": "slot_03",
+    "top1": {
+      "name": "律动单车",
+      "itemId": "purple_lvdongdanche",
+      "quality": "purple"
+    },
+    "top3": [
+      "purple_lvdongdanche",
+      "purple_arespaobuji",
+      "gold_lunyimoxing"
+    ],
+    "confidence": "high"
+  },
+  {
+    "benchmarkId": "BM1-04",
+    "slotId": "slot_04",
+    "top1": {
+      "name": "律动单车",
+      "itemId": "purple_lvdongdanche",
+      "quality": "purple"
+    },
+    "top3": [
+      "purple_lvdongdanche",
+      "purple_arespaobuji",
+      "gold_lunyimoxing"
+    ],
+    "confidence": "high"
+  },
+  {
+    "benchmarkId": "BM1-04",
+    "slotId": "slot_05",
+    "top1": {
+      "name": "海贝勋章",
+      "itemId": "gold_haibeixunzhang",
+      "quality": "gold"
+    },
+    "top3": [
+      "gold_haibeixunzhang",
+      "blue_jinianyinbi",
+      "gold_jinjiweijiu"
+    ],
+    "confidence": "high"
+  },
+  {
+    "benchmarkId": "BM1-04",
+    "slotId": "slot_06",
+    "top1": {
+      "name": "橙色鸡尾酒",
+      "itemId": "purple_chengjieweijiu",
+      "quality": "purple"
+    },
+    "top3": [
+      "purple_chengjieweijiu",
+      "gold_jinjiweijiu",
+      "purple_hongyaoshui"
+    ],
+    "confidence": "high"
+  },
+  {
+    "benchmarkId": "BM1-04",
+    "slotId": "slot_07",
+    "top1": {
+      "name": "金鸡尾酒",
+      "itemId": "gold_jinjiweijiu",
+      "quality": "gold"
+    },
+    "top3": [
+      "gold_jinjiweijiu",
+      "purple_chengjieweijiu",
+      "gold_haibeixunzhang"
+    ],
+    "confidence": "high"
+  },
+  {
+    "benchmarkId": "BM1-04",
+    "slotId": "slot_08",
+    "top1": {
+      "name": "球形无人机",
+      "itemId": "gold_qiuxingwurenji",
+      "quality": "gold"
+    },
+    "top3": [
+      "gold_qiuxingwurenji",
+      "red_xinlietieqi_l3",
+      "purple_lvdongdanche"
+    ],
+    "confidence": "high"
+  },
+  {
+    "benchmarkId": "BM1-04",
+    "slotId": "slot_09",
+    "top1": {
+      "name": "拍立得相框",
+      "itemId": "white_pailidexiangkuang",
+      "quality": "white"
+    },
+    "top3": [
+      "white_pailidexiangkuang",
+      "blue_yishuhua_shenlin",
+      "white_dianyingkaquan"
+    ],
+    "confidence": "high"
+  },
+  {
+    "benchmarkId": "BM1-04",
+    "slotId": "slot_10",
+    "top1": {
+      "name": "纪念银币",
+      "itemId": "blue_jinianyinbi",
+      "quality": "blue"
+    },
+    "top3": [
+      "blue_jinianyinbi",
+      "gold_haibeixunzhang",
+      "gold_jinwan"
+    ],
+    "confidence": "high"
+  },
+  {
+    "benchmarkId": "BM1-04",
+    "slotId": "slot_11",
+    "top1": {
+      "name": "炽心水滴",
+      "itemId": "red_chixinshuidi",
+      "quality": "red"
+    },
+    "top3": [
+      "red_chixinshuidi",
+      "purple_xiahongzuan",
+      "purple_youlingtai"
+    ],
+    "confidence": "high"
+  },
+  {
+    "benchmarkId": "BM1-04",
+    "slotId": "slot_12",
+    "top1": {
+      "name": "霞红钻",
+      "itemId": "purple_xiahongzuan",
+      "quality": "purple"
+    },
+    "top3": [
+      "purple_xiahongzuan",
+      "red_chixinshuidi",
+      "purple_youlingtai"
+    ],
+    "confidence": "high"
+  },
+  {
+    "benchmarkId": "BM1-04",
+    "slotId": "slot_13",
+    "top1": {
+      "name": "霞红钻",
+      "itemId": "purple_xiahongzuan",
+      "quality": "purple"
+    },
+    "top3": [
+      "purple_xiahongzuan",
+      "red_chixinshuidi",
+      "purple_youlingtai"
+    ],
+    "confidence": "high"
+  },
+  {
+    "benchmarkId": "BM1-04",
+    "slotId": "slot_14",
+    "top1": {
+      "name": "幽灵态",
+      "itemId": "purple_youlingtai",
+      "quality": "purple"
+    },
+    "top3": [
+      "purple_youlingtai",
+      "purple_xiahongzuan",
+      "purple_zhenzhubang"
+    ],
+    "confidence": "high"
+  },
+  {
+    "benchmarkId": "BM1-04",
+    "slotId": "slot_15",
+    "top1": {
+      "name": "幽灵态",
+      "itemId": "purple_youlingtai",
+      "quality": "purple"
+    },
+    "top3": [
+      "purple_youlingtai",
+      "purple_xiahongzuan",
+      "purple_zhenzhubang"
+    ],
+    "confidence": "high"
+  },
+  {
+    "benchmarkId": "BM1-04",
+    "slotId": "slot_16",
+    "top1": {
+      "name": "留声机喇叭",
+      "itemId": "gold_liushengjilaba",
+      "quality": "gold"
+    },
+    "top3": [
+      "gold_liushengjilaba",
+      "gold_jinwan",
+      "purple_liushengjiangzuo"
+    ],
+    "confidence": "high"
+  },
+  {
+    "benchmarkId": "BM1-04",
+    "slotId": "slot_17",
+    "top1": {
+      "name": "火漆印",
+      "itemId": "green_huoqiyin",
+      "quality": "green"
+    },
+    "top3": [
+      "green_huoqiyin",
+      "green_liulidanzhu",
+      "green_maorongrongdequeding"
+    ],
+    "confidence": "high"
+  },
+  {
+    "benchmarkId": "BM1-04",
+    "slotId": "slot_18",
+    "top1": {
+      "name": "琉璃弹珠",
+      "itemId": "green_liulidanzhu",
+      "quality": "green"
+    },
+    "top3": [
+      "green_liulidanzhu",
+      "green_huoqiyin",
+      "purple_taomu"
+    ],
+    "confidence": "high"
+  },
+  {
+    "benchmarkId": "BM1-04",
+    "slotId": "slot_19",
+    "top1": {
+      "name": "草莓糖果",
+      "itemId": "white_caomeitangguo",
+      "quality": "white"
+    },
+    "top3": [
+      "white_caomeitangguo",
+      "white_caomeiruantang",
+      "white_saokingweichen"
+    ],
+    "confidence": "high"
+  },
+  {
+    "benchmarkId": "BM1-04",
+    "slotId": "slot_20",
+    "top1": {
+      "name": "星影滑板",
+      "itemId": "blue_xingyinghuaban",
+      "quality": "blue"
+    },
+    "top3": [
+      "blue_xingyinghuaban",
+      "blue_zhinengshouji",
+      "white_dianyingkaquan"
+    ],
+    "confidence": "high"
+  },
+  {
+    "benchmarkId": "BM1-05",
+    "slotId": "slot_01",
+    "top1": {
+      "name": "银白胸甲",
+      "itemId": "blue_yinbaixiongjia",
+      "quality": "blue"
+    },
+    "top3": [
+      "blue_yinbaixiongjia",
+      "blue_yishuhua_shenlin",
+      "gold_wanyouxingyi"
+    ],
+    "confidence": "high"
+  },
+  {
+    "benchmarkId": "BM1-05",
+    "slotId": "slot_02",
+    "top1": {
+      "name": "极速机车",
+      "itemId": "gold_jisujiche",
+      "quality": "gold"
+    },
+    "top3": [
+      "gold_jisujiche",
+      "gold_zhinengchongdianqi",
+      "purple_lvdongdanche"
+    ],
+    "confidence": "high"
+  },
+  {
+    "benchmarkId": "BM1-05",
+    "slotId": "slot_03",
+    "top1": {
+      "name": "智能充电器",
+      "itemId": "gold_zhinengchongdianqi",
+      "quality": "gold"
+    },
+    "top3": [
+      "gold_zhinengchongdianqi",
+      "gold_jisujiche",
+      "blue_zhinengshouji"
+    ],
+    "confidence": "high"
+  },
+  {
+    "benchmarkId": "BM1-05",
+    "slotId": "slot_04",
+    "top1": {
+      "name": "留声奖座",
+      "itemId": "purple_liushengjiangzuo",
+      "quality": "purple"
+    },
+    "top3": [
+      "purple_liushengjiangzuo",
+      "purple_liushengjiangbei",
+      "gold_jinwan"
+    ],
+    "confidence": "high"
+  },
+  {
+    "benchmarkId": "BM1-05",
+    "slotId": "slot_05",
+    "top1": {
+      "name": "饕目",
+      "itemId": "purple_taomu",
+      "quality": "purple"
+    },
+    "top3": [
+      "purple_taomu",
+      "purple_youlingtai",
+      "purple_xiahongzuan"
+    ],
+    "confidence": "high"
+  },
+  {
+    "benchmarkId": "BM1-05",
+    "slotId": "slot_06",
+    "top1": {
+      "name": "水晶祈愿球",
+      "itemId": "white_shuijingqiyuanqiu",
+      "quality": "white"
+    },
+    "top3": [
+      "white_shuijingqiyuanqiu",
+      "purple_yuebaisha",
+      "green_liulidanzhu"
+    ],
+    "confidence": "high"
+  },
+  {
+    "benchmarkId": "BM1-05",
+    "slotId": "slot_07",
+    "top1": {
+      "name": "纯净矿泉水",
+      "itemId": "blue_chunjingkuangquanshui",
+      "quality": "blue"
+    },
+    "top3": [
+      "blue_chunjingkuangquanshui",
+      "purple_hongyaoshui",
+      "blue_zhinengshouji"
+    ],
+    "confidence": "high"
+  },
+  {
+    "benchmarkId": "BM1-05",
+    "slotId": "slot_08",
+    "top1": {
+      "name": "草莓糖果",
+      "itemId": "white_caomeitangguo",
+      "quality": "white"
+    },
+    "top3": [
+      "white_caomeitangguo",
+      "white_caomeiruantang",
+      "white_saokingweichen"
+    ],
+    "confidence": "high"
+  }
+]

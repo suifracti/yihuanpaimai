@@ -1,0 +1,40 @@
+{
+  "splitVersion": "reviewed-proposal-split-v1",
+  "sourceId": "src-c86e85c5712aea00ac7d",
+  "proposalArtifactPath": "experiments/vision_benchmark_v2/proposal_artifact.json",
+  "proposalArtifactHash": "f0103050a96b66fbe696641e30535e41301ce460abad0c0054395d18fdc90314",
+  "proposalId": "proposal-44d473f3458cff319236",
+  "reviewStatus": "reviewed_consistent",
+  "resolutionMethod": "reviewed_split",
+  "children": [
+    {
+      "childId": "split-child-1c9b91687748",
+      "sourcePixelBbox": [0, 33, 31, 99],
+      "sourceCells": [[1, 0], [2, 0]],
+      "bboxCoordinateSpace": "source_pixel",
+      "coverageRole": "physical_parent_fragment"
+    },
+    {
+      "childId": "split-child-7a64c32a095d",
+      "sourcePixelBbox": [0, 103, 31, 132],
+      "sourceCells": [[3, 0]],
+      "bboxCoordinateSpace": "source_pixel",
+      "coverageRole": "physical_parent_fragment"
+    }
+  ],
+  "discardedRegions": [
+    {
+      "regionId": "discard-5fbf0220690f",
+      "sourcePixelBbox": [0, 99, 31, 103],
+      "sourceCells": [],
+      "bboxCoordinateSpace": "source_pixel",
+      "reason": "Four source-pixel rows cross the visually reviewed parent boundary and cannot be assigned safely; sourceCells remain proposal provenance, not pixel segmentation truth."
+    }
+  ],
+  "reviewEvidence": {
+    "evidenceType": "manual_source_review",
+    "sourceSnapshotPath": "experiments/vision_benchmark_v2/snapshots/source-c86e85c5712aea00ac7d.png",
+    "reviewerRole": "human_reviewer",
+    "note": "The fixed snapshot shows cells (1,0),(2,0) intersecting one upper physical parent and cell (3,0) intersecting a different lower parent. The uncertain four-row boundary is discarded. No item identity, quality, or truth is asserted."
+  }
+}

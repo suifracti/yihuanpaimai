@@ -1,0 +1,9 @@
+# 连续编辑保护与24组冻结复验
+
+052dbb9修复HUD applyManualState返回后仍通过setTimeout延迟解除suppress的窗口：下一次input/blur可能在旧抑制状态中被忽略。程序赋值不会发input事件，现于回传处理结束同步解除保护。
+
+本轮先冻结红格修复6dccd18并运行实际24组，在蓝件数1→0阶段超时，事实仍1。保留build/constraint_matrix_20260913/frozen-fixed/report.json，不宣称该包通过。源码定位延迟抑制后修复；guard-fixed源码与frozen-guard新冻结均24/24 PASS：八类各可行/矛盾/清空，生产状态及exact候选与Main/HUD冲突提示一致。不是所有竞态已消除或真实键鼠性能验收。HUD四场景状态回归PASS。
+
+最新候选 build/isolated_trial_guard_20260913/dist/异环拍卖助手，metadata052dbb9/isDirty=false。纳入a29678b红格Python/JS传递修复。日常历史哈希保持19100479bbb2dfd8e09faa2adbaf5117919126df4b4bcf92e377ad88c4da3431；v13未覆盖。
+
+下一步继续场地倍率、其余参数语义及布局验收。P3 PARTIAL，P4实施中，完整试用/P5未完成；逐件匹配调优暂停、未执行真实70秒游戏输入。

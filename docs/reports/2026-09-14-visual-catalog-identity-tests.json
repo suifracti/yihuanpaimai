@@ -1,0 +1,11 @@
+{
+  "names": [
+    "test_visual_catalog_identity",
+    "test_catalog_reference_manifest_v1"
+  ],
+  "tests": 39,
+  "failures": [],
+  "errors": [],
+  "skipped": [],
+  "seconds": 185.23400000000402
+}

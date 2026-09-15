@@ -1,0 +1,49 @@
+{
+  "groupingVersion": "parent-grouping-review-v1",
+  "sourceId": "src-c86e85c5712aea00ac7d",
+  "proposalArtifactPath": "experiments/vision_benchmark_v2/proposal_artifact.json",
+  "proposalArtifactHash": "f0103050a96b66fbe696641e30535e41301ce460abad0c0054395d18fdc90314",
+  "atomicityReviewPath": "experiments/vision_benchmark_v2/atomicity_review_v1.json",
+  "atomicityReviewHash": "8e0e7d63420028516f8792992dbf7dbc47107f99fe9172380e666a8759b64415",
+  "groups": [
+    {
+      "groupId": "group-cc1717363037459a",
+      "memberProposalIds": [
+        "proposal-031da3c8719343f83304",
+        "proposal-0cca811ac3b016de81d9",
+        "proposal-1ce9c560bb170747b4bc",
+        "proposal-41c72082eb5676c5cb4d",
+        "proposal-4294fb007503928869b1",
+        "proposal-43a94e18c191c9268276",
+        "proposal-4b4a67d66377dc176b31",
+        "proposal-4f4b8f809073855ed857",
+        "proposal-4f5a25c82b1c75408c72",
+        "proposal-643f656f5c67a9759dcb",
+        "proposal-6466ce88f36565576c24",
+        "proposal-6c0f34068689cb1e5410",
+        "proposal-78af733732eccc33714f",
+        "proposal-9024bee1fb047008467d",
+        "proposal-99ffee4f75a9bb602d7a",
+        "proposal-a14206bd4db19be3f104",
+        "proposal-a7d6a91229f4935c139b",
+        "proposal-cb32cb10f80543fbf46c",
+        "proposal-cf5a1011125ba9833e64",
+        "proposal-d8081139e14881a54f46",
+        "proposal-ec6fd5dc2c4f4c90e4a9",
+        "proposal-f28ddd713184a1d3ff00",
+        "proposal-f647a67177f085529d0f"
+      ],
+      "resolvedParentBbox": [99, 101, 248, 251],
+      "bboxCoordinateSpace": "source_pixel",
+      "bboxDerivation": "reviewed_override",
+      "resolutionMethod": "reviewed_multi_proposal_group",
+      "reviewStatus": "reviewed_consistent",
+      "reviewEvidence": {
+        "evidenceType": "manual_source_review",
+        "sourceSnapshotPath": "experiments/vision_benchmark_v2/snapshots/source-c86e85c5712aea00ac7d.png",
+        "reviewerRole": "human_reviewer",
+        "note": "Source-pixel review confirms these contiguous proposal regions are fragments of one visible large physical tile; the reviewed bbox follows that tile boundary. No identity or quality is asserted."
+      }
+    }
+  ]
+}

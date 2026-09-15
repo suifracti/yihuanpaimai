@@ -1,0 +1,49 @@
+{
+  "contractVersion": "geometry-contract-v1",
+  "pathBase": "repository_root",
+  "description": "REP-04 regression: ROI/bbox coordinates are not established in the stored 1920x1080 source-pixel space. No transform is guessed.",
+  "sources": [
+    {
+      "sourceId": "src-regression-rep04",
+      "sourcePath": "assets/video_frames/sec_210.jpg",
+      "width": 1920,
+      "height": 1080,
+      "sceneType": "auction_inventory_in_desktop_capture",
+      "inventoryEligible": true,
+      "inventoryRoi": {
+        "x": 740,
+        "y": 200,
+        "width": 260,
+        "height": 450,
+        "coordinateSpace": "viewport_pixel"
+      },
+      "coordinateSpace": "source_pixel"
+    }
+  ],
+  "instances": [
+    {
+      "instanceId": "inst-regression-rep04-s04",
+      "sourceId": "src-regression-rep04",
+      "bbox": [790, 305, 830, 365],
+      "bboxCoordinateSpace": "viewport_pixel",
+      "footprint": null,
+      "canonicalItemId": null,
+      "observationLabel": "legacy REP-04/s04 observation",
+      "contentVerification": {
+        "contentVerified": false,
+        "reviewStatus": "rejected",
+        "evidenceType": "manual_review",
+        "scope": "crop_instance_binding_only",
+        "note": "Coordinates land on unrelated desktop content when applied directly to the stored source."
+      }
+    }
+  ],
+  "queueSlots": [
+    {
+      "queueId": "queue-regression-rep04-s04",
+      "instanceId": "inst-regression-rep04-s04",
+      "cropPath": "experiments/vision_benchmark_v1/crops/crop_REP-04_s04.png",
+      "legacyLocalOrdinal": "REP-04/s04"
+    }
+  ]
+}

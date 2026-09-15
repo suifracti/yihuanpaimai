@@ -1,0 +1,1867 @@
+{
+  "viewportBasis": {
+    "originalSize": [
+      2560,
+      1440
+    ],
+    "gridOriginOnOriginal": [
+      1753,
+      285
+    ],
+    "cellPx": 75,
+    "maxOccupiedLastRowFromDetections": 9,
+    "rule": "A GT item is fully in this settlement viewport iff lastRow<=maxOccupiedLastRowFromDetections. The 10x25 stitched canvas is not this single 2560x1440 frame. Origin taken from detected (0,0) bbox 1753,285 and 75px cells.",
+    "stitchedCanvas": {
+      "columns": 10,
+      "rows": 25,
+      "cellWidthPx": 75,
+      "cellHeightPx": 75
+    }
+  },
+  "counts": {
+    "gtTotal": 39,
+    "fullyVisibleGt": 27,
+    "partialGt": 2,
+    "belowFoldGt": 10,
+    "recognized": 29
+  },
+  "recognizedUnits": [
+    {
+      "idx": 0,
+      "reviewUnitId": "settlement_item_0",
+      "row": 0,
+      "col": 0,
+      "w": 2,
+      "h": 3,
+      "name": "销魂挠挠爪",
+      "catalogId": "image12-0-0",
+      "confirmationStatus": "CONFIRMED",
+      "identityStatus": "EXACT_IDENTIFIED",
+      "rarity": "blue",
+      "bboxOnOriginal": [
+        1753,
+        285,
+        150,
+        225
+      ],
+      "cropPath": "evidence/settlement_v2/blobs/9f/9fcec3c3ce6f03a168cb53dd7b4949cb1605a28ede98c4fb63437e8e93f3eb87.png",
+      "cropSha256": "9fcec3c3ce6f03a168cb53dd7b4949cb1605a28ede98c4fb63437e8e93f3eb87",
+      "originalRef": "evidence/settlement_v2/blobs/85/85ce3299f6c8304dfd6a41168bbf04995e69c2cc32b2da3e838fa656c71e78b6.png",
+      "gt": {
+        "referenceId": "ref_144037_01",
+        "name": "销魂挠挠爪",
+        "catalogId": "image12-0-0"
+      },
+      "class": "visible_gt_correct",
+      "note": null
+    },
+    {
+      "idx": 1,
+      "reviewUnitId": "settlement_item_1",
+      "row": 0,
+      "col": 2,
+      "w": 1,
+      "h": 3,
+      "name": "烟紫水晶",
+      "catalogId": "image11-0-1",
+      "confirmationStatus": "CONFIRMED",
+      "identityStatus": "EXACT_IDENTIFIED",
+      "rarity": "blue",
+      "bboxOnOriginal": [
+        1903,
+        285,
+        75,
+        225
+      ],
+      "cropPath": "evidence/settlement_v2/blobs/bb/bbc258634f44c17db7b8441ce8dc193f7495e98038c5eeb80112ffe5d5aeca22.png",
+      "cropSha256": "bbc258634f44c17db7b8441ce8dc193f7495e98038c5eeb80112ffe5d5aeca22",
+      "originalRef": "evidence/settlement_v2/blobs/85/85ce3299f6c8304dfd6a41168bbf04995e69c2cc32b2da3e838fa656c71e78b6.png",
+      "gt": {
+        "referenceId": "ref_144037_02",
+        "name": "烟紫水晶",
+        "catalogId": "image11-0-1"
+      },
+      "class": "visible_gt_correct",
+      "note": null
+    },
+    {
+      "idx": 2,
+      "reviewUnitId": "settlement_item_2",
+      "row": 0,
+      "col": 3,
+      "w": 1,
+      "h": 1,
+      "name": "拍拍球",
+      "catalogId": "image9-0-2",
+      "confirmationStatus": "CONFIRMED",
+      "identityStatus": "EXACT_IDENTIFIED",
+      "rarity": "green",
+      "bboxOnOriginal": [
+        1978,
+        285,
+        75,
+        75
+      ],
+      "cropPath": "evidence/settlement_v2/blobs/68/68e4216cee2daf152d0f834ccc680cbebc5e1ccf5f3790311c562a63a04e8814.png",
+      "cropSha256": "68e4216cee2daf152d0f834ccc680cbebc5e1ccf5f3790311c562a63a04e8814",
+      "originalRef": "evidence/settlement_v2/blobs/85/85ce3299f6c8304dfd6a41168bbf04995e69c2cc32b2da3e838fa656c71e78b6.png",
+      "gt": {
+        "referenceId": "ref_144037_03",
+        "name": "拍拍球",
+        "catalogId": "image9-0-2"
+      },
+      "class": "visible_gt_correct",
+      "note": null
+    },
+    {
+      "idx": 3,
+      "reviewUnitId": "settlement_item_3",
+      "row": 0,
+      "col": 4,
+      "w": 1,
+      "h": 1,
+      "name": "金月",
+      "catalogId": "image8-1-1",
+      "confirmationStatus": "CONFIRMED",
+      "identityStatus": "EXACT_IDENTIFIED",
+      "rarity": "green",
+      "bboxOnOriginal": [
+        2053,
+        285,
+        76,
+        75
+      ],
+      "cropPath": "evidence/settlement_v2/blobs/f2/f2b491d4772d886f5893a89fa11e728fa3745732281d6d9fe8262aba5b946202.png",
+      "cropSha256": "f2b491d4772d886f5893a89fa11e728fa3745732281d6d9fe8262aba5b946202",
+      "originalRef": "evidence/settlement_v2/blobs/85/85ce3299f6c8304dfd6a41168bbf04995e69c2cc32b2da3e838fa656c71e78b6.png",
+      "gt": {
+        "referenceId": "ref_144037_04",
+        "name": "金月",
+        "catalogId": "image8-1-1"
+      },
+      "class": "visible_gt_correct",
+      "note": null
+    },
+    {
+      "idx": 4,
+      "reviewUnitId": "settlement_item_4",
+      "row": 0,
+      "col": 5,
+      "w": 2,
+      "h": 1,
+      "name": "复古圆桌",
+      "catalogId": "image14-0-2",
+      "confirmationStatus": "CONFIRMED",
+      "identityStatus": "EXACT_IDENTIFIED",
+      "rarity": "blue",
+      "bboxOnOriginal": [
+        2129,
+        285,
+        150,
+        75
+      ],
+      "cropPath": "evidence/settlement_v2/blobs/5a/5a90a737f11055c6be8a591829314d1032a37a2233e77cb0a8dd101fb2771c10.png",
+      "cropSha256": "5a90a737f11055c6be8a591829314d1032a37a2233e77cb0a8dd101fb2771c10",
+      "originalRef": "evidence/settlement_v2/blobs/85/85ce3299f6c8304dfd6a41168bbf04995e69c2cc32b2da3e838fa656c71e78b6.png",
+      "gt": {
+        "referenceId": "ref_144037_05",
+        "name": "复古圆桌",
+        "catalogId": "image14-0-2"
+      },
+      "class": "visible_gt_correct",
+      "note": null
+    },
+    {
+      "idx": 5,
+      "reviewUnitId": "settlement_item_5",
+      "row": 0,
+      "col": 7,
+      "w": 1,
+      "h": 1,
+      "name": "（未来的）大师飞镖",
+      "catalogId": "image16-0-0",
+      "confirmationStatus": "CONFIRMED",
+      "identityStatus": "EXACT_IDENTIFIED",
+      "rarity": "blue",
+      "bboxOnOriginal": [
+        2279,
+        285,
+        75,
+        75
+      ],
+      "cropPath": "evidence/settlement_v2/blobs/ce/ce8dbe9aa148ac762b3ae657f55e3ba15bb8d59796ac817b44bc6b7beafb6e18.png",
+      "cropSha256": "ce8dbe9aa148ac762b3ae657f55e3ba15bb8d59796ac817b44bc6b7beafb6e18",
+      "originalRef": "evidence/settlement_v2/blobs/85/85ce3299f6c8304dfd6a41168bbf04995e69c2cc32b2da3e838fa656c71e78b6.png",
+      "gt": {
+        "referenceId": "ref_144037_06",
+        "name": "（未来的）大师飞镖",
+        "catalogId": "image16-0-0"
+      },
+      "class": "visible_gt_correct",
+      "note": null
+    },
+    {
+      "idx": 6,
+      "reviewUnitId": "settlement_item_6",
+      "row": 0,
+      "col": 8,
+      "w": 2,
+      "h": 1,
+      "name": "惠比寿宫廷小塔",
+      "catalogId": "image7-0-0",
+      "confirmationStatus": "CONFIRMED",
+      "identityStatus": "EXACT_IDENTIFIED",
+      "rarity": "green",
+      "bboxOnOriginal": [
+        2354,
+        285,
+        150,
+        75
+      ],
+      "cropPath": "evidence/settlement_v2/blobs/db/dbb9178cc0de8adc2d982797a441b9e097b7c1055dd764884a75b8b3c24a96e0.png",
+      "cropSha256": "dbb9178cc0de8adc2d982797a441b9e097b7c1055dd764884a75b8b3c24a96e0",
+      "originalRef": "evidence/settlement_v2/blobs/85/85ce3299f6c8304dfd6a41168bbf04995e69c2cc32b2da3e838fa656c71e78b6.png",
+      "gt": {
+        "referenceId": "ref_144037_07",
+        "name": "惠比寿宫廷小塔",
+        "catalogId": "image7-0-0"
+      },
+      "class": "visible_gt_correct",
+      "note": null
+    },
+    {
+      "idx": 7,
+      "reviewUnitId": "settlement_item_7",
+      "row": 1,
+      "col": 3,
+      "w": 3,
+      "h": 3,
+      "name": "艺术画「深林」",
+      "catalogId": "image10-1-0",
+      "confirmationStatus": "CONFIRMED",
+      "identityStatus": "EXACT_IDENTIFIED",
+      "rarity": "blue",
+      "bboxOnOriginal": [
+        1978,
+        360,
+        226,
+        225
+      ],
+      "cropPath": "evidence/settlement_v2/blobs/39/3976076732a7eac2fd443828c38f3b4a622a854251ab2ce5c9a7b136d0a9d020.png",
+      "cropSha256": "3976076732a7eac2fd443828c38f3b4a622a854251ab2ce5c9a7b136d0a9d020",
+      "originalRef": "evidence/settlement_v2/blobs/85/85ce3299f6c8304dfd6a41168bbf04995e69c2cc32b2da3e838fa656c71e78b6.png",
+      "gt": {
+        "referenceId": "ref_144037_08",
+        "name": "艺术画「深林」",
+        "catalogId": "image10-1-0"
+      },
+      "class": "visible_gt_correct",
+      "note": null
+    },
+    {
+      "idx": 8,
+      "reviewUnitId": "settlement_item_8",
+      "row": 1,
+      "col": 6,
+      "w": 3,
+      "h": 3,
+      "name": "九格小食",
+      "catalogId": "image34-0-1",
+      "confirmationStatus": "CONFIRMED",
+      "identityStatus": "EXACT_IDENTIFIED",
+      "rarity": "red",
+      "bboxOnOriginal": [
+        2204,
+        360,
+        225,
+        225
+      ],
+      "cropPath": "evidence/settlement_v2/blobs/31/316f6f45e60b994ef2e4f83a291534913f7e57d4a2ae26aab74ef70cd8ce59aa.png",
+      "cropSha256": "316f6f45e60b994ef2e4f83a291534913f7e57d4a2ae26aab74ef70cd8ce59aa",
+      "originalRef": "evidence/settlement_v2/blobs/85/85ce3299f6c8304dfd6a41168bbf04995e69c2cc32b2da3e838fa656c71e78b6.png",
+      "gt": {
+        "referenceId": "ref_144037_09",
+        "name": "九格小食",
+        "catalogId": "image34-0-1"
+      },
+      "class": "visible_gt_correct",
+      "note": null
+    },
+    {
+      "idx": 9,
+      "reviewUnitId": "settlement_item_9",
+      "row": 1,
+      "col": 9,
+      "w": 1,
+      "h": 1,
+      "name": "鎏金坠",
+      "catalogId": "image24-1-2",
+      "confirmationStatus": "CONFIRMED",
+      "identityStatus": "EXACT_IDENTIFIED",
+      "rarity": "purple",
+      "bboxOnOriginal": [
+        2429,
+        360,
+        75,
+        75
+      ],
+      "cropPath": "evidence/settlement_v2/blobs/41/41a3b188bed84d5617444a224c55147fe56c4dfb0988034cf089298975c20ebe.png",
+      "cropSha256": "41a3b188bed84d5617444a224c55147fe56c4dfb0988034cf089298975c20ebe",
+      "originalRef": "evidence/settlement_v2/blobs/85/85ce3299f6c8304dfd6a41168bbf04995e69c2cc32b2da3e838fa656c71e78b6.png",
+      "gt": {
+        "referenceId": "ref_144037_10",
+        "name": "鎏金坠",
+        "catalogId": "image24-1-2"
+      },
+      "class": "visible_gt_correct",
+      "note": null
+    },
+    {
+      "idx": 10,
+      "reviewUnitId": "settlement_item_10",
+      "row": 2,
+      "col": 9,
+      "w": 1,
+      "h": 2,
+      "name": "酷辣辣辣条",
+      "catalogId": "image3-0-2",
+      "confirmationStatus": "CONFIRMED",
+      "identityStatus": "EXACT_IDENTIFIED",
+      "rarity": "red",
+      "bboxOnOriginal": [
+        2429,
+        435,
+        75,
+        150
+      ],
+      "cropPath": "evidence/settlement_v2/blobs/5e/5e1b9abaad84003b9fed5c3899c6a3d40cb3b3987abfcc9c43edec54bf4c1b17.png",
+      "cropSha256": "5e1b9abaad84003b9fed5c3899c6a3d40cb3b3987abfcc9c43edec54bf4c1b17",
+      "originalRef": "evidence/settlement_v2/blobs/85/85ce3299f6c8304dfd6a41168bbf04995e69c2cc32b2da3e838fa656c71e78b6.png",
+      "gt": {
+        "referenceId": "ref_144037_11",
+        "name": "酷辣辣辣条",
+        "catalogId": "visual-latiao-1x2"
+      },
+      "class": "visible_gt_correct",
+      "note": null
+    },
+    {
+      "idx": 11,
+      "reviewUnitId": "settlement_item_11",
+      "row": 3,
+      "col": 0,
+      "w": 2,
+      "h": 2,
+      "name": "跳跳兔盒",
+      "catalogId": "image20-0-1",
+      "confirmationStatus": "CONFIRMED",
+      "identityStatus": "EXACT_IDENTIFIED",
+      "rarity": "purple",
+      "bboxOnOriginal": [
+        1753,
+        510,
+        150,
+        150
+      ],
+      "cropPath": "evidence/settlement_v2/blobs/f1/f114ac391108358210aea4c0672168bd8bf5d335c69fe3b21c3416a9e62460d3.png",
+      "cropSha256": "f114ac391108358210aea4c0672168bd8bf5d335c69fe3b21c3416a9e62460d3",
+      "originalRef": "evidence/settlement_v2/blobs/85/85ce3299f6c8304dfd6a41168bbf04995e69c2cc32b2da3e838fa656c71e78b6.png",
+      "gt": {
+        "referenceId": "ref_144037_12",
+        "name": "跳跳兔盒",
+        "catalogId": "image20-0-1"
+      },
+      "class": "visible_gt_correct",
+      "note": null
+    },
+    {
+      "idx": 12,
+      "reviewUnitId": "settlement_item_12",
+      "row": 3,
+      "col": 2,
+      "w": 1,
+      "h": 1,
+      "name": "炭火脆皮烤肉",
+      "catalogId": "image9-0-1",
+      "confirmationStatus": "CONFIRMED",
+      "identityStatus": "EXACT_IDENTIFIED",
+      "rarity": "green",
+      "bboxOnOriginal": [
+        1903,
+        510,
+        75,
+        75
+      ],
+      "cropPath": "evidence/settlement_v2/blobs/e2/e258d7028dd975526b0dd874b0c337e158a292e17adc3a80c7d7dc2d64501be2.png",
+      "cropSha256": "e258d7028dd975526b0dd874b0c337e158a292e17adc3a80c7d7dc2d64501be2",
+      "originalRef": "evidence/settlement_v2/blobs/85/85ce3299f6c8304dfd6a41168bbf04995e69c2cc32b2da3e838fa656c71e78b6.png",
+      "gt": {
+        "referenceId": "ref_144037_13",
+        "name": "炭火脆皮烤肉",
+        "catalogId": "image9-0-1"
+      },
+      "class": "visible_gt_correct",
+      "note": null
+    },
+    {
+      "idx": 13,
+      "reviewUnitId": "settlement_item_13",
+      "row": 4,
+      "col": 2,
+      "w": 2,
+      "h": 2,
+      "name": "蓝焰火花塞",
+      "catalogId": "image30-0-0",
+      "confirmationStatus": "CONFIRMED",
+      "identityStatus": "EXACT_IDENTIFIED",
+      "rarity": "gold",
+      "bboxOnOriginal": [
+        1903,
+        585,
+        150,
+        150
+      ],
+      "cropPath": "evidence/settlement_v2/blobs/54/54c895232a00b963a639b072bab7eccf07f81e754f1da6ab2aa865a4d9eba337.png",
+      "cropSha256": "54c895232a00b963a639b072bab7eccf07f81e754f1da6ab2aa865a4d9eba337",
+      "originalRef": "evidence/settlement_v2/blobs/85/85ce3299f6c8304dfd6a41168bbf04995e69c2cc32b2da3e838fa656c71e78b6.png",
+      "gt": {
+        "referenceId": "ref_144037_14",
+        "name": "蓝焰火花塞",
+        "catalogId": "image30-0-0"
+      },
+      "class": "visible_gt_correct",
+      "note": null
+    },
+    {
+      "idx": 14,
+      "reviewUnitId": "settlement_item_14",
+      "row": 4,
+      "col": 4,
+      "w": 3,
+      "h": 1,
+      "name": "炫动三角铁",
+      "catalogId": "image5-1-0",
+      "confirmationStatus": "CONFIRMED",
+      "identityStatus": "EXACT_IDENTIFIED",
+      "rarity": "green",
+      "bboxOnOriginal": [
+        2053,
+        585,
+        226,
+        75
+      ],
+      "cropPath": "evidence/settlement_v2/blobs/70/709dad18810c0697b4a9a0cc5651e70dcb7a9c4d8c70f7e32f6a1d0f320517c9.png",
+      "cropSha256": "709dad18810c0697b4a9a0cc5651e70dcb7a9c4d8c70f7e32f6a1d0f320517c9",
+      "originalRef": "evidence/settlement_v2/blobs/85/85ce3299f6c8304dfd6a41168bbf04995e69c2cc32b2da3e838fa656c71e78b6.png",
+      "gt": {
+        "referenceId": "ref_144037_15",
+        "name": "炫动三角铁",
+        "catalogId": "image5-1-0"
+      },
+      "class": "visible_gt_correct",
+      "note": null
+    },
+    {
+      "idx": 15,
+      "reviewUnitId": "settlement_item_15",
+      "row": 4,
+      "col": 7,
+      "w": 2,
+      "h": 1,
+      "name": "巡哨-干练精英",
+      "catalogId": "visual-922c073c366d",
+      "confirmationStatus": "CONFIRMED",
+      "identityStatus": "EXACT_IDENTIFIED",
+      "rarity": "gold",
+      "bboxOnOriginal": [
+        2279,
+        585,
+        150,
+        75
+      ],
+      "cropPath": "evidence/settlement_v2/blobs/d3/d3a8309b324da640364882fd507ada2395f02321df3f76c78bcc41dce70ddbd3.png",
+      "cropSha256": "d3a8309b324da640364882fd507ada2395f02321df3f76c78bcc41dce70ddbd3",
+      "originalRef": "evidence/settlement_v2/blobs/85/85ce3299f6c8304dfd6a41168bbf04995e69c2cc32b2da3e838fa656c71e78b6.png",
+      "gt": {
+        "referenceId": "ref_144037_16",
+        "name": "巡哨-干练精英",
+        "catalogId": "visual-922c073c366d"
+      },
+      "class": "visible_gt_correct",
+      "note": null
+    },
+    {
+      "idx": 16,
+      "reviewUnitId": "settlement_item_16",
+      "row": 4,
+      "col": 9,
+      "w": 1,
+      "h": 1,
+      "name": "银铃",
+      "catalogId": "image15-0-1",
+      "confirmationStatus": "CONFIRMED",
+      "identityStatus": "EXACT_IDENTIFIED",
+      "rarity": "blue",
+      "bboxOnOriginal": [
+        2429,
+        585,
+        75,
+        75
+      ],
+      "cropPath": "evidence/settlement_v2/blobs/98/98f4a52d18cb89f0f55aeb16e1ba96a8ab3aecff7614e96e16a45b963280685b.png",
+      "cropSha256": "98f4a52d18cb89f0f55aeb16e1ba96a8ab3aecff7614e96e16a45b963280685b",
+      "originalRef": "evidence/settlement_v2/blobs/85/85ce3299f6c8304dfd6a41168bbf04995e69c2cc32b2da3e838fa656c71e78b6.png",
+      "gt": {
+        "referenceId": "ref_144037_17",
+        "name": "银铃",
+        "catalogId": "image15-0-1"
+      },
+      "class": "visible_gt_correct",
+      "note": null
+    },
+    {
+      "idx": 17,
+      "reviewUnitId": "settlement_item_17",
+      "row": 5,
+      "col": 0,
+      "w": 2,
+      "h": 1,
+      "name": "大将军章鱼烧",
+      "catalogId": "image22-0-2",
+      "confirmationStatus": "CONFIRMED",
+      "identityStatus": "EXACT_IDENTIFIED",
+      "rarity": "purple",
+      "bboxOnOriginal": [
+        1753,
+        660,
+        150,
+        75
+      ],
+      "cropPath": "evidence/settlement_v2/blobs/b8/b89c3cd91ec535e0c744dfacd4245b943b148911d4a516d40805fe8b7164b9a9.png",
+      "cropSha256": "b89c3cd91ec535e0c744dfacd4245b943b148911d4a516d40805fe8b7164b9a9",
+      "originalRef": "evidence/settlement_v2/blobs/85/85ce3299f6c8304dfd6a41168bbf04995e69c2cc32b2da3e838fa656c71e78b6.png",
+      "gt": {
+        "referenceId": "ref_144037_18",
+        "name": "大将军章鱼烧",
+        "catalogId": "image22-0-2"
+      },
+      "class": "visible_gt_correct",
+      "note": null
+    },
+    {
+      "idx": 18,
+      "reviewUnitId": "settlement_item_18",
+      "row": 5,
+      "col": 4,
+      "w": 2,
+      "h": 2,
+      "name": "盈雪点翠",
+      "catalogId": "image30-0-1",
+      "confirmationStatus": "CONFIRMED",
+      "identityStatus": "EXACT_IDENTIFIED",
+      "rarity": "gold",
+      "bboxOnOriginal": [
+        2053,
+        660,
+        151,
+        150
+      ],
+      "cropPath": "evidence/settlement_v2/blobs/15/15430d851d0018340781f3136adf7cf634cf97ceb16f94e97d9723637ee67f72.png",
+      "cropSha256": "15430d851d0018340781f3136adf7cf634cf97ceb16f94e97d9723637ee67f72",
+      "originalRef": "evidence/settlement_v2/blobs/85/85ce3299f6c8304dfd6a41168bbf04995e69c2cc32b2da3e838fa656c71e78b6.png",
+      "gt": {
+        "referenceId": "ref_144037_19",
+        "name": "盈雪点翠",
+        "catalogId": "image30-0-1"
+      },
+      "class": "visible_gt_correct",
+      "note": null
+    },
+    {
+      "idx": 19,
+      "reviewUnitId": "settlement_item_19",
+      "row": 5,
+      "col": 6,
+      "w": 1,
+      "h": 1,
+      "name": "绵绵云",
+      "catalogId": "image3-0-1",
+      "confirmationStatus": "CONFIRMED",
+      "identityStatus": "EXACT_IDENTIFIED",
+      "rarity": "white",
+      "bboxOnOriginal": [
+        2204,
+        660,
+        75,
+        75
+      ],
+      "cropPath": "evidence/settlement_v2/blobs/a4/a4a7a778086a75b01448a4bff66944054e62e38d13f1305fe383d3f662efcc16.png",
+      "cropSha256": "a4a7a778086a75b01448a4bff66944054e62e38d13f1305fe383d3f662efcc16",
+      "originalRef": "evidence/settlement_v2/blobs/85/85ce3299f6c8304dfd6a41168bbf04995e69c2cc32b2da3e838fa656c71e78b6.png",
+      "gt": {
+        "referenceId": "ref_144037_20",
+        "name": "绵绵云",
+        "catalogId": "image3-0-1"
+      },
+      "class": "visible_gt_correct",
+      "note": null
+    },
+    {
+      "idx": 20,
+      "reviewUnitId": "settlement_item_20",
+      "row": 5,
+      "col": 7,
+      "w": 1,
+      "h": 1,
+      "name": "猫丸秘制豚骨拉面",
+      "catalogId": "visual-9607b248bbf4",
+      "confirmationStatus": "CONFIRMED",
+      "identityStatus": "EXACT_IDENTIFIED",
+      "rarity": "gold",
+      "bboxOnOriginal": [
+        2279,
+        660,
+        75,
+        75
+      ],
+      "cropPath": "evidence/settlement_v2/blobs/fa/fa4a46e6c39f6760752819c8e72cfe9b1b197a3eac2ae7508d55d5aaa8f0910e.png",
+      "cropSha256": "fa4a46e6c39f6760752819c8e72cfe9b1b197a3eac2ae7508d55d5aaa8f0910e",
+      "originalRef": "evidence/settlement_v2/blobs/85/85ce3299f6c8304dfd6a41168bbf04995e69c2cc32b2da3e838fa656c71e78b6.png",
+      "gt": {
+        "referenceId": "ref_144037_21",
+        "name": "猫丸秘制豚骨拉面",
+        "catalogId": "visual-9607b248bbf4"
+      },
+      "class": "visible_gt_correct",
+      "note": null
+    },
+    {
+      "idx": 21,
+      "reviewUnitId": "settlement_item_21",
+      "row": 5,
+      "col": 8,
+      "w": 2,
+      "h": 3,
+      "name": "方盒随身听",
+      "catalogId": "image1-0-0",
+      "confirmationStatus": "CONFIRMED",
+      "identityStatus": "EXACT_IDENTIFIED",
+      "rarity": "white",
+      "bboxOnOriginal": [
+        2354,
+        660,
+        150,
+        225
+      ],
+      "cropPath": "evidence/settlement_v2/blobs/14/1448ad769c07adbb7b2255e14cabf3197db07ee0a541032a820920dfd84c4b03.png",
+      "cropSha256": "1448ad769c07adbb7b2255e14cabf3197db07ee0a541032a820920dfd84c4b03",
+      "originalRef": "evidence/settlement_v2/blobs/85/85ce3299f6c8304dfd6a41168bbf04995e69c2cc32b2da3e838fa656c71e78b6.png",
+      "gt": {
+        "referenceId": "ref_144037_22",
+        "name": "方盒随身听",
+        "catalogId": "image1-0-0"
+      },
+      "class": "visible_gt_correct",
+      "note": null
+    },
+    {
+      "idx": 22,
+      "reviewUnitId": "settlement_item_22",
+      "row": 6,
+      "col": 0,
+      "w": 4,
+      "h": 4,
+      "name": null,
+      "catalogId": null,
+      "confirmationStatus": "CANDIDATE_ONLY",
+      "identityStatus": "AMBIGUOUS_CANDIDATES",
+      "rarity": "green",
+      "bboxOnOriginal": [
+        1753,
+        735,
+        300,
+        300
+      ],
+      "cropPath": "evidence/settlement_v2/blobs/df/df0cd1f815db21b5905d54f700235f8199978abee5723cf965222fcef5f73744.png",
+      "cropSha256": "df0cd1f815db21b5905d54f700235f8199978abee5723cf965222fcef5f73744",
+      "originalRef": "evidence/settlement_v2/blobs/85/85ce3299f6c8304dfd6a41168bbf04995e69c2cc32b2da3e838fa656c71e78b6.png",
+      "gt": {
+        "referenceId": "ref_144037_23",
+        "name": "M1000模型",
+        "catalogId": "image5-0-0"
+      },
+      "class": "visible_gt_unknown",
+      "note": null
+    },
+    {
+      "idx": 23,
+      "reviewUnitId": "settlement_item_23",
+      "row": 6,
+      "col": 6,
+      "w": 1,
+      "h": 1,
+      "name": "幽灵态",
+      "catalogId": "image23-1-1",
+      "confirmationStatus": "CONFIRMED",
+      "identityStatus": "EXACT_IDENTIFIED",
+      "rarity": "purple",
+      "bboxOnOriginal": [
+        2204,
+        735,
+        75,
+        75
+      ],
+      "cropPath": "evidence/settlement_v2/blobs/69/6950b773ce0bed2e4fa7ef95d517507a255490a19a59885bf0a7e655670b0b26.png",
+      "cropSha256": "6950b773ce0bed2e4fa7ef95d517507a255490a19a59885bf0a7e655670b0b26",
+      "originalRef": "evidence/settlement_v2/blobs/85/85ce3299f6c8304dfd6a41168bbf04995e69c2cc32b2da3e838fa656c71e78b6.png",
+      "gt": {
+        "referenceId": "ref_144037_24",
+        "name": "幽灵态",
+        "catalogId": "image23-1-1"
+      },
+      "class": "visible_gt_correct",
+      "note": null
+    },
+    {
+      "idx": 24,
+      "reviewUnitId": "settlement_item_24",
+      "row": 6,
+      "col": 7,
+      "w": 1,
+      "h": 2,
+      "name": "「方盒科技」智能手表",
+      "catalogId": "image31-1-2",
+      "confirmationStatus": "CONFIRMED",
+      "identityStatus": "EXACT_IDENTIFIED",
+      "rarity": "gold",
+      "bboxOnOriginal": [
+        2279,
+        735,
+        75,
+        150
+      ],
+      "cropPath": "evidence/settlement_v2/blobs/20/20b05f9255f6cceee1ee6dbcf6b71fe2e0e24d1c74b7237b61f59ab09534c57e.png",
+      "cropSha256": "20b05f9255f6cceee1ee6dbcf6b71fe2e0e24d1c74b7237b61f59ab09534c57e",
+      "originalRef": "evidence/settlement_v2/blobs/85/85ce3299f6c8304dfd6a41168bbf04995e69c2cc32b2da3e838fa656c71e78b6.png",
+      "gt": {
+        "referenceId": "ref_144037_25",
+        "name": "「方盒科技」智能手表",
+        "catalogId": "image31-1-2"
+      },
+      "class": "visible_gt_correct",
+      "note": null
+    },
+    {
+      "idx": 25,
+      "reviewUnitId": "settlement_item_25",
+      "row": 7,
+      "col": 4,
+      "w": 2,
+      "h": 1,
+      "name": "巡哨-干练精英",
+      "catalogId": "visual-922c073c366d",
+      "confirmationStatus": "CONFIRMED",
+      "identityStatus": "EXACT_IDENTIFIED",
+      "rarity": "gold",
+      "bboxOnOriginal": [
+        2053,
+        810,
+        151,
+        75
+      ],
+      "cropPath": "evidence/settlement_v2/blobs/17/177d5bd21bd3923a139d87aad7ba8a1552e409560aa1cd99fc4c46a3cfebb8a9.png",
+      "cropSha256": "177d5bd21bd3923a139d87aad7ba8a1552e409560aa1cd99fc4c46a3cfebb8a9",
+      "originalRef": "evidence/settlement_v2/blobs/85/85ce3299f6c8304dfd6a41168bbf04995e69c2cc32b2da3e838fa656c71e78b6.png",
+      "gt": {
+        "referenceId": "ref_144037_26",
+        "name": "巡哨-干练精英",
+        "catalogId": "visual-922c073c366d"
+      },
+      "class": "visible_gt_correct",
+      "note": null
+    },
+    {
+      "idx": 26,
+      "reviewUnitId": "settlement_item_26",
+      "row": 7,
+      "col": 6,
+      "w": 1,
+      "h": 1,
+      "name": "（未来的）大师飞镖",
+      "catalogId": "image16-0-0",
+      "confirmationStatus": "CONFIRMED",
+      "identityStatus": "EXACT_IDENTIFIED",
+      "rarity": "blue",
+      "bboxOnOriginal": [
+        2204,
+        810,
+        75,
+        75
+      ],
+      "cropPath": "evidence/settlement_v2/blobs/f1/f1b50f9fc51cd0475e8403e60fb4fa902ffaeea28736b3c8fdb575317a4e5fd4.png",
+      "cropSha256": "f1b50f9fc51cd0475e8403e60fb4fa902ffaeea28736b3c8fdb575317a4e5fd4",
+      "originalRef": "evidence/settlement_v2/blobs/85/85ce3299f6c8304dfd6a41168bbf04995e69c2cc32b2da3e838fa656c71e78b6.png",
+      "gt": {
+        "referenceId": "ref_144037_27",
+        "name": "（未来的）大师飞镖",
+        "catalogId": "image16-0-0"
+      },
+      "class": "visible_gt_correct",
+      "note": null
+    },
+    {
+      "idx": 27,
+      "reviewUnitId": "settlement_item_27",
+      "row": 8,
+      "col": 4,
+      "w": 5,
+      "h": 2,
+      "name": null,
+      "catalogId": null,
+      "confirmationStatus": "CANDIDATE_ONLY",
+      "identityStatus": "AMBIGUOUS_CANDIDATES",
+      "rarity": "red",
+      "bboxOnOriginal": [
+        2053,
+        885,
+        376,
+        150
+      ],
+      "cropPath": "evidence/settlement_v2/blobs/06/067687f140882e0e41040653290bd873dd918b11f69382d8c1d30270c9f077a2.png",
+      "cropSha256": "067687f140882e0e41040653290bd873dd918b11f69382d8c1d30270c9f077a2",
+      "originalRef": "evidence/settlement_v2/blobs/85/85ce3299f6c8304dfd6a41168bbf04995e69c2cc32b2da3e838fa656c71e78b6.png",
+      "gt": null,
+      "class": "extra_unaligned",
+      "note": null
+    },
+    {
+      "idx": 28,
+      "reviewUnitId": "settlement_item_28",
+      "row": 8,
+      "col": 9,
+      "w": 1,
+      "h": 2,
+      "name": null,
+      "catalogId": null,
+      "confirmationStatus": "CANDIDATE_ONLY",
+      "identityStatus": "AMBIGUOUS_CANDIDATES",
+      "rarity": "blue",
+      "bboxOnOriginal": [
+        2429,
+        885,
+        75,
+        150
+      ],
+      "cropPath": "evidence/settlement_v2/blobs/2b/2bb61943b88f72126bee2e03d8070913195c14cbb84dc959883ff263b23e9ed2.png",
+      "cropSha256": "2bb61943b88f72126bee2e03d8070913195c14cbb84dc959883ff263b23e9ed2",
+      "originalRef": "evidence/settlement_v2/blobs/85/85ce3299f6c8304dfd6a41168bbf04995e69c2cc32b2da3e838fa656c71e78b6.png",
+      "gt": null,
+      "class": "extra_unaligned",
+      "note": null
+    }
+  ],
+  "visibleGt": [
+    {
+      "referenceId": "ref_144037_01",
+      "name": "销魂挠挠爪",
+      "catalogId": "image12-0-0",
+      "row": 0,
+      "col": 0,
+      "w": 2,
+      "h": 3,
+      "lastRow": 2,
+      "pixelBboxOnStitchedCanvas": [
+        0,
+        0,
+        150,
+        225
+      ],
+      "projectedViewportBbox": [
+        1753,
+        285,
+        150,
+        225
+      ],
+      "visibility": "fully_in_this_viewport",
+      "quality": "blue"
+    },
+    {
+      "referenceId": "ref_144037_02",
+      "name": "烟紫水晶",
+      "catalogId": "image11-0-1",
+      "row": 0,
+      "col": 2,
+      "w": 1,
+      "h": 3,
+      "lastRow": 2,
+      "pixelBboxOnStitchedCanvas": [
+        150,
+        0,
+        225,
+        225
+      ],
+      "projectedViewportBbox": [
+        1903,
+        285,
+        75,
+        225
+      ],
+      "visibility": "fully_in_this_viewport",
+      "quality": "blue"
+    },
+    {
+      "referenceId": "ref_144037_03",
+      "name": "拍拍球",
+      "catalogId": "image9-0-2",
+      "row": 0,
+      "col": 3,
+      "w": 1,
+      "h": 1,
+      "lastRow": 0,
+      "pixelBboxOnStitchedCanvas": [
+        225,
+        0,
+        300,
+        75
+      ],
+      "projectedViewportBbox": [
+        1978,
+        285,
+        75,
+        75
+      ],
+      "visibility": "fully_in_this_viewport",
+      "quality": "green"
+    },
+    {
+      "referenceId": "ref_144037_04",
+      "name": "金月",
+      "catalogId": "image8-1-1",
+      "row": 0,
+      "col": 4,
+      "w": 1,
+      "h": 1,
+      "lastRow": 0,
+      "pixelBboxOnStitchedCanvas": [
+        300,
+        0,
+        375,
+        75
+      ],
+      "projectedViewportBbox": [
+        2053,
+        285,
+        75,
+        75
+      ],
+      "visibility": "fully_in_this_viewport",
+      "quality": "green"
+    },
+    {
+      "referenceId": "ref_144037_05",
+      "name": "复古圆桌",
+      "catalogId": "image14-0-2",
+      "row": 0,
+      "col": 5,
+      "w": 2,
+      "h": 1,
+      "lastRow": 0,
+      "pixelBboxOnStitchedCanvas": [
+        375,
+        0,
+        525,
+        75
+      ],
+      "projectedViewportBbox": [
+        2128,
+        285,
+        150,
+        75
+      ],
+      "visibility": "fully_in_this_viewport",
+      "quality": "blue"
+    },
+    {
+      "referenceId": "ref_144037_06",
+      "name": "（未来的）大师飞镖",
+      "catalogId": "image16-0-0",
+      "row": 0,
+      "col": 7,
+      "w": 1,
+      "h": 1,
+      "lastRow": 0,
+      "pixelBboxOnStitchedCanvas": [
+        525,
+        0,
+        600,
+        75
+      ],
+      "projectedViewportBbox": [
+        2278,
+        285,
+        75,
+        75
+      ],
+      "visibility": "fully_in_this_viewport",
+      "quality": "blue"
+    },
+    {
+      "referenceId": "ref_144037_07",
+      "name": "惠比寿宫廷小塔",
+      "catalogId": "image7-0-0",
+      "row": 0,
+      "col": 8,
+      "w": 2,
+      "h": 1,
+      "lastRow": 0,
+      "pixelBboxOnStitchedCanvas": [
+        600,
+        0,
+        750,
+        75
+      ],
+      "projectedViewportBbox": [
+        2353,
+        285,
+        150,
+        75
+      ],
+      "visibility": "fully_in_this_viewport",
+      "quality": "green"
+    },
+    {
+      "referenceId": "ref_144037_08",
+      "name": "艺术画「深林」",
+      "catalogId": "image10-1-0",
+      "row": 1,
+      "col": 3,
+      "w": 3,
+      "h": 3,
+      "lastRow": 3,
+      "pixelBboxOnStitchedCanvas": [
+        225,
+        75,
+        450,
+        300
+      ],
+      "projectedViewportBbox": [
+        1978,
+        360,
+        225,
+        225
+      ],
+      "visibility": "fully_in_this_viewport",
+      "quality": "blue"
+    },
+    {
+      "referenceId": "ref_144037_09",
+      "name": "九格小食",
+      "catalogId": "image34-0-1",
+      "row": 1,
+      "col": 6,
+      "w": 3,
+      "h": 3,
+      "lastRow": 3,
+      "pixelBboxOnStitchedCanvas": [
+        450,
+        75,
+        675,
+        300
+      ],
+      "projectedViewportBbox": [
+        2203,
+        360,
+        225,
+        225
+      ],
+      "visibility": "fully_in_this_viewport",
+      "quality": "red"
+    },
+    {
+      "referenceId": "ref_144037_10",
+      "name": "鎏金坠",
+      "catalogId": "image24-1-2",
+      "row": 1,
+      "col": 9,
+      "w": 1,
+      "h": 1,
+      "lastRow": 1,
+      "pixelBboxOnStitchedCanvas": [
+        675,
+        75,
+        750,
+        150
+      ],
+      "projectedViewportBbox": [
+        2428,
+        360,
+        75,
+        75
+      ],
+      "visibility": "fully_in_this_viewport",
+      "quality": "purple"
+    },
+    {
+      "referenceId": "ref_144037_11",
+      "name": "酷辣辣辣条",
+      "catalogId": "visual-latiao-1x2",
+      "row": 2,
+      "col": 9,
+      "w": 1,
+      "h": 2,
+      "lastRow": 3,
+      "pixelBboxOnStitchedCanvas": [
+        675,
+        150,
+        750,
+        300
+      ],
+      "projectedViewportBbox": [
+        2428,
+        435,
+        75,
+        150
+      ],
+      "visibility": "fully_in_this_viewport",
+      "quality": "red"
+    },
+    {
+      "referenceId": "ref_144037_12",
+      "name": "跳跳兔盒",
+      "catalogId": "image20-0-1",
+      "row": 3,
+      "col": 0,
+      "w": 2,
+      "h": 2,
+      "lastRow": 4,
+      "pixelBboxOnStitchedCanvas": [
+        0,
+        225,
+        150,
+        375
+      ],
+      "projectedViewportBbox": [
+        1753,
+        510,
+        150,
+        150
+      ],
+      "visibility": "fully_in_this_viewport",
+      "quality": "purple"
+    },
+    {
+      "referenceId": "ref_144037_13",
+      "name": "炭火脆皮烤肉",
+      "catalogId": "image9-0-1",
+      "row": 3,
+      "col": 2,
+      "w": 1,
+      "h": 1,
+      "lastRow": 3,
+      "pixelBboxOnStitchedCanvas": [
+        150,
+        225,
+        225,
+        300
+      ],
+      "projectedViewportBbox": [
+        1903,
+        510,
+        75,
+        75
+      ],
+      "visibility": "fully_in_this_viewport",
+      "quality": "green"
+    },
+    {
+      "referenceId": "ref_144037_14",
+      "name": "蓝焰火花塞",
+      "catalogId": "image30-0-0",
+      "row": 4,
+      "col": 2,
+      "w": 2,
+      "h": 2,
+      "lastRow": 5,
+      "pixelBboxOnStitchedCanvas": [
+        150,
+        300,
+        300,
+        450
+      ],
+      "projectedViewportBbox": [
+        1903,
+        585,
+        150,
+        150
+      ],
+      "visibility": "fully_in_this_viewport",
+      "quality": "gold"
+    },
+    {
+      "referenceId": "ref_144037_15",
+      "name": "炫动三角铁",
+      "catalogId": "image5-1-0",
+      "row": 4,
+      "col": 4,
+      "w": 3,
+      "h": 1,
+      "lastRow": 4,
+      "pixelBboxOnStitchedCanvas": [
+        300,
+        300,
+        525,
+        375
+      ],
+      "projectedViewportBbox": [
+        2053,
+        585,
+        225,
+        75
+      ],
+      "visibility": "fully_in_this_viewport",
+      "quality": "green"
+    },
+    {
+      "referenceId": "ref_144037_16",
+      "name": "巡哨-干练精英",
+      "catalogId": "visual-922c073c366d",
+      "row": 4,
+      "col": 7,
+      "w": 2,
+      "h": 1,
+      "lastRow": 4,
+      "pixelBboxOnStitchedCanvas": [
+        525,
+        300,
+        675,
+        375
+      ],
+      "projectedViewportBbox": [
+        2278,
+        585,
+        150,
+        75
+      ],
+      "visibility": "fully_in_this_viewport",
+      "quality": "gold"
+    },
+    {
+      "referenceId": "ref_144037_17",
+      "name": "银铃",
+      "catalogId": "image15-0-1",
+      "row": 4,
+      "col": 9,
+      "w": 1,
+      "h": 1,
+      "lastRow": 4,
+      "pixelBboxOnStitchedCanvas": [
+        675,
+        300,
+        750,
+        375
+      ],
+      "projectedViewportBbox": [
+        2428,
+        585,
+        75,
+        75
+      ],
+      "visibility": "fully_in_this_viewport",
+      "quality": "blue"
+    },
+    {
+      "referenceId": "ref_144037_18",
+      "name": "大将军章鱼烧",
+      "catalogId": "image22-0-2",
+      "row": 5,
+      "col": 0,
+      "w": 2,
+      "h": 1,
+      "lastRow": 5,
+      "pixelBboxOnStitchedCanvas": [
+        0,
+        375,
+        150,
+        450
+      ],
+      "projectedViewportBbox": [
+        1753,
+        660,
+        150,
+        75
+      ],
+      "visibility": "fully_in_this_viewport",
+      "quality": "purple"
+    },
+    {
+      "referenceId": "ref_144037_19",
+      "name": "盈雪点翠",
+      "catalogId": "image30-0-1",
+      "row": 5,
+      "col": 4,
+      "w": 2,
+      "h": 2,
+      "lastRow": 6,
+      "pixelBboxOnStitchedCanvas": [
+        300,
+        375,
+        450,
+        525
+      ],
+      "projectedViewportBbox": [
+        2053,
+        660,
+        150,
+        150
+      ],
+      "visibility": "fully_in_this_viewport",
+      "quality": "gold"
+    },
+    {
+      "referenceId": "ref_144037_20",
+      "name": "绵绵云",
+      "catalogId": "image3-0-1",
+      "row": 5,
+      "col": 6,
+      "w": 1,
+      "h": 1,
+      "lastRow": 5,
+      "pixelBboxOnStitchedCanvas": [
+        450,
+        375,
+        525,
+        450
+      ],
+      "projectedViewportBbox": [
+        2203,
+        660,
+        75,
+        75
+      ],
+      "visibility": "fully_in_this_viewport",
+      "quality": "grey"
+    },
+    {
+      "referenceId": "ref_144037_21",
+      "name": "猫丸秘制豚骨拉面",
+      "catalogId": "visual-9607b248bbf4",
+      "row": 5,
+      "col": 7,
+      "w": 1,
+      "h": 1,
+      "lastRow": 5,
+      "pixelBboxOnStitchedCanvas": [
+        525,
+        375,
+        600,
+        450
+      ],
+      "projectedViewportBbox": [
+        2278,
+        660,
+        75,
+        75
+      ],
+      "visibility": "fully_in_this_viewport",
+      "quality": "gold"
+    },
+    {
+      "referenceId": "ref_144037_22",
+      "name": "方盒随身听",
+      "catalogId": "image1-0-0",
+      "row": 5,
+      "col": 8,
+      "w": 2,
+      "h": 3,
+      "lastRow": 7,
+      "pixelBboxOnStitchedCanvas": [
+        600,
+        375,
+        750,
+        600
+      ],
+      "projectedViewportBbox": [
+        2353,
+        660,
+        150,
+        225
+      ],
+      "visibility": "fully_in_this_viewport",
+      "quality": "grey"
+    },
+    {
+      "referenceId": "ref_144037_23",
+      "name": "M1000模型",
+      "catalogId": "image5-0-0",
+      "row": 6,
+      "col": 0,
+      "w": 4,
+      "h": 4,
+      "lastRow": 9,
+      "pixelBboxOnStitchedCanvas": [
+        0,
+        450,
+        300,
+        750
+      ],
+      "projectedViewportBbox": [
+        1753,
+        735,
+        300,
+        300
+      ],
+      "visibility": "fully_in_this_viewport",
+      "quality": "green"
+    },
+    {
+      "referenceId": "ref_144037_24",
+      "name": "幽灵态",
+      "catalogId": "image23-1-1",
+      "row": 6,
+      "col": 6,
+      "w": 1,
+      "h": 1,
+      "lastRow": 6,
+      "pixelBboxOnStitchedCanvas": [
+        450,
+        450,
+        525,
+        525
+      ],
+      "projectedViewportBbox": [
+        2203,
+        735,
+        75,
+        75
+      ],
+      "visibility": "fully_in_this_viewport",
+      "quality": "purple"
+    },
+    {
+      "referenceId": "ref_144037_25",
+      "name": "「方盒科技」智能手表",
+      "catalogId": "image31-1-2",
+      "row": 6,
+      "col": 7,
+      "w": 1,
+      "h": 2,
+      "lastRow": 7,
+      "pixelBboxOnStitchedCanvas": [
+        525,
+        450,
+        600,
+        600
+      ],
+      "projectedViewportBbox": [
+        2278,
+        735,
+        75,
+        150
+      ],
+      "visibility": "fully_in_this_viewport",
+      "quality": "gold"
+    },
+    {
+      "referenceId": "ref_144037_26",
+      "name": "巡哨-干练精英",
+      "catalogId": "visual-922c073c366d",
+      "row": 7,
+      "col": 4,
+      "w": 2,
+      "h": 1,
+      "lastRow": 7,
+      "pixelBboxOnStitchedCanvas": [
+        300,
+        525,
+        450,
+        600
+      ],
+      "projectedViewportBbox": [
+        2053,
+        810,
+        150,
+        75
+      ],
+      "visibility": "fully_in_this_viewport",
+      "quality": "gold"
+    },
+    {
+      "referenceId": "ref_144037_27",
+      "name": "（未来的）大师飞镖",
+      "catalogId": "image16-0-0",
+      "row": 7,
+      "col": 6,
+      "w": 1,
+      "h": 1,
+      "lastRow": 7,
+      "pixelBboxOnStitchedCanvas": [
+        450,
+        525,
+        525,
+        600
+      ],
+      "projectedViewportBbox": [
+        2203,
+        810,
+        75,
+        75
+      ],
+      "visibility": "fully_in_this_viewport",
+      "quality": "blue"
+    }
+  ],
+  "partialGt": [
+    {
+      "referenceId": "ref_144037_28",
+      "name": "储钱小哼",
+      "catalogId": "visual-xiaoheng-5x5",
+      "row": 8,
+      "col": 4,
+      "w": 5,
+      "h": 5,
+      "lastRow": 12,
+      "pixelBboxOnStitchedCanvas": [
+        300,
+        600,
+        675,
+        975
+      ],
+      "projectedViewportBbox": [
+        2053,
+        885,
+        375,
+        375
+      ],
+      "visibility": "partial_in_this_viewport",
+      "quality": "red"
+    },
+    {
+      "referenceId": "ref_144037_29",
+      "name": "灯塔",
+      "catalogId": "image11-0-0",
+      "row": 8,
+      "col": 9,
+      "w": 1,
+      "h": 3,
+      "lastRow": 10,
+      "pixelBboxOnStitchedCanvas": [
+        675,
+        600,
+        750,
+        825
+      ],
+      "projectedViewportBbox": [
+        2428,
+        885,
+        75,
+        225
+      ],
+      "visibility": "partial_in_this_viewport",
+      "quality": "blue"
+    }
+  ],
+  "belowFoldGt": [
+    {
+      "referenceId": "ref_144037_30",
+      "name": "罐装随心泥",
+      "catalogId": "image26-0-2",
+      "row": 10,
+      "col": 0,
+      "w": 4,
+      "h": 3,
+      "lastRow": 12,
+      "pixelBboxOnStitchedCanvas": [
+        0,
+        750,
+        300,
+        975
+      ],
+      "projectedViewportBbox": [
+        1753,
+        1035,
+        300,
+        225
+      ],
+      "visibility": "below_fold",
+      "quality": "gold"
+    },
+    {
+      "referenceId": "ref_144037_31",
+      "name": "「强身好伙伴！」",
+      "catalogId": "image27-1-2",
+      "row": 11,
+      "col": 9,
+      "w": 1,
+      "h": 5,
+      "lastRow": 15,
+      "pixelBboxOnStitchedCanvas": [
+        675,
+        825,
+        750,
+        1200
+      ],
+      "projectedViewportBbox": [
+        2428,
+        1110,
+        75,
+        375
+      ],
+      "visibility": "below_fold",
+      "quality": "gold"
+    },
+    {
+      "referenceId": "ref_144037_32",
+      "name": "琉璃尾",
+      "catalogId": "visual-liuliwei-4x1",
+      "row": 13,
+      "col": 0,
+      "w": 4,
+      "h": 1,
+      "lastRow": 13,
+      "pixelBboxOnStitchedCanvas": [
+        0,
+        975,
+        300,
+        1050
+      ],
+      "projectedViewportBbox": [
+        1753,
+        1260,
+        300,
+        75
+      ],
+      "visibility": "below_fold",
+      "quality": "gold"
+    },
+    {
+      "referenceId": "ref_144037_33",
+      "name": "番茄百分百果冻",
+      "catalogId": "image12-1-1",
+      "row": 13,
+      "col": 4,
+      "w": 2,
+      "h": 2,
+      "lastRow": 14,
+      "pixelBboxOnStitchedCanvas": [
+        300,
+        975,
+        450,
+        1125
+      ],
+      "projectedViewportBbox": [
+        2053,
+        1260,
+        150,
+        150
+      ],
+      "visibility": "below_fold",
+      "quality": "blue"
+    },
+    {
+      "referenceId": "ref_144037_34",
+      "name": "引航者望远镜",
+      "catalogId": "image10-1-2",
+      "row": 13,
+      "col": 6,
+      "w": 3,
+      "h": 2,
+      "lastRow": 14,
+      "pixelBboxOnStitchedCanvas": [
+        450,
+        975,
+        675,
+        1125
+      ],
+      "projectedViewportBbox": [
+        2203,
+        1260,
+        225,
+        150
+      ],
+      "visibility": "below_fold",
+      "quality": "blue"
+    },
+    {
+      "referenceId": "ref_144037_35",
+      "name": "蟑螂！蟑螂！",
+      "catalogId": "image1-1-0",
+      "row": 14,
+      "col": 0,
+      "w": 2,
+      "h": 2,
+      "lastRow": 15,
+      "pixelBboxOnStitchedCanvas": [
+        0,
+        1050,
+        150,
+        1200
+      ],
+      "projectedViewportBbox": [
+        1753,
+        1335,
+        150,
+        150
+      ],
+      "visibility": "below_fold",
+      "quality": "grey"
+    },
+    {
+      "referenceId": "ref_144037_36",
+      "name": "断落的剑格",
+      "catalogId": "image13-1-0",
+      "row": 14,
+      "col": 2,
+      "w": 2,
+      "h": 1,
+      "lastRow": 14,
+      "pixelBboxOnStitchedCanvas": [
+        150,
+        1050,
+        300,
+        1125
+      ],
+      "projectedViewportBbox": [
+        1903,
+        1335,
+        150,
+        75
+      ],
+      "visibility": "below_fold",
+      "quality": "blue"
+    },
+    {
+      "referenceId": "ref_144037_37",
+      "name": "吨吨锤",
+      "catalogId": "visual-4cc72b207cb6",
+      "row": 15,
+      "col": 2,
+      "w": 3,
+      "h": 3,
+      "lastRow": 17,
+      "pixelBboxOnStitchedCanvas": [
+        150,
+        1125,
+        375,
+        1350
+      ],
+      "projectedViewportBbox": [
+        1903,
+        1410,
+        225,
+        225
+      ],
+      "visibility": "below_fold",
+      "quality": "red"
+    },
+    {
+      "referenceId": "ref_144037_38",
+      "name": "「莲-C198」唱片机",
+      "catalogId": "image5-1-1",
+      "row": 15,
+      "col": 5,
+      "w": 2,
+      "h": 2,
+      "lastRow": 16,
+      "pixelBboxOnStitchedCanvas": [
+        375,
+        1125,
+        525,
+        1275
+      ],
+      "projectedViewportBbox": [
+        2128,
+        1410,
+        150,
+        150
+      ],
+      "visibility": "below_fold",
+      "quality": "green"
+    },
+    {
+      "referenceId": "ref_144037_39",
+      "name": "清凉凉止痛药",
+      "catalogId": "image14-0-0",
+      "row": 15,
+      "col": 7,
+      "w": 2,
+      "h": 1,
+      "lastRow": 15,
+      "pixelBboxOnStitchedCanvas": [
+        525,
+        1125,
+        675,
+        1200
+      ],
+      "projectedViewportBbox": [
+        2278,
+        1410,
+        150,
+        75
+      ],
+      "visibility": "below_fold",
+      "quality": "blue"
+    }
+  ],
+  "extraDetections": [
+    {
+      "reviewUnitId": "settlement_item_27",
+      "grid": [
+        8,
+        4,
+        5,
+        2
+      ],
+      "bboxOnOriginal": [
+        2053,
+        885,
+        376,
+        150
+      ],
+      "rarity": "red",
+      "name": null,
+      "overlappingGt": [
+        {
+          "referenceId": "ref_144037_28",
+          "name": "储钱小哼",
+          "grid": [
+            8,
+            4,
+            5,
+            5
+          ],
+          "visibility": "partial_in_this_viewport"
+        }
+      ]
+    },
+    {
+      "reviewUnitId": "settlement_item_28",
+      "grid": [
+        8,
+        9,
+        1,
+        2
+      ],
+      "bboxOnOriginal": [
+        2429,
+        885,
+        75,
+        150
+      ],
+      "rarity": "blue",
+      "name": null,
+      "overlappingGt": [
+        {
+          "referenceId": "ref_144037_29",
+          "name": "灯塔",
+          "grid": [
+            8,
+            9,
+            1,
+            3
+          ],
+          "visibility": "partial_in_this_viewport"
+        }
+      ]
+    }
+  ]
+}

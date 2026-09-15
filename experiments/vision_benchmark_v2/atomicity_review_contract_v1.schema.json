@@ -1,0 +1,47 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://local.yihuan/benchmark/atomicity-review-v1.schema.json",
+  "title": "Atomicity Review Contract v1",
+  "description": "Geometry-only reviewed atomicity classifications bound to one frozen production proposal artifact.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "reviewVersion", "sourceId", "proposalArtifactPath", "proposalArtifactHash", "reviews", "reviewEvidence"],
+  "properties": {
+    "schemaVersion": {"const": "atomicity-review-contract-v1"},
+    "reviewVersion": {"const": "atomicity-review-v1"},
+    "sourceId": {"type": "string", "minLength": 1},
+    "proposalArtifactPath": {"type": "string", "minLength": 1},
+    "proposalArtifactHash": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+    "reviews": {
+      "type": "array",
+      "minItems": 1,
+      "items": {"$ref": "#/$defs/review"}
+    },
+    "reviewEvidence": {"$ref": "#/$defs/reviewEvidence"}
+  },
+  "$defs": {
+    "review": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["proposalId", "atomicityClassification", "reviewStatus"],
+      "properties": {
+        "proposalId": {"type": "string", "pattern": "^proposal-[A-Za-z0-9._:-]+$"},
+        "atomicityClassification": {
+          "enum": ["ATOMIC_CLEAR", "FRAGMENT_OF_ONE_PARENT", "MIXED_MULTI_PARENT", "AMBIGUOUS", "BACKGROUND_OR_NOISE"]
+        },
+        "reviewStatus": {"enum": ["pending_review", "reviewed_consistent", "rejected"]}
+      }
+    },
+    "reviewEvidence": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["evidenceType", "sourceSnapshotPath", "reviewerRole", "note"],
+      "properties": {
+        "evidenceType": {"const": "manual_source_geometry_review"},
+        "sourceSnapshotPath": {"type": "string", "minLength": 1},
+        "reviewerRole": {"const": "human_reviewer"},
+        "note": {"type": "string", "minLength": 1}
+      }
+    }
+  }
+}

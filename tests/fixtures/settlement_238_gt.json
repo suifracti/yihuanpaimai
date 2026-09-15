@@ -1,0 +1,700 @@
+{
+  "frame": "2026-08-17 14-11-56.mkv@238s",
+  "grid": {
+    "x1": 0.685,
+    "y1": 0.2,
+    "x2": 0.978,
+    "y2": 0.755,
+    "cols": 10,
+    "rows": 8
+  },
+  "items": [
+    {
+      "id": 1,
+      "note": "pen-cup",
+      "rarity": "purple",
+      "row": 0,
+      "col": 0,
+      "widthCells": 2,
+      "heightCells": 2,
+      "cells": [
+        [
+          0,
+          0
+        ],
+        [
+          0,
+          1
+        ],
+        [
+          1,
+          0
+        ],
+        [
+          1,
+          1
+        ]
+      ],
+      "bbox": [
+        1315,
+        216,
+        112,
+        119
+      ]
+    },
+    {
+      "id": 2,
+      "note": "ramen-top",
+      "rarity": "purple",
+      "row": 0,
+      "col": 2,
+      "widthCells": 1,
+      "heightCells": 1,
+      "cells": [
+        [
+          0,
+          2
+        ]
+      ],
+      "bbox": [
+        1427,
+        216,
+        56,
+        59
+      ]
+    },
+    {
+      "id": 3,
+      "note": "snack-bag",
+      "rarity": "purple",
+      "row": 1,
+      "col": 2,
+      "widthCells": 1,
+      "heightCells": 1,
+      "cells": [
+        [
+          1,
+          2
+        ]
+      ],
+      "bbox": [
+        1427,
+        275,
+        56,
+        59
+      ]
+    },
+    {
+      "id": 4,
+      "note": "ramen-mid",
+      "rarity": "purple",
+      "row": 2,
+      "col": 2,
+      "widthCells": 1,
+      "heightCells": 1,
+      "cells": [
+        [
+          2,
+          2
+        ]
+      ],
+      "bbox": [
+        1427,
+        335,
+        56,
+        59
+      ]
+    },
+    {
+      "id": 5,
+      "note": "ice-cube",
+      "rarity": "red",
+      "row": 0,
+      "col": 3,
+      "widthCells": 3,
+      "heightCells": 2,
+      "cells": [
+        [
+          0,
+          3
+        ],
+        [
+          0,
+          4
+        ],
+        [
+          0,
+          5
+        ],
+        [
+          1,
+          3
+        ],
+        [
+          1,
+          4
+        ],
+        [
+          1,
+          5
+        ]
+      ],
+      "bbox": [
+        1483,
+        216,
+        168,
+        119
+      ]
+    },
+    {
+      "id": 6,
+      "note": "telescope-chest",
+      "rarity": "blue",
+      "row": 0,
+      "col": 6,
+      "widthCells": 3,
+      "heightCells": 2,
+      "cells": [
+        [
+          0,
+          6
+        ],
+        [
+          0,
+          7
+        ],
+        [
+          0,
+          8
+        ],
+        [
+          1,
+          6
+        ],
+        [
+          1,
+          7
+        ],
+        [
+          1,
+          8
+        ]
+      ],
+      "bbox": [
+        1652,
+        216,
+        168,
+        119
+      ]
+    },
+    {
+      "id": 7,
+      "note": "pink-candy",
+      "rarity": "blue",
+      "row": 0,
+      "col": 9,
+      "widthCells": 1,
+      "heightCells": 1,
+      "cells": [
+        [
+          0,
+          9
+        ]
+      ],
+      "bbox": [
+        1820,
+        216,
+        56,
+        59
+      ]
+    },
+    {
+      "id": 8,
+      "note": "white-crystals",
+      "rarity": "blue",
+      "row": 1,
+      "col": 9,
+      "widthCells": 1,
+      "heightCells": 1,
+      "cells": [
+        [
+          1,
+          9
+        ]
+      ],
+      "bbox": [
+        1820,
+        275,
+        56,
+        59
+      ]
+    },
+    {
+      "id": 9,
+      "note": "snow-globe",
+      "rarity": "purple",
+      "row": 2,
+      "col": 0,
+      "widthCells": 2,
+      "heightCells": 2,
+      "cells": [
+        [
+          2,
+          0
+        ],
+        [
+          2,
+          1
+        ],
+        [
+          3,
+          0
+        ],
+        [
+          3,
+          1
+        ]
+      ],
+      "bbox": [
+        1315,
+        335,
+        112,
+        119
+      ]
+    },
+    {
+      "id": 10,
+      "note": "remote",
+      "rarity": "purple",
+      "row": 3,
+      "col": 2,
+      "widthCells": 2,
+      "heightCells": 1,
+      "cells": [
+        [
+          3,
+          2
+        ],
+        [
+          3,
+          3
+        ]
+      ],
+      "bbox": [
+        1427,
+        395,
+        112,
+        59
+      ]
+    },
+    {
+      "id": 11,
+      "note": "sushi",
+      "rarity": "purple",
+      "row": 3,
+      "col": 4,
+      "widthCells": 2,
+      "heightCells": 1,
+      "cells": [
+        [
+          3,
+          4
+        ],
+        [
+          3,
+          5
+        ]
+      ],
+      "bbox": [
+        1539,
+        395,
+        112,
+        59
+      ]
+    },
+    {
+      "id": 12,
+      "note": "statue",
+      "rarity": "gold",
+      "row": 2,
+      "col": 6,
+      "widthCells": 4,
+      "heightCells": 4,
+      "cells": [
+        [
+          2,
+          6
+        ],
+        [
+          2,
+          7
+        ],
+        [
+          2,
+          8
+        ],
+        [
+          2,
+          9
+        ],
+        [
+          3,
+          6
+        ],
+        [
+          3,
+          7
+        ],
+        [
+          3,
+          8
+        ],
+        [
+          3,
+          9
+        ],
+        [
+          4,
+          6
+        ],
+        [
+          4,
+          7
+        ],
+        [
+          4,
+          8
+        ],
+        [
+          4,
+          9
+        ],
+        [
+          5,
+          6
+        ],
+        [
+          5,
+          7
+        ],
+        [
+          5,
+          8
+        ],
+        [
+          5,
+          9
+        ]
+      ],
+      "bbox": [
+        1652,
+        335,
+        224,
+        239
+      ]
+    },
+    {
+      "id": 13,
+      "note": "fried-plate",
+      "rarity": "purple",
+      "row": 4,
+      "col": 0,
+      "widthCells": 2,
+      "heightCells": 1,
+      "cells": [
+        [
+          4,
+          0
+        ],
+        [
+          4,
+          1
+        ]
+      ],
+      "bbox": [
+        1315,
+        455,
+        112,
+        59
+      ]
+    },
+    {
+      "id": 14,
+      "note": "wand",
+      "rarity": "purple",
+      "row": 4,
+      "col": 2,
+      "widthCells": 1,
+      "heightCells": 3,
+      "cells": [
+        [
+          4,
+          2
+        ],
+        [
+          5,
+          2
+        ],
+        [
+          6,
+          2
+        ]
+      ],
+      "bbox": [
+        1427,
+        455,
+        56,
+        179
+      ]
+    },
+    {
+      "id": 15,
+      "note": "popsicle",
+      "rarity": "purple",
+      "row": 4,
+      "col": 3,
+      "widthCells": 2,
+      "heightCells": 1,
+      "cells": [
+        [
+          4,
+          3
+        ],
+        [
+          4,
+          4
+        ]
+      ],
+      "bbox": [
+        1483,
+        455,
+        112,
+        59
+      ]
+    },
+    {
+      "id": 16,
+      "note": "bottle",
+      "rarity": "green",
+      "row": 4,
+      "col": 5,
+      "widthCells": 1,
+      "heightCells": 2,
+      "cells": [
+        [
+          4,
+          5
+        ],
+        [
+          5,
+          5
+        ]
+      ],
+      "bbox": [
+        1596,
+        455,
+        56,
+        119
+      ]
+    },
+    {
+      "id": 17,
+      "note": "radio-left",
+      "rarity": "blue",
+      "row": 5,
+      "col": 3,
+      "widthCells": 1,
+      "heightCells": 1,
+      "cells": [
+        [
+          5,
+          3
+        ]
+      ],
+      "bbox": [
+        1483,
+        515,
+        56,
+        59
+      ]
+    },
+    {
+      "id": 18,
+      "note": "round-table",
+      "rarity": "blue",
+      "row": 6,
+      "col": 0,
+      "widthCells": 1,
+      "heightCells": 1,
+      "cells": [
+        [
+          6,
+          0
+        ]
+      ],
+      "bbox": [
+        1315,
+        575,
+        56,
+        59
+      ]
+    },
+    {
+      "id": 19,
+      "note": "rocket",
+      "rarity": "blue",
+      "row": 6,
+      "col": 0,
+      "widthCells": 3,
+      "heightCells": 2,
+      "cells": [
+        [
+          6,
+          1
+        ],
+        [
+          7,
+          0
+        ],
+        [
+          7,
+          1
+        ],
+        [
+          7,
+          2
+        ]
+      ],
+      "bbox": [
+        1315,
+        575,
+        168,
+        119
+      ]
+    },
+    {
+      "id": 20,
+      "note": "orb",
+      "rarity": "purple",
+      "row": 6,
+      "col": 3,
+      "widthCells": 1,
+      "heightCells": 1,
+      "cells": [
+        [
+          6,
+          3
+        ]
+      ],
+      "bbox": [
+        1483,
+        575,
+        56,
+        59
+      ]
+    },
+    {
+      "id": 21,
+      "note": "tablet",
+      "rarity": "purple",
+      "row": 5,
+      "col": 4,
+      "widthCells": 2,
+      "heightCells": 3,
+      "cells": [
+        [
+          5,
+          4
+        ],
+        [
+          6,
+          4
+        ],
+        [
+          6,
+          5
+        ],
+        [
+          7,
+          4
+        ],
+        [
+          7,
+          5
+        ]
+      ],
+      "bbox": [
+        1539,
+        515,
+        112,
+        179
+      ]
+    },
+    {
+      "id": 22,
+      "note": "pink-crystal",
+      "rarity": "blue",
+      "row": 6,
+      "col": 6,
+      "widthCells": 1,
+      "heightCells": 2,
+      "cells": [
+        [
+          6,
+          6
+        ],
+        [
+          7,
+          6
+        ]
+      ],
+      "bbox": [
+        1652,
+        575,
+        56,
+        119
+      ]
+    },
+    {
+      "id": 23,
+      "note": "set-square",
+      "rarity": "green",
+      "row": 6,
+      "col": 7,
+      "widthCells": 3,
+      "heightCells": 2,
+      "cells": [
+        [
+          6,
+          7
+        ],
+        [
+          6,
+          8
+        ],
+        [
+          6,
+          9
+        ],
+        [
+          7,
+          7
+        ],
+        [
+          7,
+          8
+        ],
+        [
+          7,
+          9
+        ]
+      ],
+      "bbox": [
+        1708,
+        575,
+        168,
+        119
+      ]
+    }
+  ]
+}

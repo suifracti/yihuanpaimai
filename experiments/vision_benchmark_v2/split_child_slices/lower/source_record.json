@@ -1,0 +1,112 @@
+{
+  "candidateSourcePath": "core/settlement_items_crop.png",
+  "coordinateSpace": "source_pixel",
+  "fixturePath": "experiments/vision_benchmark_v2/fixtures/reviewed_split_lower_parent_v1.json",
+  "fixtureSha256": "9b2db26915c02719bc27a0e5968cd07901e7c7d51bb6643dc3c4df05e0826e58",
+  "height": 329,
+  "inventoryEligible": true,
+  "inventoryRoi": {
+    "coordinateSpace": "source_pixel",
+    "height": 329,
+    "width": 307,
+    "x": 0,
+    "y": 0
+  },
+  "proposalProvenance": {
+    "artifactPath": "experiments/vision_benchmark_v2/proposal_artifact.json",
+    "artifactSha256": "f0103050a96b66fbe696641e30535e41301ce460abad0c0054395d18fdc90314",
+    "atomicityClassifications": {
+      "proposal-44d473f3458cff319236": "MIXED_MULTI_PARENT"
+    },
+    "atomicityReviewPath": "experiments/vision_benchmark_v2/atomicity_review_v1.json",
+    "atomicityReviewSha256": "8e0e7d63420028516f8792992dbf7dbc47107f99fe9172380e666a8759b64415",
+    "atomicityReviewVersion": "atomicity-review-v1",
+    "bboxDerivation": "reviewed_override",
+    "groupingReviewPath": "experiments/vision_benchmark_v2/fixtures/grouping_review_split_children_v1.json",
+    "groupingReviewSha256": "070ba143d00f4049ea38cfd624018a43a9c9a1ed7a1dbd7098c9e7794e22317a",
+    "groupingVersion": "parent-grouping-review-v1",
+    "parentResolutionMethod": "reviewed_split_child_parent",
+    "parentResolutionOwner": "benchmark-v2-adapter",
+    "productionPrimitives": [
+      {
+        "implementationPath": "core/settlement_item_recognizer.py",
+        "implementationSha256": "32dc8b0175adc9560a81213370bf2d6c975377101441942dea42bfd7681c3f1e",
+        "invocationVersion": "settlement-component-export-v1",
+        "name": "SettlementItemRecognizer._segment_occupied_components",
+        "runtimeDependencies": {
+          "numpy": "2.2.6",
+          "opencv": "5.0.0"
+        },
+        "version": "source-sha256:32dc8b0175adc9560a81213370bf2d6c975377101441942dea42bfd7681c3f1e"
+      }
+    ],
+    "resolvedParentBbox": [
+      8,
+      103,
+      98,
+      162
+    ],
+    "reviewEvidence": {
+      "evidenceType": "manual_source_review",
+      "note": "Source review resolves the lower split child to a separate physical parent bbox; geometry only, with no semantic or quality assertion.",
+      "reviewerRole": "human_reviewer",
+      "sourceSnapshotPath": "experiments/vision_benchmark_v2/snapshots/source-c86e85c5712aea00ac7d.png"
+    },
+    "reviewStatus": "reviewed_consistent",
+    "schemaVersion": "production-proposal-contract-v1",
+    "selectedGroupId": "group-split-lower-540eff89",
+    "selectedProposalCount": 0,
+    "selectedProposalIds": [],
+    "selectedProposalTrackIds": [
+      {
+        "proposalId": "proposal-44d473f3458cff319236",
+        "trackId": null
+      }
+    ],
+    "selectedProposalUnionBbox": [
+      0,
+      103,
+      31,
+      132
+    ],
+    "selectedSplitChildCount": 1,
+    "selectedSplitChildIds": [
+      "split-child-7a64c32a095d"
+    ],
+    "selectedSplitChildren": [
+      {
+        "childId": "split-child-7a64c32a095d",
+        "coverageRole": "physical_parent_fragment",
+        "sourceCells": [
+          [
+            3,
+            0
+          ]
+        ],
+        "sourcePixelBbox": [
+          0,
+          103,
+          31,
+          132
+        ]
+      }
+    ],
+    "splitReviewPath": "experiments/vision_benchmark_v2/fixtures/reviewed_split_44d473_v1.json",
+    "splitReviewSha256": "d8fa627b29d84bba86550c8a794889aa03336a79270acbea179138f2b2bdd271",
+    "splitSourceProposalId": "proposal-44d473f3458cff319236",
+    "splitVersion": "reviewed-proposal-split-v1"
+  },
+  "recordVersion": "benchmark-v2-source-record-v1",
+  "sceneAdmission": {
+    "decisionMethod": "reviewed_fixture",
+    "inventoryEligible": true,
+    "note": "Known fixed inventory crop reviewed only for source and geometry admission.",
+    "sceneType": "inventory_crop"
+  },
+  "sceneType": "inventory_crop",
+  "sha256": "c86e85c5712aea00ac7dc9fa08b8111faf0e6a14c85f126c4f9a1f4b2bedce17",
+  "snapshotOwner": "benchmark-v2-adapter-slice-v1",
+  "snapshotPath": "experiments/vision_benchmark_v2/split_child_slices/lower/snapshots/source-c86e85c5712aea00ac7d.png",
+  "sourceId": "src-c86e85c5712aea00ac7d",
+  "width": 307
+}

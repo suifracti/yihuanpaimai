@@ -1,0 +1,174 @@
+{
+  "schemaVersion": "mascot.final-assets.v1",
+  "manifestId": "mascot-final-assets-v1",
+  "visualAuthority": {
+    "path": "design/mascot/source/mascot_design_master.png",
+    "sha256": "e26ae89df12f46527a83af389aeb0084ee83c53a0a582a712901eb5e36c2f6cb"
+  },
+  "sourceFiles": [
+    {
+      "path": "design/mascot/source/mascot_asset_character.png",
+      "sha256": "0b3d0e56aa7fa2e50342280c1bed6eafda61607f05bc31b488786a3cb8b974fe"
+    },
+    {
+      "path": "design/mascot/source/mascot_asset_application.png",
+      "sha256": "9b077f99258b8c3a5f0404f869e24428ae5e8c789ac866f3cc076726dff6cd28"
+    }
+  ],
+  "bboxConvention": "source_pixel_xyxy_half_open",
+  "extractionPolicy": "non_generative_source_pixel_preserving",
+  "assets": [
+    {
+      "assetId": "mascot.portrait.default",
+      "role": "portrait",
+      "path": "design/mascot/exports/mascot_portrait_default.png",
+      "mediaType": "image/png",
+      "pixelFormat": "RGBA",
+      "width": 146,
+      "height": 194,
+      "sha256": "ec1c0bed2cfe778d6201b7c66fcddadebe9ae30e794b849894a1fa5a2b74f047",
+      "sourcePath": "design/mascot/source/mascot_asset_character.png",
+      "sourceBbox": [968, 8, 1114, 202],
+      "status": "approved_final"
+    },
+    {
+      "assetId": "mascot.portrait.thinking",
+      "role": "portrait",
+      "path": "design/mascot/exports/mascot_portrait_thinking_v2.png",
+      "mediaType": "image/png",
+      "pixelFormat": "RGBA",
+      "width": 140,
+      "height": 194,
+      "sha256": "daff7f9193b2980dd09b900cf0e995357169b097c5b23ff0c237e47152e39e3f",
+      "sourcePath": "design/mascot/source/mascot_asset_character.png",
+      "sourceBbox": [1114, 8, 1256, 202],
+      "status": "approved_final"
+    },
+    {
+      "assetId": "mascot.portrait.success",
+      "role": "portrait",
+      "path": "design/mascot/exports/mascot_portrait_success_v2.png",
+      "mediaType": "image/png",
+      "pixelFormat": "RGBA",
+      "width": 136,
+      "height": 194,
+      "sha256": "5021c280344f258879c010dfadcdbe562734d5bf8f9de6efc0d8cd67413bc3f0",
+      "sourcePath": "design/mascot/source/mascot_asset_character.png",
+      "sourceBbox": [1254, 8, 1396, 202],
+      "status": "approved_final"
+    },
+    {
+      "assetId": "mascot.avatar.round",
+      "role": "avatar",
+      "path": "design/mascot/exports/mascot_avatar_round_v2.png",
+      "mediaType": "image/png",
+      "pixelFormat": "RGBA",
+      "width": 179,
+      "height": 163,
+      "sha256": "9462aa2ca8161416e0092938eee5b31147800803fea4c6b9125dadb3247c4a65",
+      "sourcePath": "design/mascot/source/mascot_asset_character.png",
+      "sourceBbox": [1010, 463, 1224, 633],
+      "status": "approved_final"
+    },
+    {
+      "assetId": "mascot.avatar.square",
+      "role": "avatar",
+      "path": "design/mascot/exports/mascot_avatar_square_v2.png",
+      "mediaType": "image/png",
+      "pixelFormat": "RGBA",
+      "width": 159,
+      "height": 155,
+      "sha256": "89fc50a469da82e4630e652cc58575bd2a9a4ecacdb9be8526b372ad574d35f5",
+      "sourcePath": "design/mascot/source/mascot_asset_character.png",
+      "sourceBbox": [1237, 463, 1445, 633],
+      "status": "approved_final"
+    },
+    {
+      "assetId": "mascot.chibi.idle",
+      "role": "chibi_state",
+      "path": "design/mascot/exports/chibi/mascot_chibi_idle.png",
+      "mediaType": "image/png",
+      "pixelFormat": "RGBA",
+      "width": 140,
+      "height": 133,
+      "sha256": "1f436454fc54ff15538e61a10dcb3d55afcde90d739b53a794065b92d0fa8728",
+      "sourcePath": "design/mascot/source/mascot_asset_character.png",
+      "sourceBbox": [473, 657, 621, 801],
+      "status": "approved_final"
+    },
+    {
+      "assetId": "mascot.chibi.thinking",
+      "role": "chibi_state",
+      "path": "design/mascot/exports/chibi/mascot_chibi_thinking.png",
+      "mediaType": "image/png",
+      "pixelFormat": "RGBA",
+      "width": 133,
+      "height": 117,
+      "sha256": "15257c89e5e2ed1d7d6c025ce302aeabd08eac928116582ed7a4ed69a6408078",
+      "sourcePath": "design/mascot/source/mascot_asset_application.png",
+      "sourceBbox": [1124, 345, 1259, 462],
+      "status": "approved_final"
+    },
+    {
+      "assetId": "mascot.chibi.success",
+      "role": "chibi_state",
+      "path": "design/mascot/exports/chibi/mascot_chibi_success.png",
+      "mediaType": "image/png",
+      "pixelFormat": "RGBA",
+      "width": 138,
+      "height": 117,
+      "sha256": "63c287ec89612bd06d4e9d93a14dfcb6f37d6cedc1143afa88a79a17bfb9c884",
+      "sourcePath": "design/mascot/source/mascot_asset_application.png",
+      "sourceBbox": [1257, 345, 1395, 462],
+      "status": "approved_final"
+    },
+    {
+      "assetId": "mascot.chibi.warning",
+      "role": "chibi_state",
+      "path": "design/mascot/exports/chibi/mascot_chibi_warning.png",
+      "mediaType": "image/png",
+      "pixelFormat": "RGBA",
+      "width": 143,
+      "height": 117,
+      "sha256": "6688697a8f740a67fe07b19e5c061d6a831e4a8d7d44ed9e1cab7d62a0806b27",
+      "sourcePath": "design/mascot/source/mascot_asset_application.png",
+      "sourceBbox": [1393, 345, 1536, 462],
+      "status": "approved_final"
+    },
+    {
+      "assetId": "mascot.chibi.sleep",
+      "role": "chibi_state",
+      "path": "design/mascot/exports/chibi/mascot_chibi_sleep.png",
+      "mediaType": "image/png",
+      "pixelFormat": "RGBA",
+      "width": 131,
+      "height": 112,
+      "sha256": "0153bc0901fce73de8dbc43aa36b7f1992558da6bc2b7d819ce16c34cded467b",
+      "sourcePath": "design/mascot/source/mascot_asset_application.png",
+      "sourceBbox": [997, 469, 1128, 610],
+      "status": "approved_final"
+    },
+    {
+      "assetId": "mascot.chibi.loading.v2",
+      "role": "chibi_state",
+      "path": "design/mascot/exports/chibi/mascot_chibi_loading_v2.png",
+      "mediaType": "image/png",
+      "pixelFormat": "RGBA",
+      "width": 192,
+      "height": 153,
+      "sha256": "5fcc8a2dae3cfe3bac240cb08af41f8375ec70dec3a546f26dc8337803bfd524",
+      "sourcePath": "design/mascot/source/mascot_asset_character.png",
+      "sourceBbox": [1213, 657, 1361, 801],
+      "reviewedExtractionCrop": [1176, 632, 1374, 800],
+      "reviewArtifact": "design/mascot/review/mascot_chibi_loading_crop_review_v2.png",
+      "status": "approved_final"
+    }
+  ],
+  "retiredAssets": [
+    {
+      "path": "design/mascot/exports/chibi/mascot_chibi_loading.png",
+      "reason": "superseded_by_mascot.chibi.loading.v2",
+      "mustNotReference": true
+    }
+  ]
+}

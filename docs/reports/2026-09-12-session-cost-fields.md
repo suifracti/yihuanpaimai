@@ -1,0 +1,9 @@
+# P4 成本字段与记录转换
+
+业务提交6c7ceb4。发现CurrentMatch.to_canonical固定将intel/other/future写0，主窗口解释成本也只取entry。新增intelCost、otherCost、futureIncrementalCost当前事实及两端输入；当前记录转换和主窗口解释共用session_costs.costs_from_facts，保留入场未知而非强置0。新增费用进入宿主手动输入整数/非负校验，生产ctx嵌套costs中的三项费用投影到当前事实。已付为entry+intel+other，全成本再加future，不混为重复扣费。旧附加费用默认0契约保留。
+
+cost-fields-tests.json 11项通过3.813秒，无跳过。覆盖CurrentMatch实际字段接收、canonical费用保留、v06适配器透传、归零、未知entry保持未知；原利润边界及展示回归通过。
+
+cost-dual-ui/report.json PASS：真实Main/HUD启动并正常退出，主输入情报1200，HUD输入其他300和后续700，两端回执一致；选择珊瑚入场5000，canonical.costs与solverInput.costs严格一致，sunk6500/total7200。数量/金均/叫价清空和合成盈亏边界沿用通过。此处验证宿主记录对象，不宣称实际历史落盘重启；本次隔离运行目录未生成可供重读的正式历史JSON。实际视觉布局/自动模式冻结估价的手动成本覆盖仍需补验。
+
+下一步先核对自动模式成本覆盖和历史落盘恢复，补实际成本合计/生效反馈；随后继续P4其余字段与隔离包。P3 PARTIAL，自动本人获胜实录仍缺，逐件匹配暂停。正式历史SHA256仍19100479bbb2dfd8e09faa2adbaf5117919126df4b4bcf92e377ad88c4da3431，v13未覆盖，无真实游戏输入。

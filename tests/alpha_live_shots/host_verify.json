@@ -1,0 +1,19 @@
+{
+  "hud": 9316544,
+  "visible": true,
+  "iconic": false,
+  "rect": [
+    983,
+    564,
+    1543,
+    642
+  ],
+  "exStyle": "0x50008",
+  "WS_EX_NOACTIVATE": false,
+  "owner": 0,
+  "ownerTitle": "",
+  "launcher": 132918,
+  "ownerIsLauncher": false,
+  "foreground": 9316544,
+  "fgTitle": "⚡ 异环拍卖战术助手 HUD"
+}

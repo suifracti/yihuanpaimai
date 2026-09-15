@@ -1,0 +1,24 @@
+{
+  "version": 1,
+  "roi": "lobby_venue_search",
+  "minScore": 0.62,
+  "minMargin": 0.05,
+  "items": [
+    {
+      "id": "珊瑚场",
+      "file": "珊瑚场.png",
+      "venue": "中级场 · 珊瑚场",
+      "venueKey": "shanhu",
+      "venueLabel": "珊瑚场",
+      "entryCost": 5000
+    },
+    {
+      "id": "海贝场",
+      "file": "海贝场.png",
+      "venue": "初级场 · 海贝场",
+      "venueKey": "haibei",
+      "venueLabel": "海贝场",
+      "entryCost": 0
+    }
+  ]
+}

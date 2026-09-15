@@ -1,0 +1,1332 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="dark">
+  <title>异环拍卖助手 0.68 Alpha</title>
+  <link rel="stylesheet" href="main_window.css">
+</head>
+<body>
+  <div class="app-shell">
+    <!-- 顶部紧凑主导航 -->
+    <header class="topbar">
+      <div class="brand" aria-label="异环拍卖助手 0.68 Alpha">
+        <span class="brand-mark" aria-hidden="true"><i></i></span>
+        <span class="brand-name">异环拍卖助手</span>
+        <span class="brand-version">0.68</span>
+        <span class="alpha-badge">Alpha</span>
+      </div>
+
+      <nav class="primary-nav" aria-label="主导航">
+        <button class="nav-item is-active" type="button" data-view-target="overview" aria-current="page">首页</button>
+        <button class="nav-item" type="button" data-view-target="match">对局</button>
+        <button class="nav-item" type="button" data-view-target="history">记录</button>
+        <button class="nav-item" type="button" data-view-target="analysis">分析</button>
+      </nav>
+
+      <div class="header-actions">
+        <div class="overlay-pill" id="pin-control" data-pinned="true">
+          <span class="status-dot" id="pin-status-dot" aria-hidden="true"></span>
+          <span id="pin-status">窗口置顶开启</span>
+          <button class="overlay-toggle-btn" id="pin-toggle" type="button">取消置顶</button>
+        </div>
+        <div class="overlay-pill" id="overlay-control" data-visible="true">
+          <span class="status-dot" aria-hidden="true"></span>
+          <span id="overlay-status">悬浮窗开启</span>
+          <button class="overlay-toggle-btn" id="overlay-toggle" type="button">隐藏</button>
+        </div>
+      </div>
+    </header>
+
+    <main class="dashboard">
+      <!-- ======================================================= -->
+      <!-- 1. 首页 (Overview - 极简任务状态中心)                    -->
+      <!-- ======================================================= -->
+      <section class="view-page is-active overview-page" data-view-page="overview" aria-label="首页">
+        <div class="overview-container">
+          <!-- 上半区：当前任务/行动卡片与看板娘 -->
+          <div class="overview-main-grid">
+            <!-- 正在进行中的对局卡片 (有局时显示) -->
+            <div class="overview-hero-surface" id="overview-active-card" hidden>
+              <div class="overview-hero-header">
+                <div class="overview-hero-badges">
+                  <span class="tag is-warning">正在进行中的对局</span>
+                  <span class="badge badge-lifecycle" id="overview-match-lifecycle">进行中</span>
+                </div>
+                <div class="overview-hero-rule" id="overview-match-rule">标准规则</div>
+              </div>
+              <h1 class="overview-hero-title" id="overview-match-title">珊瑚场 · 琉璃宝箱</h1>
+              <div class="overview-hero-meta">
+                <span id="overview-match-intel-count">已获取 4/7 项情报</span>
+              </div>
+
+              <div class="overview-val-summary">
+                <div class="overview-val-item">
+                  <span class="overview-val-label">当前估值中位 (P50)</span>
+                  <strong class="overview-val-num is-accent" id="overview-match-p50">--</strong>
+                </div>
+                <div class="overview-val-item">
+                  <span class="overview-val-label">建议最高出价</span>
+                  <strong class="overview-val-num is-success" id="overview-match-rec-max">--</strong>
+                </div>
+              </div>
+
+              <div class="overview-actions">
+                <button class="btn-primary" id="overview-btn-resume" type="button">
+                  <svg class="icon-svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="12" cy="12" r="10"/><polygon points="10 8 16 12 10 16 10 8"/></svg>
+                  <span>继续对局工作台</span>
+                </button>
+                <button class="btn-secondary" id="overview-btn-quick-new" type="button">
+                  <svg class="icon-svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>
+                  <span>重新开始新一局</span>
+                </button>
+              </div>
+            </div>
+
+            <!-- 无对局时的开始卡片 (无局时显示) -->
+            <div class="overview-hero-surface" id="overview-empty-card">
+              <div class="overview-hero-header">
+                <span class="tag is-ready">应用就绪</span>
+              </div>
+              <h1 class="overview-hero-title">准备开始拍卖</h1>
+              <p class="overview-hero-desc">进入游戏拍卖行后，点击下方按钮进入对局工作台。支持截图快捷识别情报，推算藏品价值与出价上限。</p>
+              <div class="overview-actions">
+                <button class="btn-primary" id="overview-btn-start" type="button">
+                  <svg class="icon-svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+                  <span>开始新一局对局</span>
+                </button>
+                <button class="btn-secondary" id="overview-btn-history" type="button">
+                  <svg class="icon-svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 20h16a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.93a2 2 0 0 1-1.66-.9l-.82-1.2A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13c0 1.1.9 2 2 2Z"/></svg>
+                  <span>查看历史记录</span>
+                </button>
+              </div>
+            </div>
+
+            <!-- 看板娘自然嵌入状态 (人格化状态锚点) -->
+            <section class="mascot-panel" id="mascot-panel" aria-label="看板娘状态" data-ready="false">
+              <div class="mascot-stage-wrap">
+                <div class="mascot-portrait-stage">
+                  <img id="mascot-state-image" alt="看板娘当前状态" draggable="false" hidden>
+                  <img id="mascot-portrait" alt="看板娘" draggable="false" hidden>
+                </div>
+                <div class="mascot-text-block">
+                  <div class="mascot-title-row">
+                    <h2 id="mascot-state-title">随时待命</h2>
+                    <span class="mascot-state-chip" id="mascot-state-chip">就绪</span>
+                  </div>
+                  <p id="mascot-state-description">准备陪你查看拍卖数据。</p>
+                </div>
+              </div>
+            </section>
+          </div>
+
+          <!-- 下半区：真实概况数据与本地归档状态 (Truthful Summary Strip) -->
+          <div class="overview-stats-section">
+            <div class="overview-stats-header">
+              <span class="overview-stats-title">本地数据积累概况</span>
+              <span class="overview-stats-hint">真实对局归档与历史准入状态</span>
+            </div>
+            <div class="overview-stats-grid">
+              <div class="overview-stat-card" data-metric="matches">
+                <span class="stat-card-label">今日对局</span>
+                <strong class="stat-card-value" data-value>--</strong>
+                <span class="stat-card-meta" data-change>今日已完成对局</span>
+              </div>
+              <div class="overview-stat-card" data-metric="totalRecords">
+                <span class="stat-card-label">真实历史总记录</span>
+                <strong class="stat-card-value" data-value>--</strong>
+                <span class="stat-card-meta">已归档对局样本</span>
+              </div>
+              <div class="overview-stat-card" data-metric="admittedRecords">
+                <span class="stat-card-label">历史准入样本</span>
+                <strong class="stat-card-value is-success" data-value>--</strong>
+                <span class="stat-card-meta">可用于历史先验</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ======================================================= -->
+      <!-- 2. 对局页 (Match - 连续两栏单板工作台)                  -->
+      <!-- ======================================================= -->
+      <section class="view-page match-page" data-view-page="match" aria-label="对局工作台" hidden>
+        <div class="workbench-canvas">
+          <!-- 顶栏：当前对局信息与操作 -->
+          <div class="workbench-header">
+            <div class="workbench-title-area">
+              <span class="workbench-venue-title" id="match-live-heading">珊瑚场 · 琉璃宝箱</span>
+              <span class="badge badge-rule" id="match-live-rule-tag">标准规则</span>
+              <span class="badge badge-lifecycle" id="match-live-status-badge">正在收集情报</span>
+              <span class="workbench-meta-sub"><code id="match-live-id" hidden>--</code><span id="match-live-completeness-text">输入待完善</span></span>
+            </div>
+            <div class="workbench-actions">
+              <button class="btn-wb-action" id="recognition-mode-toggle" type="button" data-mode="manual" onclick="postNative('manual_facts', {facts:{recognitionMode:this.dataset.mode === 'auto' ? 'manual' : 'auto'}})">手动识别</button>
+              <label for="player-display-name">本人昵称</label>
+              <span id="isolated-trial-label" role="status" hidden>隔离试用 · 数据单独保存</span>
+              <span id="vision-health-status" role="status" hidden></span>
+              <button class="btn-wb-action" id="restore-vision-btn" type="button" hidden onclick="postNative('start_live_vision')">恢复识别</button>
+              <input class="form-control" id="player-display-name" type="text" maxlength="64" placeholder="游戏内昵称（非数字UID）" style="width:180px" autocomplete="off">
+              <button class="btn-wb-action" id="save-player-display-name" type="button">保存昵称</button>
+              <span id="player-display-name-status" role="status">未设置，使用画面姓名；清空后保存可恢复</span>
+              <button class="btn-wb-action" id="match-btn-next" type="button" title="开始新一局">
+                <svg class="icon-svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>
+                <span>新一局</span>
+              </button>
+              <button class="btn-wb-action btn-wb-settle" id="match-btn-settle" type="button" title="结算本局并保存">
+                <svg class="icon-svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M16 8h-6a2 2 0 1 0 0 4h4a2 2 0 1 1 0 4H8"/><path d="M12 18V6"/></svg>
+                <span>结算本局</span>
+              </button>
+              <button class="btn-wb-action" id="match-btn-save-settlement-screenshot" type="button" title="只保存当前结算原图，不等待识别或填写结算表">保存结算截图</button>
+              <span class="warehouse-capture-message" id="match-settlement-screenshot-status" role="status" aria-live="polite"></span>
+              <button class="btn-wb-action btn-wb-settle" id="match-btn-save-game-screenshot" type="button" title="任意时刻只截取异环游戏客户区，直接保存到当前对局；不检查场景、不等待识别">手动截图（异环）</button>
+              <span class="warehouse-capture-message" id="match-game-screenshot-status" role="status" aria-live="polite"></span>
+              <div class="warehouse-capture-slot" id="warehouse-capture-slot" data-available="false">
+                <button class="btn-wb-action" id="warehouse-capture-toggle" type="button" disabled>采集完整仓库</button>
+                <span class="warehouse-capture-message" id="warehouse-capture-message"></span>
+                <div class="warehouse-capture-confirm" id="warehouse-capture-confirm" hidden>
+                  <p>程序仅在结算页滚动仓库；按 Esc、点击、滚轮或任意按键会立即停止；不会点击、出价或返回顶部；未完整覆盖会保存为部分。</p>
+                  <div class="warehouse-capture-confirm-actions">
+                    <button type="button" id="warehouse-capture-cancel" class="btn-review-action">取消</button>
+                    <button type="button" id="warehouse-capture-confirm-btn" class="btn-review-action btn-review-primary">确认开始</button>
+                  </div>
+                </div>
+              </div>
+              <div class="warehouse-manual-slot" id="warehouse-manual-slot">
+                <button class="btn-wb-action" id="warehouse-manual-start-btn" type="button" title="由人工手动滚动并分页截取仓库">手动接管采集</button>
+                <span class="warehouse-capture-message" id="warehouse-manual-message"></span>
+                <div class="warehouse-manual-controls" id="warehouse-manual-controls" hidden>
+                  <button type="button" id="warehouse-manual-snap-btn" class="btn-review-action btn-review-primary">截取当前页</button>
+                  <button type="button" id="warehouse-manual-finish-btn" class="btn-review-action btn-review-save">完成采集</button>
+                  <button type="button" id="warehouse-manual-cancel-btn" class="btn-review-action btn-review-danger">放弃</button>
+                  <span id="warehouse-manual-page-counter" class="warehouse-capture-message">已采集 0 页</span>
+                </div>
+                <div class="warehouse-capture-confirm" id="warehouse-manual-confirm" hidden>
+                  <p>即将由人工分页截取仓库当前页并推算，是否继续？</p>
+                  <div class="warehouse-capture-confirm-actions">
+                    <button type="button" id="warehouse-manual-confirm-cancel" class="btn-review-action">取消</button>
+                    <button type="button" id="warehouse-manual-confirm-btn" class="btn-review-action btn-review-primary">确认继续</button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <details class="wir-panel">
+            <summary>本局截图原图（不等待藏品识别）</summary>
+            <button type="button" class="btn-wb-action" onclick="requestOriginalScreenshots(dashboard.matchState.matchId, 'warehouse-originals')">刷新截图</button>
+            <div id="warehouse-originals">保存的截图会显示在这里；原图数量不代表仓库已经完整识别。</div>
+          </details>
+          <section class="wir-panel" id="warehouse-identity-review" hidden>
+            <header class="wir-top">
+              <div>
+                <strong id="wir-coverage">覆盖未就绪</strong>
+                <span class="wir-caption" id="wir-coverage-caption"></span>
+              </div>
+              <div class="wir-progress">
+                <span id="wir-progress">已处理 0 / 0 · 未处理 0</span>
+                <span id="wir-track-pos">第 0 / 0 件</span>
+              </div>
+            </header>
+            <div class="wir-shell">
+              <div class="wir-left">
+                <div class="wir-hero" id="wir-hero">
+                  <img id="wir-hero-img" alt="当前藏品证据" hidden>
+                  <span id="wir-hero-missing" class="wir-missing">证据不可用</span>
+                </div>
+                <div class="wir-thumbs" id="wir-thumbs"></div>
+                <div class="wir-geom" id="wir-geom"></div>
+                <div class="wir-nav">
+                  <button type="button" id="wir-prev" class="btn-review-action">上一件</button>
+                  <button type="button" id="wir-next" class="btn-review-action">下一件</button>
+                  <label class="wir-filter"><input type="checkbox" id="wir-filter-unresolved"> 只看未处理</label>
+                </div>
+              </div>
+              <div class="wir-right">
+                <div class="wir-candidates" id="wir-candidates"></div>
+                <div class="wir-primary">
+                  <button type="button" id="wir-confirm-candidate" class="btn-review-action btn-review-primary">明确确认此候选</button>
+                </div>
+                <p class="wir-draft" id="wir-draft"></p>
+                <div class="wir-secondary">
+                  <div class="wir-secondary-quiet">
+                    <button type="button" id="wir-defer" class="btn-review-action">暂缓</button>
+                    <button type="button" id="wir-undo" class="btn-review-action">撤销本件</button>
+                  </div>
+                  <details class="wir-exception" id="wir-exception">
+                    <summary>异常处理</summary>
+                    <div class="wir-search">
+                      <input id="wir-search-input" type="search" placeholder="覆盖搜索 catalog ID / 名称" autocomplete="off">
+                      <button type="button" id="wir-search-btn" class="btn-review-action">搜索</button>
+                      <div id="wir-search-hits" class="wir-hits"></div>
+                    </div>
+                    <div class="wir-exception-actions">
+                      <button type="button" id="wir-override" class="btn-review-action">覆盖确认</button>
+                      <button type="button" id="wir-out" class="btn-review-action">目录外</button>
+                      <button type="button" id="wir-exclude" class="btn-review-action">排除误检</button>
+                      <button type="button" id="wir-flag" class="btn-review-action">几何错误</button>
+                    </div>
+                    <div class="wir-reason-box" id="wir-reason-box" hidden>
+                      <textarea id="wir-reason" rows="2" placeholder="必须填写理由后才能提交异常动作"></textarea>
+                      <select id="wir-override-reason">
+                        <option value="">覆盖理由</option>
+                        <option value="CLIPPED_GEOMETRY">边界裁剪/显示不全</option>
+                        <option value="SEGMENTATION_ERROR">连通块切分错误</option>
+                        <option value="CATALOG_GEOMETRY_MISMATCH">几何尺寸不匹配</option>
+                        <option value="HUMAN_VISUAL_IDENTIFICATION">人工视觉核准</option>
+                      </select>
+                    </div>
+                  </details>
+                </div>
+              </div>
+            </div>
+            <footer class="wir-bottom">
+              <button type="button" id="wir-finalize" class="btn-review-action btn-review-primary">生成审阅结果</button>
+              <button type="button" id="wir-save" class="btn-review-action" hidden>写入本局记录</button>
+              <span id="wir-persist" class="wir-persist">尚未写入历史记录</span>
+              <span id="wir-resolution" class="wir-caption"></span>
+              <span id="wir-message" class="wir-message"></span>
+            </footer>
+            <div class="wir-save-confirm" id="wir-save-confirm" hidden>
+              <p>将本次人工审阅结果写入本局记录；不会自动用于 Solver、算法优化或识图训练。</p>
+              <div class="wir-save-confirm-actions">
+                <button type="button" id="wir-save-cancel" class="btn-review-action">取消</button>
+                <button type="button" id="wir-save-confirm-btn" class="btn-review-action btn-review-primary">确认写入</button>
+              </div>
+            </div>
+          </section>
+
+          <!-- 主体两栏连续工作面 -->
+          <div class="workbench-columns">
+            <!-- 左栏：情报录入与约束 (Facts Input) -->
+            <div class="workbench-col-facts">
+              
+              <!-- 稳定锚定快照按钮 (自适应状态) -->
+              <div class="match-card snapshot-action-slot">
+                <button class="btn-snapshot-action is-prominent" id="match-btn-snapshot" type="button">
+                  <svg class="icon-svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/>
+                    <circle cx="12" cy="13" r="4"/>
+                  </svg>
+                  <span id="match-snapshot-btn-label">快照识别 (Capture)</span>
+                </button>
+                <div class="snapshot-status-hint" id="match-snapshot-status">
+                  <span id="match-snapshot-status-text">看到游戏情报卡片时点击，自动提取对局事实</span>
+                </div>
+              </div>
+
+              <!-- 基础环境 -->
+              <div class="match-card">
+                <div class="section-caption">
+                  <span class="caption-title">基础环境</span>
+                  <span class="section-caption-sub">选择会场与箱型</span>
+                </div>
+                <div class="form-grid-3">
+                  <div class="form-field">
+                    <label class="form-field-label" for="match-venue-trigger">会场</label>
+                    <div class="custom-dropdown" id="match-venue-dropdown">
+                      <button class="dropdown-trigger" id="match-venue-trigger" type="button">
+                        <span id="match-venue-display">请选择会场</span>
+                        <span class="dropdown-arrow">▼</span>
+                      </button>
+                      <div class="dropdown-menu" id="match-venue-menu" hidden></div>
+                    </div>
+                  </div>
+                  <div class="form-field">
+                    <label class="form-field-label" for="match-box-trigger">宝箱</label>
+                    <div class="custom-dropdown" id="match-box-dropdown">
+                      <button class="dropdown-trigger" id="match-box-trigger" type="button">
+                        <span id="match-box-display">请选择宝箱</span>
+                        <span class="dropdown-arrow">▼</span>
+                      </button>
+                      <div class="dropdown-menu" id="match-box-menu" hidden></div>
+                    </div>
+                  </div>
+                  <div class="form-field">
+                    <label class="form-field-label" for="match-cond-trigger">规则</label>
+                    <div class="custom-dropdown" id="match-cond-dropdown">
+                      <button class="dropdown-trigger" id="match-cond-trigger" type="button">
+                        <span id="match-cond-display">标准对局</span>
+                        <span class="dropdown-arrow">▼</span>
+                      </button>
+                      <div class="dropdown-menu" id="match-cond-menu" hidden></div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <!-- 整仓与全局参数 (从品质区剥离独立放置) -->
+              <div class="match-card" id="match-card-global-params">
+                <div class="section-caption">
+                  <span class="caption-title">整仓与全局参数</span>
+                  <span class="section-caption-sub">高阶件数 Q · 总件数 · 总占格 · 费用与福利</span>
+                </div>
+                <!-- 规模与核心 -->
+                <div class="form-grid-3" style="margin-bottom: 8px;">
+                  <div class="form-field" id="tile-q">
+                    <label class="form-field-label" for="match-input-q">高阶件数 (Q)</label>
+                    <div class="stepper-input-wrap">
+                      <input class="form-control" id="match-input-q" type="number" min="0" placeholder="未获取">
+                      <div class="stepper-buttons">
+                        <button type="button" class="stepper-btn" data-step-target="match-input-q" data-step="1">+</button>
+                        <button type="button" class="stepper-btn" data-step-target="match-input-q" data-step="-1">-</button>
+                      </div>
+                    </div>
+                  </div>
+                  <div class="form-field">
+                    <label class="form-field-label" for="match-input-total-items">总件数</label>
+                    <input class="form-control" id="match-input-total-items" type="number" min="0" placeholder="--">
+                  </div>
+                  <div class="form-field">
+                    <label class="form-field-label" for="match-input-total-grid">总占格</label>
+                    <input class="form-control" id="match-input-total-grid" type="number" min="0" placeholder="--">
+                  </div>
+                </div>
+                <!-- 费用与福利 -->
+                <div class="form-grid-4" style="margin-bottom: 8px;">
+                  <div class="form-field">
+                    <label class="form-field-label">情报费用</label>
+                    <div class="form-control readonly-display" id="match-display-intel-cost" style="background:rgba(255,255,255,0.04);color:#94a3b8;cursor:default;line-height:26px;">未知 / 暂无自动数据</div>
+                  </div>
+                  <div class="form-field">
+                    <label class="form-field-label">其他已付费用</label>
+                    <div class="form-control readonly-display" id="match-display-other-cost" style="background:rgba(255,255,255,0.04);color:#94a3b8;cursor:default;line-height:26px;">未知 / 暂无自动数据</div>
+                  </div>
+                  <div class="form-field">
+                    <label class="form-field-label">预计后续费用</label>
+                    <div class="form-control readonly-display" id="match-display-future-cost" style="background:rgba(255,255,255,0.04);color:#94a3b8;cursor:default;line-height:26px;">未知 / 暂无自动数据</div>
+                  </div>
+                  <div class="form-field">
+                    <label class="form-field-label" for="match-input-welfare-received">福利金实际到账</label>
+                    <input class="form-control" id="match-input-welfare-received" type="text" inputmode="numeric" aria-describedby="match-welfare-error" placeholder="未知留空，0表示未收到">
+                  </div>
+                  <p id="match-welfare-error" role="alert" style="color:#ff9d8e;grid-column:1/-1"></p>
+                  <p id="match-session-accounting" style="grid-column:1/-1" role="status"></p>
+                  <p id="match-cost-summary" style="grid-column:1/-1">费用待确认</p>
+                </div>
+                <!-- 特殊词条/机制 -->
+                <p id="match-free-intel-status" role="status" hidden></p>
+                <details id="match-dark-controls" hidden>
+                  <summary>天黑了：私人上限与可见次数</summary>
+                  <p>上限记录自己的出价计划；次数按画面可见信息填写，不代表对手金额。</p>
+                  <label>私人出价上限<input class="form-control" id="match-input-private-bid-cap" type="text" inputmode="numeric" placeholder="未知留空，明确没有填0" aria-describedby="match-error-private-bid-cap"></label>
+                  <p id="match-error-private-bid-cap" role="alert" style="color:#ff9d8e"></p>
+                  <label>可见出价次数<input class="form-control" id="match-input-bid-action-count" type="text" inputmode="numeric" placeholder="未知留空，明确没有填0" aria-describedby="match-error-bid-action-count"></label>
+                  <p id="match-error-bid-action-count" role="alert" style="color:#ff9d8e"></p>
+                </details>
+                <details id="match-sparkle-fields">
+                  <summary>闪耀之心：转换宝石证据</summary>
+                  <div class="form-grid-4">
+                    <label>转换后的宝石总件数<input class="form-control" id="match-sparkle-count" type="text" inputmode="numeric" placeholder="未知可留空，0表示没有"></label>
+                    <label style="grid-column:span 3">已确认宝石名称<input class="form-control" id="match-sparkle-names" type="text" placeholder="例如：泪滴+绿林*2"></label>
+                  </div>
+                  <p>只记录闪耀之心转换的1×1宝石。名称用 + 分隔，重复数量用 *；不确定的名称留空。</p>
+                  <p id="match-sparkle-bounds" role="status"></p>
+                </details>
+              </div>
+
+              <!-- 已知藏品约束 -->
+              <div class="match-card">
+                <div class="section-caption">
+                  <span class="caption-title">已知藏品约束</span>
+                  <span class="section-caption-sub">名称或价格；/ 二选一，+ 同时存在，*2 两件</span>
+                </div>
+                <div class="known-list-group">
+                  <!-- 金色已知 -->
+                  <div class="known-row">
+                    <span class="rarity-pill is-gold">金</span>
+                    <div class="known-entry-box">
+                      <div class="known-chips-list" id="match-chips-gold"></div>
+                      <div class="known-input-wrap">
+                        <input class="form-control known-tag-input" id="match-input-known-gold" type="text" data-rarity="gold" placeholder="+ 添加已知金色 (名称或价格)..." autocomplete="off">
+                        <div class="known-suggest-dropdown" id="match-suggest-gold" hidden></div>
+                      </div>
+                    </div>
+                  </div>
+                  <!-- 紫色已知 -->
+                  <div class="known-row">
+                    <span class="rarity-pill is-purple">紫</span>
+                    <div class="known-entry-box">
+                      <div class="known-chips-list" id="match-chips-purple"></div>
+                      <div class="known-input-wrap">
+                        <input class="form-control known-tag-input" id="match-input-known-purple" type="text" data-rarity="purple" placeholder="+ 添加已知紫色 (名称或价格)..." autocomplete="off">
+                        <div class="known-suggest-dropdown" id="match-suggest-purple" hidden></div>
+                      </div>
+                    </div>
+                  </div>
+                  <div class="known-row">
+                    <span class="rarity-pill is-blue">蓝</span>
+                    <div class="known-entry-box">
+                      <div class="known-chips-list" id="match-chips-blue"></div>
+                      <div class="known-input-wrap">
+                        <input class="form-control known-tag-input" id="match-input-known-blue" type="text" data-rarity="blue" placeholder="+ 添加已知蓝色 (名称或价格)..." autocomplete="off">
+                        <div class="known-suggest-dropdown" id="match-suggest-blue" hidden></div>
+                      </div>
+                    </div>
+                  </div>
+                  <div class="known-row">
+                    <span class="rarity-pill is-green">绿</span>
+                    <div class="known-entry-box">
+                      <div class="known-chips-list" id="match-chips-green"></div>
+                      <div class="known-input-wrap">
+                        <input class="form-control known-tag-input" id="match-input-known-green" type="text" data-rarity="green" placeholder="+ 添加已知绿色 (名称或价格)..." autocomplete="off">
+                        <div class="known-suggest-dropdown" id="match-suggest-green" hidden></div>
+                      </div>
+                    </div>
+                  </div>
+                  <div class="known-row">
+                    <span class="rarity-pill is-white">白</span>
+                    <div class="known-entry-box">
+                      <div class="known-chips-list" id="match-chips-white"></div>
+                      <div class="known-input-wrap">
+                        <input class="form-control known-tag-input" id="match-input-known-white" type="text" data-rarity="white" placeholder="+ 添加已知白色 (名称或价格)..." autocomplete="off">
+                        <div class="known-suggest-dropdown" id="match-suggest-white" hidden></div>
+                      </div>
+                    </div>
+                  </div>
+                  <!-- 红色已知 -->
+                  <div class="known-row">
+                    <span class="rarity-pill is-red">红</span>
+                    <div class="known-entry-box">
+                      <div class="known-chips-list" id="match-chips-red"></div>
+                      <div class="known-input-wrap">
+                        <input class="form-control known-tag-input" id="match-input-known-red" type="text" data-rarity="red" placeholder="+ 添加已知红色 (名称或价格)..." autocomplete="off">
+                        <div class="known-suggest-dropdown" id="match-suggest-red" hidden></div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <!-- 品质数值约束（按品质严格分行: 金 → 紫 → 蓝 → 绿 → 白 → 红，固定 4 列对齐） -->
+              <details class="more-facts-details" id="match-more-facts-details" open>
+                <summary class="more-facts-summary">
+                  <span>各品质数值约束（件数 · 均价 · 占格）</span>
+                  <span class="summary-arrow">▾</span>
+                </summary>
+                <div class="more-facts-content">
+                  <div class="quality-matrix-table">
+                    <!-- 表头: 品质 | 件数 | 均价 | 占格 -->
+                    <div class="quality-matrix-header">
+                      <span>品质</span>
+                      <span>件数</span>
+                      <span>均价</span>
+                      <span>占格</span>
+                    </div>
+
+                    <!-- 1. 金色行 -->
+                    <div class="quality-matrix-row">
+                      <div class="quality-matrix-badge-cell">
+                        <span class="rarity-pill is-gold">金</span>
+                      </div>
+                      <div class="quality-matrix-cell">
+                        <input class="form-control" id="match-input-gold-count" type="number" min="0" placeholder="--">
+                      </div>
+                      <div class="quality-matrix-cell">
+                        <input class="form-control" id="match-input-gold-avg" type="number" min="0" step="1" placeholder="例如 58000">
+                      </div>
+                      <div class="quality-matrix-cell">
+                        <input class="form-control" id="match-input-gold-grid" type="number" min="0" placeholder="--">
+                      </div>
+                    </div>
+
+                    <!-- 2. 紫色行 -->
+                    <div class="quality-matrix-row">
+                      <div class="quality-matrix-badge-cell">
+                        <span class="rarity-pill is-purple">紫</span>
+                      </div>
+                      <div class="quality-matrix-cell">
+                        <input class="form-control" id="match-input-purple-count" type="number" min="0" placeholder="--">
+                      </div>
+                      <div class="quality-matrix-cell">
+                        <input class="form-control" id="match-input-purple-avg" type="number" min="0" placeholder="--">
+                      </div>
+                      <div class="quality-matrix-cell">
+                        <input class="form-control" id="match-input-purple-grid" type="number" min="0" placeholder="--">
+                      </div>
+                    </div>
+
+                    <!-- 3. 蓝色行 -->
+                    <div class="quality-matrix-row">
+                      <div class="quality-matrix-badge-cell">
+                        <span class="rarity-pill is-blue">蓝</span>
+                      </div>
+                      <div class="quality-matrix-cell">
+                        <input class="form-control" id="match-input-blue-count" type="number" min="0" placeholder="--">
+                      </div>
+                      <div class="quality-matrix-cell">
+                        <input class="form-control" id="match-input-blue-avg" type="number" min="0" step="1" placeholder="--">
+                      </div>
+                      <div class="quality-matrix-cell">
+                        <input class="form-control" id="match-input-blue-grid" type="number" min="0" step="1" placeholder="--">
+                      </div>
+                    </div>
+
+                    <!-- 4. 绿色行 -->
+                    <div class="quality-matrix-row">
+                      <div class="quality-matrix-badge-cell">
+                        <span class="rarity-pill is-green">绿</span>
+                      </div>
+                      <div class="quality-matrix-cell">
+                        <input class="form-control" id="match-input-green-count" type="number" min="0" step="1" placeholder="--">
+                      </div>
+                      <div class="quality-matrix-cell">
+                        <input class="form-control" id="match-input-green-avg" type="number" min="0" step="1" placeholder="--">
+                      </div>
+                      <div class="quality-matrix-cell">
+                        <input class="form-control" id="match-input-green-grid" type="number" min="0" step="1" placeholder="--">
+                      </div>
+                    </div>
+
+                    <!-- 5. 白色行 -->
+                    <div class="quality-matrix-row">
+                      <div class="quality-matrix-badge-cell">
+                        <span class="rarity-pill is-white">白</span>
+                      </div>
+                      <div class="quality-matrix-cell">
+                        <input class="form-control" id="match-input-white-count" type="number" min="0" step="1" placeholder="--">
+                      </div>
+                      <div class="quality-matrix-cell">
+                        <input class="form-control" id="match-input-white-avg" type="number" min="0" step="1" placeholder="--">
+                      </div>
+                      <div class="quality-matrix-cell">
+                        <input class="form-control" id="match-input-white-grid" type="number" min="0" step="1" placeholder="--">
+                      </div>
+                    </div>
+
+                    <!-- 6. 红色行 -->
+                    <div class="quality-matrix-row">
+                      <div class="quality-matrix-badge-cell">
+                        <span class="rarity-pill is-red">红</span>
+                      </div>
+                      <div class="quality-matrix-cell">
+                        <input class="form-control" id="match-input-red-count" type="number" min="0" placeholder="--">
+                      </div>
+                      <div class="quality-matrix-cell">
+                        <div class="quality-matrix-placeholder" title="红色无均价约束">--</div>
+                      </div>
+                      <div class="quality-matrix-cell">
+                        <input class="form-control" id="match-input-red-grid" type="number" min="0" step="1" placeholder="--">
+                      </div>
+                    </div>
+
+                  </div>
+                </div>
+              </details>
+
+              <!-- 缺失事实轻提示 -->
+              <div class="missing-facts-strip" id="match-missing-facts-strip">
+                <div id="match-missing-val-row" hidden>
+                  <span class="missing-prefix">待补充：</span>
+                  <span class="missing-tags-wrap" id="match-missing-val-container"></span>
+                </div>
+                <div id="match-missing-dec-row" hidden>
+                  <span class="missing-prefix">策略待补充：</span>
+                  <span class="missing-tags-wrap" id="match-missing-dec-container"></span>
+                </div>
+              </div>
+
+            </div>
+
+            <!-- 右栏：实时估值与建议决策 (Valuation Output) -->
+            <div class="workbench-col-valuation">
+              <div class="valuation-display-pane">
+                <div class="section-caption">
+                  <span class="caption-title">实时估值与决策</span>
+                  <span class="section-caption-sub" id="match-live-calc-status">根据当前情报推演</span>
+                </div>
+
+                <!-- 等待情报状态 -->
+                <div class="match-prediction-empty" id="match-live-prediction-empty">
+                  <div class="empty-icon-wrap">
+                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M15 14c.2-1 .7-1.7 1.5-2.5 1-.9 1.5-2.2 1.5-3.5A6 6 0 0 0 6 8c0 1 .2 2.2 1.5 3.5.7.7 1.3 1.5 1.5 2.5"/><path d="M9 18h6"/><path d="M10 22h4"/></svg>
+                  </div>
+                  <div class="empty-primary-text">等待录入情报</div>
+                  <div class="empty-sub-text">点击左侧 [快照识别] 或选择会场与件数后，系统将自动推演出估值与建议最高出价。</div>
+                </div>
+
+                <!-- 估值结果呈现区 -->
+                <div class="match-prediction-content" id="match-live-prediction-content" hidden>
+                  <!-- 核心估值大字与区间卡片 -->
+                  <div class="val-hero-card">
+                    <div class="val-hero-center">
+                      <span class="val-hero-label" id="match-live-estimate-label">当前估值中位</span>
+                      <div class="val-hero-price-wrap">
+                        <strong class="val-hero-num" id="match-live-p50">--</strong>
+                        <span class="val-hero-unit">齿轮</span>
+                      </div>
+                    </div>
+
+                    <!-- 估值区间 (保守 / 中位 / 乐观) -->
+                    <div class="val-interval-strip">
+                      <div class="val-interval-col">
+                        <span class="val-interval-label" id="match-live-p20-label">保守 (P20)</span>
+                        <strong class="val-interval-val" id="match-live-p20">--</strong>
+                      </div>
+                      <div class="val-interval-col is-mid">
+                        <span class="val-interval-label" id="match-live-p50-sub-label">中位基准 (P50)</span>
+                        <strong class="val-interval-val" id="match-live-p50-sub">--</strong>
+                      </div>
+                      <div class="val-interval-col">
+                        <span class="val-interval-label" id="match-live-p80-label">乐观 (P80)</span>
+                        <strong class="val-interval-val" id="match-live-p80">--</strong>
+                      </div>
+                    </div>
+                  </div>
+
+                  <!-- 建议最高出价与行动建议卡片 -->
+                  <div class="decision-summary-box">
+                    <div class="decision-top-row">
+                      <div class="decision-cap-block">
+                        <span class="decision-cap-label" id="match-live-rec-label">建议最高出价</span>
+                        <strong class="decision-cap-val" id="match-live-recommended-max">--</strong>
+                      </div>
+                      <div class="decision-badges-wrap">
+                        <span class="decision-badge is-bid" id="match-live-action-badge">正常出价</span>
+                        <span class="badge badge-admission" id="match-live-support-badge">基础结构推断</span>
+                      </div>
+                    </div>
+                    <div class="decision-reason-text" id="match-live-action-reason">
+                      当前估值高于成本，出价在安全边际内。
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <!-- 触发右侧抽屉的纯净按钮 -->
+              <div class="drawer-trigger-slot">
+                <button class="btn-open-drawer" id="match-btn-open-drawer" type="button" aria-expanded="false" aria-controls="valuation-drawer">
+                  <svg class="icon-svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>
+                  <span>查看估值依据与候选空间</span>
+                </button>
+              </div>
+
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ======================================================= -->
+      <!-- 右侧滑出估值深度抽屉 (Valuation Deep-Dive Drawer)         -->
+      <!-- ======================================================= -->
+      <div class="drawer-backdrop" id="valuation-drawer-backdrop"></div>
+      <aside class="valuation-drawer" id="valuation-drawer" aria-label="估值依据详情" aria-hidden="true">
+        <div class="drawer-header">
+          <h3 class="drawer-title">
+            <svg class="icon-svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>
+            <span>详细估值依据与候选空间</span>
+          </h3>
+          <button class="drawer-close-btn" id="valuation-drawer-close" type="button" title="关闭">×</button>
+        </div>
+        <div class="drawer-body">
+
+          <!-- 候选空间指标 -->
+          <div>
+            <div class="drawer-section-title">候选状态空间</div>
+            <div class="drawer-grid-2">
+              <div class="drawer-stat-tile">
+                <span class="drawer-stat-label">候选 G 范围 (金件数)</span>
+                <strong class="drawer-stat-val" id="match-exp-candidate-gs">--</strong>
+              </div>
+              <div class="drawer-stat-tile">
+                <span class="drawer-stat-label">可行状态数</span>
+                <strong class="drawer-stat-val" id="match-exp-state-count">--</strong>
+              </div>
+              <div class="drawer-stat-tile">
+                <span class="drawer-stat-label">硬保底价值</span>
+                <strong class="drawer-stat-val" id="match-exp-hard-floor">--</strong>
+              </div>
+              <div class="drawer-stat-tile">
+                <span class="drawer-stat-label">理论边界 (Min / Max)</span>
+                <strong class="drawer-stat-val" id="match-exp-theo-bounds">--</strong>
+              </div>
+            </div>
+          </div>
+
+          <!-- 决策三线 -->
+          <div>
+            <div class="drawer-section-title">保本与追价参考</div>
+            <p id="match-live-expected-profit">预期盈亏：—</p>
+            <div class="lines-trio">
+              <div class="line-card" style="display:none">
+                <span class="l-label">🎯 目标利润线</span>
+                <strong class="l-val is-target" id="match-live-target-line">--</strong>
+              </div>
+              <div class="line-card">
+                <span class="l-label">🛡️ 全局保本线</span>
+                <strong class="l-val is-global" id="match-live-global-line">--</strong>
+              </div>
+              <div class="line-card">
+                <span class="l-label">⚡ 边际追价上限</span>
+                <strong class="l-val is-marginal" id="match-live-marginal-line">--</strong>
+              </div>
+            </div>
+          </div>
+
+          <!-- 分品质价值构成 -->
+          <div>
+            <div class="drawer-section-title">分品质价值构成</div>
+            <div class="breakdown-row">
+              <div class="breakdown-item">
+                <span class="breakdown-dot is-gold"></span>
+                <span>金色: <strong id="match-exp-val-gold">--</strong></span>
+              </div>
+              <div class="breakdown-item">
+                <span class="breakdown-dot is-purple"></span>
+                <span>紫色: <strong id="match-exp-val-purple">--</strong></span>
+              </div>
+              <div class="breakdown-item">
+                <span class="breakdown-dot is-red"></span>
+                <span>红色: <strong id="match-exp-val-red">--</strong></span>
+              </div>
+              <div class="breakdown-item">
+                <span class="breakdown-dot is-low"></span>
+                <span>低阶保底: <strong id="match-exp-val-low">--</strong></span>
+              </div>
+            </div>
+          </div>
+
+          <!-- 4 席位竞价详情 -->
+          <div>
+            <div class="drawer-section-title">4 席位竞价详情</div>
+            <div class="seats-grid" id="match-seats-grid"></div>
+          </div>
+
+          <div>
+            <div class="drawer-section-title">情报原文</div>
+            <div id="match-intel-timeline" class="intel-timeline"></div>
+          </div>
+
+          <!-- 6 品质观测状态明细 -->
+          <div>
+            <div class="drawer-section-title">6 品质观测明细</div>
+            <div class="rarity-matrix-grid">
+              <div class="rarity-card">
+                <div><span class="rarity-tag is-white">白</span> <span class="rarity-card-count" id="match-q-white-count">--</span></div>
+                <span class="rarity-card-avg" id="match-q-white-avg">均价: --</span>
+              </div>
+              <div class="rarity-card">
+                <div><span class="rarity-tag is-green">绿</span> <span class="rarity-card-count" id="match-q-green-count">--</span></div>
+                <span class="rarity-card-avg" id="match-q-green-avg">均价: --</span>
+              </div>
+              <div class="rarity-card">
+                <div><span class="rarity-tag is-blue">蓝</span> <span class="rarity-card-count" id="match-q-blue-count">--</span></div>
+                <span class="rarity-card-avg" id="match-q-blue-avg">均价: --</span>
+              </div>
+              <div class="rarity-card">
+                <div><span class="rarity-tag is-purple">紫</span> <span class="rarity-card-count" id="match-q-purple-count">--</span></div>
+                <span class="rarity-card-avg" id="match-q-purple-avg">均价: --</span>
+              </div>
+              <div class="rarity-card">
+                <div><span class="rarity-tag is-gold">金</span> <span class="rarity-card-count" id="match-q-gold-count">--</span></div>
+                <span class="rarity-card-avg" id="match-q-gold-avg">均价: --</span>
+              </div>
+              <div class="rarity-card">
+                <div><span class="rarity-tag is-red">红</span> <span class="rarity-card-count" id="match-q-red-count">--</span></div>
+                <span class="rarity-card-avg" id="match-q-red-avg">件数: --</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- 局内仓库藏品与候选 -->
+          <div>
+            <div class="drawer-section-title" style="display: flex; justify-content: space-between; align-items: center;">
+              <span>局内仓库藏品</span>
+              <div>
+                <span class="badge" id="match-wh-status-badge">未录入</span>
+                <span id="match-wh-count" style="font-size: 11px; opacity: 0.8; margin-left: 6px;">0 件</span>
+              </div>
+            </div>
+            <div class="warehouse-slots-list" id="match-wh-slots-list" style="margin-top: 8px; display: flex; flex-direction: column; gap: 6px;"></div>
+          </div>
+
+        </div>
+      </aside>
+
+      <!-- ======================================================= -->
+      <!-- 3. 记录页 (History - 人话优先双栏)                       -->
+      <!-- ======================================================= -->
+      <section class="view-page history-page" data-view-page="history" aria-label="对局历史记录" hidden>
+        <div class="history-layout">
+          <!-- 左侧列表 -->
+          <div class="history-list-pane">
+            <div class="history-pane-header">
+              <h2>历史对局</h2>
+              <div style="display: flex; align-items: center; gap: 8px;">
+                <button type="button" class="btn-review-action" id="history-export-btn" title="导出全部历史对局及其原始图片，自包含 ZIP">导出全部记录（含图片）</button>
+                <button type="button" class="btn-review-action" id="history-labels-export-btn" title="只导出人工确认的物品图片和标签，不启动训练">导出人工确认样本</button>
+                <span id="history-labels-export-status" role="status"></span>
+                <button type="button" class="btn-review-action" id="history-import-btn" title="导入对局数据包及其原始图片">导入对局包</button>
+                <label class="history-select-all" title="选择当前筛选结果中的全部对局">
+                  <input type="checkbox" id="history-select-all" /> 全选
+                </label>
+                <button type="button" class="btn-review-action btn-delete-selected" id="history-delete-selected-btn" disabled title="删除选中的对局记录">删除所选</button>
+                <span class="history-count-badge" id="history-count-badge">0 条</span>
+                <label class="debug-toggle" title="显示草稿 / 排除 / 调试记录">
+                  <input type="checkbox" id="filter-debug" /> 调试记录
+                </label>
+              </div>
+            </div>
+
+            <p class="history-export-status" id="history-export-status" role="status" aria-live="polite">导出全部历史对局，包含各局原始图片。</p>
+            <div class="history-filter-bar">
+              <!-- 主筛选 Tabs -->
+              <div class="history-main-tabs">
+                <button type="button" class="history-main-tab is-active" data-history-tab="all">全部记录</button>
+                <button type="button" class="history-main-tab" data-history-tab="pending">待处理</button>
+                <button type="button" class="history-main-tab" data-history-tab="verified">已核对</button>
+              </div>
+
+              <!-- 更多筛选下拉与搜索 -->
+              <div class="filter-row">
+                <!-- 来源筛选 -->
+                <div class="custom-dropdown" id="dropdown-filter-source">
+                  <button type="button" class="dropdown-trigger" id="trigger-filter-source">
+                    <span class="dropdown-label">来源: 全部</span>
+                    <span class="dropdown-arrow">▾</span>
+                  </button>
+                  <div class="dropdown-menu" hidden>
+                    <div class="dropdown-item is-selected" data-value="all">来源: 全部</div>
+                    <div class="dropdown-item" data-value="current">新版记录</div>
+                    <div class="dropdown-item" data-value="legacy">旧版记录</div>
+                  </div>
+                </div>
+
+                <!-- 对局状态筛选 -->
+                <div class="custom-dropdown" id="dropdown-filter-outcome">
+                  <button type="button" class="dropdown-trigger" id="trigger-filter-outcome">
+                    <span class="dropdown-label">对局: 全部</span>
+                    <span class="dropdown-arrow">▾</span>
+                  </button>
+                  <div class="dropdown-menu" hidden>
+                    <div class="dropdown-item is-selected" data-value="all">对局: 全部</div>
+                    <div class="dropdown-item" data-value="settled">已结算</div>
+                    <div class="dropdown-item" data-value="unsettled">未结算</div>
+                    <div class="dropdown-item" data-value="abandoned">已放弃</div>
+                  </div>
+                </div>
+
+                <!-- 截图筛选 -->
+                <div class="custom-dropdown" id="dropdown-filter-evidence">
+                  <button type="button" class="dropdown-trigger" id="trigger-filter-evidence">
+                    <span class="dropdown-label">截图: 全部</span>
+                    <span class="dropdown-arrow">▾</span>
+                  </button>
+                  <div class="dropdown-menu" hidden>
+                    <div class="dropdown-item is-selected" data-value="all">截图: 全部</div>
+                    <div class="dropdown-item" data-value="has">有截图</div>
+                    <div class="dropdown-item" data-value="none">无截图</div>
+                  </div>
+                </div>
+
+                <!-- 分析准入筛选 -->
+                <div class="custom-dropdown" id="dropdown-filter-admission">
+                  <button type="button" class="dropdown-trigger" id="trigger-filter-admission">
+                    <span class="dropdown-label">分析: 全部</span>
+                    <span class="dropdown-arrow">▾</span>
+                  </button>
+                  <div class="dropdown-menu" hidden>
+                    <div class="dropdown-item is-selected" data-value="all">分析: 全部</div>
+                    <div class="dropdown-item" data-value="admitted">参与分析</div>
+                    <div class="dropdown-item" data-value="excluded">不参与分析</div>
+                  </div>
+                </div>
+
+                <!-- 时间筛选 -->
+                <div class="custom-dropdown" id="dropdown-filter-time">
+                  <button type="button" class="dropdown-trigger" id="trigger-filter-time">
+                    <span class="dropdown-label">时间: 全部</span>
+                    <span class="dropdown-arrow">▾</span>
+                  </button>
+                  <div class="dropdown-menu" hidden>
+                    <div class="dropdown-item is-selected" data-value="all">全部时间</div>
+                    <div class="dropdown-item" data-value="today">今天</div>
+                    <div class="dropdown-item" data-value="7d">最近 7 天</div>
+                    <div class="dropdown-item" data-value="30d">最近 30 天</div>
+                    <div class="dropdown-item" data-value="custom">自定义日期</div>
+                  </div>
+                </div>
+
+                <!-- 自定义起止日期输入框 -->
+                <div class="history-custom-dates" id="history-custom-dates" hidden>
+                  <input type="date" id="filter-date-start" class="date-input" title="开始日期">
+                  <span class="date-sep">至</span>
+                  <input type="date" id="filter-date-end" class="date-input" title="结束日期">
+                </div>
+
+                <input type="search" id="filter-search" placeholder="搜索 会场 / 宝箱 / ID" autocomplete="off" />
+              </div>
+            </div>
+
+            <div class="history-empty" id="history-empty-state">
+              <div class="empty-icon-wrap">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect width="20" height="16" x="2" y="4" rx="2"/><path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7"/></svg>
+              </div>
+              <div style="font-size: 13px; font-weight: 600; color: var(--text);">暂无匹配对局</div>
+              <div style="font-size: 11px; color: var(--text-muted);">调整筛选条件或勾选调试记录</div>
+            </div>
+
+            <div class="history-error" id="history-error-state" hidden>
+              <div class="empty-icon-wrap">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+              </div>
+              <div style="font-size: 13px; font-weight: 600; color: var(--text);" id="history-error-title">历史数据暂不可用</div>
+              <div style="font-size: 11px; color: var(--text-muted);" id="history-error-desc">无法读取本地持久化数据。</div>
+            </div>
+
+            <div class="history-list" id="history-list" role="listbox" aria-label="历史对局列表"></div>
+            <div class="legacy-archive-pane" id="legacy-archive-pane" hidden>
+              <div class="legacy-pane-title">
+                <span>历史归档（只读）</span>
+                <span class="legacy-source-info" id="legacy-source-info"></span>
+              </div>
+              <div class="legacy-loading" id="legacy-loading" hidden>加载中…</div>
+              <div class="legacy-empty" id="legacy-empty" hidden>未找到旧版历史文件</div>
+              <div class="history-list legacy-list" id="legacy-list" role="listbox" aria-label="历史归档列表"></div>
+            </div>
+          </div>
+
+          <!-- 右侧详情 -->
+          <div class="history-detail-pane">
+            <div class="history-detail-placeholder" id="history-detail-placeholder">
+              <div class="empty-icon-wrap">
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect width="8" height="4" x="8" y="2" rx="1" ry="1"/><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><path d="M12 11h4"/><path d="M12 16h4"/><path d="M8 11h.01"/><path d="M8 16h.01"/></svg>
+              </div>
+              <div style="font-size: 14px; font-weight: 600; color: var(--text); margin-bottom: 4px;">请在左侧选择一局对局</div>
+              <div style="font-size: 12px; color: var(--text-muted);">查看该局环境、观测事实、当时预测快照与结算结果。</div>
+            </div>
+
+            <div class="history-detail-card" id="history-detail-card" hidden>
+              <div class="detail-header">
+                <div class="detail-title-row">
+                  <div class="detail-title-group">
+                    <span class="detail-main-title" id="detail-match-title">对局详情</span>
+                    <span class="detail-badges">
+                      <span class="badge badge-lifecycle" id="detail-lifecycle-badge">--</span>
+                      <span class="badge badge-admission" id="detail-admission-badge">--</span>
+                    </span>
+                  </div>
+                  <div class="detail-actions">
+                    <button type="button" class="btn-delete-record" id="detail-delete-btn" title="删除此条记录">删除记录</button>
+                  </div>
+                </div>
+                <div class="detail-meta-row">
+                  <span class="detail-time" id="detail-played-at">--</span>
+                  <code id="detail-match-id" hidden>--</code>
+                </div>
+              </div>
+
+              <!-- 区域 0：本局总结 (自然语义摘要) -->
+              <div class="detail-section detail-section-summary" id="detail-summary-section" hidden>
+                <div class="detail-section-title">本局总结</div>
+                <div class="summary-text" id="detail-match-summary" style="font-size: 13px; line-height: 1.6; color: var(--text);"></div>
+              </div>
+
+              <!-- 区域 1：实际结算结果 (第一视觉核心) -->
+              <div class="detail-section detail-section-settlement">
+                <div class="detail-section-title">对局结算结果</div>
+                <p id="detail-cost-summary">费用未记录</p>
+                <div class="detail-grid-4" id="detail-settlement-fields">
+                  <div class="detail-field"><span class="field-label">最终成交价</span><strong class="field-value" id="detail-clearing-price">--</strong></div>
+                  <div class="detail-field"><span class="field-label">实际总价值</span><strong class="field-value text-accent" id="detail-actual-total">--</strong></div>
+                  <div class="detail-field"><span class="field-label">结算账面收益</span><strong class="field-value text-green" id="detail-profit">--</strong></div>
+                  <div class="detail-field"><span class="field-label">拍下方</span><strong class="field-value" id="detail-acquired">--</strong></div>
+                  <div class="detail-field" id="detail-sell-selection-field" style="grid-column: 1 / -1;"><span class="field-label">底部品质出售勾选</span><strong class="field-value" id="detail-sell-selection">--</strong></div>
+                </div>
+                <div class="settlement-absent-notice" id="detail-settlement-absent" hidden>尚未产生结算凭证（草稿或未完成对局）</div>
+              </div>
+
+              <!-- 区域 2：结算审阅与逐件核对 -->
+              <div class="detail-section detail-section-review" id="detail-review-section" hidden>
+                <div class="review-section-header">
+                  <div class="detail-section-title">结算凭证与逐件核对</div>
+                  <span class="review-section-tag" id="detail-review-tag">机器推断候选 · 人工保存后生效</span>
+                </div>
+                <div class="review-toolbar">
+                  <button type="button" class="btn-review-action" id="history-warehouse-review-btn" hidden onclick="openHistoricalWarehouseReview()">继续审阅仓库</button>
+                  <button type="button" class="btn-review-action btn-review-primary" id="review-import-btn">📷 导入结算截图</button>
+                  <button type="button" class="btn-review-action" id="review-replace-btn">替换截图</button>
+                  <button type="button" class="btn-review-action" id="review-rerecognize-btn">🔄 重新识别</button>
+                  <button type="button" class="btn-review-action btn-review-save" id="review-save-btn">💾 保存核对结果</button>
+                  <button type="button" class="btn-review-action" id="review-reset-btn">撤销修改</button>
+                  <button type="button" class="btn-review-action btn-review-danger" id="review-delete-btn">移除导入关联</button>
+                  <span class="review-save-status" id="review-save-status"></span>
+                </div>
+                  <fieldset id="review-identity-fields" hidden>
+                    <legend>竞得身份核对（保存后仍保留草稿）</legend>
+                    <label for="review-winner-name">竞得者名称</label>
+                    <input class="form-control" id="review-winner-name" maxlength="64" autocomplete="off">
+                    <label for="review-acquired">是否由本人拍下</label>
+                    <select class="form-control" id="review-acquired">
+                      <option value="unknown">归属未知</option><option value="true">本人拍下</option><option value="false">他人拍下</option>
+                    </select>
+                    <label><input type="checkbox" id="review-identity-confirm">我已对照结算画面核对，保存这项身份修正</label>
+                  </fieldset>
+                <div class="review-screenshot-row">
+                  <div class="review-screenshot-box" id="review-screenshot-box">
+                    <img id="review-screenshot-img" alt="结算截图" hidden />
+                    <span class="review-no-screenshot" id="review-no-screenshot">暂无截图证据</span>
+                  </div>
+                  <div class="review-summary-box" id="review-summary-box" hidden>
+                    <div class="review-summary-grid">
+                      <div class="review-stat-item"><span class="review-stat-label">成交价</span><strong class="review-stat-val" id="review-clearing">--</strong></div>
+                      <div class="review-stat-item"><span class="review-stat-label">实际价值</span><strong class="review-stat-val" id="review-actual">--</strong></div>
+                      <div class="review-stat-item"><span class="review-stat-label">结算账面收益</span><strong class="review-stat-val text-green" id="review-profit">--</strong></div>
+                      <div class="review-stat-item"><span class="review-stat-label">覆盖状态</span><strong class="review-stat-val" id="review-coverage">部分覆盖（待核对）</strong></div>
+                      <div class="review-stat-item"><span class="review-stat-label">审阅状态</span><strong class="review-stat-val" id="review-status">未审阅</strong></div>
+                    </div>
+                    <div class="review-provenance-row" hidden>
+                      <span>证据 ID: <code id="review-evidence-id">--</code></span>
+                      <span>哈希: <code id="review-sha">--</code></span>
+                    </div>
+                  </div>
+                </div>
+                <div class="wir-saved-summary" id="wir-saved-summary" hidden>
+                  <div class="wir-saved-caption" id="wir-saved-caption"></div>
+                  <div class="wir-saved-facts" id="wir-saved-facts" hidden></div>
+                </div>
+                <div class="review-proposals" id="review-proposals"></div>
+                <div class="review-empty" id="review-empty" hidden>请先选择一局对局以加载结算审阅。</div>
+              </div>
+
+              <!-- 区域 3：当时预测快照 -->
+              <div class="detail-section">
+                <div class="detail-section-title">当局预测快照</div>
+                <div class="detail-grid-4">
+                  <div class="detail-field"><span class="field-label">保守估值 (P20)</span><strong class="field-value" id="detail-p20">--</strong></div>
+                  <div class="detail-field"><span class="field-label">中位估值 (P50)</span><strong class="field-value" id="detail-p50">--</strong></div>
+                  <div class="detail-field"><span class="field-label">乐观估值 (P80)</span><strong class="field-value" id="detail-p80">--</strong></div>
+                  <div class="detail-field"><span class="field-label">建议出价上限</span><strong class="field-value text-green" id="detail-rec-max">--</strong></div>
+                </div>
+              </div>
+
+              <!-- 区域 4：环境与观测事实 -->
+              <div class="detail-section">
+                <div class="detail-section-title">环境与观测事实</div>
+                <div class="detail-grid-3">
+                  <div class="detail-field"><span class="field-label">会场</span><strong class="field-value" id="detail-venue">--</strong></div>
+                  <div class="detail-field"><span class="field-label">宝箱</span><strong class="field-value" id="detail-box">--</strong></div>
+                  <div class="detail-field"><span class="field-label">规则</span><strong class="field-value" id="detail-condition">--</strong></div>
+                  <div class="detail-field"><span class="field-label">高阶件数 (Q)</span><strong class="field-value" id="detail-q">--</strong></div>
+                  <div class="detail-field"><span class="field-label">金色均价</span><strong class="field-value" id="detail-gold-avg">--</strong></div>
+                  <div class="detail-field"><span class="field-label">紫色数量</span><strong class="field-value" id="detail-purple-count">--</strong></div>
+                  <div class="detail-field"><span class="field-label">紫色均价</span><strong class="field-value" id="detail-purple-avg">--</strong></div>
+                  <div class="detail-field"><span class="field-label">蓝色件数</span><strong class="field-value" id="detail-blue-count">--</strong></div>
+                  <div class="detail-field"><span class="field-label">金色件数</span><strong class="field-value" id="detail-gold-count">--</strong></div>
+                  <div class="detail-field"><span class="field-label">红色件数</span><strong class="field-value" id="detail-red-count">--</strong></div>
+                  <div class="detail-field"><span class="field-label">总件数</span><strong class="field-value" id="detail-total-items">--</strong></div>
+                  <div class="detail-field"><span class="field-label">总占格</span><strong class="field-value" id="detail-total-grid">--</strong></div>
+                  <div class="detail-field"><span class="field-label">金色占格</span><strong class="field-value" id="detail-gold-grid">--</strong></div>
+                  <div class="detail-field"><span class="field-label">紫色占格</span><strong class="field-value" id="detail-purple-grid">--</strong></div>
+                  <div class="detail-field"><span class="field-label">已知金色</span><strong class="field-value" id="detail-known-gold" style="overflow-wrap:anywhere">未记录</strong></div>
+                  <div class="detail-field"><span class="field-label">已知紫色</span><strong class="field-value" id="detail-known-purple" style="overflow-wrap:anywhere">未记录</strong></div>
+                  <div class="detail-field"><span class="field-label">已知红色</span><strong class="field-value" id="detail-known-red" style="overflow-wrap:anywhere">未记录</strong></div>
+                  <div class="detail-field"><span class="field-label">已知蓝色</span><strong class="field-value" id="detail-known-blue" style="overflow-wrap:anywhere">未记录</strong></div>
+                  <div class="detail-field"><span class="field-label">已知绿色</span><strong class="field-value" id="detail-known-green" style="overflow-wrap:anywhere">未记录</strong></div>
+                  <div class="detail-field"><span class="field-label">已知白色</span><strong class="field-value" id="detail-known-white" style="overflow-wrap:anywhere">未记录</strong></div>
+
+                  <div class="detail-field"><span class="field-label">白色件数</span><strong class="field-value" id="detail-white-count">--</strong></div>
+                  <div class="detail-field"><span class="field-label">白色均价</span><strong class="field-value" id="detail-white-avg">--</strong></div>
+                  <div class="detail-field"><span class="field-label">白色占格</span><strong class="field-value" id="detail-white-grid">--</strong></div>
+                  <div class="detail-field"><span class="field-label">绿色件数</span><strong class="field-value" id="detail-green-count">--</strong></div>
+                  <div class="detail-field"><span class="field-label">绿色均价</span><strong class="field-value" id="detail-green-avg">--</strong></div>
+                  <div class="detail-field"><span class="field-label">绿色占格</span><strong class="field-value" id="detail-green-grid">--</strong></div>
+                  <div class="detail-field"><span class="field-label">蓝色均价</span><strong class="field-value" id="detail-blue-avg">--</strong></div>
+                  <div class="detail-field"><span class="field-label">蓝色占格</span><strong class="field-value" id="detail-blue-grid">--</strong></div>
+                  <div class="detail-field"><span class="field-label">私人上限／可见次数</span><strong class="field-value" id="detail-dark-controls">未记录</strong></div><div class="detail-field"><span class="field-label">本局收支</span><strong class="field-value" id="detail-session-accounting" style="overflow-wrap:anywhere">未记录</strong></div>
+                  <div class="detail-field"><span class="field-label">闪耀之心证据</span><strong class="field-value" id="detail-sparkle" style="overflow-wrap:anywhere">未记录</strong></div>
+                  <div class="detail-field"><span class="field-label">红色占格</span><strong class="field-value" id="detail-red-grid">--</strong></div>
+
+                  <div class="detail-field"><span class="field-label">门票支出</span><strong class="field-value" id="detail-entry-cost">--</strong></div>
+                  <div class="detail-field"><span class="field-label">仓库概况</span><strong class="field-value" id="detail-warehouse">--</strong></div>
+                  <div class="detail-field" style="grid-column:1/-1"><span class="field-label">情报识别记录</span><div class="field-value" id="detail-intel-evidence" style="white-space:pre-wrap;overflow-wrap:anywhere;text-align:left">未记录情报识别证据</div></div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ======================================================= -->
+      <!-- 4. 分析页 (Analysis - 真实算法表现与评估状态)             -->
+      <!-- ======================================================= -->
+      <section class="view-page analysis-page" data-view-page="analysis" aria-label="算法表现分析" hidden>
+        <div class="analysis-container">
+          <!-- 第一视觉层级：正式评估状态 Hero 卡片 -->
+          <div class="analysis-status-card">
+            <div class="analysis-card-header">
+              <span class="tag is-warning" id="analysis-status-badge">评估样本积累中</span>
+              <span class="analysis-header-hint" id="analysis-status-hint">正式评估门槛未就绪</span>
+            </div>
+            <h2 id="analysis-title">暂无足够正式评估数据</h2>
+            <p id="analysis-desc">当前尚未积累足够符合正式评估条件的实战对局样本。异环拍卖助手坚持<strong>真实性与严谨性</strong>，绝不展示任何预设或虚构的准确率指标。完成更多完整对局后，系统将自动发布正式估值误差分布与分位数区间校准分析。</p>
+          </div>
+
+          <!-- 第二视觉层级：正式模型评估指标预览 (正式可用时展示数值，不可用时显示待积累状态) -->
+          <div class="analysis-metrics-section">
+            <div class="analysis-section-header">
+              <span class="analysis-section-title">模型预测评估指标</span>
+              <span class="analysis-section-sub">仅统计通过正式资格审查 (Eligible Production) 的完整对局</span>
+            </div>
+            <div class="analysis-metrics-grid">
+              <div class="analysis-metric-card" data-eval-metric="mae">
+                <span class="analysis-metric-label">平均绝对误差 (MAE)</span>
+                <strong class="analysis-metric-value" id="eval-mae-value">样本积累中</strong>
+                <span class="analysis-metric-meta">预测中位 P50 与实际总价值平均偏差</span>
+              </div>
+              <div class="analysis-metric-card" data-eval-metric="calibration">
+                <span class="analysis-metric-label">估值分位校准度</span>
+                <strong class="analysis-metric-value" id="eval-calib-value">样本积累中</strong>
+                <span class="analysis-metric-meta">P20-P80 估值分布区间覆盖率</span>
+              </div>
+              <div class="analysis-metric-card" data-eval-metric="undervalue">
+                <span class="analysis-metric-label">出价上限安全率</span>
+                <strong class="analysis-metric-value" id="eval-safe-value">样本积累中</strong>
+                <span class="analysis-metric-meta">建议最高出价不超过实际总价值比例</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- 第三视觉层级：数据概念与准入说明 (清晰区分三大概念) -->
+          <div class="analysis-concepts-card" data-policy-doc="History Admission Policy v1">
+            <div class="analysis-section-header" style="margin-bottom: 12px;">
+              <span class="analysis-section-title">评估数据流向与概念区分</span>
+              <span class="analysis-section-sub">严谨区分数据生命周期各阶段</span>
+            </div>
+            <div class="analysis-concept-columns">
+              <div class="analysis-concept-item">
+                <div class="concept-badge-row">
+                  <span class="concept-dot is-blue"></span>
+                  <strong>1. 历史总记录 (History Total)</strong>
+                </div>
+                <p>本地存储已归档的全部对局。包含正常结算、主动放弃、草稿与异常对局。</p>
+              </div>
+              <div class="analysis-concept-item">
+                <div class="concept-badge-row">
+                  <span class="concept-dot is-green"></span>
+                  <strong>2. 历史准入 (History Admission)</strong>
+                </div>
+                <p>通过历史准入规则筛选的有效对局，用于构建拍卖物品与会场的先验概率知识库。</p>
+              </div>
+              <div class="analysis-concept-item">
+                <div class="concept-badge-row">
+                  <span class="concept-dot is-gold"></span>
+                  <strong>3. 评估资格 (Evaluation Eligibility)</strong>
+                </div>
+                <p>同时具备事前确定性预测快照与事后结算核准凭证的严格样本，唯有此项能计入正式算法报告。</p>
+              </div>
+            </div>
+
+            <details class="analysis-faq" style="margin-top: 16px;">
+              <summary class="analysis-faq-toggle">常见疑问：P20 / P50 / P80 代表什么？</summary>
+              <div class="analysis-faq-body">
+                P20、P50、P80 分别代表当前对局藏品<strong>真实总价值分布的 20%、50%（中位数）与 80% 估值分位数</strong>，用于量化不确定性区间与制定安全出价策略，<strong>不是准确率指标</strong>。
+              </div>
+            </details>
+          </div>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <!-- 对话框：删除记录 -->
+  <div class="modal-overlay" id="delete-record-modal" hidden>
+    <div class="modal-card" role="dialog" aria-labelledby="delete-modal-title" aria-modal="true">
+      <div class="modal-header">
+        <h3 class="modal-title" id="delete-modal-title">确定删除这条记录吗？</h3>
+      </div>
+      <div class="modal-body">
+        <p class="modal-warning-text" style="margin-bottom: 8px;">此操作将从本机历史记录中移除该条记录。</p>
+        <div class="modal-error-text" id="delete-modal-error" hidden></div>
+      </div>
+      <div class="modal-actions">
+        <button type="button" class="modal-btn modal-btn-cancel" id="delete-modal-cancel-btn">取消</button>
+        <button type="button" class="modal-btn modal-btn-danger" id="delete-modal-confirm-btn" style="width: auto;">确认删除</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 对话框：新一局处理 -->
+  <div class="modal-overlay" id="next-match-modal" hidden>
+    <div class="modal-card" role="dialog" aria-labelledby="next-modal-title" aria-modal="true">
+      <div class="modal-header">
+        <h3 class="modal-title" id="next-modal-title">开始新一局</h3>
+      </div>
+      <div class="modal-body">
+        <p class="modal-warning-text" style="margin-bottom: 12px;">当前局尚未结算，请选择处理方式：</p>
+        <div class="modal-flow-choices">
+          <button type="button" class="modal-btn modal-btn-confirm" id="next-modal-keep-btn">保留草稿并开始下一局</button>
+          <button type="button" class="modal-btn modal-btn-danger" id="next-modal-discard-btn">放弃当前局并开始下一局</button>
+        </div>
+      </div>
+      <div class="modal-actions" style="margin-top: 8px;">
+        <button type="button" class="modal-btn modal-btn-cancel" id="next-modal-close-btn">取消</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 对话框：本局结算 -->
+  <div class="modal-overlay" id="settle-match-modal" hidden>
+    <div class="modal-card" role="dialog" aria-labelledby="settle-modal-title" aria-modal="true" style="max-width: 440px;">
+      <div class="modal-header">
+        <h3 class="modal-title" id="settle-modal-title">本局结算</h3>
+      </div>
+      <div class="modal-body">
+        <!-- 默认只读识别结果卡片 -->
+        <div id="settle-summary-card" style="background: rgba(15, 23, 42, 0.6); border: 1px solid rgba(148, 163, 184, 0.2); border-radius: 8px; padding: 12px 14px; margin-bottom: 12px;">
+          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px; font-size: 13px;">
+            <div><span style="color: #94a3b8;">竞得者：</span><strong id="settle-summary-winner" style="color: #e2e8f0;">--</strong></div>
+            <div><span style="color: #94a3b8;">最终成交价：</span><strong id="settle-summary-clearing" style="color: #38bdf8;">--</strong></div>
+            <div><span style="color: #94a3b8;">实际价值：</span><strong id="settle-summary-actual" style="color: #34d399;">--</strong></div>
+            <div><span style="color: #94a3b8;">收益：</span><strong id="settle-summary-profit" style="color: #f59e0b;">--</strong></div>
+            <div><span style="color: #94a3b8;">本人拍下：</span><strong id="settle-summary-acquired" style="color: #e2e8f0;">--</strong></div>
+            <div><span style="color: #94a3b8;">竞拍帮手：</span><strong id="settle-summary-assistant" style="color: #c084fc;">--</strong></div>
+          </div>
+          <div id="settle-summary-hint" style="margin-top: 8px; font-size: 12px; color: #34d399;" hidden>✓ 关键结算数据已通过画面高可信识别</div>
+        </div>
+
+        <!-- 修正识别结果输入区（默认折叠，缺失/冲突或手动点击时展开） -->
+        <div id="settle-manual-edit-container" hidden>
+          <div style="font-size: 12px; color: #94a3b8; margin-bottom: 8px;">手动修正字段：</div>
+          <div style="display: flex; flex-direction: column; gap: 8px; margin-bottom: 10px;">
+            <div class="form-field">
+              <label class="form-field-label" for="settle-clearing-price">最终成交价</label>
+              <input class="form-control" id="settle-clearing-price" type="number" min="0" step="1" placeholder="例如 125000">
+            </div>
+            <div class="form-field">
+              <label class="form-field-label" for="settle-actual-total">最后实际总价</label>
+              <input class="form-control" id="settle-actual-total" type="number" min="0" step="1" placeholder="例如 182000">
+            </div>
+            <div class="form-field">
+              <label class="form-field-label" for="settle-acquired-select">是否由本人拍下</label>
+              <select class="form-control" id="settle-acquired-select">
+                <option value="">请选择</option>
+                <option value="true">是，本人拍下</option>
+                <option value="false">否，其他人拍下</option>
+              </select>
+            </div>
+            <div class="form-field">
+              <label class="form-field-label" for="settle-winner-name">竞得者名称</label>
+              <input class="form-control" id="settle-winner-name" type="text" placeholder="填写结算画面中的名称" autocomplete="off">
+            </div>
+          </div>
+        </div>
+
+        <div class="modal-error-text" id="settle-modal-error" hidden></div>
+      </div>
+      <div class="modal-actions" style="display: flex; justify-content: space-between; align-items: center;">
+        <button type="button" class="modal-btn" id="settle-modal-toggle-edit-btn" style="background: rgba(255, 255, 255, 0.08); color: #94a3b8; font-size: 12px; padding: 6px 12px;">修正识别结果</button>
+        <div style="display: flex; gap: 8px;">
+          <button type="button" class="modal-btn modal-btn-cancel" id="settle-modal-cancel-btn">取消</button>
+          <button type="button" class="modal-btn modal-btn-confirm" id="settle-modal-confirm-btn">确认保存并开始下一局</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script src="mascot_runtime_binding.js"></script>
+  <script src="auction_engine_v06.js"></script>
+  <script src="main_window.js"></script>
+</body>
+</html>

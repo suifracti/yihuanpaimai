@@ -1,0 +1,44 @@
+{
+  "groupingVersion": "parent-grouping-review-v1",
+  "sourceId": "src-c86e85c5712aea00ac7d",
+  "proposalArtifactPath": "experiments/vision_benchmark_v2/proposal_artifact.json",
+  "proposalArtifactHash": "f0103050a96b66fbe696641e30535e41301ce460abad0c0054395d18fdc90314",
+  "atomicityReviewPath": "experiments/vision_benchmark_v2/atomicity_review_v1.json",
+  "atomicityReviewHash": "8e0e7d63420028516f8792992dbf7dbc47107f99fe9172380e666a8759b64415",
+  "splitReviewPath": "experiments/vision_benchmark_v2/fixtures/reviewed_split_44d473_v1.json",
+  "splitReviewHash": "d8fa627b29d84bba86550c8a794889aa03336a79270acbea179138f2b2bdd271",
+  "groups": [
+    {
+      "groupId": "group-split-upper-6bc1a2a9",
+      "memberProposalIds": [],
+      "memberSplitChildIds": ["split-child-1c9b91687748"],
+      "resolvedParentBbox": [8, 13, 38, 99],
+      "bboxCoordinateSpace": "source_pixel",
+      "bboxDerivation": "reviewed_override",
+      "resolutionMethod": "reviewed_split_child_parent",
+      "reviewStatus": "reviewed_consistent",
+      "reviewEvidence": {
+        "evidenceType": "manual_source_review",
+        "sourceSnapshotPath": "experiments/vision_benchmark_v2/snapshots/source-c86e85c5712aea00ac7d.png",
+        "reviewerRole": "human_reviewer",
+        "note": "Source review resolves the upper split child to one physical parent bbox; geometry only, with no semantic or quality assertion."
+      }
+    },
+    {
+      "groupId": "group-split-lower-540eff89",
+      "memberProposalIds": [],
+      "memberSplitChildIds": ["split-child-7a64c32a095d"],
+      "resolvedParentBbox": [8, 103, 98, 162],
+      "bboxCoordinateSpace": "source_pixel",
+      "bboxDerivation": "reviewed_override",
+      "resolutionMethod": "reviewed_split_child_parent",
+      "reviewStatus": "reviewed_consistent",
+      "reviewEvidence": {
+        "evidenceType": "manual_source_review",
+        "sourceSnapshotPath": "experiments/vision_benchmark_v2/snapshots/source-c86e85c5712aea00ac7d.png",
+        "reviewerRole": "human_reviewer",
+        "note": "Source review resolves the lower split child to a separate physical parent bbox; geometry only, with no semantic or quality assertion."
+      }
+    }
+  ]
+}

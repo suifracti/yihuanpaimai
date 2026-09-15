@@ -1,0 +1,99 @@
+{
+  "schemaVersion": "venue-box-catalog.v1",
+  "catalogVersion": "venue-box-catalog.candidate.2026-08-22.v1",
+  "catalogStatus": "DRAFT",
+  "gameBuild": "live-build-observed-2026-08-22",
+  "generatedAt": "2026-08-22T14:30:00+08:00",
+  "evidenceBundleSha256": "a01da8d92eee94178583ba17b4970c0b9c87252384c411fa1c8dd3865cdbcba2",
+  "venues": [
+    {
+      "venueId": "venue-haibei",
+      "displayName": "海贝场",
+      "selectable": true,
+      "tier": {
+        "status": "NOT_GAME_AUTHORITY",
+        "value": null,
+        "evidenceRefs": ["current-game-2026-08-22-venue-selection-full"]
+      },
+      "assetRequirement": {
+        "status": "VERIFIED",
+        "value": 0,
+        "evidenceRefs": ["current-game-2026-08-22-venue-selection-full"]
+      },
+      "entryCost": {
+        "status": "VERIFIED",
+        "value": 0,
+        "evidenceRefs": ["current-game-2026-08-22-venue-selection-full"]
+      },
+      "evidenceRefs": ["current-game-2026-08-22-venue-selection-full"],
+      "observationAliases": [],
+      "boxes": []
+    },
+    {
+      "venueId": "venue-shanhu",
+      "displayName": "珊瑚场",
+      "selectable": true,
+      "tier": {
+        "status": "NOT_GAME_AUTHORITY",
+        "value": null,
+        "evidenceRefs": ["current-game-2026-08-22-venue-selection-full"]
+      },
+      "assetRequirement": {
+        "status": "VERIFIED",
+        "value": 1000000,
+        "evidenceRefs": ["current-game-2026-08-22-venue-selection-full"]
+      },
+      "entryCost": {
+        "status": "VERIFIED",
+        "value": 5000,
+        "evidenceRefs": ["current-game-2026-08-22-venue-selection-full"]
+      },
+      "evidenceRefs": ["current-game-2026-08-22-venue-selection-full"],
+      "observationAliases": [],
+      "boxes": []
+    },
+    {
+      "venueId": "venue-zhenzhu",
+      "displayName": "真珠场",
+      "selectable": true,
+      "tier": {
+        "status": "NOT_GAME_AUTHORITY",
+        "value": null,
+        "evidenceRefs": ["current-game-2026-08-22-venue-selection-full"]
+      },
+      "assetRequirement": {
+        "status": "VERIFIED",
+        "value": 5000000,
+        "evidenceRefs": ["current-game-2026-08-22-venue-selection-full"]
+      },
+      "entryCost": {
+        "status": "VERIFIED",
+        "value": 20000,
+        "evidenceRefs": ["current-game-2026-08-22-venue-selection-full"]
+      },
+      "evidenceRefs": ["current-game-2026-08-22-venue-selection-full"],
+      "observationAliases": [],
+      "boxes": []
+    }
+  ],
+  "compatibilityTranslations": [
+    {
+      "consumer": "v06_solver",
+      "catalogVenueId": "venue-haibei",
+      "status": "UNRESOLVED",
+      "compatibilityValue": null
+    },
+    {
+      "consumer": "v06_solver",
+      "catalogVenueId": "venue-shanhu",
+      "status": "UNRESOLVED",
+      "compatibilityValue": null
+    },
+    {
+      "consumer": "v06_solver",
+      "catalogVenueId": "venue-zhenzhu",
+      "status": "UNRESOLVED",
+      "compatibilityValue": null
+    }
+  ]
+}

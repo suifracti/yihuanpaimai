@@ -1,0 +1,86 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://yihuanpaimai.local/schemas/settlement-truth-evidence-v2.schema.json",
+  "title": "Settlement Truth Evidence v2",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "matchId",
+    "actualTotal",
+    "settlementObservedAt",
+    "truthSource",
+    "truthConfidence",
+    "evidenceReferences",
+    "verification",
+    "truthPayloadSha256",
+    "unresolvedTruthConflict",
+    "inventoryScope",
+    "itemLedger",
+    "fileOriginals"
+  ],
+  "properties": {
+    "schemaVersion": { "const": "settlement-truth-evidence.v2" },
+    "matchId": { "type": "string", "minLength": 1 },
+    "actualTotal": { "type": "number", "exclusiveMinimum": 0 },
+    "settlementObservedAt": { "type": "string", "format": "date-time" },
+    "truthSource": { "type": "string", "minLength": 1 },
+    "truthConfidence": { "const": "high" },
+    "evidenceReferences": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["uri", "sha256"],
+        "properties": {
+          "uri": { "type": "string", "minLength": 1 },
+          "sha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" }
+        }
+      }
+    },
+    "verification": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["method", "version", "verifier"],
+      "properties": {
+        "method": { "type": "string", "minLength": 1 },
+        "version": { "type": "string", "minLength": 1 },
+        "verifier": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["type", "id"],
+          "properties": {
+            "type": { "enum": ["reviewer", "deterministic_verifier"] },
+            "id": { "type": "string", "minLength": 1 }
+          }
+        }
+      }
+    },
+    "truthPayloadSha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+    "unresolvedTruthConflict": { "const": false },
+    "inventoryScope": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["complete"],
+      "properties": { "complete": { "type": ["boolean", "null"] } }
+    },
+    "itemLedger": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["verified", "deduplicated", "sha256"],
+      "properties": {
+        "verified": { "type": "boolean" },
+        "deduplicated": { "type": "boolean" },
+        "sha256": { "type": ["string", "null"], "pattern": "^[0-9a-f]{64}$" }
+      }
+    },
+    "fileOriginals": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "$ref": "https://yihuanpaimai.local/schemas/settlement-evidence-original-v2.schema.json"
+      }
+    }
+  }
+}

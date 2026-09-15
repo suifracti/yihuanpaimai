@@ -1,0 +1,25 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://yihuanpaimai.local/schemas/box-observation-v1.schema.json",
+  "title": "BoxObservation v1",
+  "type": "object",
+  "required": [
+    "schemaVersion", "observedAt", "venueId", "rawDisplayName",
+    "reviewer", "catalogVersion", "collectionMode"
+  ],
+  "properties": {
+    "schemaVersion": { "const": "box-observation.v1" },
+    "observedAt": { "type": "string", "format": "date-time" },
+    "venueId": { "type": "string", "minLength": 1 },
+    "rawDisplayName": { "type": "string", "minLength": 1 },
+    "rawEffectText": { "type": ["string", "null"] },
+    "screenshotPath": { "type": ["string", "null"] },
+    "screenshotSha256": { "type": ["string", "null"], "pattern": "^[a-f0-9]{64}$" },
+    "matchId": { "type": ["string", "null"] },
+    "reviewer": { "type": "string", "minLength": 1 },
+    "catalogVersion": { "type": "string", "minLength": 1 },
+    "collectionMode": { "const": "PASSIVE_NATURAL_COLLECTION" },
+    "reviewStatus": { "enum": ["PENDING", "APPROVED", "REJECTED"] }
+  },
+  "additionalProperties": false
+}

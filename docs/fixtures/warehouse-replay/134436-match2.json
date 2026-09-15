@@ -1,0 +1,17 @@
+{
+  "videoPath": "D:/video/2026-09-08 13-44-36.mkv",
+  "recordStableKey": "video_audit_20260908_134436_match2",
+  "sampleTimesSec": [
+    550,
+    550.5,
+    551,
+    555,
+    560
+  ],
+  "gameBbox": [
+    105,
+    150,
+    1545,
+    960
+  ]
+}

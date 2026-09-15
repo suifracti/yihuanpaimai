@@ -1,0 +1,527 @@
+{
+  "metadata": {
+    "videoPath": "D:/video/2026-09-08 13-40-43.mkv",
+    "sourceFrameTimeSec": 150,
+    "sourceFrameSha256": "54fc066dd73e4120e3a7e10b2005ff5db3f7e7e4ebca86b36aa520daeb5a2a8e",
+    "sourceFramePath": "build/codex_matching_20260912/other-video-inspection/2026-09-08 13-40-43-150.png",
+    "annotationScope": "VISIBLE_VIEWPORT_ONLY",
+    "coverageStatus": "PARTIAL",
+    "visibleGrid": {
+      "rows": 10,
+      "columns": 10
+    },
+    "wholeWarehouseItemCount": null,
+    "visibleItemCount": 17,
+    "visibleOccupiedCells": 62,
+    "visibleEmptyCells": 38,
+    "provenanceNote": "Original frame and catalog cards visually compared before production predictions. No bottom endpoint is recorded; this is not a whole-warehouse answer key.",
+    "recordStableKey": "video_audit_20260908_134043"
+  },
+  "items": [
+    {
+      "referenceId": "ref_134043_visible_01",
+      "gridBoundingBox": {
+        "row": 0,
+        "col": 0,
+        "width": 2,
+        "height": 2,
+        "shape": "2x2"
+      },
+      "sourceFrameBbox": [
+        1315,
+        213,
+        1427,
+        325
+      ],
+      "canonicalName": "蟑螂！蟑螂！",
+      "catalogId": "image1-1-0",
+      "quality": "灰",
+      "identityStatus": "VISUALLY_CHECKED_SOURCE_CARD",
+      "sourceScreenshot": "assets/items/catalog_screenshots/2X2/{DDEC982D-9536-4205-837F-B1BF79E86325}.png",
+      "sourceScreenshotSha256": "8f1a2a1d7add0febd9fa2658e81e6ffa4dd2409876e3044e40efb09fc33ba4a6",
+      "cardBbox": [
+        396,
+        0,
+        386,
+        277
+      ],
+      "localCropPath": "assets/items/ground_truth_reference_134043_visible/ref_134043_visible_01.png",
+      "cropSha256": "bfd6f78536112af1b69a6e7a15660fca10d6c1c72a4b1a39bef64df25cbdaf2b"
+    },
+    {
+      "referenceId": "ref_134043_visible_02",
+      "gridBoundingBox": {
+        "row": 0,
+        "col": 2,
+        "width": 2,
+        "height": 1,
+        "shape": "2x1"
+      },
+      "sourceFrameBbox": [
+        1427,
+        213,
+        1540,
+        269
+      ],
+      "canonicalName": "复古圆桌",
+      "catalogId": "image14-0-2",
+      "quality": "蓝",
+      "identityStatus": "VISUALLY_CHECKED_SOURCE_CARD",
+      "sourceScreenshot": "assets/items/catalog_screenshots/2X1/{E065324C-AC60-41CF-B56A-8043A3B76C53}.png",
+      "sourceScreenshotSha256": "cf0981c366d1f48083a3c7f2acd476edbd941eca32a1c1ab587224d2d26148e5",
+      "cardBbox": [
+        391,
+        20,
+        366,
+        236
+      ],
+      "localCropPath": "assets/items/ground_truth_reference_134043_visible/ref_134043_visible_02.png",
+      "cropSha256": "f8bbf024d88f324aa1afefed2e6faa78c465f0c53b5b094dfbf9710dadc7e3e7"
+    },
+    {
+      "referenceId": "ref_134043_visible_03",
+      "gridBoundingBox": {
+        "row": 1,
+        "col": 2,
+        "width": 1,
+        "height": 1,
+        "shape": "1x1"
+      },
+      "sourceFrameBbox": [
+        1427,
+        269,
+        1484,
+        325
+      ],
+      "canonicalName": "花雕碗",
+      "catalogId": "image2-1-2",
+      "quality": "灰",
+      "identityStatus": "VISUALLY_CHECKED_SOURCE_CARD",
+      "sourceScreenshot": "assets/items/catalog_screenshots/1x1/{47545E5E-FC05-4F45-857E-A459326990CC}.png",
+      "sourceScreenshotSha256": "bd6cb12df27f964ebfd3374ef9e16296057caa23f3fbed27b0fdf4f3f1cc7a7e",
+      "cardBbox": [
+        17,
+        276,
+        366,
+        236
+      ],
+      "localCropPath": "assets/items/ground_truth_reference_134043_visible/ref_134043_visible_03.png",
+      "cropSha256": "083e408b7faa4c333d658c814acb9b00b50544596b4790c40d8d13f9dfdfab9c"
+    },
+    {
+      "referenceId": "ref_134043_visible_04",
+      "gridBoundingBox": {
+        "row": 1,
+        "col": 3,
+        "width": 1,
+        "height": 1,
+        "shape": "1x1"
+      },
+      "sourceFrameBbox": [
+        1484,
+        269,
+        1540,
+        325
+      ],
+      "canonicalName": "鎏金盂",
+      "catalogId": "image9-1-2",
+      "quality": "绿",
+      "identityStatus": "VISUALLY_CHECKED_SOURCE_CARD",
+      "sourceScreenshot": "assets/items/catalog_screenshots/1x1/{47545E5E-FC05-4F45-857E-A459326990CC}.png",
+      "sourceScreenshotSha256": "bd6cb12df27f964ebfd3374ef9e16296057caa23f3fbed27b0fdf4f3f1cc7a7e",
+      "cardBbox": [
+        775,
+        0,
+        387,
+        265
+      ],
+      "localCropPath": "assets/items/ground_truth_reference_134043_visible/ref_134043_visible_04.png",
+      "cropSha256": "849d31772eaa308877e5d20351401b5e0c01bc66b20eeb11596a4d58a6651c07"
+    },
+    {
+      "referenceId": "ref_134043_visible_05",
+      "gridBoundingBox": {
+        "row": 0,
+        "col": 4,
+        "width": 2,
+        "height": 2,
+        "shape": "2x2"
+      },
+      "sourceFrameBbox": [
+        1540,
+        213,
+        1652,
+        325
+      ],
+      "canonicalName": "「莲-C198」唱片机",
+      "catalogId": "image5-1-1",
+      "quality": "绿",
+      "identityStatus": "VISUALLY_CHECKED_SOURCE_CARD",
+      "sourceScreenshot": "assets/items/catalog_screenshots/2X2/{DFB6F983-7A0D-41C6-AB47-6C150B5F7770}.png",
+      "sourceScreenshotSha256": "c06571615098094064711d59881537eca676fc07420d0153c1f787afcb77ea69",
+      "cardBbox": [
+        387,
+        259,
+        387,
+        259
+      ],
+      "localCropPath": "assets/items/ground_truth_reference_134043_visible/ref_134043_visible_05.png",
+      "cropSha256": "18643c8a2d0447740a5065c3ca32e680abe24efb0b4e60dae5b015f1b5b51ac8"
+    },
+    {
+      "referenceId": "ref_134043_visible_06",
+      "gridBoundingBox": {
+        "row": 0,
+        "col": 6,
+        "width": 1,
+        "height": 1,
+        "shape": "1x1"
+      },
+      "sourceFrameBbox": [
+        1652,
+        213,
+        1708,
+        269
+      ],
+      "canonicalName": "压缩纸盒",
+      "catalogId": "image24-0-2",
+      "quality": "紫",
+      "identityStatus": "VISUALLY_CHECKED_SOURCE_CARD",
+      "sourceScreenshot": "assets/items/catalog_screenshots/1x1/{46C9F0D7-4495-419F-9A04-544A2E375631}.png",
+      "sourceScreenshotSha256": "e0df940f362f4583c644144ab611bd8ff0aff5682eb2d14609324f6cdc430470",
+      "cardBbox": [
+        392,
+        22,
+        366,
+        236
+      ],
+      "localCropPath": "assets/items/ground_truth_reference_134043_visible/ref_134043_visible_06.png",
+      "cropSha256": "fe8d9ce9db435591f239e506dc80e20c0f1c7790632652b98ac0edca2c60a1b5"
+    },
+    {
+      "referenceId": "ref_134043_visible_07",
+      "gridBoundingBox": {
+        "row": 1,
+        "col": 6,
+        "width": 1,
+        "height": 2,
+        "shape": "1x2"
+      },
+      "sourceFrameBbox": [
+        1652,
+        269,
+        1708,
+        382
+      ],
+      "canonicalName": "心猎铁骑L1-星影狩猎",
+      "catalogId": "image12-1-0",
+      "quality": "蓝",
+      "identityStatus": "VISUALLY_CHECKED_SOURCE_CARD",
+      "sourceScreenshot": "assets/items/catalog_screenshots/1X2/{C8C0E0D0-AD0B-43F9-A2E8-6453DE902C79}.png",
+      "sourceScreenshotSha256": "70480994d882de0565f400f2be0f40d69787ab139e9611d1dc066b29c580642d",
+      "cardBbox": [
+        773,
+        16,
+        366,
+        236
+      ],
+      "localCropPath": "assets/items/ground_truth_reference_134043_visible/ref_134043_visible_07.png",
+      "cropSha256": "e7b89812779cace4b748d75536beea9e24fe1cdcd4f8d033b426290ca47b9c33"
+    },
+    {
+      "referenceId": "ref_134043_visible_08",
+      "gridBoundingBox": {
+        "row": 0,
+        "col": 7,
+        "width": 1,
+        "height": 3,
+        "shape": "1x3"
+      },
+      "sourceFrameBbox": [
+        1708,
+        213,
+        1765,
+        382
+      ],
+      "canonicalName": "角斗士之歌",
+      "catalogId": "image19-0-2",
+      "quality": "紫",
+      "identityStatus": "VISUALLY_CHECKED_SOURCE_CARD",
+      "sourceScreenshot": "assets/items/catalog_screenshots/1X3/{8443FC6A-7C86-4902-BAB8-454E077003BF}.png",
+      "sourceScreenshotSha256": "6f824c36d49ed95947cd348d392dfeb3cf9c32fc283f2827ac107850f83bca64",
+      "cardBbox": [
+        769,
+        262,
+        385,
+        263
+      ],
+      "localCropPath": "assets/items/ground_truth_reference_134043_visible/ref_134043_visible_08.png",
+      "cropSha256": "ce769ff5312b1ed9d7a413ff176cf1b2c765d6941980577e3375a5924314c60e"
+    },
+    {
+      "referenceId": "ref_134043_visible_09",
+      "gridBoundingBox": {
+        "row": 0,
+        "col": 8,
+        "width": 1,
+        "height": 3,
+        "shape": "1x3"
+      },
+      "sourceFrameBbox": [
+        1765,
+        213,
+        1821,
+        382
+      ],
+      "canonicalName": "洄游的一旗",
+      "catalogId": "image20-0-0",
+      "quality": "紫",
+      "identityStatus": "VISUALLY_CHECKED_SOURCE_CARD",
+      "sourceScreenshot": "assets/items/catalog_screenshots/1X3/{4B4BA98A-9DF4-4399-8B1B-754510B27C7A}.png",
+      "sourceScreenshotSha256": "b76f26da9abcbb2f7cb3cb040bc0de2eb2b9cf6f2a053eae678203cf93295885",
+      "cardBbox": [
+        16,
+        10,
+        366,
+        231
+      ],
+      "localCropPath": "assets/items/ground_truth_reference_134043_visible/ref_134043_visible_09.png",
+      "cropSha256": "b18259b2149e15b551480d2a7bc57bde5df5d6220ede4080ab0c5cd3b555256b"
+    },
+    {
+      "referenceId": "ref_134043_visible_10",
+      "gridBoundingBox": {
+        "row": 0,
+        "col": 9,
+        "width": 1,
+        "height": 3,
+        "shape": "1x3"
+      },
+      "sourceFrameBbox": [
+        1821,
+        213,
+        1877,
+        382
+      ],
+      "canonicalName": "名为显赫的权杖",
+      "catalogId": "image27-0-0",
+      "quality": "金",
+      "identityStatus": "VISUALLY_CHECKED_SOURCE_CARD",
+      "sourceScreenshot": "assets/items/catalog_screenshots/1X3/{8443FC6A-7C86-4902-BAB8-454E077003BF}.png",
+      "sourceScreenshotSha256": "6f824c36d49ed95947cd348d392dfeb3cf9c32fc283f2827ac107850f83bca64",
+      "cardBbox": [
+        393,
+        31,
+        366,
+        236
+      ],
+      "localCropPath": "assets/items/ground_truth_reference_134043_visible/ref_134043_visible_10.png",
+      "cropSha256": "11c8e5f9151b75f63e5b8079c66e8bbcd649d8e1b314367d0055edb418c53835"
+    },
+    {
+      "referenceId": "ref_134043_visible_11",
+      "gridBoundingBox": {
+        "row": 2,
+        "col": 0,
+        "width": 3,
+        "height": 2,
+        "shape": "3x2"
+      },
+      "sourceFrameBbox": [
+        1315,
+        325,
+        1484,
+        438
+      ],
+      "canonicalName": "杯装日出",
+      "catalogId": "image18-0-2",
+      "quality": "紫",
+      "identityStatus": "VISUALLY_CHECKED_SOURCE_CARD",
+      "sourceScreenshot": "assets/items/catalog_screenshots/3X2/{1C65BF0E-A101-4042-A9D7-9653D84BCAD1}.png",
+      "sourceScreenshotSha256": "8a7797b78d26fb9c92308b04d8b504e4abf8ae6957f67907bc6da31cabfd9897",
+      "cardBbox": [
+        392,
+        0,
+        382,
+        272
+      ],
+      "localCropPath": "assets/items/ground_truth_reference_134043_visible/ref_134043_visible_11.png",
+      "cropSha256": "2fa7f5b7c46b715cee8c6435636a1b68a6d35601a1546967734c7dc796279bc2"
+    },
+    {
+      "referenceId": "ref_134043_visible_12",
+      "gridBoundingBox": {
+        "row": 2,
+        "col": 3,
+        "width": 2,
+        "height": 2,
+        "shape": "2x2"
+      },
+      "sourceFrameBbox": [
+        1484,
+        325,
+        1596,
+        438
+      ],
+      "canonicalName": "智能笔筒",
+      "catalogId": "image18-1-2",
+      "quality": "紫",
+      "identityStatus": "VISUALLY_CHECKED_SOURCE_CARD",
+      "sourceScreenshot": "assets/items/catalog_screenshots/2X2/{E979E688-0FB8-4D82-BED5-C0FA4B86B848}.png",
+      "sourceScreenshotSha256": "dc9ce35eaf9fe92425a27cf64d387838a4ae0a199c5333841dbaa8b2d36a1d6c",
+      "cardBbox": [
+        17,
+        20,
+        366,
+        236
+      ],
+      "localCropPath": "assets/items/ground_truth_reference_134043_visible/ref_134043_visible_12.png",
+      "cropSha256": "da59ea7070885ff602411842599d0784a674bb7f167555ef5f68cace5d876e25"
+    },
+    {
+      "referenceId": "ref_134043_visible_13",
+      "gridBoundingBox": {
+        "row": 2,
+        "col": 5,
+        "width": 1,
+        "height": 1,
+        "shape": "1x1"
+      },
+      "sourceFrameBbox": [
+        1596,
+        325,
+        1652,
+        382
+      ],
+      "canonicalName": "布妮果实",
+      "catalogId": "image3-1-1",
+      "quality": "灰",
+      "identityStatus": "VISUALLY_CHECKED_SOURCE_CARD",
+      "sourceScreenshot": null,
+      "sourceScreenshotSha256": null,
+      "cardBbox": null,
+      "localCropPath": "assets/items/ground_truth_reference_134043_visible/ref_134043_visible_13.png",
+      "cropSha256": "177367a0cd9c53ef05e3a1a933256390dcc4fc8fa68e43c20ec1e81a1a8abd4c"
+    },
+    {
+      "referenceId": "ref_134043_visible_14",
+      "gridBoundingBox": {
+        "row": 3,
+        "col": 5,
+        "width": 2,
+        "height": 2,
+        "shape": "2x2"
+      },
+      "sourceFrameBbox": [
+        1596,
+        382,
+        1708,
+        494
+      ],
+      "canonicalName": "双颈玉瓶-白",
+      "catalogId": "visual-dc9ba21be2ec",
+      "quality": "gold",
+      "identityStatus": "VISUALLY_CHECKED_SOURCE_CARD",
+      "sourceScreenshot": "assets/items/catalog_screenshots/2X2/{3D2983C4-2C10-49CB-8E12-4E20E57E0F4C}.png",
+      "sourceScreenshotSha256": "d2dcded2e611ec8c196ddb345ebe89bf16b374c37b18eef3ccc723f4f81a4a7c",
+      "cardBbox": [
+        386,
+        264,
+        387,
+        265
+      ],
+      "localCropPath": "assets/items/ground_truth_reference_134043_visible/ref_134043_visible_14.png",
+      "cropSha256": "fa1d7af18e0db4943e349aad11679228f4feba0f0bbecae19c2cc705b142a667"
+    },
+    {
+      "referenceId": "ref_134043_visible_15",
+      "gridBoundingBox": {
+        "row": 3,
+        "col": 7,
+        "width": 2,
+        "height": 1,
+        "shape": "2x1"
+      },
+      "sourceFrameBbox": [
+        1708,
+        382,
+        1821,
+        438
+      ],
+      "canonicalName": "清凉凉止痛药",
+      "catalogId": "image14-0-0",
+      "quality": "蓝",
+      "identityStatus": "VISUALLY_CHECKED_SOURCE_CARD",
+      "sourceScreenshot": "assets/items/catalog_screenshots/2X1/{E065324C-AC60-41CF-B56A-8043A3B76C53}.png",
+      "sourceScreenshotSha256": "cf0981c366d1f48083a3c7f2acd476edbd941eca32a1c1ab587224d2d26148e5",
+      "cardBbox": [
+        10,
+        20,
+        366,
+        236
+      ],
+      "localCropPath": "assets/items/ground_truth_reference_134043_visible/ref_134043_visible_15.png",
+      "cropSha256": "d65f9af6e9f0e3a68afe531c555803792acf2b10ae80e7791e33bd9e634cc897"
+    },
+    {
+      "referenceId": "ref_134043_visible_16",
+      "gridBoundingBox": {
+        "row": 3,
+        "col": 9,
+        "width": 1,
+        "height": 1,
+        "shape": "1x1"
+      },
+      "sourceFrameBbox": [
+        1821,
+        382,
+        1877,
+        438
+      ],
+      "canonicalName": "扫晴微尘",
+      "catalogId": "image3-0-0",
+      "quality": "灰",
+      "identityStatus": "VISUALLY_CHECKED_SOURCE_CARD",
+      "sourceScreenshot": "assets/items/catalog_screenshots/1x1/{47545E5E-FC05-4F45-857E-A459326990CC}.png",
+      "sourceScreenshotSha256": "bd6cb12df27f964ebfd3374ef9e16296057caa23f3fbed27b0fdf4f3f1cc7a7e",
+      "cardBbox": [
+        398,
+        276,
+        366,
+        236
+      ],
+      "localCropPath": "assets/items/ground_truth_reference_134043_visible/ref_134043_visible_16.png",
+      "cropSha256": "b2545da1b05079972931cd359050d9465337629ef8f200d3027af731878f70cc"
+    },
+    {
+      "referenceId": "ref_134043_visible_17",
+      "gridBoundingBox": {
+        "row": 4,
+        "col": 0,
+        "width": 4,
+        "height": 5,
+        "shape": "4x5"
+      },
+      "sourceFrameBbox": [
+        1315,
+        438,
+        1540,
+        719
+      ],
+      "canonicalName": "大饼",
+      "catalogId": "image26-0-1",
+      "quality": "金",
+      "identityStatus": "VISUALLY_CHECKED_SOURCE_CARD",
+      "sourceScreenshot": "assets/items/catalog_screenshots/4X5/{3926DFDD-7627-4780-B786-3D4910511CA2}.png",
+      "sourceScreenshotSha256": "a936c0ffebad090b7bafebf130ddebdd0db71338264e385657b35b34c1e31a1c",
+      "cardBbox": [
+        411,
+        70,
+        368,
+        236
+      ],
+      "localCropPath": "assets/items/ground_truth_reference_134043_visible/ref_134043_visible_17.png",
+      "cropSha256": "655f95b5f8e2d4710f754d3a2bcb4c6b91f221d38c2a674dadcf68768b463cc9"
+    }
+  ]
+}

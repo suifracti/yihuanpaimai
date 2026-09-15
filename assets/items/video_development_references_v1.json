@@ -1,0 +1,52 @@
+{
+  "schemaVersion": "video-development-reference.v1",
+  "scope": "Explicitly separated development-only visual references extracted from reveal frames; never counted as visual_catalog_v2 verified source cards.",
+  "records": [
+    {
+      "catalogId": "image2-1-0",
+      "name": "生鸡蛋",
+      "value": 178,
+      "rarity": "white",
+      "width": 1,
+      "height": 2,
+      "imagePath": "assets/items/video_development_references_v1/egg-v3a-reveal-186.75.png",
+      "imageSha256": "fb947bfa91e7a1ea829fa0fd2cfd4b49557dac614f0849914354e798befa548c",
+      "sampleClass": "development-reference",
+      "purpose": "Independent visual reference for the third-scene egg-shaped unresolved slot; the source is an unselected reveal frame, not the final acceptance frame.",
+      "sourceVideo": "C:\\Users\\Administrator\\Videos\\2026-08-18 11-19-25.mkv",
+      "sourceVideoSha256": "9d4c6ef913f91aa1ec7a5c963f3bfd5fd38307a4d124a38bf8807a6097c70d0c",
+      "sourceSeconds": 186.75,
+      "sourceFrameIndex": 11205,
+      "sourceFps": 60.0,
+      "sourceRect": [0, 6, 1, 2],
+      "acceptanceSample": {
+        "fixture": "tests/fixtures/settlement_cards_v2/2026-08-18_11-19-25_189.png",
+        "rect": [0, 6, 1, 2],
+        "role": "acceptance-only; never loaded as a template"
+      }
+    },
+    {
+      "catalogId": "image2-0-2",
+      "name": "纸牌",
+      "value": 183,
+      "rarity": "white",
+      "width": 1,
+      "height": 2,
+      "imagePath": "assets/items/video_development_references_v1/paper-v4-reveal-4.20.png",
+      "imageSha256": "7af1a29c80e303eb1fa7837466ff9bf0d82da31d04fb5c5a248611a866d55687",
+      "sampleClass": "development-reference",
+      "purpose": "Independent visual reference for the fifth-scene paper/card-shaped unresolved slot; the source is an unselected reveal frame, not the final acceptance frame.",
+      "sourceVideo": "C:\\Users\\Administrator\\Videos\\2026-08-25 21-58-33.mkv",
+      "sourceVideoSha256": "792d82a772a985831f8cf054a32be4d84bf9da3484396c8ec647b5f24f19c637",
+      "sourceSeconds": 4.2,
+      "sourceFrameIndex": 252,
+      "sourceFps": 60.0,
+      "sourceRect": [0, 8, 1, 2],
+      "acceptanceSample": {
+        "fixture": "tests/fixtures/settlement_cards_v2/2026-08-25_21-58-33_6.png",
+        "rect": [0, 8, 1, 2],
+        "role": "acceptance-only; never loaded as a template"
+      }
+    }
+  ]
+}

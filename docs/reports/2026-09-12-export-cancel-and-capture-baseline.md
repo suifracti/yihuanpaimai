@@ -1,0 +1,9 @@
+# 原生导出取消与失败恢复
+
+业务提交f3a7a8d。实际运行隔离Main/HUD，用computer-use观察原生“导出全部人工确认样本”保存对话框并点击取消；DOM确认按钮重新可用、提示已取消导出。随后指定无效txt目标，后台返回失败且按钮恢复、未创建文件。labels-dialog-cancel-retry/report.json PASS。正式和隔离历史均未变化、正常退出。
+
+初版检查脚本在模态期间读不到DOM返回None而失败，不是取消失败；已修正等待并重跑。Escape目标为主窗口时未关闭模态，随后根据模态截图实际点击取消完成，未重复盲按。验证时失败提示为ZIP_REQUIRED；本轮随后将其替换为中文，并为无历史/不可写/文件占用提供提示。label-error-copy-tests.json 4项通过3.575秒验证最终中文提示和原子导出边界；中文修改未再次开启原生对话框。
+
+同时开始采集恢复基线审查：dialog-and-capture-baseline-tests.json 11项中4失败，均来自test_warehouse_capture_commands_v1；3项为后台启动/状态不符，1项仍断言宿主源码不得含canonical_history，与现有持久化职责冲突。未把4项都归为过期，启动失败根因下一步继续查。当前start会新建会话，capture_session每次新建ledger；同局中断后如何延续证据与覆盖尚未验收。
+
+所有产物根目录build/codex_other_video_20260912/。正式历史SHA256仍19100479bbb2dfd8e09faa2adbaf5117919126df4b4bcf92e377ad88c4da3431。P3仍PARTIAL，自动识别优化暂停，v13未覆盖、真实70秒游戏输入未运行。下一步对照生产采集合同修正基线并推进同局中断/重试，再做其余UI参数同步与隔离试用包；完整目标未完成。

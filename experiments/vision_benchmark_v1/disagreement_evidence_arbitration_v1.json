@@ -1,0 +1,373 @@
+{
+  "arbitrationVersion": "1.0.0",
+  "arbitrationDate": "2026-08-20",
+  "provenance": "post_unblinding_evidence_arbitration",
+  "independentModelAgreementEligible": false,
+  "frozenGptPredictionsModified": false,
+  "authoritativeAliasMapCreated": false,
+  "verifiedTruthWritten": false,
+  "scope": {
+    "slotCount": 10,
+    "includedQueueIds": [
+      "BLIND_REP-01_s03",
+      "BLIND_REP-01_s06",
+      "BLIND_REP-01_s09",
+      "BLIND_REP-01_s11",
+      "BLIND_REP-01_s12",
+      "BLIND_REP-01_s13",
+      "BLIND_REP-01_s15",
+      "BLIND_REP-02_s01",
+      "BLIND_REP-02_s11",
+      "BLIND_REP-02_s18"
+    ],
+    "excluded": {
+      "strictExactAgreement": ["BLIND_REP-01_s01"],
+      "invalidPackSlots": [
+        "BLIND_REP-04_s04",
+        "BLIND_REP-04_s05",
+        "BLIND_REP-04_s08",
+        "BLIND_REP-04_s09",
+        "BLIND_REP-05_s01",
+        "BLIND_REP-05_s02",
+        "BLIND_REP-05_s03",
+        "BLIND_REP-05_s04"
+      ]
+    }
+  },
+  "summary": {
+    "likelyAliasEquivalent": 2,
+    "trueVisualDisagreement": 8,
+    "supportsFrozenGpt": 8,
+    "supportsGemini": 0,
+    "bothPlausible": 0,
+    "insufficientEvidence": 0,
+    "unresolved": 0,
+    "aliasCandidates": 7,
+    "aliasCandidatesByStatus": {
+      "strong_candidate": 5,
+      "weak_candidate": 2,
+      "unresolved": 0
+    }
+  },
+  "comparisonInterpretation": {
+    "originalStrictExactAgreement": {
+      "count": 1,
+      "denominator": 11
+    },
+    "likelyProtocolOrAliasOnlyDisagreements": {
+      "count": 2,
+      "denominator": 10,
+      "queueIds": ["BLIND_REP-02_s01", "BLIND_REP-02_s11"]
+    },
+    "counterfactualIdentityEquivalentCountIfAliasesAreLaterConfirmed": {
+      "count": 3,
+      "denominator": 11,
+      "note": "Diagnostic only: original exact 九格小食 plus two likely alias-equivalent slots. This is not a revised benchmark score and does not change frozen predictions. BLIND_REP-02_s01 would still retain a real quality disagreement (Gemini red vs canonical/GPT blue)."
+    },
+    "interpretation": "Two of the ten prior non-exact slots are likely evaluation-protocol/name-namespace problems rather than different visual object recognition. The other eight are target-selection or item-recognition conflicts supported against Gemini by bbox geometry and canonical SOT."
+  },
+  "slotArbitrations": [
+    {
+      "queueId": "BLIND_REP-01_s03",
+      "imageId": "REP-01",
+      "cropId": "crop_REP-01_s03.png",
+      "slotId": "s03",
+      "sourceImage": "assets/settlement_frames/sec_488.jpg",
+      "bbox": [1744, 480, 1872, 608],
+      "frozenGptTop1": {"itemId": "image5-0-2", "name": "新口味上市！", "quality": "绿", "confidence": 0.99},
+      "frozenGptSimilarCandidates": [],
+      "geminiTop1": {"itemId": "red_xinlietieqi_l3", "name": "心猎铁骑L3", "quality": "red", "confidence": "high"},
+      "geminiTopK": ["red_xinlietieqi_l3", "red_xinlietieqi_l2", "purple_xinlietieqi_l1"],
+      "evidence": {
+        "crop": "The crop contains several small neighboring gems, but its center is on the large green costumed-figure card.",
+        "sourceAndBbox": "The bbox center (1808,544) lies inside the 3x3 green card, not on a Heart Hunter toy.",
+        "canonicalSot": "The red-and-cream figure, gold side tassels, sparkles, and 3x3 footprint exactly match image5-0-2 新口味上市！. The catalog Heart Hunter L3 references are armored rider figures with different colors and silhouettes."
+      },
+      "semanticAliasAssessment": "心猎铁骑L3 has multiple canonical family variants but no authoritative mapping to a red item; none visually matches this bbox target.",
+      "triageStatus": "supports_frozen_gpt",
+      "trueVisualDisagreement": true,
+      "confidence": 0.99
+    },
+    {
+      "queueId": "BLIND_REP-01_s06",
+      "imageId": "REP-01",
+      "cropId": "crop_REP-01_s06.png",
+      "slotId": "s06",
+      "sourceImage": "assets/settlement_frames/sec_488.jpg",
+      "bbox": [1664, 288, 1728, 416],
+      "frozenGptTop1": {"itemId": "image26-0-0", "name": "乔望尼金雕像", "quality": "金", "confidence": 0.97},
+      "frozenGptSimilarCandidates": [],
+      "geminiTop1": {"itemId": "purple_hongyaoshui", "name": "红药水", "quality": "purple", "confidence": "medium"},
+      "geminiTopK": ["purple_hongyaoshui", "purple_chengjieweijiu", "red_xiahongzuan"],
+      "evidence": {
+        "crop": "The crop is a gray rock fragment on a gold-card background with a neighboring blue card edge.",
+        "sourceAndBbox": "The bbox center (1696,352) lies inside the large 4x5 gold sculpture; a bottle card is only adjacent at the left edge.",
+        "canonicalSot": "The full source sculpture's gold figure and twin gray rock masses exactly match image26-0-0 乔望尼金雕像. No potion candidate matches the target area."
+      },
+      "semanticAliasAssessment": "红药水 may describe the adjacent bottle, but the current evidence is insufficient to map purple_hongyaoshui to a unique catalog item.",
+      "triageStatus": "supports_frozen_gpt",
+      "trueVisualDisagreement": true,
+      "confidence": 0.98
+    },
+    {
+      "queueId": "BLIND_REP-01_s09",
+      "imageId": "REP-01",
+      "cropId": "crop_REP-01_s09.png",
+      "slotId": "s09",
+      "sourceImage": "assets/settlement_frames/sec_488.jpg",
+      "bbox": [1440, 528, 1504, 576],
+      "frozenGptTop1": {"itemId": "image22-1-2", "name": "环的冥思", "quality": "紫", "confidence": 0.97},
+      "frozenGptSimilarCandidates": [],
+      "geminiTop1": {"itemId": "white_dianyingkaquan", "name": "电影卡券", "quality": "white", "confidence": "medium"},
+      "geminiTopK": ["white_dianyingkaquan", "blue_zhinengshouji", "white_zhezhibaozhi"],
+      "evidence": {
+        "crop": "The visible target is a gold loop sculpture on a dark rectangular plinth in a purple card; a blue card is adjacent on the right/bottom.",
+        "sourceAndBbox": "The bbox center remains within the narrow 1x2 purple sculpture card.",
+        "canonicalSot": "The loop and black marble-like base exactly match image22-1-2 环的冥思. A ticket-like blue item is nearby but is not the bbox target."
+      },
+      "semanticAliasAssessment": "The nearby blue ticket/box resembles image14-0-0 清凉凉止痛药; white_dianyingkaquan is therefore a weak alias candidate for that adjacent canonical item, not for this slot target.",
+      "triageStatus": "supports_frozen_gpt",
+      "trueVisualDisagreement": true,
+      "confidence": 0.97
+    },
+    {
+      "queueId": "BLIND_REP-01_s11",
+      "imageId": "REP-01",
+      "cropId": "crop_REP-01_s11.png",
+      "slotId": "s11",
+      "sourceImage": "assets/settlement_frames/sec_488.jpg",
+      "bbox": [1728, 560, 1792, 624],
+      "frozenGptTop1": {"itemId": "image5-0-2", "name": "新口味上市！", "quality": "绿", "confidence": 0.97},
+      "frozenGptSimilarCandidates": [],
+      "geminiTop1": {"itemId": "gold_jinwan", "name": "金碗", "quality": "gold", "confidence": "medium"},
+      "geminiTopK": ["gold_jinwan", "white_huadiaowan", "gold_liushengjilaba"],
+      "evidence": {
+        "crop": "The crop contains the red-and-cream figure and gold tassel on a green card.",
+        "sourceAndBbox": "The bbox center (1760,592) lies within the upper-left/middle of the 3x3 新口味上市！ card.",
+        "canonicalSot": "The figure is an exact match to image5-0-2. A small gold lidded bowl is visible elsewhere nearby and matches image9-1-2 鎏金盂, but it is outside this target."
+      },
+      "semanticAliasAssessment": "gold_jinwan is a strong semantic alias candidate for the adjacent canonical 鎏金盂, with incorrect Gemini quality metadata; it does not make this slot equivalent.",
+      "triageStatus": "supports_frozen_gpt",
+      "trueVisualDisagreement": true,
+      "confidence": 0.99
+    },
+    {
+      "queueId": "BLIND_REP-01_s12",
+      "imageId": "REP-01",
+      "cropId": "crop_REP-01_s12.png",
+      "slotId": "s12",
+      "sourceImage": "assets/settlement_frames/sec_488.jpg",
+      "bbox": [1744, 608, 1808, 672],
+      "frozenGptTop1": {"itemId": "image5-0-2", "name": "新口味上市！", "quality": "绿", "confidence": 0.96},
+      "frozenGptSimilarCandidates": [],
+      "geminiTop1": {"itemId": "white_caomeiruantang", "name": "草莓软糖", "quality": "white", "confidence": "medium"},
+      "geminiTopK": ["white_caomeiruantang", "white_caomeitangguo", "purple_yuebaisha"],
+      "evidence": {
+        "crop": "The crop shows the lower red body and gold tassel tips of the green 3x3 figure card.",
+        "sourceAndBbox": "The bbox center (1776,640) is still inside 新口味上市！; the small oval object is a separate neighboring card.",
+        "canonicalSot": "The parent card matches image5-0-2. The nearby off-white oval visually matches image9-1-0 肥皂 rather than a canonical item named 草莓软糖."
+      },
+      "semanticAliasAssessment": "white_caomeiruantang is a weak alias candidate for the adjacent canonical 肥皂, but the descriptive name and quality both conflict with the SOT.",
+      "triageStatus": "supports_frozen_gpt",
+      "trueVisualDisagreement": true,
+      "confidence": 0.98
+    },
+    {
+      "queueId": "BLIND_REP-01_s13",
+      "imageId": "REP-01",
+      "cropId": "crop_REP-01_s13.png",
+      "slotId": "s13",
+      "sourceImage": "assets/settlement_frames/sec_488.jpg",
+      "bbox": [1680, 256, 1744, 320],
+      "frozenGptTop1": {"itemId": "image26-0-0", "name": "乔望尼金雕像", "quality": "金", "confidence": 0.96},
+      "frozenGptSimilarCandidates": [],
+      "geminiTop1": {"itemId": "purple_yuebaisha", "name": "月白沙", "quality": "purple", "confidence": "medium"},
+      "geminiTopK": ["purple_yuebaisha", "white_shuijingqiyuanqiu", "purple_taomu"],
+      "evidence": {
+        "crop": "The crop contains a gold limb/ornament fragment on the gold sculpture card with a neighboring blue gem card edge.",
+        "sourceAndBbox": "The bbox center (1712,288) is inside the top-left of the 4x5 乔望尼金雕像 card.",
+        "canonicalSot": "The full source object exactly matches image26-0-0. 月白沙 is itself a valid canonical catalog name, but its clustered white-gem icon is a different nearby item and does not match this bbox target."
+      },
+      "semanticAliasAssessment": "No alias problem: 月白沙 resolves canonically to image23-1-0, but it is the wrong item for this slot.",
+      "triageStatus": "supports_frozen_gpt",
+      "trueVisualDisagreement": true,
+      "confidence": 0.98
+    },
+    {
+      "queueId": "BLIND_REP-01_s15",
+      "imageId": "REP-01",
+      "cropId": "crop_REP-01_s15.png",
+      "slotId": "s15",
+      "sourceImage": "assets/settlement_frames/sec_488.jpg",
+      "bbox": [1472, 480, 1536, 544],
+      "frozenGptTop1": {"itemId": "image10-1-0", "name": "艺术画「深林」", "quality": "蓝", "confidence": 0.86},
+      "frozenGptSimilarCandidates": [{"itemId": "image14-0-2", "name": "复古圆桌", "quality": "蓝"}],
+      "geminiTop1": {"itemId": "green_xiaomuzhuo", "name": "小木桌", "quality": "green", "confidence": "medium"},
+      "geminiTopK": ["green_xiaomuzhuo", "blue_fuguonandeng", "white_saokingweichen"],
+      "evidence": {
+        "crop": "The crop mixes the lower portion of the blue painting card with the top of the neighboring round table.",
+        "sourceAndBbox": "Most of the bbox and its center (1504,512) lie inside the 3x3 painting card; the table enters only along the lower edge.",
+        "canonicalSot": "The tilted gold frame and landscape match image10-1-0 艺术画「深林」. The adjacent table matches image14-0-2 复古圆桌, which was already preserved as GPT's frozen similar candidate."
+      },
+      "semanticAliasAssessment": "green_xiaomuzhuo is a strong alias candidate for the adjacent image14-0-2 复古圆桌, but Gemini selected the neighbor rather than the bbox's parent item and also assigned the wrong quality.",
+      "triageStatus": "supports_frozen_gpt",
+      "trueVisualDisagreement": true,
+      "confidence": 0.93
+    },
+    {
+      "queueId": "BLIND_REP-02_s01",
+      "imageId": "REP-02",
+      "cropId": "crop_REP-02_s01.png",
+      "slotId": "s01",
+      "sourceImage": "core/settlement_items_crop.png",
+      "bbox": [92, 100, 230, 230],
+      "frozenGptTop1": {"itemId": "image10-0-0", "name": "绝对是亲手钓的鱼", "quality": "蓝", "confidence": 0.99},
+      "frozenGptSimilarCandidates": [],
+      "geminiTop1": {"itemId": "red_chiweiyu", "name": "赤尾鱼", "quality": "red", "confidence": "high"},
+      "geminiTopK": ["red_chiweiyu", "red_jinjinlidiaoxiang", "red_pendragon"],
+      "evidence": {
+        "crop": "Both predictions refer to the same distinctive red-backed, white-bellied fish silhouette with a sharply curved magenta tail.",
+        "sourceAndBbox": "The bbox cleanly encloses the complete 5x5 fish card; there is no competing fish object.",
+        "canonicalSot": "The image is an exact pixel-level visual match to the unique 5x5 catalog item image10-0-0 绝对是亲手钓的鱼. catalog_065 has no 赤尾鱼 entry."
+      },
+      "semanticAliasAssessment": "red_chiweiyu / 赤尾鱼 is a strong candidate semantic alias for image10-0-0 绝对是亲手钓的鱼. Item identity is likely equivalent, but Gemini's red quality remains incorrect relative to the blue canonical card.",
+      "triageStatus": "likely_alias_equivalent",
+      "trueVisualDisagreement": false,
+      "qualityDisagreementRemains": true,
+      "confidence": 0.98
+    },
+    {
+      "queueId": "BLIND_REP-02_s11",
+      "imageId": "REP-02",
+      "cropId": "crop_REP-02_s11.png",
+      "slotId": "s11",
+      "sourceImage": "core/settlement_items_crop.png",
+      "bbox": [65, 155, 90, 180],
+      "frozenGptTop1": {"itemId": "image35-1-2", "name": "「泪滴」", "quality": "红", "confidence": 0.93},
+      "frozenGptSimilarCandidates": [],
+      "geminiTop1": {"itemId": "red_chixinshuidi", "name": "炽心水滴", "quality": "red", "confidence": "medium"},
+      "geminiTopK": ["red_chixinshuidi", "purple_xiahongzuan", "purple_youlingtai"],
+      "evidence": {
+        "crop": "Both labels refer to the same pale-blue faceted teardrop icon on a red one-cell card.",
+        "sourceAndBbox": "The bbox contains that single teardrop and no competing item shape.",
+        "canonicalSot": "The highlight, blue-to-lilac gradient, droplet silhouette, red quality, and 1x1 footprint exactly match the unique catalog item image35-1-2 「泪滴」. catalog_065 has no 炽心水滴 entry."
+      },
+      "semanticAliasAssessment": "red_chixinshuidi / 炽心水滴 is a strong candidate semantic alias for image35-1-2 「泪滴」. The previous strict mismatch is very likely namespace/naming-only; quality also agrees.",
+      "triageStatus": "likely_alias_equivalent",
+      "trueVisualDisagreement": false,
+      "qualityDisagreementRemains": false,
+      "confidence": 0.99
+    },
+    {
+      "queueId": "BLIND_REP-02_s18",
+      "imageId": "REP-02",
+      "cropId": "crop_REP-02_s18.png",
+      "slotId": "s18",
+      "sourceImage": "core/settlement_items_crop.png",
+      "bbox": [250, 265, 275, 295],
+      "frozenGptTop1": {"itemId": "image17-1-1", "name": "阿瑞斯动感单车", "quality": "紫", "confidence": 0.96},
+      "frozenGptSimilarCandidates": [],
+      "geminiTop1": {"itemId": "green_liulidanzhu", "name": "琉璃弹珠", "quality": "green", "confidence": "medium"},
+      "geminiTopK": ["green_liulidanzhu", "green_huoqiyin", "purple_taomu"],
+      "evidence": {
+        "crop": "The isolated crop is mostly purple background, but it is inside the right portion of a 3x2 purple exercise-bike card.",
+        "sourceAndBbox": "The bbox lies within the card containing the monitor, bike frame, pedals, and green bottle. The green swirl marble is a separate one-cell item below/right and outside the bbox.",
+        "canonicalSot": "The exercise-bike silhouette exactly matches image17-1-1 阿瑞斯动感单车. The neighboring swirl marble matches image3-1-0 崭新的弹珠."
+      },
+      "semanticAliasAssessment": "green_liulidanzhu is a strong semantic alias candidate for the adjacent canonical image3-1-0 崭新的弹珠, but Gemini selected the neighbor and assigned green instead of the canonical gray quality.",
+      "triageStatus": "supports_frozen_gpt",
+      "trueVisualDisagreement": true,
+      "confidence": 0.97
+    }
+  ],
+  "aliasCandidates": [
+    {
+      "geminiSemanticItemId": "red_chixinshuidi",
+      "geminiName": "炽心水滴",
+      "candidateCanonicalItemId": "image35-1-2",
+      "canonicalName": "「泪滴」",
+      "evidence": "Unique red 1x1 pale-blue teardrop icon, gradient, and silhouette match exactly; no catalog entry named 炽心水滴 exists.",
+      "confidence": 0.99,
+      "aliasStatus": "strong_candidate",
+      "slotEffect": "likely_alias_equivalent"
+    },
+    {
+      "geminiSemanticItemId": "red_chiweiyu",
+      "geminiName": "赤尾鱼",
+      "candidateCanonicalItemId": "image10-0-0",
+      "canonicalName": "绝对是亲手钓的鱼",
+      "evidence": "The complete unique 5x5 fish icon is an exact visual match; catalog_065 has no 赤尾鱼 entry. Gemini quality red conflicts with canonical blue.",
+      "confidence": 0.98,
+      "aliasStatus": "strong_candidate",
+      "slotEffect": "likely_alias_equivalent_with_quality_disagreement"
+    },
+    {
+      "geminiSemanticItemId": "green_xiaomuzhuo",
+      "geminiName": "小木桌",
+      "candidateCanonicalItemId": "image14-0-2",
+      "canonicalName": "复古圆桌",
+      "evidence": "The neighboring round wooden top and dark pedestal match the unique 2x1 canonical table. It is adjacent to, not centered in, the audited bbox; Gemini quality green conflicts with canonical blue.",
+      "confidence": 0.92,
+      "aliasStatus": "strong_candidate",
+      "slotEffect": "adjacent_item_selected_not_slot_equivalence"
+    },
+    {
+      "geminiSemanticItemId": "gold_jinwan",
+      "geminiName": "金碗",
+      "candidateCanonicalItemId": "image9-1-2",
+      "canonicalName": "鎏金盂",
+      "evidence": "The nearby gold lidded vessel is a close, unique visual match to 鎏金盂. It is outside the audited target and Gemini quality gold conflicts with canonical green.",
+      "confidence": 0.9,
+      "aliasStatus": "strong_candidate",
+      "slotEffect": "adjacent_item_selected_not_slot_equivalence"
+    },
+    {
+      "geminiSemanticItemId": "green_liulidanzhu",
+      "geminiName": "琉璃弹珠",
+      "candidateCanonicalItemId": "image3-1-0",
+      "canonicalName": "崭新的弹珠",
+      "evidence": "The neighboring green-yellow swirl marble matches the unique canonical marble icon. It is outside the audited bbox and Gemini quality green conflicts with canonical gray.",
+      "confidence": 0.95,
+      "aliasStatus": "strong_candidate",
+      "slotEffect": "adjacent_item_selected_not_slot_equivalence"
+    },
+    {
+      "geminiSemanticItemId": "white_dianyingkaquan",
+      "geminiName": "电影卡券",
+      "candidateCanonicalItemId": "image14-0-0",
+      "canonicalName": "清凉凉止痛药",
+      "evidence": "A nearby blue rectangular ticket/box resembles the canonical painkiller package, but the small rendering does not support an authoritative identity assertion and the names/qualities conflict.",
+      "confidence": 0.72,
+      "aliasStatus": "weak_candidate",
+      "slotEffect": "possible_adjacent_item_selected_not_slot_equivalence"
+    },
+    {
+      "geminiSemanticItemId": "white_caomeiruantang",
+      "geminiName": "草莓软糖",
+      "candidateCanonicalItemId": "image9-1-0",
+      "canonicalName": "肥皂",
+      "evidence": "The nearby off-white oval matches the canonical soap icon, but Gemini's descriptive name and white quality are inconsistent with the green canonical card.",
+      "confidence": 0.68,
+      "aliasStatus": "weak_candidate",
+      "slotEffect": "possible_adjacent_item_selected_not_slot_equivalence"
+    }
+  ],
+  "provenanceGuard": {
+    "thisFileMayReviseFrozenGptPredictions": false,
+    "thisFileCountsAsIndependentModelObservation": false,
+    "thisFileMayCreateStrongMultiModelPseudoLabels": false,
+    "existingIndependentStrongCandidatePreservedOnly": "BLIND_REP-01_s01 / 九格小食",
+    "aliasInterpretationMayOnlyCorrectComparisonSemantics": true,
+    "verifiedTruthRequiresHumanOrIndependentReliableEvidence": true
+  },
+  "prohibitedActionsPerformed": {
+    "frozenGptReviewModified": false,
+    "pseudoLabelsModified": false,
+    "authoritativeAliasMapCreated": false,
+    "groundTruthModified": false,
+    "historicalJsonModified": false,
+    "redPriorModified": false,
+    "solverModified": false,
+    "cropGeneratorModified": false
+  }
+}

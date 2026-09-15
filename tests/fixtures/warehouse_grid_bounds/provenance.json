@@ -1,0 +1,15 @@
+{
+  "sourceFrameSha256": "54fc066dd73e4120e3a7e10b2005ff5db3f7e7e4ebca86b36aa520daeb5a2a8e",
+  "sourceVideo": "D:/video/2026-09-08 13-40-43.mkv",
+  "timeSec": 150,
+  "sourceBbox": [
+    1315,
+    211,
+    1915,
+    847
+  ],
+  "cropSha256": "3f6cc3fc4505feddd04e68ce9d84834ee4fb6390b6debd911e0c18eb2c48709e",
+  "visibleGridRows": 10,
+  "gridBottomApproxPx": 564,
+  "filterCenterApproxPx": 597
+}

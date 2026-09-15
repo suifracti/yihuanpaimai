@@ -1,0 +1,12 @@
+{
+  "version": 1,
+  "roi": "lobby_tool_search",
+  "minScore": 0.62,
+  "minMargin": 0.05,
+  "items": [
+    {
+      "id": "高级品鉴仪器组",
+      "file": "高级品鉴仪器组.png"
+    }
+  ]
+}

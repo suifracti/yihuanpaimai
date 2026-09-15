@@ -1,0 +1,2205 @@
+{
+  "catalogCoverageStatus": "UNVERIFIED",
+  "recordStableKey": "video_audit_20260908_134043",
+  "reviewStatus": "REVIEW_REQUIRED",
+  "reviewUnits": [
+    {
+      "bestObservationId": "obs-4-0-seq0",
+      "candidateStatus": "UNIQUE_IN_CATALOG",
+      "candidates": [
+        {
+          "catalogId": "image26-0-1",
+          "geometry": {
+            "cells": 20,
+            "height": 5,
+            "shape": "4x5",
+            "width": 4
+          },
+          "identityStatus": "CANDIDATE_ONLY",
+          "inliers": 62,
+          "margin": 62,
+          "matchReasons": [
+            "WHOLE_CARD_MATCH",
+            "SIFT_INLIERS_62"
+          ],
+          "name": "大饼",
+          "score": 1.0
+        }
+      ],
+      "footprint": {
+        "heightCells": 5,
+        "widthCells": 4
+      },
+      "geometryEvidenceStatus": "EXACT",
+      "heightCandidates": [
+        5
+      ],
+      "identityStatus": "REVIEW_REQUIRED",
+      "observations": [
+        {
+          "bbox": [
+            1316.0,
+            437.0,
+            1540.0,
+            717.0
+          ],
+          "bestFgScore": null,
+          "evidenceId": "sev2_video_audit_20260908_134043_c5417e63f22f5131_warehouse-segment",
+          "fgMargin": null,
+          "inliers": 62,
+          "localGridBbox": [
+            4,
+            0,
+            4,
+            5
+          ],
+          "margin": 62,
+          "matchedCandidateId": "image26-0-1",
+          "matchedCandidateName": "大饼",
+          "observationId": "obs-4-0-seq0",
+          "sequenceIndex": 0,
+          "sha256": "c5417e63f22f51313dd51ce6983ffd7350899cf5cef04b2cd9937663ad07861a",
+          "status": "FULL"
+        },
+        {
+          "bbox": [
+            1316.0,
+            437.0,
+            1540.0,
+            717.0
+          ],
+          "bestFgScore": null,
+          "evidenceId": "sev2_video_audit_20260908_134043_2940c6a6092504f2_warehouse-segment",
+          "fgMargin": null,
+          "inliers": 65,
+          "localGridBbox": [
+            4,
+            0,
+            4,
+            5
+          ],
+          "margin": 65,
+          "matchedCandidateId": "image26-0-1",
+          "matchedCandidateName": "大饼",
+          "observationId": "obs-4-0-seq1",
+          "sequenceIndex": 1,
+          "sha256": "2940c6a6092504f25d0c2ce62a71ba4135433cde2da3fe7d68da982d2426d7df",
+          "status": "FULL"
+        },
+        {
+          "bbox": [
+            1316.0,
+            437.0,
+            1540.0,
+            717.0
+          ],
+          "bestFgScore": null,
+          "evidenceId": "sev2_video_audit_20260908_134043_e215188351145ed6_warehouse-segment",
+          "fgMargin": null,
+          "inliers": 65,
+          "localGridBbox": [
+            4,
+            0,
+            4,
+            5
+          ],
+          "margin": 65,
+          "matchedCandidateId": "image26-0-1",
+          "matchedCandidateName": "大饼",
+          "observationId": "obs-4-0-seq2",
+          "sequenceIndex": 2,
+          "sha256": "e215188351145ed65a5b15c2a7cca21a3926c7e60e4197ae2856a5a0356e14ef",
+          "status": "FULL"
+        }
+      ],
+      "physicalGroupId": "group-world-4-0",
+      "placementStatus": "RESOLVED",
+      "reviewUnitId": "unit-world-4-0-4x5",
+      "selectedCatalogId": null,
+      "spanCandidates": [
+        20
+      ],
+      "supportingTrackIds": [
+        "raw-track-4-0"
+      ],
+      "visibility": "FULL",
+      "widthCandidates": [
+        4
+      ],
+      "worldAnchor": {
+        "col": 0,
+        "row": 4
+      }
+    },
+    {
+      "bestObservationId": "obs-2-0-seq0",
+      "candidateStatus": "UNIQUE_IN_CATALOG",
+      "candidates": [
+        {
+          "catalogId": "image18-0-2",
+          "geometry": {
+            "cells": 6,
+            "height": 2,
+            "shape": "3x2",
+            "width": 3
+          },
+          "identityStatus": "CANDIDATE_ONLY",
+          "inliers": 22,
+          "margin": 22,
+          "matchReasons": [
+            "WHOLE_CARD_MATCH",
+            "SIFT_INLIERS_22"
+          ],
+          "name": "杯装日出",
+          "score": 1.0
+        }
+      ],
+      "footprint": {
+        "heightCells": 2,
+        "widthCells": 3
+      },
+      "geometryEvidenceStatus": "EXACT",
+      "heightCandidates": [
+        2
+      ],
+      "identityStatus": "REVIEW_REQUIRED",
+      "observations": [
+        {
+          "bbox": [
+            1316.0,
+            325.0,
+            1484.0,
+            437.0
+          ],
+          "bestFgScore": null,
+          "evidenceId": "sev2_video_audit_20260908_134043_c5417e63f22f5131_warehouse-segment",
+          "fgMargin": null,
+          "inliers": 22,
+          "localGridBbox": [
+            2,
+            0,
+            3,
+            2
+          ],
+          "margin": 22,
+          "matchedCandidateId": "image18-0-2",
+          "matchedCandidateName": "杯装日出",
+          "observationId": "obs-2-0-seq0",
+          "sequenceIndex": 0,
+          "sha256": "c5417e63f22f51313dd51ce6983ffd7350899cf5cef04b2cd9937663ad07861a",
+          "status": "FULL"
+        },
+        {
+          "bbox": [
+            1316.0,
+            325.0,
+            1484.0,
+            437.0
+          ],
+          "bestFgScore": null,
+          "evidenceId": "sev2_video_audit_20260908_134043_2940c6a6092504f2_warehouse-segment",
+          "fgMargin": null,
+          "inliers": 24,
+          "localGridBbox": [
+            2,
+            0,
+            3,
+            2
+          ],
+          "margin": 24,
+          "matchedCandidateId": "image18-0-2",
+          "matchedCandidateName": "杯装日出",
+          "observationId": "obs-2-0-seq1",
+          "sequenceIndex": 1,
+          "sha256": "2940c6a6092504f25d0c2ce62a71ba4135433cde2da3fe7d68da982d2426d7df",
+          "status": "FULL"
+        },
+        {
+          "bbox": [
+            1316.0,
+            325.0,
+            1484.0,
+            437.0
+          ],
+          "bestFgScore": null,
+          "evidenceId": "sev2_video_audit_20260908_134043_e215188351145ed6_warehouse-segment",
+          "fgMargin": null,
+          "inliers": 23,
+          "localGridBbox": [
+            2,
+            0,
+            3,
+            2
+          ],
+          "margin": 23,
+          "matchedCandidateId": "image18-0-2",
+          "matchedCandidateName": "杯装日出",
+          "observationId": "obs-2-0-seq2",
+          "sequenceIndex": 2,
+          "sha256": "e215188351145ed65a5b15c2a7cca21a3926c7e60e4197ae2856a5a0356e14ef",
+          "status": "FULL"
+        }
+      ],
+      "physicalGroupId": "group-world-2-0",
+      "placementStatus": "RESOLVED",
+      "reviewUnitId": "unit-world-2-0-3x2",
+      "selectedCatalogId": null,
+      "spanCandidates": [
+        6
+      ],
+      "supportingTrackIds": [
+        "raw-track-2-0"
+      ],
+      "visibility": "FULL",
+      "widthCandidates": [
+        3
+      ],
+      "worldAnchor": {
+        "col": 0,
+        "row": 2
+      }
+    },
+    {
+      "bestObservationId": "obs-0-0-seq0",
+      "candidateStatus": "UNIQUE_IN_CATALOG",
+      "candidates": [
+        {
+          "catalogId": "image1-1-0",
+          "geometry": {
+            "cells": 4,
+            "height": 2,
+            "shape": "2x2",
+            "width": 2
+          },
+          "identityStatus": "CANDIDATE_ONLY",
+          "inliers": 22,
+          "margin": 22,
+          "matchReasons": [
+            "WHOLE_CARD_MATCH",
+            "SIFT_INLIERS_22"
+          ],
+          "name": "蟑螂！蟑螂！",
+          "score": 1.0
+        }
+      ],
+      "footprint": {
+        "heightCells": 2,
+        "widthCells": 2
+      },
+      "geometryEvidenceStatus": "EXACT",
+      "heightCandidates": [
+        2
+      ],
+      "identityStatus": "REVIEW_REQUIRED",
+      "observations": [
+        {
+          "bbox": [
+            1316.0,
+            213.0,
+            1428.0,
+            325.0
+          ],
+          "bestFgScore": null,
+          "evidenceId": "sev2_video_audit_20260908_134043_c5417e63f22f5131_warehouse-segment",
+          "fgMargin": null,
+          "inliers": 22,
+          "localGridBbox": [
+            0,
+            0,
+            2,
+            2
+          ],
+          "margin": 22,
+          "matchedCandidateId": "image1-1-0",
+          "matchedCandidateName": "蟑螂！蟑螂！",
+          "observationId": "obs-0-0-seq0",
+          "sequenceIndex": 0,
+          "sha256": "c5417e63f22f51313dd51ce6983ffd7350899cf5cef04b2cd9937663ad07861a",
+          "status": "FULL"
+        },
+        {
+          "bbox": [
+            1316.0,
+            213.0,
+            1428.0,
+            325.0
+          ],
+          "bestFgScore": null,
+          "evidenceId": "sev2_video_audit_20260908_134043_2940c6a6092504f2_warehouse-segment",
+          "fgMargin": null,
+          "inliers": 21,
+          "localGridBbox": [
+            0,
+            0,
+            2,
+            2
+          ],
+          "margin": 21,
+          "matchedCandidateId": "image1-1-0",
+          "matchedCandidateName": "蟑螂！蟑螂！",
+          "observationId": "obs-0-0-seq1",
+          "sequenceIndex": 1,
+          "sha256": "2940c6a6092504f25d0c2ce62a71ba4135433cde2da3fe7d68da982d2426d7df",
+          "status": "FULL"
+        },
+        {
+          "bbox": [
+            1316.0,
+            213.0,
+            1428.0,
+            325.0
+          ],
+          "bestFgScore": null,
+          "evidenceId": "sev2_video_audit_20260908_134043_e215188351145ed6_warehouse-segment",
+          "fgMargin": null,
+          "inliers": 22,
+          "localGridBbox": [
+            0,
+            0,
+            2,
+            2
+          ],
+          "margin": 22,
+          "matchedCandidateId": "image1-1-0",
+          "matchedCandidateName": "蟑螂！蟑螂！",
+          "observationId": "obs-0-0-seq2",
+          "sequenceIndex": 2,
+          "sha256": "e215188351145ed65a5b15c2a7cca21a3926c7e60e4197ae2856a5a0356e14ef",
+          "status": "FULL"
+        }
+      ],
+      "physicalGroupId": "group-world-0-0",
+      "placementStatus": "RESOLVED",
+      "reviewUnitId": "unit-world-0-0-2x2",
+      "selectedCatalogId": null,
+      "spanCandidates": [
+        4
+      ],
+      "supportingTrackIds": [
+        "raw-track-0-0"
+      ],
+      "visibility": "FULL",
+      "widthCandidates": [
+        2
+      ],
+      "worldAnchor": {
+        "col": 0,
+        "row": 0
+      }
+    },
+    {
+      "bestObservationId": "obs-0-7-seq0",
+      "candidateStatus": "UNIQUE_IN_CATALOG",
+      "candidates": [
+        {
+          "catalogId": "image19-0-2",
+          "geometry": {
+            "cells": 3,
+            "height": 3,
+            "shape": "1x3",
+            "width": 1
+          },
+          "identityStatus": "CANDIDATE_ONLY",
+          "inliers": 21,
+          "margin": 21,
+          "matchReasons": [
+            "WHOLE_CARD_MATCH",
+            "SIFT_INLIERS_21"
+          ],
+          "name": "角斗士之歌",
+          "score": 1.0
+        }
+      ],
+      "footprint": {
+        "heightCells": 3,
+        "widthCells": 1
+      },
+      "geometryEvidenceStatus": "EXACT",
+      "heightCandidates": [
+        3
+      ],
+      "identityStatus": "REVIEW_REQUIRED",
+      "observations": [
+        {
+          "bbox": [
+            1708.0,
+            213.0,
+            1764.0,
+            381.0
+          ],
+          "bestFgScore": null,
+          "evidenceId": "sev2_video_audit_20260908_134043_c5417e63f22f5131_warehouse-segment",
+          "fgMargin": null,
+          "inliers": 21,
+          "localGridBbox": [
+            0,
+            7,
+            1,
+            3
+          ],
+          "margin": 21,
+          "matchedCandidateId": "image19-0-2",
+          "matchedCandidateName": "角斗士之歌",
+          "observationId": "obs-0-7-seq0",
+          "sequenceIndex": 0,
+          "sha256": "c5417e63f22f51313dd51ce6983ffd7350899cf5cef04b2cd9937663ad07861a",
+          "status": "FULL"
+        },
+        {
+          "bbox": [
+            1708.0,
+            213.0,
+            1764.0,
+            381.0
+          ],
+          "bestFgScore": null,
+          "evidenceId": "sev2_video_audit_20260908_134043_2940c6a6092504f2_warehouse-segment",
+          "fgMargin": null,
+          "inliers": 19,
+          "localGridBbox": [
+            0,
+            7,
+            1,
+            3
+          ],
+          "margin": 19,
+          "matchedCandidateId": "image19-0-2",
+          "matchedCandidateName": "角斗士之歌",
+          "observationId": "obs-0-7-seq1",
+          "sequenceIndex": 1,
+          "sha256": "2940c6a6092504f25d0c2ce62a71ba4135433cde2da3fe7d68da982d2426d7df",
+          "status": "FULL"
+        },
+        {
+          "bbox": [
+            1708.0,
+            213.0,
+            1764.0,
+            381.0
+          ],
+          "bestFgScore": null,
+          "evidenceId": "sev2_video_audit_20260908_134043_e215188351145ed6_warehouse-segment",
+          "fgMargin": null,
+          "inliers": 19,
+          "localGridBbox": [
+            0,
+            7,
+            1,
+            3
+          ],
+          "margin": 19,
+          "matchedCandidateId": "image19-0-2",
+          "matchedCandidateName": "角斗士之歌",
+          "observationId": "obs-0-7-seq2",
+          "sequenceIndex": 2,
+          "sha256": "e215188351145ed65a5b15c2a7cca21a3926c7e60e4197ae2856a5a0356e14ef",
+          "status": "FULL"
+        }
+      ],
+      "physicalGroupId": "group-world-0-7",
+      "placementStatus": "RESOLVED",
+      "reviewUnitId": "unit-world-0-7-1x3",
+      "selectedCatalogId": null,
+      "spanCandidates": [
+        3
+      ],
+      "supportingTrackIds": [
+        "raw-track-0-7"
+      ],
+      "visibility": "FULL",
+      "widthCandidates": [
+        1
+      ],
+      "worldAnchor": {
+        "col": 7,
+        "row": 0
+      }
+    },
+    {
+      "bestObservationId": "obs-0-8-seq0",
+      "candidateStatus": "UNIQUE_IN_CATALOG",
+      "candidates": [
+        {
+          "catalogId": "image20-0-0",
+          "geometry": {
+            "cells": 3,
+            "height": 3,
+            "shape": "1x3",
+            "width": 1
+          },
+          "identityStatus": "CANDIDATE_ONLY",
+          "inliers": 26,
+          "margin": 26,
+          "matchReasons": [
+            "WHOLE_CARD_MATCH",
+            "SIFT_INLIERS_26"
+          ],
+          "name": "洄游的一旗",
+          "score": 1.0
+        }
+      ],
+      "footprint": {
+        "heightCells": 3,
+        "widthCells": 1
+      },
+      "geometryEvidenceStatus": "EXACT",
+      "heightCandidates": [
+        3
+      ],
+      "identityStatus": "REVIEW_REQUIRED",
+      "observations": [
+        {
+          "bbox": [
+            1764.0,
+            213.0,
+            1820.0,
+            381.0
+          ],
+          "bestFgScore": null,
+          "evidenceId": "sev2_video_audit_20260908_134043_c5417e63f22f5131_warehouse-segment",
+          "fgMargin": null,
+          "inliers": 26,
+          "localGridBbox": [
+            0,
+            8,
+            1,
+            3
+          ],
+          "margin": 26,
+          "matchedCandidateId": "image20-0-0",
+          "matchedCandidateName": "洄游的一旗",
+          "observationId": "obs-0-8-seq0",
+          "sequenceIndex": 0,
+          "sha256": "c5417e63f22f51313dd51ce6983ffd7350899cf5cef04b2cd9937663ad07861a",
+          "status": "FULL"
+        },
+        {
+          "bbox": [
+            1764.0,
+            213.0,
+            1820.0,
+            381.0
+          ],
+          "bestFgScore": null,
+          "evidenceId": "sev2_video_audit_20260908_134043_2940c6a6092504f2_warehouse-segment",
+          "fgMargin": null,
+          "inliers": 26,
+          "localGridBbox": [
+            0,
+            8,
+            1,
+            3
+          ],
+          "margin": 26,
+          "matchedCandidateId": "image20-0-0",
+          "matchedCandidateName": "洄游的一旗",
+          "observationId": "obs-0-8-seq1",
+          "sequenceIndex": 1,
+          "sha256": "2940c6a6092504f25d0c2ce62a71ba4135433cde2da3fe7d68da982d2426d7df",
+          "status": "FULL"
+        },
+        {
+          "bbox": [
+            1764.0,
+            213.0,
+            1820.0,
+            381.0
+          ],
+          "bestFgScore": null,
+          "evidenceId": "sev2_video_audit_20260908_134043_e215188351145ed6_warehouse-segment",
+          "fgMargin": null,
+          "inliers": 26,
+          "localGridBbox": [
+            0,
+            8,
+            1,
+            3
+          ],
+          "margin": 26,
+          "matchedCandidateId": "image20-0-0",
+          "matchedCandidateName": "洄游的一旗",
+          "observationId": "obs-0-8-seq2",
+          "sequenceIndex": 2,
+          "sha256": "e215188351145ed65a5b15c2a7cca21a3926c7e60e4197ae2856a5a0356e14ef",
+          "status": "FULL"
+        }
+      ],
+      "physicalGroupId": "group-world-0-8",
+      "placementStatus": "RESOLVED",
+      "reviewUnitId": "unit-world-0-8-1x3",
+      "selectedCatalogId": null,
+      "spanCandidates": [
+        3
+      ],
+      "supportingTrackIds": [
+        "raw-track-0-8"
+      ],
+      "visibility": "FULL",
+      "widthCandidates": [
+        1
+      ],
+      "worldAnchor": {
+        "col": 8,
+        "row": 0
+      }
+    },
+    {
+      "bestObservationId": "obs-0-9-seq0",
+      "candidateStatus": "UNIQUE_IN_CATALOG",
+      "candidates": [
+        {
+          "catalogId": "image27-0-0",
+          "geometry": {
+            "cells": 3,
+            "height": 3,
+            "shape": "1x3",
+            "width": 1
+          },
+          "identityStatus": "CANDIDATE_ONLY",
+          "inliers": 22,
+          "margin": 22,
+          "matchReasons": [
+            "WHOLE_CARD_MATCH",
+            "SIFT_INLIERS_22"
+          ],
+          "name": "名为显赫的权杖",
+          "score": 1.0
+        }
+      ],
+      "footprint": {
+        "heightCells": 3,
+        "widthCells": 1
+      },
+      "geometryEvidenceStatus": "EXACT",
+      "heightCandidates": [
+        3
+      ],
+      "identityStatus": "REVIEW_REQUIRED",
+      "observations": [
+        {
+          "bbox": [
+            1820.0,
+            213.0,
+            1876.0,
+            381.0
+          ],
+          "bestFgScore": null,
+          "evidenceId": "sev2_video_audit_20260908_134043_c5417e63f22f5131_warehouse-segment",
+          "fgMargin": null,
+          "inliers": 22,
+          "localGridBbox": [
+            0,
+            9,
+            1,
+            3
+          ],
+          "margin": 22,
+          "matchedCandidateId": "image27-0-0",
+          "matchedCandidateName": "名为显赫的权杖",
+          "observationId": "obs-0-9-seq0",
+          "sequenceIndex": 0,
+          "sha256": "c5417e63f22f51313dd51ce6983ffd7350899cf5cef04b2cd9937663ad07861a",
+          "status": "FULL"
+        },
+        {
+          "bbox": [
+            1820.0,
+            213.0,
+            1876.0,
+            381.0
+          ],
+          "bestFgScore": null,
+          "evidenceId": "sev2_video_audit_20260908_134043_2940c6a6092504f2_warehouse-segment",
+          "fgMargin": null,
+          "inliers": 24,
+          "localGridBbox": [
+            0,
+            9,
+            1,
+            3
+          ],
+          "margin": 24,
+          "matchedCandidateId": "image27-0-0",
+          "matchedCandidateName": "名为显赫的权杖",
+          "observationId": "obs-0-9-seq1",
+          "sequenceIndex": 1,
+          "sha256": "2940c6a6092504f25d0c2ce62a71ba4135433cde2da3fe7d68da982d2426d7df",
+          "status": "FULL"
+        },
+        {
+          "bbox": [
+            1820.0,
+            213.0,
+            1876.0,
+            381.0
+          ],
+          "bestFgScore": null,
+          "evidenceId": "sev2_video_audit_20260908_134043_e215188351145ed6_warehouse-segment",
+          "fgMargin": null,
+          "inliers": 25,
+          "localGridBbox": [
+            0,
+            9,
+            1,
+            3
+          ],
+          "margin": 25,
+          "matchedCandidateId": "image27-0-0",
+          "matchedCandidateName": "名为显赫的权杖",
+          "observationId": "obs-0-9-seq2",
+          "sequenceIndex": 2,
+          "sha256": "e215188351145ed65a5b15c2a7cca21a3926c7e60e4197ae2856a5a0356e14ef",
+          "status": "FULL"
+        }
+      ],
+      "physicalGroupId": "group-world-0-9",
+      "placementStatus": "RESOLVED",
+      "reviewUnitId": "unit-world-0-9-1x3",
+      "selectedCatalogId": null,
+      "spanCandidates": [
+        3
+      ],
+      "supportingTrackIds": [
+        "raw-track-0-9"
+      ],
+      "visibility": "FULL",
+      "widthCandidates": [
+        1
+      ],
+      "worldAnchor": {
+        "col": 9,
+        "row": 0
+      }
+    },
+    {
+      "bestObservationId": "obs-3-5-seq0",
+      "candidateStatus": "UNIQUE_IN_CATALOG",
+      "candidates": [
+        {
+          "bestFgScore": 0.9881,
+          "catalogId": "visual-dc9ba21be2ec",
+          "fgMargin": 0.9881,
+          "geometry": {
+            "cells": 4,
+            "height": 2,
+            "shape": "2x2",
+            "width": 2
+          },
+          "identityStatus": "CANDIDATE_ONLY",
+          "inliers": 5,
+          "margin": 5,
+          "matchReasons": [
+            "WHOLE_CARD_MATCH",
+            "SIFT_INLIERS_5",
+            "FOREGROUND_SHAPE_AND_COLOR",
+            "SCORE_0.9881"
+          ],
+          "name": "双颈玉瓶-白",
+          "score": 0.8
+        }
+      ],
+      "footprint": {
+        "heightCells": 2,
+        "widthCells": 2
+      },
+      "geometryEvidenceStatus": "EXACT",
+      "heightCandidates": [
+        2
+      ],
+      "identityStatus": "REVIEW_REQUIRED",
+      "observations": [
+        {
+          "bbox": [
+            1596.0,
+            381.0,
+            1708.0,
+            493.0
+          ],
+          "bestFgScore": 0.9881,
+          "evidenceId": "sev2_video_audit_20260908_134043_c5417e63f22f5131_warehouse-segment",
+          "fgMargin": 0.9881,
+          "inliers": 5,
+          "localGridBbox": [
+            3,
+            5,
+            2,
+            2
+          ],
+          "margin": 5,
+          "matchedCandidateId": "visual-dc9ba21be2ec",
+          "matchedCandidateName": "双颈玉瓶-白",
+          "observationId": "obs-3-5-seq0",
+          "sequenceIndex": 0,
+          "sha256": "c5417e63f22f51313dd51ce6983ffd7350899cf5cef04b2cd9937663ad07861a",
+          "status": "FULL"
+        },
+        {
+          "bbox": [
+            1596.0,
+            381.0,
+            1708.0,
+            493.0
+          ],
+          "bestFgScore": 0.9881,
+          "evidenceId": "sev2_video_audit_20260908_134043_2940c6a6092504f2_warehouse-segment",
+          "fgMargin": 0.9881,
+          "inliers": 5,
+          "localGridBbox": [
+            3,
+            5,
+            2,
+            2
+          ],
+          "margin": 5,
+          "matchedCandidateId": "visual-dc9ba21be2ec",
+          "matchedCandidateName": "双颈玉瓶-白",
+          "observationId": "obs-3-5-seq1",
+          "sequenceIndex": 1,
+          "sha256": "2940c6a6092504f25d0c2ce62a71ba4135433cde2da3fe7d68da982d2426d7df",
+          "status": "FULL"
+        },
+        {
+          "bbox": [
+            1596.0,
+            381.0,
+            1708.0,
+            493.0
+          ],
+          "bestFgScore": 0.9881,
+          "evidenceId": "sev2_video_audit_20260908_134043_e215188351145ed6_warehouse-segment",
+          "fgMargin": 0.9881,
+          "inliers": 4,
+          "localGridBbox": [
+            3,
+            5,
+            2,
+            2
+          ],
+          "margin": null,
+          "matchedCandidateId": "visual-dc9ba21be2ec",
+          "matchedCandidateName": "双颈玉瓶-白",
+          "observationId": "obs-3-5-seq2",
+          "sequenceIndex": 2,
+          "sha256": "e215188351145ed65a5b15c2a7cca21a3926c7e60e4197ae2856a5a0356e14ef",
+          "status": "FULL"
+        }
+      ],
+      "physicalGroupId": "group-world-3-5",
+      "placementStatus": "RESOLVED",
+      "reviewUnitId": "unit-world-3-5-2x2",
+      "selectedCatalogId": null,
+      "spanCandidates": [
+        4
+      ],
+      "supportingTrackIds": [
+        "raw-track-3-5"
+      ],
+      "visibility": "FULL",
+      "widthCandidates": [
+        2
+      ],
+      "worldAnchor": {
+        "col": 5,
+        "row": 3
+      }
+    },
+    {
+      "bestObservationId": "obs-0-4-seq0",
+      "candidateStatus": "UNIQUE_IN_CATALOG",
+      "candidates": [
+        {
+          "bestFgScore": 0.9951,
+          "catalogId": "image5-1-1",
+          "fgMargin": 0.9951,
+          "geometry": {
+            "cells": 4,
+            "height": 2,
+            "shape": "2x2",
+            "width": 2
+          },
+          "identityStatus": "CANDIDATE_ONLY",
+          "inliers": 6,
+          "margin": 6,
+          "matchReasons": [
+            "WHOLE_CARD_MATCH",
+            "SIFT_INLIERS_6",
+            "FOREGROUND_SHAPE_AND_COLOR",
+            "SCORE_0.9951"
+          ],
+          "name": "「莲-C198」唱片机",
+          "score": 0.8
+        }
+      ],
+      "footprint": {
+        "heightCells": 2,
+        "widthCells": 2
+      },
+      "geometryEvidenceStatus": "EXACT",
+      "heightCandidates": [
+        2
+      ],
+      "identityStatus": "REVIEW_REQUIRED",
+      "observations": [
+        {
+          "bbox": [
+            1540.0,
+            213.0,
+            1652.0,
+            325.0
+          ],
+          "bestFgScore": 0.9951,
+          "evidenceId": "sev2_video_audit_20260908_134043_c5417e63f22f5131_warehouse-segment",
+          "fgMargin": 0.9951,
+          "inliers": 6,
+          "localGridBbox": [
+            0,
+            4,
+            2,
+            2
+          ],
+          "margin": 6,
+          "matchedCandidateId": "image5-1-1",
+          "matchedCandidateName": "「莲-C198」唱片机",
+          "observationId": "obs-0-4-seq0",
+          "sequenceIndex": 0,
+          "sha256": "c5417e63f22f51313dd51ce6983ffd7350899cf5cef04b2cd9937663ad07861a",
+          "status": "FULL"
+        },
+        {
+          "bbox": [
+            1540.0,
+            213.0,
+            1652.0,
+            325.0
+          ],
+          "bestFgScore": 0.9951,
+          "evidenceId": "sev2_video_audit_20260908_134043_2940c6a6092504f2_warehouse-segment",
+          "fgMargin": 0.9951,
+          "inliers": 6,
+          "localGridBbox": [
+            0,
+            4,
+            2,
+            2
+          ],
+          "margin": 6,
+          "matchedCandidateId": "image5-1-1",
+          "matchedCandidateName": "「莲-C198」唱片机",
+          "observationId": "obs-0-4-seq1",
+          "sequenceIndex": 1,
+          "sha256": "2940c6a6092504f25d0c2ce62a71ba4135433cde2da3fe7d68da982d2426d7df",
+          "status": "FULL"
+        },
+        {
+          "bbox": [
+            1540.0,
+            213.0,
+            1652.0,
+            325.0
+          ],
+          "bestFgScore": 0.9951,
+          "evidenceId": "sev2_video_audit_20260908_134043_e215188351145ed6_warehouse-segment",
+          "fgMargin": 0.9951,
+          "inliers": 6,
+          "localGridBbox": [
+            0,
+            4,
+            2,
+            2
+          ],
+          "margin": 6,
+          "matchedCandidateId": "image5-1-1",
+          "matchedCandidateName": "「莲-C198」唱片机",
+          "observationId": "obs-0-4-seq2",
+          "sequenceIndex": 2,
+          "sha256": "e215188351145ed65a5b15c2a7cca21a3926c7e60e4197ae2856a5a0356e14ef",
+          "status": "FULL"
+        }
+      ],
+      "physicalGroupId": "group-world-0-4",
+      "placementStatus": "RESOLVED",
+      "reviewUnitId": "unit-world-0-4-2x2",
+      "selectedCatalogId": null,
+      "spanCandidates": [
+        4
+      ],
+      "supportingTrackIds": [
+        "raw-track-0-4"
+      ],
+      "visibility": "FULL",
+      "widthCandidates": [
+        2
+      ],
+      "worldAnchor": {
+        "col": 4,
+        "row": 0
+      }
+    },
+    {
+      "bestObservationId": "obs-2-3-seq0",
+      "candidateStatus": "UNIQUE_IN_CATALOG",
+      "candidates": [
+        {
+          "catalogId": "image18-1-2",
+          "geometry": {
+            "cells": 4,
+            "height": 2,
+            "shape": "2x2",
+            "width": 2
+          },
+          "identityStatus": "CANDIDATE_ONLY",
+          "inliers": 15,
+          "margin": 11,
+          "matchReasons": [
+            "WHOLE_CARD_MATCH",
+            "SIFT_INLIERS_15"
+          ],
+          "name": "智能笔筒",
+          "score": 0.75
+        }
+      ],
+      "footprint": {
+        "heightCells": 2,
+        "widthCells": 2
+      },
+      "geometryEvidenceStatus": "EXACT",
+      "heightCandidates": [
+        2
+      ],
+      "identityStatus": "REVIEW_REQUIRED",
+      "observations": [
+        {
+          "bbox": [
+            1484.0,
+            325.0,
+            1596.0,
+            437.0
+          ],
+          "bestFgScore": null,
+          "evidenceId": "sev2_video_audit_20260908_134043_c5417e63f22f5131_warehouse-segment",
+          "fgMargin": null,
+          "inliers": 14,
+          "localGridBbox": [
+            2,
+            3,
+            2,
+            2
+          ],
+          "margin": 14,
+          "matchedCandidateId": "image18-1-2",
+          "matchedCandidateName": "智能笔筒",
+          "observationId": "obs-2-3-seq0",
+          "sequenceIndex": 0,
+          "sha256": "c5417e63f22f51313dd51ce6983ffd7350899cf5cef04b2cd9937663ad07861a",
+          "status": "FULL"
+        },
+        {
+          "bbox": [
+            1484.0,
+            325.0,
+            1596.0,
+            437.0
+          ],
+          "bestFgScore": null,
+          "evidenceId": "sev2_video_audit_20260908_134043_2940c6a6092504f2_warehouse-segment",
+          "fgMargin": null,
+          "inliers": 14,
+          "localGridBbox": [
+            2,
+            3,
+            2,
+            2
+          ],
+          "margin": 10,
+          "matchedCandidateId": "image18-1-2",
+          "matchedCandidateName": "智能笔筒",
+          "observationId": "obs-2-3-seq1",
+          "sequenceIndex": 1,
+          "sha256": "2940c6a6092504f25d0c2ce62a71ba4135433cde2da3fe7d68da982d2426d7df",
+          "status": "FULL"
+        },
+        {
+          "bbox": [
+            1484.0,
+            325.0,
+            1596.0,
+            437.0
+          ],
+          "bestFgScore": null,
+          "evidenceId": "sev2_video_audit_20260908_134043_e215188351145ed6_warehouse-segment",
+          "fgMargin": null,
+          "inliers": 15,
+          "localGridBbox": [
+            2,
+            3,
+            2,
+            2
+          ],
+          "margin": 11,
+          "matchedCandidateId": "image18-1-2",
+          "matchedCandidateName": "智能笔筒",
+          "observationId": "obs-2-3-seq2",
+          "sequenceIndex": 2,
+          "sha256": "e215188351145ed65a5b15c2a7cca21a3926c7e60e4197ae2856a5a0356e14ef",
+          "status": "FULL"
+        }
+      ],
+      "physicalGroupId": "group-world-2-3",
+      "placementStatus": "RESOLVED",
+      "reviewUnitId": "unit-world-2-3-2x2",
+      "selectedCatalogId": null,
+      "spanCandidates": [
+        4
+      ],
+      "supportingTrackIds": [
+        "raw-track-2-3"
+      ],
+      "visibility": "FULL",
+      "widthCandidates": [
+        2
+      ],
+      "worldAnchor": {
+        "col": 3,
+        "row": 2
+      }
+    },
+    {
+      "bestObservationId": "obs-0-2-seq0",
+      "candidateStatus": "UNIQUE_IN_CATALOG",
+      "candidates": [
+        {
+          "bestFgScore": 0.9864,
+          "catalogId": "image14-0-2",
+          "fgMargin": 0.9864,
+          "geometry": {
+            "cells": 2,
+            "height": 1,
+            "shape": "2x1",
+            "width": 2
+          },
+          "identityStatus": "CANDIDATE_ONLY",
+          "matchReasons": [
+            "FOREGROUND_SHAPE_AND_COLOR",
+            "SCORE_0.9864"
+          ],
+          "name": "复古圆桌",
+          "score": 0.8
+        }
+      ],
+      "footprint": {
+        "heightCells": 1,
+        "widthCells": 2
+      },
+      "geometryEvidenceStatus": "EXACT",
+      "heightCandidates": [
+        1
+      ],
+      "identityStatus": "REVIEW_REQUIRED",
+      "observations": [
+        {
+          "bbox": [
+            1428.0,
+            213.0,
+            1540.0,
+            269.0
+          ],
+          "bestFgScore": 0.9864,
+          "evidenceId": "sev2_video_audit_20260908_134043_c5417e63f22f5131_warehouse-segment",
+          "fgMargin": 0.9864,
+          "inliers": 0,
+          "localGridBbox": [
+            0,
+            2,
+            2,
+            1
+          ],
+          "margin": null,
+          "matchedCandidateId": "image14-0-2",
+          "matchedCandidateName": "复古圆桌",
+          "observationId": "obs-0-2-seq0",
+          "sequenceIndex": 0,
+          "sha256": "c5417e63f22f51313dd51ce6983ffd7350899cf5cef04b2cd9937663ad07861a",
+          "status": "FULL"
+        },
+        {
+          "bbox": [
+            1428.0,
+            213.0,
+            1540.0,
+            269.0
+          ],
+          "bestFgScore": 0.9866,
+          "evidenceId": "sev2_video_audit_20260908_134043_2940c6a6092504f2_warehouse-segment",
+          "fgMargin": 0.9866,
+          "inliers": 0,
+          "localGridBbox": [
+            0,
+            2,
+            2,
+            1
+          ],
+          "margin": null,
+          "matchedCandidateId": "image14-0-2",
+          "matchedCandidateName": "复古圆桌",
+          "observationId": "obs-0-2-seq1",
+          "sequenceIndex": 1,
+          "sha256": "2940c6a6092504f25d0c2ce62a71ba4135433cde2da3fe7d68da982d2426d7df",
+          "status": "FULL"
+        },
+        {
+          "bbox": [
+            1428.0,
+            213.0,
+            1540.0,
+            269.0
+          ],
+          "bestFgScore": 0.9867,
+          "evidenceId": "sev2_video_audit_20260908_134043_e215188351145ed6_warehouse-segment",
+          "fgMargin": 0.9867,
+          "inliers": 0,
+          "localGridBbox": [
+            0,
+            2,
+            2,
+            1
+          ],
+          "margin": null,
+          "matchedCandidateId": "image14-0-2",
+          "matchedCandidateName": "复古圆桌",
+          "observationId": "obs-0-2-seq2",
+          "sequenceIndex": 2,
+          "sha256": "e215188351145ed65a5b15c2a7cca21a3926c7e60e4197ae2856a5a0356e14ef",
+          "status": "FULL"
+        }
+      ],
+      "physicalGroupId": "group-world-0-2",
+      "placementStatus": "RESOLVED",
+      "reviewUnitId": "unit-world-0-2-2x1",
+      "selectedCatalogId": null,
+      "spanCandidates": [
+        2
+      ],
+      "supportingTrackIds": [
+        "raw-track-0-2"
+      ],
+      "visibility": "FULL",
+      "widthCandidates": [
+        2
+      ],
+      "worldAnchor": {
+        "col": 2,
+        "row": 0
+      }
+    },
+    {
+      "bestObservationId": "obs-0-6-seq0",
+      "candidateStatus": "UNIQUE_IN_CATALOG",
+      "candidates": [
+        {
+          "bestFgScore": 0.9847,
+          "catalogId": "image24-0-2",
+          "fgMargin": 0.9847,
+          "geometry": {
+            "cells": 1,
+            "height": 1,
+            "shape": "1x1",
+            "width": 1
+          },
+          "identityStatus": "CANDIDATE_ONLY",
+          "inliers": 6,
+          "margin": 6,
+          "matchReasons": [
+            "WHOLE_CARD_MATCH",
+            "SIFT_INLIERS_6",
+            "FOREGROUND_SHAPE_AND_COLOR",
+            "SCORE_0.9847"
+          ],
+          "name": "压缩纸盒",
+          "score": 0.8
+        }
+      ],
+      "footprint": {
+        "heightCells": 1,
+        "widthCells": 1
+      },
+      "geometryEvidenceStatus": "EXACT",
+      "heightCandidates": [
+        1
+      ],
+      "identityStatus": "REVIEW_REQUIRED",
+      "observations": [
+        {
+          "bbox": [
+            1652.0,
+            213.0,
+            1708.0,
+            269.0
+          ],
+          "bestFgScore": null,
+          "evidenceId": "sev2_video_audit_20260908_134043_c5417e63f22f5131_warehouse-segment",
+          "fgMargin": null,
+          "inliers": 7,
+          "localGridBbox": [
+            0,
+            6,
+            1,
+            1
+          ],
+          "margin": 7,
+          "matchedCandidateId": "image24-0-2",
+          "matchedCandidateName": "压缩纸盒",
+          "observationId": "obs-0-6-seq0",
+          "sequenceIndex": 0,
+          "sha256": "c5417e63f22f51313dd51ce6983ffd7350899cf5cef04b2cd9937663ad07861a",
+          "status": "FULL"
+        },
+        {
+          "bbox": [
+            1652.0,
+            213.0,
+            1708.0,
+            269.0
+          ],
+          "bestFgScore": 0.9847,
+          "evidenceId": "sev2_video_audit_20260908_134043_2940c6a6092504f2_warehouse-segment",
+          "fgMargin": 0.9847,
+          "inliers": 6,
+          "localGridBbox": [
+            0,
+            6,
+            1,
+            1
+          ],
+          "margin": 6,
+          "matchedCandidateId": "image24-0-2",
+          "matchedCandidateName": "压缩纸盒",
+          "observationId": "obs-0-6-seq1",
+          "sequenceIndex": 1,
+          "sha256": "2940c6a6092504f25d0c2ce62a71ba4135433cde2da3fe7d68da982d2426d7df",
+          "status": "FULL"
+        },
+        {
+          "bbox": [
+            1652.0,
+            213.0,
+            1708.0,
+            269.0
+          ],
+          "bestFgScore": null,
+          "evidenceId": "sev2_video_audit_20260908_134043_e215188351145ed6_warehouse-segment",
+          "fgMargin": null,
+          "inliers": 7,
+          "localGridBbox": [
+            0,
+            6,
+            1,
+            1
+          ],
+          "margin": 7,
+          "matchedCandidateId": "image24-0-2",
+          "matchedCandidateName": "压缩纸盒",
+          "observationId": "obs-0-6-seq2",
+          "sequenceIndex": 2,
+          "sha256": "e215188351145ed65a5b15c2a7cca21a3926c7e60e4197ae2856a5a0356e14ef",
+          "status": "FULL"
+        }
+      ],
+      "physicalGroupId": "group-world-0-6",
+      "placementStatus": "RESOLVED",
+      "reviewUnitId": "unit-world-0-6-1x1",
+      "selectedCatalogId": null,
+      "spanCandidates": [
+        1
+      ],
+      "supportingTrackIds": [
+        "raw-track-0-6"
+      ],
+      "visibility": "FULL",
+      "widthCandidates": [
+        1
+      ],
+      "worldAnchor": {
+        "col": 6,
+        "row": 0
+      }
+    },
+    {
+      "bestObservationId": "obs-1-3-seq0",
+      "candidateStatus": "UNIQUE_IN_CATALOG",
+      "candidates": [
+        {
+          "bestFgScore": 0.9948,
+          "catalogId": "image9-1-2",
+          "fgMargin": 0.9948,
+          "geometry": {
+            "cells": 1,
+            "height": 1,
+            "shape": "1x1",
+            "width": 1
+          },
+          "identityStatus": "CANDIDATE_ONLY",
+          "matchReasons": [
+            "FOREGROUND_SHAPE_AND_COLOR",
+            "SCORE_0.9948"
+          ],
+          "name": "鎏金盂",
+          "score": 0.8
+        }
+      ],
+      "footprint": {
+        "heightCells": 1,
+        "widthCells": 1
+      },
+      "geometryEvidenceStatus": "EXACT",
+      "heightCandidates": [
+        1
+      ],
+      "identityStatus": "REVIEW_REQUIRED",
+      "observations": [
+        {
+          "bbox": [
+            1484.0,
+            269.0,
+            1540.0,
+            325.0
+          ],
+          "bestFgScore": 0.9948,
+          "evidenceId": "sev2_video_audit_20260908_134043_c5417e63f22f5131_warehouse-segment",
+          "fgMargin": 0.9948,
+          "inliers": 0,
+          "localGridBbox": [
+            1,
+            3,
+            1,
+            1
+          ],
+          "margin": null,
+          "matchedCandidateId": "image9-1-2",
+          "matchedCandidateName": "鎏金盂",
+          "observationId": "obs-1-3-seq0",
+          "sequenceIndex": 0,
+          "sha256": "c5417e63f22f51313dd51ce6983ffd7350899cf5cef04b2cd9937663ad07861a",
+          "status": "FULL"
+        },
+        {
+          "bbox": [
+            1484.0,
+            269.0,
+            1540.0,
+            325.0
+          ],
+          "bestFgScore": 0.9948,
+          "evidenceId": "sev2_video_audit_20260908_134043_2940c6a6092504f2_warehouse-segment",
+          "fgMargin": 0.9948,
+          "inliers": 0,
+          "localGridBbox": [
+            1,
+            3,
+            1,
+            1
+          ],
+          "margin": null,
+          "matchedCandidateId": "image9-1-2",
+          "matchedCandidateName": "鎏金盂",
+          "observationId": "obs-1-3-seq1",
+          "sequenceIndex": 1,
+          "sha256": "2940c6a6092504f25d0c2ce62a71ba4135433cde2da3fe7d68da982d2426d7df",
+          "status": "FULL"
+        },
+        {
+          "bbox": [
+            1484.0,
+            269.0,
+            1540.0,
+            325.0
+          ],
+          "bestFgScore": 0.9947,
+          "evidenceId": "sev2_video_audit_20260908_134043_e215188351145ed6_warehouse-segment",
+          "fgMargin": 0.9947,
+          "inliers": 0,
+          "localGridBbox": [
+            1,
+            3,
+            1,
+            1
+          ],
+          "margin": null,
+          "matchedCandidateId": "image9-1-2",
+          "matchedCandidateName": "鎏金盂",
+          "observationId": "obs-1-3-seq2",
+          "sequenceIndex": 2,
+          "sha256": "e215188351145ed65a5b15c2a7cca21a3926c7e60e4197ae2856a5a0356e14ef",
+          "status": "FULL"
+        }
+      ],
+      "physicalGroupId": "group-world-1-3",
+      "placementStatus": "RESOLVED",
+      "reviewUnitId": "unit-world-1-3-1x1",
+      "selectedCatalogId": null,
+      "spanCandidates": [
+        1
+      ],
+      "supportingTrackIds": [
+        "raw-track-1-3"
+      ],
+      "visibility": "FULL",
+      "widthCandidates": [
+        1
+      ],
+      "worldAnchor": {
+        "col": 3,
+        "row": 1
+      }
+    },
+    {
+      "bestObservationId": "obs-3-7-seq0",
+      "candidateStatus": "UNIQUE_IN_CATALOG",
+      "candidates": [
+        {
+          "catalogId": "image14-0-0",
+          "geometry": {
+            "cells": 2,
+            "height": 1,
+            "shape": "2x1",
+            "width": 2
+          },
+          "identityStatus": "CANDIDATE_ONLY",
+          "inliers": 12,
+          "margin": 12,
+          "matchReasons": [
+            "WHOLE_CARD_MATCH",
+            "SIFT_INLIERS_12"
+          ],
+          "name": "清凉凉止痛药",
+          "score": 0.6
+        }
+      ],
+      "footprint": {
+        "heightCells": 1,
+        "widthCells": 2
+      },
+      "geometryEvidenceStatus": "EXACT",
+      "heightCandidates": [
+        1
+      ],
+      "identityStatus": "REVIEW_REQUIRED",
+      "observations": [
+        {
+          "bbox": [
+            1708.0,
+            381.0,
+            1820.0,
+            437.0
+          ],
+          "bestFgScore": null,
+          "evidenceId": "sev2_video_audit_20260908_134043_c5417e63f22f5131_warehouse-segment",
+          "fgMargin": null,
+          "inliers": 12,
+          "localGridBbox": [
+            3,
+            7,
+            2,
+            1
+          ],
+          "margin": 12,
+          "matchedCandidateId": "image14-0-0",
+          "matchedCandidateName": "清凉凉止痛药",
+          "observationId": "obs-3-7-seq0",
+          "sequenceIndex": 0,
+          "sha256": "c5417e63f22f51313dd51ce6983ffd7350899cf5cef04b2cd9937663ad07861a",
+          "status": "FULL"
+        },
+        {
+          "bbox": [
+            1708.0,
+            381.0,
+            1820.0,
+            437.0
+          ],
+          "bestFgScore": null,
+          "evidenceId": "sev2_video_audit_20260908_134043_2940c6a6092504f2_warehouse-segment",
+          "fgMargin": null,
+          "inliers": 11,
+          "localGridBbox": [
+            3,
+            7,
+            2,
+            1
+          ],
+          "margin": 11,
+          "matchedCandidateId": "image14-0-0",
+          "matchedCandidateName": "清凉凉止痛药",
+          "observationId": "obs-3-7-seq1",
+          "sequenceIndex": 1,
+          "sha256": "2940c6a6092504f25d0c2ce62a71ba4135433cde2da3fe7d68da982d2426d7df",
+          "status": "FULL"
+        },
+        {
+          "bbox": [
+            1708.0,
+            381.0,
+            1820.0,
+            437.0
+          ],
+          "bestFgScore": null,
+          "evidenceId": "sev2_video_audit_20260908_134043_e215188351145ed6_warehouse-segment",
+          "fgMargin": null,
+          "inliers": 11,
+          "localGridBbox": [
+            3,
+            7,
+            2,
+            1
+          ],
+          "margin": 11,
+          "matchedCandidateId": "image14-0-0",
+          "matchedCandidateName": "清凉凉止痛药",
+          "observationId": "obs-3-7-seq2",
+          "sequenceIndex": 2,
+          "sha256": "e215188351145ed65a5b15c2a7cca21a3926c7e60e4197ae2856a5a0356e14ef",
+          "status": "FULL"
+        }
+      ],
+      "physicalGroupId": "group-world-3-7",
+      "placementStatus": "RESOLVED",
+      "reviewUnitId": "unit-world-3-7-2x1",
+      "selectedCatalogId": null,
+      "spanCandidates": [
+        2
+      ],
+      "supportingTrackIds": [
+        "raw-track-3-7"
+      ],
+      "visibility": "FULL",
+      "widthCandidates": [
+        2
+      ],
+      "worldAnchor": {
+        "col": 7,
+        "row": 3
+      }
+    },
+    {
+      "bestObservationId": "obs-2-5-seq0",
+      "candidateStatus": "UNIQUE_IN_CATALOG",
+      "candidates": [
+        {
+          "catalogId": "image3-1-1",
+          "geometry": {
+            "cells": 1,
+            "height": 1,
+            "shape": "1x1",
+            "width": 1
+          },
+          "identityStatus": "CANDIDATE_ONLY",
+          "inliers": 12,
+          "margin": 12,
+          "matchReasons": [
+            "WHOLE_CARD_MATCH",
+            "SIFT_INLIERS_12"
+          ],
+          "name": "布妮果实",
+          "score": 0.6
+        }
+      ],
+      "footprint": {
+        "heightCells": 1,
+        "widthCells": 1
+      },
+      "geometryEvidenceStatus": "EXACT",
+      "heightCandidates": [
+        1
+      ],
+      "identityStatus": "REVIEW_REQUIRED",
+      "observations": [
+        {
+          "bbox": [
+            1596.0,
+            325.0,
+            1652.0,
+            381.0
+          ],
+          "bestFgScore": null,
+          "evidenceId": "sev2_video_audit_20260908_134043_c5417e63f22f5131_warehouse-segment",
+          "fgMargin": null,
+          "inliers": 12,
+          "localGridBbox": [
+            2,
+            5,
+            1,
+            1
+          ],
+          "margin": 12,
+          "matchedCandidateId": "image3-1-1",
+          "matchedCandidateName": "布妮果实",
+          "observationId": "obs-2-5-seq0",
+          "sequenceIndex": 0,
+          "sha256": "c5417e63f22f51313dd51ce6983ffd7350899cf5cef04b2cd9937663ad07861a",
+          "status": "FULL"
+        },
+        {
+          "bbox": [
+            1596.0,
+            325.0,
+            1652.0,
+            381.0
+          ],
+          "bestFgScore": null,
+          "evidenceId": "sev2_video_audit_20260908_134043_2940c6a6092504f2_warehouse-segment",
+          "fgMargin": null,
+          "inliers": 12,
+          "localGridBbox": [
+            2,
+            5,
+            1,
+            1
+          ],
+          "margin": 12,
+          "matchedCandidateId": "image3-1-1",
+          "matchedCandidateName": "布妮果实",
+          "observationId": "obs-2-5-seq1",
+          "sequenceIndex": 1,
+          "sha256": "2940c6a6092504f25d0c2ce62a71ba4135433cde2da3fe7d68da982d2426d7df",
+          "status": "FULL"
+        },
+        {
+          "bbox": [
+            1596.0,
+            325.0,
+            1652.0,
+            381.0
+          ],
+          "bestFgScore": null,
+          "evidenceId": "sev2_video_audit_20260908_134043_e215188351145ed6_warehouse-segment",
+          "fgMargin": null,
+          "inliers": 12,
+          "localGridBbox": [
+            2,
+            5,
+            1,
+            1
+          ],
+          "margin": 12,
+          "matchedCandidateId": "image3-1-1",
+          "matchedCandidateName": "布妮果实",
+          "observationId": "obs-2-5-seq2",
+          "sequenceIndex": 2,
+          "sha256": "e215188351145ed65a5b15c2a7cca21a3926c7e60e4197ae2856a5a0356e14ef",
+          "status": "FULL"
+        }
+      ],
+      "physicalGroupId": "group-world-2-5",
+      "placementStatus": "RESOLVED",
+      "reviewUnitId": "unit-world-2-5-1x1",
+      "selectedCatalogId": null,
+      "spanCandidates": [
+        1
+      ],
+      "supportingTrackIds": [
+        "raw-track-2-5"
+      ],
+      "visibility": "FULL",
+      "widthCandidates": [
+        1
+      ],
+      "worldAnchor": {
+        "col": 5,
+        "row": 2
+      }
+    },
+    {
+      "bestObservationId": "obs-3-9-seq0",
+      "candidateStatus": "UNIQUE_IN_CATALOG",
+      "candidates": [
+        {
+          "catalogId": "image3-0-0",
+          "geometry": {
+            "cells": 1,
+            "height": 1,
+            "shape": "1x1",
+            "width": 1
+          },
+          "identityStatus": "CANDIDATE_ONLY",
+          "inliers": 5,
+          "margin": 5,
+          "matchReasons": [
+            "WHOLE_CARD_MATCH",
+            "SIFT_INLIERS_5"
+          ],
+          "name": "扫晴微尘",
+          "score": 0.25
+        }
+      ],
+      "footprint": {
+        "heightCells": 1,
+        "widthCells": 1
+      },
+      "geometryEvidenceStatus": "EXACT",
+      "heightCandidates": [
+        1
+      ],
+      "identityStatus": "REVIEW_REQUIRED",
+      "observations": [
+        {
+          "bbox": [
+            1820.0,
+            381.0,
+            1876.0,
+            437.0
+          ],
+          "bestFgScore": null,
+          "evidenceId": "sev2_video_audit_20260908_134043_c5417e63f22f5131_warehouse-segment",
+          "fgMargin": null,
+          "inliers": 5,
+          "localGridBbox": [
+            3,
+            9,
+            1,
+            1
+          ],
+          "margin": 5,
+          "matchedCandidateId": "image3-0-0",
+          "matchedCandidateName": "扫晴微尘",
+          "observationId": "obs-3-9-seq0",
+          "sequenceIndex": 0,
+          "sha256": "c5417e63f22f51313dd51ce6983ffd7350899cf5cef04b2cd9937663ad07861a",
+          "status": "FULL"
+        },
+        {
+          "bbox": [
+            1820.0,
+            381.0,
+            1876.0,
+            437.0
+          ],
+          "bestFgScore": null,
+          "evidenceId": "sev2_video_audit_20260908_134043_2940c6a6092504f2_warehouse-segment",
+          "fgMargin": null,
+          "inliers": 0,
+          "localGridBbox": [
+            3,
+            9,
+            1,
+            1
+          ],
+          "margin": null,
+          "matchedCandidateId": null,
+          "matchedCandidateName": null,
+          "observationId": "obs-3-9-seq1",
+          "sequenceIndex": 1,
+          "sha256": "2940c6a6092504f25d0c2ce62a71ba4135433cde2da3fe7d68da982d2426d7df",
+          "status": "FULL"
+        },
+        {
+          "bbox": [
+            1820.0,
+            381.0,
+            1876.0,
+            437.0
+          ],
+          "bestFgScore": null,
+          "evidenceId": "sev2_video_audit_20260908_134043_e215188351145ed6_warehouse-segment",
+          "fgMargin": null,
+          "inliers": 0,
+          "localGridBbox": [
+            3,
+            9,
+            1,
+            1
+          ],
+          "margin": null,
+          "matchedCandidateId": null,
+          "matchedCandidateName": null,
+          "observationId": "obs-3-9-seq2",
+          "sequenceIndex": 2,
+          "sha256": "e215188351145ed65a5b15c2a7cca21a3926c7e60e4197ae2856a5a0356e14ef",
+          "status": "FULL"
+        }
+      ],
+      "physicalGroupId": "group-world-3-9",
+      "placementStatus": "RESOLVED",
+      "reviewUnitId": "unit-world-3-9-1x1",
+      "selectedCatalogId": null,
+      "spanCandidates": [
+        1
+      ],
+      "supportingTrackIds": [
+        "raw-track-3-9"
+      ],
+      "visibility": "FULL",
+      "widthCandidates": [
+        1
+      ],
+      "worldAnchor": {
+        "col": 9,
+        "row": 3
+      }
+    },
+    {
+      "bestObservationId": "obs-1-6-seq0",
+      "candidateStatus": "AMBIGUOUS",
+      "candidates": [],
+      "footprint": {
+        "heightCells": 2,
+        "widthCells": 1
+      },
+      "geometryEvidenceStatus": "EXACT",
+      "heightCandidates": [
+        2
+      ],
+      "identityStatus": "REVIEW_REQUIRED",
+      "observations": [
+        {
+          "bbox": [
+            1652.0,
+            269.0,
+            1708.0,
+            381.0
+          ],
+          "bestFgScore": null,
+          "evidenceId": "sev2_video_audit_20260908_134043_c5417e63f22f5131_warehouse-segment",
+          "fgMargin": null,
+          "inliers": 0,
+          "localGridBbox": [
+            1,
+            6,
+            1,
+            2
+          ],
+          "margin": null,
+          "matchedCandidateId": null,
+          "matchedCandidateName": null,
+          "observationId": "obs-1-6-seq0",
+          "sequenceIndex": 0,
+          "sha256": "c5417e63f22f51313dd51ce6983ffd7350899cf5cef04b2cd9937663ad07861a",
+          "status": "FULL"
+        },
+        {
+          "bbox": [
+            1652.0,
+            269.0,
+            1708.0,
+            381.0
+          ],
+          "bestFgScore": null,
+          "evidenceId": "sev2_video_audit_20260908_134043_2940c6a6092504f2_warehouse-segment",
+          "fgMargin": null,
+          "inliers": 0,
+          "localGridBbox": [
+            1,
+            6,
+            1,
+            2
+          ],
+          "margin": null,
+          "matchedCandidateId": null,
+          "matchedCandidateName": null,
+          "observationId": "obs-1-6-seq1",
+          "sequenceIndex": 1,
+          "sha256": "2940c6a6092504f25d0c2ce62a71ba4135433cde2da3fe7d68da982d2426d7df",
+          "status": "FULL"
+        },
+        {
+          "bbox": [
+            1652.0,
+            269.0,
+            1708.0,
+            381.0
+          ],
+          "bestFgScore": null,
+          "evidenceId": "sev2_video_audit_20260908_134043_e215188351145ed6_warehouse-segment",
+          "fgMargin": null,
+          "inliers": 0,
+          "localGridBbox": [
+            1,
+            6,
+            1,
+            2
+          ],
+          "margin": null,
+          "matchedCandidateId": null,
+          "matchedCandidateName": null,
+          "observationId": "obs-1-6-seq2",
+          "sequenceIndex": 2,
+          "sha256": "e215188351145ed65a5b15c2a7cca21a3926c7e60e4197ae2856a5a0356e14ef",
+          "status": "FULL"
+        }
+      ],
+      "physicalGroupId": null,
+      "placementStatus": "AMBIGUOUS_REGION",
+      "reviewUnitId": "unit-world-1-6-1x2",
+      "selectedCatalogId": null,
+      "spanCandidates": [
+        2
+      ],
+      "supportingTrackIds": [
+        "raw-track-1-6"
+      ],
+      "visibility": "FULL",
+      "widthCandidates": [
+        1
+      ],
+      "worldAnchor": {
+        "col": 6,
+        "row": 1
+      }
+    },
+    {
+      "bestObservationId": "obs-1-2-seq0",
+      "candidateStatus": "UNKNOWN",
+      "candidates": [],
+      "footprint": {
+        "heightCells": 1,
+        "widthCells": 1
+      },
+      "geometryEvidenceStatus": "EXACT",
+      "heightCandidates": [
+        1
+      ],
+      "identityStatus": "REVIEW_REQUIRED",
+      "observations": [
+        {
+          "bbox": [
+            1428.0,
+            269.0,
+            1484.0,
+            325.0
+          ],
+          "bestFgScore": null,
+          "evidenceId": "sev2_video_audit_20260908_134043_c5417e63f22f5131_warehouse-segment",
+          "fgMargin": null,
+          "inliers": 0,
+          "localGridBbox": [
+            1,
+            2,
+            1,
+            1
+          ],
+          "margin": null,
+          "matchedCandidateId": null,
+          "matchedCandidateName": null,
+          "observationId": "obs-1-2-seq0",
+          "sequenceIndex": 0,
+          "sha256": "c5417e63f22f51313dd51ce6983ffd7350899cf5cef04b2cd9937663ad07861a",
+          "status": "FULL"
+        },
+        {
+          "bbox": [
+            1428.0,
+            269.0,
+            1484.0,
+            325.0
+          ],
+          "bestFgScore": null,
+          "evidenceId": "sev2_video_audit_20260908_134043_2940c6a6092504f2_warehouse-segment",
+          "fgMargin": null,
+          "inliers": 0,
+          "localGridBbox": [
+            1,
+            2,
+            1,
+            1
+          ],
+          "margin": null,
+          "matchedCandidateId": null,
+          "matchedCandidateName": null,
+          "observationId": "obs-1-2-seq1",
+          "sequenceIndex": 1,
+          "sha256": "2940c6a6092504f25d0c2ce62a71ba4135433cde2da3fe7d68da982d2426d7df",
+          "status": "FULL"
+        },
+        {
+          "bbox": [
+            1428.0,
+            269.0,
+            1484.0,
+            325.0
+          ],
+          "bestFgScore": null,
+          "evidenceId": "sev2_video_audit_20260908_134043_e215188351145ed6_warehouse-segment",
+          "fgMargin": null,
+          "inliers": 0,
+          "localGridBbox": [
+            1,
+            2,
+            1,
+            1
+          ],
+          "margin": null,
+          "matchedCandidateId": null,
+          "matchedCandidateName": null,
+          "observationId": "obs-1-2-seq2",
+          "sequenceIndex": 2,
+          "sha256": "e215188351145ed65a5b15c2a7cca21a3926c7e60e4197ae2856a5a0356e14ef",
+          "status": "FULL"
+        }
+      ],
+      "physicalGroupId": "group-world-1-2",
+      "placementStatus": "RESOLVED",
+      "reviewUnitId": "unit-world-1-2-1x1",
+      "selectedCatalogId": null,
+      "spanCandidates": [
+        1
+      ],
+      "supportingTrackIds": [
+        "raw-track-1-2"
+      ],
+      "visibility": "FULL",
+      "widthCandidates": [
+        1
+      ],
+      "worldAnchor": {
+        "col": 2,
+        "row": 1
+      }
+    }
+  ],
+  "schemaVersion": "warehouse-review-packet.v2",
+  "segments": [
+    {
+      "bottomEndpointTrusted": false,
+      "coverageStatus": "COVERAGE_UNPROVEN",
+      "evidenceId": "sev2_video_audit_20260908_134043_c5417e63f22f5131_warehouse-segment",
+      "height": 1080,
+      "kind": "warehouse-segment",
+      "sequenceIndex": 0,
+      "sha256": "c5417e63f22f51313dd51ce6983ffd7350899cf5cef04b2cd9937663ad07861a",
+      "topEndpointTrusted": true,
+      "width": 1920
+    },
+    {
+      "bottomEndpointTrusted": false,
+      "coverageStatus": "COVERAGE_UNPROVEN",
+      "evidenceId": "sev2_video_audit_20260908_134043_2940c6a6092504f2_warehouse-segment",
+      "height": 1080,
+      "kind": "warehouse-segment",
+      "sequenceIndex": 1,
+      "sha256": "2940c6a6092504f25d0c2ce62a71ba4135433cde2da3fe7d68da982d2426d7df",
+      "topEndpointTrusted": true,
+      "width": 1920
+    },
+    {
+      "bottomEndpointTrusted": false,
+      "coverageStatus": "COVERAGE_UNPROVEN",
+      "evidenceId": "sev2_video_audit_20260908_134043_e215188351145ed6_warehouse-segment",
+      "height": 1080,
+      "kind": "warehouse-segment",
+      "sequenceIndex": 2,
+      "sha256": "e215188351145ed65a5b15c2a7cca21a3926c7e60e4197ae2856a5a0356e14ef",
+      "topEndpointTrusted": true,
+      "width": 1920
+    }
+  ],
+  "sourceFingerprint": "eb52d33247e4c003a7144cab54d5da16aee3c681cc99d9e190848c2e6e078adf",
+  "summary": {
+    "ambiguousCount": 1,
+    "candidateReadyCount": 15,
+    "reviewedIdentityCount": 0,
+    "visibleReviewUnitCount": 17
+  },
+  "warehouseCoverage": {
+    "segmentCount": 3,
+    "status": "PARTIAL",
+    "terminationReason": "MISSING_BOTTOM"
+  }
+}

@@ -1,0 +1,444 @@
+{
+  "packVersion": "1.0.0",
+  "description": "Human 1-Click Verification Queue containing candidate suggestions and crop references for fast human review.",
+  "totalReviewSlots": 19,
+  "items": [
+    {
+      "queueId": "HUMAN_REP-01_s01",
+      "representativeId": "REP-01",
+      "slotId": "s01",
+      "cropRelativePath": "experiments/vision_benchmark_v1/crops/crop_REP-01_s01.png",
+      "sourceImage": "assets/settlement_frames/sec_488.jpg",
+      "bbox": [
+        1408,
+        256,
+        1536,
+        384
+      ],
+      "geminiTop3": [
+        "red_jiugexiaoshi",
+        "red_yicuyouhuo",
+        "gold_dabing"
+      ],
+      "geminiConfidence": "high",
+      "detectedQuality": "red",
+      "impactReason": "Red item in settlement",
+      "priority": "P0_CRITICAL",
+      "provenance": "gemini_pseudo_label"
+    },
+    {
+      "queueId": "HUMAN_REP-01_s03",
+      "representativeId": "REP-01",
+      "slotId": "s03",
+      "cropRelativePath": "experiments/vision_benchmark_v1/crops/crop_REP-01_s03.png",
+      "sourceImage": "assets/settlement_frames/sec_488.jpg",
+      "bbox": [
+        1744,
+        480,
+        1872,
+        608
+      ],
+      "geminiTop3": [
+        "red_xinlietieqi_l3",
+        "red_xinlietieqi_l2",
+        "purple_xinlietieqi_l1"
+      ],
+      "geminiConfidence": "high",
+      "detectedQuality": "red",
+      "impactReason": "Red character toy 2x2",
+      "priority": "P0_CRITICAL",
+      "provenance": "gemini_pseudo_label"
+    },
+    {
+      "queueId": "HUMAN_REP-01_s06",
+      "representativeId": "REP-01",
+      "slotId": "s06",
+      "cropRelativePath": "experiments/vision_benchmark_v1/crops/crop_REP-01_s06.png",
+      "sourceImage": "assets/settlement_frames/sec_488.jpg",
+      "bbox": [
+        1664,
+        288,
+        1728,
+        416
+      ],
+      "geminiTop3": [
+        "purple_hongyaoshui",
+        "purple_chengjieweijiu",
+        "red_xiahongzuan"
+      ],
+      "geminiConfidence": "medium",
+      "detectedQuality": "purple",
+      "impactReason": "Purple 1x2 potion",
+      "priority": "P1_MEDIUM",
+      "provenance": "gemini_pseudo_label"
+    },
+    {
+      "queueId": "HUMAN_REP-01_s09",
+      "representativeId": "REP-01",
+      "slotId": "s09",
+      "cropRelativePath": "experiments/vision_benchmark_v1/crops/crop_REP-01_s09.png",
+      "sourceImage": "assets/settlement_frames/sec_488.jpg",
+      "bbox": [
+        1440,
+        528,
+        1504,
+        576
+      ],
+      "geminiTop3": [
+        "white_dianyingkaquan",
+        "blue_zhinengshouji",
+        "white_zhezhibaozhi"
+      ],
+      "geminiConfidence": "medium",
+      "detectedQuality": "white",
+      "impactReason": "Small ticket 1x1",
+      "priority": "P1_MEDIUM",
+      "provenance": "gemini_pseudo_label"
+    },
+    {
+      "queueId": "HUMAN_REP-01_s11",
+      "representativeId": "REP-01",
+      "slotId": "s11",
+      "cropRelativePath": "experiments/vision_benchmark_v1/crops/crop_REP-01_s11.png",
+      "sourceImage": "assets/settlement_frames/sec_488.jpg",
+      "bbox": [
+        1728,
+        560,
+        1792,
+        624
+      ],
+      "geminiTop3": [
+        "gold_jinwan",
+        "white_huadiaowan",
+        "gold_liushengjilaba"
+      ],
+      "geminiConfidence": "medium",
+      "detectedQuality": "gold",
+      "impactReason": "Gold bowl 1x1",
+      "priority": "P1_MEDIUM",
+      "provenance": "gemini_pseudo_label"
+    },
+    {
+      "queueId": "HUMAN_REP-01_s12",
+      "representativeId": "REP-01",
+      "slotId": "s12",
+      "cropRelativePath": "experiments/vision_benchmark_v1/crops/crop_REP-01_s12.png",
+      "sourceImage": "assets/settlement_frames/sec_488.jpg",
+      "bbox": [
+        1744,
+        608,
+        1808,
+        672
+      ],
+      "geminiTop3": [
+        "white_caomeiruantang",
+        "white_caomeitangguo",
+        "purple_yuebaisha"
+      ],
+      "geminiConfidence": "medium",
+      "detectedQuality": "white",
+      "impactReason": "Small candy 1x1",
+      "priority": "P1_MEDIUM",
+      "provenance": "gemini_pseudo_label"
+    },
+    {
+      "queueId": "HUMAN_REP-01_s13",
+      "representativeId": "REP-01",
+      "slotId": "s13",
+      "cropRelativePath": "experiments/vision_benchmark_v1/crops/crop_REP-01_s13.png",
+      "sourceImage": "assets/settlement_frames/sec_488.jpg",
+      "bbox": [
+        1680,
+        256,
+        1744,
+        320
+      ],
+      "geminiTop3": [
+        "purple_yuebaisha",
+        "white_shuijingqiyuanqiu",
+        "purple_taomu"
+      ],
+      "geminiConfidence": "medium",
+      "detectedQuality": "purple",
+      "impactReason": "Small gem 1x1",
+      "priority": "P1_MEDIUM",
+      "provenance": "gemini_pseudo_label"
+    },
+    {
+      "queueId": "HUMAN_REP-01_s15",
+      "representativeId": "REP-01",
+      "slotId": "s15",
+      "cropRelativePath": "experiments/vision_benchmark_v1/crops/crop_REP-01_s15.png",
+      "sourceImage": "assets/settlement_frames/sec_488.jpg",
+      "bbox": [
+        1472,
+        480,
+        1536,
+        544
+      ],
+      "geminiTop3": [
+        "green_xiaomuzhuo",
+        "blue_fuguonandeng",
+        "white_saokingweichen"
+      ],
+      "geminiConfidence": "medium",
+      "detectedQuality": "green",
+      "impactReason": "Green table 1x1",
+      "priority": "P1_MEDIUM",
+      "provenance": "gemini_pseudo_label"
+    },
+    {
+      "queueId": "HUMAN_REP-02_s01",
+      "representativeId": "REP-02",
+      "slotId": "s01",
+      "cropRelativePath": "experiments/vision_benchmark_v1/crops/crop_REP-02_s01.png",
+      "sourceImage": "core/settlement_items_crop.png",
+      "bbox": [
+        92,
+        100,
+        230,
+        230
+      ],
+      "geminiTop3": [
+        "red_chiweiyu",
+        "red_jinjinlidiaoxiang",
+        "red_pendragon"
+      ],
+      "geminiConfidence": "high",
+      "detectedQuality": "red",
+      "impactReason": "Giant Red Fish 3x3",
+      "priority": "P0_CRITICAL",
+      "provenance": "gemini_pseudo_label"
+    },
+    {
+      "queueId": "HUMAN_REP-02_s11",
+      "representativeId": "REP-02",
+      "slotId": "s11",
+      "cropRelativePath": "experiments/vision_benchmark_v1/crops/crop_REP-02_s11.png",
+      "sourceImage": "core/settlement_items_crop.png",
+      "bbox": [
+        65,
+        155,
+        90,
+        180
+      ],
+      "geminiTop3": [
+        "red_chixinshuidi",
+        "purple_xiahongzuan",
+        "purple_youlingtai"
+      ],
+      "geminiConfidence": "medium",
+      "detectedQuality": "red",
+      "impactReason": "Red gem 1x1 (High value)",
+      "priority": "P0_CRITICAL",
+      "provenance": "gemini_pseudo_label"
+    },
+    {
+      "queueId": "HUMAN_REP-02_s18",
+      "representativeId": "REP-02",
+      "slotId": "s18",
+      "cropRelativePath": "experiments/vision_benchmark_v1/crops/crop_REP-02_s18.png",
+      "sourceImage": "core/settlement_items_crop.png",
+      "bbox": [
+        250,
+        265,
+        275,
+        295
+      ],
+      "geminiTop3": [
+        "green_liulidanzhu",
+        "green_huoqiyin",
+        "purple_taomu"
+      ],
+      "geminiConfidence": "medium",
+      "detectedQuality": "green",
+      "impactReason": "Green marble 1x1",
+      "priority": "P1_MEDIUM",
+      "provenance": "gemini_pseudo_label"
+    },
+    {
+      "queueId": "HUMAN_REP-04_s04",
+      "representativeId": "REP-04",
+      "slotId": "s04",
+      "cropRelativePath": "experiments/vision_benchmark_v1/crops/crop_REP-04_s04.png",
+      "sourceImage": "assets/video_frames/sec_210.jpg",
+      "bbox": [
+        790,
+        305,
+        830,
+        365
+      ],
+      "geminiTop3": [
+        "red_xinlietieqi_wanju",
+        "red_xinlietieqi_l3",
+        "purple_xinlietieqi_l1"
+      ],
+      "geminiConfidence": "medium",
+      "detectedQuality": "red",
+      "impactReason": "Red toy 2x2 (High impact)",
+      "priority": "P0_CRITICAL",
+      "provenance": "gemini_pseudo_label"
+    },
+    {
+      "queueId": "HUMAN_REP-04_s05",
+      "representativeId": "REP-04",
+      "slotId": "s05",
+      "cropRelativePath": "experiments/vision_benchmark_v1/crops/crop_REP-04_s05.png",
+      "sourceImage": "assets/video_frames/sec_210.jpg",
+      "bbox": [
+        875,
+        255,
+        895,
+        295
+      ],
+      "geminiTop3": [
+        "red_chixinshuidi",
+        "purple_xiahongzuan",
+        "purple_youlingtai"
+      ],
+      "geminiConfidence": "high",
+      "detectedQuality": "red",
+      "impactReason": "Red teardrop gem 1x1",
+      "priority": "P0_CRITICAL",
+      "provenance": "gemini_pseudo_label"
+    },
+    {
+      "queueId": "HUMAN_REP-04_s08",
+      "representativeId": "REP-04",
+      "slotId": "s08",
+      "cropRelativePath": "experiments/vision_benchmark_v1/crops/crop_REP-04_s08.png",
+      "sourceImage": "assets/video_frames/sec_210.jpg",
+      "bbox": [
+        875,
+        365,
+        900,
+        410
+      ],
+      "geminiTop3": [
+        "green_shupianlingshi",
+        "white_caomeitangguo",
+        "white_dianyingkaquan"
+      ],
+      "geminiConfidence": "medium",
+      "detectedQuality": "green",
+      "impactReason": "Snack bag 1x2",
+      "priority": "P1_MEDIUM",
+      "provenance": "gemini_pseudo_label"
+    },
+    {
+      "queueId": "HUMAN_REP-04_s09",
+      "representativeId": "REP-04",
+      "slotId": "s09",
+      "cropRelativePath": "experiments/vision_benchmark_v1/crops/crop_REP-04_s09.png",
+      "sourceImage": "assets/video_frames/sec_210.jpg",
+      "bbox": [
+        875,
+        410,
+        900,
+        450
+      ],
+      "geminiTop3": [
+        "green_kaorouchuan",
+        "green_shupianlingshi",
+        "white_caomeiruantang"
+      ],
+      "geminiConfidence": "medium",
+      "detectedQuality": "green",
+      "impactReason": "Skewer 1x2",
+      "priority": "P1_MEDIUM",
+      "provenance": "gemini_pseudo_label"
+    },
+    {
+      "queueId": "HUMAN_REP-05_s01",
+      "representativeId": "REP-05",
+      "slotId": "s01",
+      "cropRelativePath": "experiments/vision_benchmark_v1/crops/crop_REP-05_s01.png",
+      "sourceImage": "build/live_fail/t004.jpg",
+      "bbox": [
+        1400,
+        300,
+        1550,
+        450
+      ],
+      "geminiTop3": [
+        "gold_guanzhuangsuixinni",
+        "purple_slime_mud",
+        "gold_dabing"
+      ],
+      "geminiConfidence": "medium",
+      "detectedQuality": "gold",
+      "impactReason": "Gold mud 2x2",
+      "priority": "P1_MEDIUM",
+      "provenance": "gemini_pseudo_label"
+    },
+    {
+      "queueId": "HUMAN_REP-05_s02",
+      "representativeId": "REP-05",
+      "slotId": "s02",
+      "cropRelativePath": "experiments/vision_benchmark_v1/crops/crop_REP-05_s02.png",
+      "sourceImage": "build/live_fail/t004.jpg",
+      "bbox": [
+        1550,
+        300,
+        1700,
+        450
+      ],
+      "geminiTop3": [
+        "purple_arespaobuji",
+        "purple_lvdongdanche",
+        "gold_lunyimoxing"
+      ],
+      "geminiConfidence": "medium",
+      "detectedQuality": "purple",
+      "impactReason": "Purple treadmill 2x2",
+      "priority": "P1_MEDIUM",
+      "provenance": "gemini_pseudo_label"
+    },
+    {
+      "queueId": "HUMAN_REP-05_s03",
+      "representativeId": "REP-05",
+      "slotId": "s03",
+      "cropRelativePath": "experiments/vision_benchmark_v1/crops/crop_REP-05_s03.png",
+      "sourceImage": "build/live_fail/t004.jpg",
+      "bbox": [
+        1400,
+        450,
+        1480,
+        530
+      ],
+      "geminiTop3": [
+        "blue_fuguonandeng",
+        "green_xiaomuzhuo",
+        "white_saokingweichen"
+      ],
+      "geminiConfidence": "low",
+      "detectedQuality": "blue",
+      "impactReason": "Blue lamp 1x1 (Ambiguous)",
+      "priority": "P1_MEDIUM",
+      "provenance": "gemini_pseudo_label"
+    },
+    {
+      "queueId": "HUMAN_REP-05_s04",
+      "representativeId": "REP-05",
+      "slotId": "s04",
+      "cropRelativePath": "experiments/vision_benchmark_v1/crops/crop_REP-05_s04.png",
+      "sourceImage": "build/live_fail/t004.jpg",
+      "bbox": [
+        1480,
+        450,
+        1560,
+        530
+      ],
+      "geminiTop3": [
+        "green_maorongrongdequeding",
+        "green_liulidanzhu",
+        "white_mianmianyun"
+      ],
+      "geminiConfidence": "low",
+      "detectedQuality": "green",
+      "impactReason": "Green plush 1x1 (Low confidence)",
+      "priority": "P1_MEDIUM",
+      "provenance": "gemini_pseudo_label"
+    }
+  ]
+}

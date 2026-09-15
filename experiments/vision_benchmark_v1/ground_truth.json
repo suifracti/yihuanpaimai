@@ -1,0 +1,8 @@
+{
+  "benchmarkVersion": "1.0.0",
+  "provenanceAuditStatus": "downgraded_to_unverified",
+  "description": "Ground truth repository for formal vision benchmark. Currently 0 slots have independent pre-existing or human verification.",
+  "verifiedHumanSlotsCount": 0,
+  "verifiedPreexistingSlotsCount": 0,
+  "verifiedSlots": []
+}

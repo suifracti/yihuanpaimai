@@ -1,0 +1,222 @@
+{
+  "candidateSourcePath": "core/settlement_items_crop.png",
+  "coordinateSpace": "source_pixel",
+  "fixturePath": "experiments/vision_benchmark_v2/fixtures/reviewed_multi_parent_v1.json",
+  "fixtureSha256": "ce55c7dad192b976918ea88be93a631cfde6a4a9b792bd5763afd4f14d8256a3",
+  "height": 329,
+  "inventoryEligible": true,
+  "inventoryRoi": {
+    "coordinateSpace": "source_pixel",
+    "height": 329,
+    "width": 307,
+    "x": 0,
+    "y": 0
+  },
+  "proposalProvenance": {
+    "artifactPath": "experiments/vision_benchmark_v2/proposal_artifact.json",
+    "artifactSha256": "f0103050a96b66fbe696641e30535e41301ce460abad0c0054395d18fdc90314",
+    "atomicityClassifications": {
+      "proposal-031da3c8719343f83304": "FRAGMENT_OF_ONE_PARENT",
+      "proposal-0cca811ac3b016de81d9": "FRAGMENT_OF_ONE_PARENT",
+      "proposal-1ce9c560bb170747b4bc": "FRAGMENT_OF_ONE_PARENT",
+      "proposal-41c72082eb5676c5cb4d": "FRAGMENT_OF_ONE_PARENT",
+      "proposal-4294fb007503928869b1": "FRAGMENT_OF_ONE_PARENT",
+      "proposal-43a94e18c191c9268276": "FRAGMENT_OF_ONE_PARENT",
+      "proposal-4b4a67d66377dc176b31": "FRAGMENT_OF_ONE_PARENT",
+      "proposal-4f4b8f809073855ed857": "FRAGMENT_OF_ONE_PARENT",
+      "proposal-4f5a25c82b1c75408c72": "FRAGMENT_OF_ONE_PARENT",
+      "proposal-643f656f5c67a9759dcb": "FRAGMENT_OF_ONE_PARENT",
+      "proposal-6466ce88f36565576c24": "FRAGMENT_OF_ONE_PARENT",
+      "proposal-6c0f34068689cb1e5410": "FRAGMENT_OF_ONE_PARENT",
+      "proposal-78af733732eccc33714f": "FRAGMENT_OF_ONE_PARENT",
+      "proposal-9024bee1fb047008467d": "FRAGMENT_OF_ONE_PARENT",
+      "proposal-99ffee4f75a9bb602d7a": "FRAGMENT_OF_ONE_PARENT",
+      "proposal-a14206bd4db19be3f104": "FRAGMENT_OF_ONE_PARENT",
+      "proposal-a7d6a91229f4935c139b": "FRAGMENT_OF_ONE_PARENT",
+      "proposal-cb32cb10f80543fbf46c": "FRAGMENT_OF_ONE_PARENT",
+      "proposal-cf5a1011125ba9833e64": "FRAGMENT_OF_ONE_PARENT",
+      "proposal-d8081139e14881a54f46": "FRAGMENT_OF_ONE_PARENT",
+      "proposal-ec6fd5dc2c4f4c90e4a9": "FRAGMENT_OF_ONE_PARENT",
+      "proposal-f28ddd713184a1d3ff00": "FRAGMENT_OF_ONE_PARENT",
+      "proposal-f647a67177f085529d0f": "FRAGMENT_OF_ONE_PARENT"
+    },
+    "atomicityReviewPath": "experiments/vision_benchmark_v2/atomicity_review_v1.json",
+    "atomicityReviewSha256": "8e0e7d63420028516f8792992dbf7dbc47107f99fe9172380e666a8759b64415",
+    "atomicityReviewVersion": "atomicity-review-v1",
+    "bboxDerivation": "reviewed_override",
+    "groupingReviewPath": "experiments/vision_benchmark_v2/fixtures/grouping_review_multi_v1.json",
+    "groupingReviewSha256": "8abb174ff3af32e04a04da2f19e6c6bf554abe0ed531194dab666419879d3564",
+    "groupingVersion": "parent-grouping-review-v1",
+    "parentResolutionMethod": "reviewed_multi_proposal_group",
+    "parentResolutionOwner": "benchmark-v2-adapter",
+    "productionPrimitives": [
+      {
+        "implementationPath": "core/settlement_item_recognizer.py",
+        "implementationSha256": "32dc8b0175adc9560a81213370bf2d6c975377101441942dea42bfd7681c3f1e",
+        "invocationVersion": "settlement-component-export-v1",
+        "name": "SettlementItemRecognizer._segment_occupied_components",
+        "runtimeDependencies": {
+          "numpy": "2.2.6",
+          "opencv": "5.0.0"
+        },
+        "version": "source-sha256:32dc8b0175adc9560a81213370bf2d6c975377101441942dea42bfd7681c3f1e"
+      }
+    ],
+    "resolvedParentBbox": [
+      99,
+      101,
+      248,
+      251
+    ],
+    "reviewEvidence": {
+      "evidenceType": "manual_source_review",
+      "note": "Source-pixel review confirms these contiguous proposal regions are fragments of one visible large physical tile; the reviewed bbox follows that tile boundary. No identity or quality is asserted.",
+      "reviewerRole": "human_reviewer",
+      "sourceSnapshotPath": "experiments/vision_benchmark_v2/snapshots/source-c86e85c5712aea00ac7d.png"
+    },
+    "reviewStatus": "reviewed_consistent",
+    "schemaVersion": "production-proposal-contract-v1",
+    "selectedGroupId": "group-cc1717363037459a",
+    "selectedProposalCount": 23,
+    "selectedProposalIds": [
+      "proposal-031da3c8719343f83304",
+      "proposal-0cca811ac3b016de81d9",
+      "proposal-1ce9c560bb170747b4bc",
+      "proposal-41c72082eb5676c5cb4d",
+      "proposal-4294fb007503928869b1",
+      "proposal-43a94e18c191c9268276",
+      "proposal-4b4a67d66377dc176b31",
+      "proposal-4f4b8f809073855ed857",
+      "proposal-4f5a25c82b1c75408c72",
+      "proposal-643f656f5c67a9759dcb",
+      "proposal-6466ce88f36565576c24",
+      "proposal-6c0f34068689cb1e5410",
+      "proposal-78af733732eccc33714f",
+      "proposal-9024bee1fb047008467d",
+      "proposal-99ffee4f75a9bb602d7a",
+      "proposal-a14206bd4db19be3f104",
+      "proposal-a7d6a91229f4935c139b",
+      "proposal-cb32cb10f80543fbf46c",
+      "proposal-cf5a1011125ba9833e64",
+      "proposal-d8081139e14881a54f46",
+      "proposal-ec6fd5dc2c4f4c90e4a9",
+      "proposal-f28ddd713184a1d3ff00",
+      "proposal-f647a67177f085529d0f"
+    ],
+    "selectedProposalTrackIds": [
+      {
+        "proposalId": "proposal-031da3c8719343f83304",
+        "trackId": null
+      },
+      {
+        "proposalId": "proposal-0cca811ac3b016de81d9",
+        "trackId": null
+      },
+      {
+        "proposalId": "proposal-1ce9c560bb170747b4bc",
+        "trackId": null
+      },
+      {
+        "proposalId": "proposal-41c72082eb5676c5cb4d",
+        "trackId": null
+      },
+      {
+        "proposalId": "proposal-4294fb007503928869b1",
+        "trackId": null
+      },
+      {
+        "proposalId": "proposal-43a94e18c191c9268276",
+        "trackId": null
+      },
+      {
+        "proposalId": "proposal-4b4a67d66377dc176b31",
+        "trackId": null
+      },
+      {
+        "proposalId": "proposal-4f4b8f809073855ed857",
+        "trackId": null
+      },
+      {
+        "proposalId": "proposal-4f5a25c82b1c75408c72",
+        "trackId": null
+      },
+      {
+        "proposalId": "proposal-643f656f5c67a9759dcb",
+        "trackId": null
+      },
+      {
+        "proposalId": "proposal-6466ce88f36565576c24",
+        "trackId": null
+      },
+      {
+        "proposalId": "proposal-6c0f34068689cb1e5410",
+        "trackId": null
+      },
+      {
+        "proposalId": "proposal-78af733732eccc33714f",
+        "trackId": null
+      },
+      {
+        "proposalId": "proposal-9024bee1fb047008467d",
+        "trackId": null
+      },
+      {
+        "proposalId": "proposal-99ffee4f75a9bb602d7a",
+        "trackId": null
+      },
+      {
+        "proposalId": "proposal-a14206bd4db19be3f104",
+        "trackId": null
+      },
+      {
+        "proposalId": "proposal-a7d6a91229f4935c139b",
+        "trackId": null
+      },
+      {
+        "proposalId": "proposal-cb32cb10f80543fbf46c",
+        "trackId": null
+      },
+      {
+        "proposalId": "proposal-cf5a1011125ba9833e64",
+        "trackId": null
+      },
+      {
+        "proposalId": "proposal-d8081139e14881a54f46",
+        "trackId": null
+      },
+      {
+        "proposalId": "proposal-ec6fd5dc2c4f4c90e4a9",
+        "trackId": null
+      },
+      {
+        "proposalId": "proposal-f28ddd713184a1d3ff00",
+        "trackId": null
+      },
+      {
+        "proposalId": "proposal-f647a67177f085529d0f",
+        "trackId": null
+      }
+    ],
+    "selectedProposalUnionBbox": [
+      92,
+      99,
+      246,
+      263
+    ],
+    "selectedSplitChildCount": 0,
+    "selectedSplitChildIds": []
+  },
+  "recordVersion": "benchmark-v2-source-record-v1",
+  "sceneAdmission": {
+    "decisionMethod": "reviewed_fixture",
+    "inventoryEligible": true,
+    "note": "Known fixed inventory crop reviewed only for source and geometry admission.",
+    "sceneType": "inventory_crop"
+  },
+  "sceneType": "inventory_crop",
+  "sha256": "c86e85c5712aea00ac7dc9fa08b8111faf0e6a14c85f126c4f9a1f4b2bedce17",
+  "snapshotOwner": "benchmark-v2-adapter-slice-v1",
+  "snapshotPath": "experiments/vision_benchmark_v2/multi_group_slice/snapshots/source-c86e85c5712aea00ac7d.png",
+  "sourceId": "src-c86e85c5712aea00ac7d",
+  "width": 307
+}

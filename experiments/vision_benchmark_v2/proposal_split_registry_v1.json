@@ -1,0 +1,9 @@
+{
+  "registryVersion": "proposal-split-registry-v1",
+  "splitReviews": [
+    {
+      "path": "experiments/vision_benchmark_v2/fixtures/reviewed_split_44d473_v1.json",
+      "sha256": "d8fa627b29d84bba86550c8a794889aa03336a79270acbea179138f2b2bdd271"
+    }
+  ]
+}

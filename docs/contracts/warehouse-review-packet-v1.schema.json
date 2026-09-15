@@ -1,0 +1,198 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://yihuanpaimai.local/schemas/warehouse-review-packet-v1.schema.json",
+  "title": "Warehouse Review Packet v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "recordStableKey",
+    "sourceFingerprint",
+    "warehouseCoverage",
+    "catalogCoverageStatus",
+    "reviewStatus",
+    "segments",
+    "tracks",
+    "summary"
+  ],
+  "properties": {
+    "schemaVersion": { "const": "warehouse-review-packet.v1" },
+    "recordStableKey": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$"
+    },
+    "sourceFingerprint": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "warehouseCoverage": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["status", "segmentCount", "terminationReason"],
+      "properties": {
+        "status": { "enum": ["COVERAGE_UNPROVEN", "PARTIAL", "COMPLETE"] },
+        "segmentCount": { "type": "integer", "minimum": 0 },
+        "terminationReason": { "type": ["string", "null"], "minLength": 1 }
+      }
+    },
+    "catalogCoverageStatus": {
+      "enum": ["VERIFIED_COMPLETE", "UNVERIFIED", "PARTIAL"]
+    },
+    "reviewStatus": {
+      "enum": ["REVIEW_REQUIRED", "PARTIAL_EVIDENCE", "NOT_REVIEWABLE"]
+    },
+    "segments": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "evidenceId",
+          "kind",
+          "sequenceIndex",
+          "sha256",
+          "width",
+          "height",
+          "coverageStatus",
+          "topEndpointTrusted",
+          "bottomEndpointTrusted"
+        ],
+        "properties": {
+          "evidenceId": { "type": "string", "minLength": 1 },
+          "kind": { "const": "warehouse-segment" },
+          "sequenceIndex": { "type": "integer" },
+          "sha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+          "width": { "type": "integer", "minimum": 1 },
+          "height": { "type": "integer", "minimum": 1 },
+          "coverageStatus": { "enum": ["PARTIAL", "COVERAGE_UNPROVEN"] },
+          "topEndpointTrusted": { "type": "boolean" },
+          "bottomEndpointTrusted": { "type": "boolean" }
+        }
+      }
+    },
+    "tracks": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "trackId",
+          "status",
+          "clipped",
+          "geometryEvidenceStatus",
+          "pixelOnly",
+          "identityStatus",
+          "selectedCatalogId",
+          "bestObservationId",
+          "observations",
+          "candidateStatus",
+          "candidates",
+          "widthCandidates",
+          "heightCandidates",
+          "spanCandidates"
+        ],
+        "properties": {
+          "trackId": { "type": "string", "minLength": 1 },
+          "status": { "enum": ["OBSERVED", "AMBIGUOUS", "CONFLICT"] },
+          "clipped": { "type": "boolean" },
+          "geometryEvidenceStatus": {
+            "enum": ["EXACT", "COMPATIBLE_ONLY", "PIXEL_ONLY", "UNKNOWN"]
+          },
+          "pixelOnly": { "type": "boolean" },
+          "identityStatus": { "enum": ["REVIEW_REQUIRED", "NOT_REVIEWABLE"] },
+          "selectedCatalogId": { "type": "null" },
+          "bestObservationId": { "type": "string", "minLength": 1 },
+          "observations": {
+            "type": "array",
+            "minItems": 1,
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "observationId",
+                "evidenceId",
+                "sequenceIndex",
+                "bbox",
+                "status"
+              ],
+              "properties": {
+                "observationId": { "type": "string", "minLength": 1 },
+                "evidenceId": { "type": "string", "minLength": 1 },
+                "sequenceIndex": { "type": "integer" },
+                "bbox": {
+                  "type": "array",
+                  "minItems": 4,
+                  "maxItems": 4,
+                  "items": { "type": "number" }
+                },
+                "status": { "type": "string", "minLength": 1 }
+              }
+            }
+          },
+          "candidateStatus": {
+            "enum": [
+              "UNKNOWN",
+              "OUT_OF_CATALOG",
+              "AMBIGUOUS",
+              "SINGLE_CANDIDATE_UNVERIFIED",
+              "UNIQUE_IN_CATALOG"
+            ]
+          },
+          "candidates": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "catalogId",
+                "name",
+                "identityStatus",
+                "geometry",
+                "matchReasons"
+              ],
+              "properties": {
+                "catalogId": { "type": "string", "minLength": 1 },
+                "name": { "type": "string" },
+                "identityStatus": { "const": "CANDIDATE_ONLY" },
+                "geometry": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": ["width", "height", "cells", "shape"],
+                  "properties": {
+                    "width": { "type": "integer" },
+                    "height": { "type": "integer" },
+                    "cells": { "type": "integer" },
+                    "shape": { "type": "string" }
+                  }
+                },
+                "matchReasons": {
+                  "type": "array",
+                  "items": { "type": "string" }
+                }
+              }
+            }
+          },
+          "widthCandidates": { "type": "array", "items": { "type": "integer" } },
+          "heightCandidates": { "type": "array", "items": { "type": "integer" } },
+          "spanCandidates": { "type": "array", "items": { "type": "integer" } }
+        }
+      }
+    },
+    "summary": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "visibleTrackCount",
+        "candidateReadyCount",
+        "conflictCount",
+        "reviewedIdentityCount"
+      ],
+      "properties": {
+        "visibleTrackCount": { "type": "integer", "minimum": 0 },
+        "candidateReadyCount": { "type": "integer", "minimum": 0 },
+        "conflictCount": { "type": "integer", "minimum": 0 },
+        "reviewedIdentityCount": { "const": 0 }
+      }
+    }
+  }
+}

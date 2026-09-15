@@ -1,0 +1,44 @@
+{
+  "nRecords": 178,
+  "exactStates": [{"G": 4, "P": 7, "R": 1}, {"G": 5, "P": 7, "R": 0}],
+  "expandedStates": [{"G": 4, "P": 7, "R": 1}, {"G": 5, "P": 7, "R": 0}],
+  "supportedStateCount": 2,
+  "totalStateCount": 2,
+  "supportedWeight": 0.16263046575161874,
+  "totalWeight": 0.16263046575161874,
+  "coverageRatio": 1,
+  "isFullShadow": true,
+  "shadowWhole": {
+    "p20": 415124.0131428572,
+    "p50": 437503.0131428572,
+    "p80": 513175.0131428572
+  },
+  "partialShadowP20": 415124.0131428572,
+  "partialShadowP50": 437503.0131428572,
+  "partialShadowP80": 513175.0131428572,
+  "source": "前序全部已验证红货（相似度加权）",
+  "status": "探索性/低样本 · 直接+bootstrap",
+  "degradationLevel": "full_shadow",
+  "states": [
+    {
+      "g": 4, "p": 7, "r": 1,
+      "weight": 0.11059199999999998,
+      "relativeWeight": 0.6800201886459838,
+      "supported": true,
+      "redMode": "direct",
+      "shadowP20": 415124.0131428572,
+      "shadowP50": 513175.0131428572,
+      "shadowP80": 513175.0131428572
+    },
+    {
+      "g": 5, "p": 7, "r": 0,
+      "weight": 0.05203846575161875,
+      "relativeWeight": 0.31997981135401615,
+      "supported": true,
+      "redMode": "bootstrap",
+      "shadowP20": 437503.0131428572,
+      "shadowP50": 437503.0131428572,
+      "shadowP80": 437503.0131428572
+    }
+  ]
+}

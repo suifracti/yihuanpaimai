@@ -1,0 +1,1722 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>异环拍卖战术 HUD (v0.65 4人实战出价全时序版)</title>
+  <script src="auction_engine_v06.js"></script>
+  <script src="v06_adapter.js"></script>
+  <style>
+    :root {
+      --space-1: 4px;
+      --space-2: 8px;
+      --space-3: 12px;
+      --space-4: 16px;
+      --radius-sm: 8px;
+      --radius-md: 12px;
+      --font-xs: 11px;
+      --font-sm: 12px;
+      --font-md: 13px;
+      --font-lg: 18px;
+      --surface-0: #0b1220;
+      --surface-1: rgba(16, 24, 40, 0.96);
+      --surface-2: rgba(24, 34, 54, 0.92);
+      --border: rgba(148, 163, 184, 0.18);
+      --text-main: #e5edf6;
+      --text-muted: #93a4bb;
+      --accent: #34d399;
+      --accent-2: #a78bfa;
+      --gold: #f5c16c;
+      --purple: #c084fc;
+      --red: #fb7185;
+      --hud-bg: var(--surface-1);
+      --hud-border: var(--border);
+      --green: var(--accent);
+      --card-bg: var(--surface-2);
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; user-select: none; }
+    html, body {
+      width: 100%;
+      height: 100%;
+      margin: 0;
+      padding: 0;
+      overflow: hidden;
+      background: transparent !important;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "PingFang SC", sans-serif;
+      color: var(--text-main);
+    }
+    .hud-window {
+      width: 100%;
+      height: 100%;
+      background: var(--hud-bg);
+      backdrop-filter: blur(16px);
+      -webkit-backdrop-filter: blur(16px);
+      border: 1px solid var(--hud-border);
+      border-radius: 12px;
+      clip-path: inset(0 round 12px);
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      overflow: hidden;
+      font-size: 13px;
+      position: relative;
+    }
+    .hud-header {
+      padding: 9px 14px;
+      background: rgba(255, 255, 255, 0.05);
+      border-bottom: 1px solid var(--hud-border);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      cursor: move;
+      /* WebView2 不保证支持 app-region；拖动由 Win32 API 接管。 */
+      -webkit-app-region: no-drag;
+    }
+    .pywebview-drag-region {
+      -webkit-app-region: drag;
+    }
+    .no-drag, button, a, .hud-status-badge {
+      -webkit-app-region: no-drag;
+    }
+    .hud-title {
+      font-weight: 700;
+      font-size: 13px;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      color: #fff;
+      pointer-events: none;
+    }
+    .hud-status-badge {
+      font-size: 11px;
+      padding: 2px 6px;
+      border-radius: 4px;
+      background: rgba(16, 185, 129, 0.2);
+      color: #34d399;
+      font-weight: 600;
+      transition: all 0.2s;
+    }
+    .hud-body {
+      padding: 9px 13px;
+      display: flex;
+      flex-direction: column;
+      gap: 7px;
+      flex: 1;
+    }
+    .kpi-row {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 7px;
+    }
+    .kpi-card {
+      background: var(--card-bg);
+      border: 1px solid var(--hud-border);
+      border-radius: 8px;
+      padding: 5px 9px;
+    }
+    .kpi-label {
+      font-size: 11px;
+      color: var(--text-muted);
+      margin-bottom: 2px;
+    }
+    .kpi-value {
+      font-size: 15px;
+      font-weight: 700;
+      font-variant-numeric: tabular-nums;
+    }
+    .kpi-sub {
+      font-size: 10px;
+      color: var(--text-muted);
+      margin-top: 1px;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .action-hero {
+      background: linear-gradient(135deg, rgba(16, 185, 129, 0.2), rgba(5, 150, 105, 0.1));
+      border: 1px solid rgba(16, 185, 129, 0.4);
+      border-radius: 8px;
+      padding: 7px 11px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+    .action-hero.fold {
+      background: linear-gradient(135deg, rgba(239, 68, 68, 0.2), rgba(220, 38, 38, 0.1));
+      border-color: rgba(239, 68, 68, 0.4);
+    }
+    .action-hero.standby {
+      background: rgba(255, 255, 255, 0.05);
+      border-color: var(--hud-border);
+    }
+    .action-directive {
+      font-size: 14px;
+      font-weight: 800;
+      letter-spacing: 0.5px;
+    }
+    .action-reason {
+      font-size: 11px;
+      color: var(--text-muted);
+      margin-top: 1px;
+    }
+    .lines-card {
+      background: var(--card-bg);
+      border: 1px solid var(--hud-border);
+      border-radius: 8px;
+      padding: 6px 9px;
+      display: flex;
+      flex-direction: column;
+      gap: 3px;
+    }
+    .line-item {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-size: 11px;
+    }
+    .line-title { color: var(--text-muted); }
+    .line-val { font-weight: 700; font-variant-numeric: tabular-nums; }
+    .grid-preview {
+      display: grid;
+      grid-template-columns: repeat(10, 1fr);
+      grid-template-rows: repeat(10, 1fr);
+      gap: 1px;
+      width: 108px;
+      height: 110px;
+      background: rgba(0, 0, 0, 0.4);
+      padding: 3px;
+      border-radius: 6px;
+      border: 1px solid var(--hud-border);
+      flex-shrink: 0;
+    }
+    .grid-cell {
+      border-radius: 2px;
+      background: rgba(255, 255, 255, 0.08);
+    }
+    .grid-cell.green { background: #10b981; }
+    .grid-cell.blue { background: #38bdf8; }
+    .grid-cell.purple { background: #a855f7; }
+    .grid-cell.gold { background: #f59e0b; }
+    .grid-cell.red { background: #ef4444; }
+    .grid-cell.white { background: #d1d5db; }
+    .hud-footer {
+      padding: 5px 14px;
+      background: rgba(0, 0, 0, 0.3);
+      border-top: 1px solid var(--hud-border);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-size: 10px;
+      color: var(--text-muted);
+    }
+    .expand-btn {
+      color: #60a5fa;
+      cursor: pointer;
+      font-weight: 600;
+      padding: 2px 6px;
+      border-radius: 4px;
+      background: rgba(59, 130, 246, 0.15);
+      border: 1px solid rgba(59, 130, 246, 0.3);
+      transition: all 0.2s;
+    }
+    .expand-btn:hover {
+      background: rgba(59, 130, 246, 0.3);
+      color: #93c5fd;
+    }
+
+    /* 决策大盘抽屉蒙层 */
+    .drawer-overlay {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: rgba(14, 18, 26, 0.98);
+      backdrop-filter: blur(20px);
+      z-index: 100;
+      display: none;
+      flex-direction: column;
+      padding: 10px 13px;
+      animation: fadeIn 0.2s ease-out;
+    }
+    .drawer-overlay.active {
+      display: flex;
+    }
+    @keyframes fadeIn {
+      from { opacity: 0; transform: scale(0.98); }
+      to { opacity: 1; transform: scale(1); }
+    }
+    .drawer-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding-bottom: 6px;
+      border-bottom: 1px solid var(--hud-border);
+      margin-bottom: 8px;
+    }
+    .drawer-title {
+      font-size: 12px;
+      font-weight: 700;
+      color: #fff;
+    }
+    .close-btn {
+      cursor: pointer;
+      color: var(--text-muted);
+      font-size: 10px;
+      padding: 2px 7px;
+      border-radius: 4px;
+      background: rgba(255, 255, 255, 0.1);
+    }
+    .close-btn:hover {
+      background: rgba(255, 255, 255, 0.2);
+      color: #fff;
+    }
+    .drawer-content {
+      flex: 1;
+      overflow-y: auto;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+    .drawer-card {
+      background: var(--card-bg);
+      border: 1px solid var(--hud-border);
+      border-radius: 8px;
+      padding: 7px 9px;
+      font-size: 11px;
+    }
+    .drawer-card h4 {
+      color: #93c5fd;
+      font-size: 11px;
+      margin-bottom: 5px;
+      font-weight: 700;
+    }
+    .stat-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr 1fr;
+      gap: 5px;
+      text-align: center;
+    }
+    .stat-box {
+      background: rgba(0,0,0,0.3);
+      padding: 4px;
+      border-radius: 4px;
+    }
+    .stat-lbl { color: var(--text-muted); font-size: 9px; }
+    .stat-num { font-size: 12px; font-weight: 700; }
+
+    /* 原生质感右键菜单 */
+    .context-menu {
+      position: absolute;
+      z-index: 9999;
+      background: rgba(24, 28, 38, 0.98);
+      backdrop-filter: blur(24px);
+      -webkit-backdrop-filter: blur(24px);
+      border: 1px solid rgba(255, 255, 255, 0.2);
+      border-radius: 8px;
+      box-shadow: 0 16px 40px rgba(0, 0, 0, 0.8);
+      padding: 4px;
+      width: 175px;
+      display: none;
+      flex-direction: column;
+      gap: 2px;
+      font-size: 12px;
+    }
+    .context-menu.active {
+      display: flex;
+    }
+    .menu-item {
+      padding: 7px 10px;
+      border-radius: 5px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      cursor: pointer;
+      color: #e5e7eb;
+      transition: background 0.15s;
+    }
+    .menu-item:hover {
+      background: rgba(59, 130, 246, 0.3);
+      color: #fff;
+    }
+    .menu-item.danger:hover {
+      background: rgba(239, 68, 68, 0.3);
+      color: #fca5a5;
+    }
+    .menu-divider {
+      height: 1px;
+      background: rgba(255, 255, 255, 0.12);
+      margin: 3px 4px;
+    }
+    .alpha-panel {
+      background: var(--surface-2);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-md);
+      padding: var(--space-3);
+      display: flex;
+      flex-direction: column;
+      gap: var(--space-2);
+    }
+    .alpha-row {
+      display: grid;
+      grid-template-columns: 52px 1fr;
+      gap: var(--space-2);
+      align-items: center;
+    }
+    .alpha-label {
+      font-size: var(--font-xs);
+      color: var(--text-muted);
+      letter-spacing: 0.02em;
+    }
+    .alpha-chip-row {
+      display: flex;
+      gap: 6px;
+      flex-wrap: wrap;
+      align-items: center;
+    }
+    .alpha-chip, .alpha-mini {
+      border: 1px solid var(--border);
+      background: rgba(15, 23, 42, 0.7);
+      color: var(--text-main);
+      border-radius: 999px;
+      padding: 4px 10px;
+      font-size: var(--font-xs);
+      cursor: pointer;
+    }
+    .alpha-chip.active {
+      border-color: rgba(52, 211, 153, 0.55);
+      color: var(--accent);
+      background: rgba(16, 185, 129, 0.12);
+    }
+    .alpha-input, .alpha-select {
+      width: 100%;
+      min-height: 30px;
+      border-radius: var(--radius-sm);
+      border: 1px solid var(--border);
+      background: rgba(8, 13, 23, 0.85);
+      color: var(--text-main);
+      padding: 6px 8px;
+      font-size: var(--font-sm);
+      font-variant-numeric: tabular-nums;
+      outline: none;
+    }
+    .alpha-input:focus, .alpha-select:focus {
+      border-color: rgba(52, 211, 153, 0.5);
+    }
+    .suggest-box {
+      display: none;
+      margin-top: 4px;
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      background: #0f172a;
+      overflow: hidden;
+    }
+    .suggest-item {
+      padding: 5px 8px;
+      font-size: var(--font-xs);
+      color: var(--text-muted);
+    }
+    .suggest-item.active {
+      background: rgba(52, 211, 153, 0.16);
+      color: var(--accent);
+    }
+    .known-wrap { position: relative; }
+    .alpha-foot {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: var(--space-2);
+    }
+    .alpha-next {
+      border: 1px solid rgba(167, 139, 250, 0.4);
+      background: rgba(167, 139, 250, 0.12);
+      color: var(--accent-2);
+      border-radius: var(--radius-sm);
+      padding: 5px 10px;
+      font-size: var(--font-xs);
+      cursor: pointer;
+    }
+    .pills {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 6px;
+    }
+    .pill {
+      background: rgba(8, 13, 23, 0.7);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      padding: 6px 8px;
+    }
+    .pill b { display:block; font-size: var(--font-lg); color: var(--accent); }
+    .hud-body { overflow: auto; }
+  </style>
+</head>
+<body>
+
+  <div class="hud-window" id="hudWindow">
+    <div class="hud-header" id="hudHeader" onmousedown="startDrag(event)">
+      <div class="hud-title">
+        <img src="mascot.png" style="width: 22px; height: 22px; border-radius: 50%; border: 1.5px solid rgba(168, 85, 247, 0.8); object-fit: cover; box-shadow: 0 0 8px rgba(168, 85, 247, 0.5);" />
+        <span>⚡ 异环战术助手</span>
+        <span class="hud-status-badge" id="hudStatus">🟢 严格有效 (100%)</span>
+      </div>
+      <div style="display: flex; align-items: center; gap: 8px;">
+        <span id="hudRoundTimer" style="font-size: 11px; color: #9ca3af; pointer-events: none;">等待对局...</span>
+        <button id="btnForceRefresh" class="no-drag" onclick="apiForceRefresh()" title="立即主动刷新画面感知与大厅/对局状态" style="background: rgba(255, 255, 255, 0.08); border: 1px solid rgba(255, 255, 255, 0.18); border-radius: 4px; color: #cbd5e1; font-size: 12px; cursor: pointer; padding: 2px 7px; display: flex; align-items: center; justify-content: center; transition: all 0.2s; outline: none;">🔄</button>
+      </div>
+    </div>
+
+    <div class="hud-body">
+      <section class="alpha-panel no-drag" id="manualAlpha">
+        <div class="alpha-chip-row" id="envChips">
+          <button class="alpha-chip" id="boxChip" type="button">选箱子</button>
+          <button class="alpha-chip" id="fieldChip" type="button">选场地</button>
+          <span class="alpha-label" id="draftHint">DRAFT 未保存</span>
+        </div>
+        <div id="envPickers" style="display:none; flex-direction:column; gap:8px;">
+          <div class="alpha-row">
+            <label class="alpha-label" for="boxSelect">箱子</label>
+            <select class="alpha-select" id="boxSelect"><option value="">本局重选</option></select>
+          </div>
+          <div class="alpha-row">
+            <label class="alpha-label" for="fieldSelect">场地</label>
+            <select class="alpha-select" id="fieldSelect"><option value="">本局重选</option></select>
+          </div>
+        </div>
+        <div class="alpha-row"><label class="alpha-label" for="qInput">Q</label><input class="alpha-input" id="qInput" inputmode="numeric" autocomplete="off" placeholder="高阶总件数"></div>
+        <div class="alpha-row"><label class="alpha-label" for="goldAvgInput">金均</label><input class="alpha-input" id="goldAvgInput" inputmode="numeric" autocomplete="off" placeholder="真实价格"></div>
+        <div class="alpha-row"><label class="alpha-label" for="purpleCountInput">紫数</label><input class="alpha-input" id="purpleCountInput" inputmode="numeric" autocomplete="off" placeholder="purpleCount"></div>
+        <div class="alpha-label">已知藏品 · + 同时存在 / 候选 *N 重复</div>
+        <div class="alpha-row"><label class="alpha-label">金</label><div class="known-wrap"><input class="alpha-input known-input" id="knownGoldInput" data-rarity="gold" placeholder="454654+489498" autocomplete="off"><div class="suggest-box" id="goldSuggest"></div></div></div>
+        <div class="alpha-row"><label class="alpha-label">红</label><div class="known-wrap"><input class="alpha-input known-input" id="knownRedInput" data-rarity="red" placeholder="454654*2" autocomplete="off"><div class="suggest-box" id="redSuggest"></div></div></div>
+        <div class="alpha-row" id="purpleKnownRow" style="display:none;"><label class="alpha-label">紫</label><div class="known-wrap"><input class="alpha-input known-input" id="knownPurpleInput" data-rarity="purple" placeholder="需要时再展开" autocomplete="off"><div class="suggest-box" id="purpleSuggest"></div></div></div>
+        <div class="alpha-foot">
+          <button class="alpha-mini" id="togglePurpleKnown" type="button">展开紫色</button>
+          <button class="alpha-next" id="nextMatchBtn" type="button">下一局</button>
+        </div>
+        <div class="pills">
+          <div class="pill"><span class="alpha-label">P20</span><b id="alphaP20">—</b></div>
+          <div class="pill"><span class="alpha-label">P50</span><b id="alphaP50">—</b></div>
+          <div class="pill"><span class="alpha-label">P80</span><b id="alphaP80">—</b></div>
+        </div>
+        <div class="alpha-label" id="alphaStatus">有多少可信事实就算到对应层级</div>
+      </section>
+      <!-- 1. 行动决策卡 (Entry & Action) -->
+      <div class="action-hero standby" id="actionHero">
+        <div>
+          <div class="action-directive" id="actionText" style="color: #60a5fa;">⏳ 监控就绪</div>
+          <div class="action-reason" id="actionReason">进入拍卖场后将自动毫秒级推演</div>
+        </div>
+        <div style="text-align: right;">
+          <div style="font-size: 10px; color: var(--text-muted);">准入评级</div>
+          <div style="font-size: 13px; font-weight: 700; color: #34d399;" id="entryGrade">待命</div>
+        </div>
+      </div>
+
+      <!-- 2. 核心价值与领跑叫价 (P50 Valuation & Leader Bid) -->
+      <div class="kpi-row">
+        <div class="kpi-card">
+          <div class="kpi-label">整仓期望估值 (P50)</div>
+          <div class="kpi-value" style="color: #fbbf24;" id="valP50">-- W</div>
+          <div class="kpi-sub" id="valRange">区间: -- ~ --</div>
+        </div>
+        <div class="kpi-card">
+          <div class="kpi-label">当前最高叫价 (领跑)</div>
+          <div class="kpi-value" style="color: #60a5fa;" id="leaderBid">-- W</div>
+          <div class="kpi-sub" id="leaderBidSub" style="color: #93c5fd;">等待出价...</div>
+        </div>
+      </div>
+
+      <!-- 3. 独立三层博弈出价线与市场模型 (v0.6 Decision Engine Lines) -->
+      <div class="lines-card">
+        <div class="line-item" style="display:none">
+          <span class="line-title" id="targetLineLabel">🎯 目标回报线 (Target)</span>
+          <span class="line-val" style="color: #34d399;" id="targetProfitLine">-- W</span>
+        </div>
+        <div class="line-item">
+          <span class="line-title">🛡️ 全局保本线 (Global · 扣整局成本)</span>
+          <span class="line-val" style="color: #fbbf24;" id="globalProfitLine">-- W</span>
+        </div>
+        <div class="line-item">
+          <span class="line-title">⚡ 边际追价线 (Marginal · 仅扣未来新增)</span>
+          <span class="line-val" style="color: #f87171;" id="marginalChaseLine">-- W</span>
+        </div>
+        <div class="line-item">
+          <span class="line-title">📊 市场成交预期</span>
+          <span class="line-val" style="color: #93c5fd;" id="marketRatioEst">🟢 正常竞争 (成交预期 -- W)</span>
+        </div>
+      </div>
+
+      <!-- 4. 底部并排：25格连通块与道具/情报建议 (Intel & Item Advice) -->
+      <div style="display: flex; gap: 8px; align-items: center;">
+        <div class="grid-preview" id="gridPreview"></div>
+        <div style="flex: 1; font-size: 11px; color: var(--text-muted); line-height: 1.45;">
+          <div><b>💡 道具建议:</b> <span id="intelItemAdvice" style="color: #60a5fa; font-weight: 700;">无需使用道具</span></div>
+          <div><b>识别情报:</b> <span id="intelQ">等待画面...</span></div>
+          <div><b>箱型:</b> <span id="intelBox">等待识别</span></div>
+          <div><b>场地状态:</b> <span id="intelCond">自动检测中</span></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="hud-footer">
+      <span id="hudFps">感知: 10 FPS · 延迟 &lt; 5ms</span>
+      <span class="expand-btn" id="expandBtn" onclick="toggleDrawer(true)">[展开决策大盘 ↗]</span>
+    </div>
+
+    <!-- 决策大盘抽屉全景视图 -->
+    <div class="drawer-overlay" id="drawerOverlay">
+      <div class="drawer-header">
+        <div class="drawer-title">📊 0.6 4人出价榜与决策大盘全景</div>
+        <div class="close-btn no-drag" onclick="toggleDrawer(false)" style="cursor: pointer; padding: 3px 10px; font-weight: 600; -webkit-app-region: no-drag;">✕ 折叠收起</div>
+      </div>
+      <div class="drawer-content">
+        <!-- 4人实战出价榜与时序 -->
+        <div class="drawer-card">
+          <h4>👥 4人实战叫价榜与时序轨迹</h4>
+          <div id="d_players_table" style="display:flex; flex-direction:column; gap:4px; margin-bottom:6px;">
+            <div style="display:flex; justify-content:space-between; padding:3px 6px; background:rgba(59,130,246,0.15); border:1px solid rgba(59,130,246,0.3); border-radius:4px;">
+              <span style="color:#93c5fd; font-weight:700;">👤 我 (<span id="d_my_name">玩家本人</span>)</span>
+              <b style="color:#34d399;" id="d_my_bid">-- W</b>
+            </div>
+            <div id="d_opponents_list" style="display:flex; flex-direction:column; gap:3px;">
+              <div style="display:flex; justify-content:space-between; padding:2px 6px; background:rgba(0,0,0,0.3); border-radius:4px;">
+                <span style="color:var(--text-muted);">对手1</span><b style="color:#fff;">-- W</b>
+              </div>
+              <div style="display:flex; justify-content:space-between; padding:2px 6px; background:rgba(0,0,0,0.3); border-radius:4px;">
+                <span style="color:var(--text-muted);">对手2</span><b style="color:#fff;">-- W</b>
+              </div>
+              <div style="display:flex; justify-content:space-between; padding:2px 6px; background:rgba(0,0,0,0.3); border-radius:4px;">
+                <span style="color:var(--text-muted);">对手3</span><b style="color:#fff;">-- W</b>
+              </div>
+            </div>
+          </div>
+          <div id="d_bids_timeline" style="font-size:10px; color:var(--text-muted); line-height:1.5; border-top:1px dashed var(--hud-border); padding-top:4px;">
+            时序: 等待第1轮出价...
+          </div>
+        </div>
+
+        <!-- 财务战绩统计 -->
+        <div class="drawer-card">
+          <h4>🏆 今日实战战绩与财务累计 (Schema 6 自动记账)</h4>
+          <div class="stat-grid" style="grid-template-columns: 1fr 1fr 1fr 1fr;">
+            <div class="stat-box">
+              <div class="stat-lbl">今日对局</div>
+              <div class="stat-num" style="color:#fff;" id="d_sessionCount">12 局</div>
+            </div>
+            <div class="stat-box">
+              <div class="stat-lbl">胜率 / 竞得</div>
+              <div class="stat-num" style="color:#34d399;" id="d_sessionWinRate">83.3%</div>
+            </div>
+            <div class="stat-box">
+              <div class="stat-lbl">今日累计净利</div>
+              <div class="stat-num" style="color:#fbbf24;" id="d_sessionProfit">+328.5 W</div>
+            </div>
+            <div class="stat-box">
+              <div class="stat-lbl">局均净收益</div>
+              <div class="stat-num" style="color:#60a5fa;" id="d_sessionAvgProfit">+27.4 W</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- 蒙特卡洛抽样 -->
+        <div class="drawer-card">
+          <h4>📈 价值分布置信区间 (Monte Carlo 50,000 抽样)</h4>
+          <div class="stat-grid">
+            <div class="stat-box">
+              <div class="stat-lbl">P10 保底估值</div>
+              <div class="stat-num" style="color: #9ca3af;" id="d_p10">-- W</div>
+            </div>
+            <div class="stat-box">
+              <div class="stat-lbl">P50 期望中位</div>
+              <div class="stat-num" style="color: #fbbf24;" id="d_p50">-- W</div>
+            </div>
+            <div class="stat-box">
+              <div class="stat-lbl">P90 乐观上限</div>
+              <div class="stat-num" style="color: #34d399;" id="d_p90">-- W</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 右键菜单 -->
+    <div class="context-menu" id="contextMenu">
+      <div class="menu-item" onclick="apiForceRefresh(); hideContextMenu();">🔄 立即刷新大厅/对局感知</div>
+      <div class="menu-item" onclick="apiSnapToGame()">🧲 重新吸附到游戏</div>
+      <div class="menu-item" onclick="toggleDrawer(true); hideContextMenu();">📊 展开决策大盘</div>
+      <div class="menu-item" onclick="apiOpenConfig()">⚙️ 编辑配置文件</div>
+      <div class="menu-item" onclick="apiOpenLab()">🌐 浏览器打开实验室</div>
+      <div class="menu-divider"></div>
+      <div class="menu-item danger" onclick="apiExitApp()">❌ 退出战术助手</div>
+    </div>
+  </div>
+
+  <script>
+    // 1. 原生 Win32 硬件拖拽由 Windows DWM WM_NCHITTEST 单一真实源接管，零 JS 竞争
+    let hudWsClient = null;
+
+    // 2. 右键菜单交互
+    const ctxMenu = document.getElementById("contextMenu");
+    window.addEventListener("contextmenu", (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      const x = Math.min(e.clientX, window.innerWidth - 180);
+      const y = Math.min(e.clientY, window.innerHeight - 200);
+      ctxMenu.style.left = `${x}px`;
+      ctxMenu.style.top = `${y}px`;
+      ctxMenu.classList.add("active");
+    });
+
+    window.addEventListener("click", () => {
+      hideContextMenu();
+    });
+
+    function hideContextMenu() {
+      ctxMenu.classList.remove("active");
+    }
+
+    // 2.5 原生硬件拖拽分发
+    function startDrag(e) {
+      if(e.button !== 0) return; // 仅左键触发
+      // 过滤所有按钮、链接、关闭按钮及交互元素
+      if(e.target.closest("button, .no-drag, .close-btn, .context-menu, a, input, select, .hud-status-badge")) return;
+
+      if(window.chrome && window.chrome.webview) {
+        window.chrome.webview.postMessage(JSON.stringify({ action: "begin_drag" }));
+      } else if(window.pywebview && window.pywebview.api && typeof window.pywebview.api.begin_drag === "function") {
+        window.pywebview.api.begin_drag();
+      }
+    }
+
+    // 3. 原生 Python API 交互封装
+    let lastForceRefreshAt = 0;
+    let refreshSeq = 0;
+    let activeRefreshId = null;
+    function newRefreshId() {
+      refreshSeq += 1;
+      return `ui${refreshSeq}-${Date.now().toString(36)}`;
+    }
+    function paintRefreshing(requestId) {
+      activeRefreshId = requestId;
+      const badge = document.getElementById("hudStatus");
+      if(badge) {
+        badge.innerText = "🔄 识别中";
+        badge.style.background = "rgba(56, 189, 248, 0.2)";
+        badge.style.color = "#38bdf8";
+      }
+      const market = document.getElementById("marketRatioEst");
+      if(market) market.innerText = "助手: 识别中";
+      const action = document.getElementById("actionText");
+      if(action) action.innerText = "🔄 正在识别当前画面";
+      const reason = document.getElementById("actionReason");
+      if(reason) reason.innerText = `刷新事务 ${requestId}`;
+    }
+    function characterLabel(d) {
+      if(d.refreshPending || d.solverStatus === "refreshing") return "识别中";
+      if(d.lobbyCharacterLabel) return d.lobbyCharacterLabel;
+      if(d.lobbyCharacter) return d.lobbyCharacter;
+      if(d.inLobby || d.scene === "AUCTION_LOBBY") return "未识别";
+      return "助手待识别";
+    }
+    function apiForceRefresh() {
+      const now = Date.now();
+      if(now - lastForceRefreshAt < 250) return;
+      lastForceRefreshAt = now;
+      const requestId = newRefreshId();
+      paintRefreshing(requestId);
+      const btn = document.getElementById("btnForceRefresh");
+      if(btn) {
+        btn.style.transform = "rotate(360deg)";
+        btn.style.transition = "transform 0.4s ease";
+        setTimeout(() => { btn.style.transform = "rotate(0deg)"; btn.style.transition = "none"; }, 450);
+      }
+      const payload = { action: "force_refresh", type: "force_refresh", refreshRequestId: requestId, timestamp: now };
+      if(window.chrome && window.chrome.webview) {
+        window.chrome.webview.postMessage(JSON.stringify(payload));
+        return;
+      }
+      if(window.pywebview && window.pywebview.api && typeof window.pywebview.api.force_refresh === "function") {
+        window.pywebview.api.force_refresh(requestId);
+        return;
+      }
+      if(hudWsClient && hudWsClient.readyState === WebSocket.OPEN) {
+        hudWsClient.send(JSON.stringify(payload));
+      }
+    }
+
+    function apiExitApp() {
+      hideContextMenu();
+      if(window.pywebview && window.pywebview.api) {
+        window.pywebview.api.exit_app();
+      } else {
+        window.close();
+      }
+    }
+
+    function apiSnapToGame() {
+      hideContextMenu();
+      if(window.pywebview && window.pywebview.api) {
+        window.pywebview.api.snap_to_game();
+      }
+    }
+
+    function apiOpenConfig() {
+      hideContextMenu();
+      if(window.pywebview && window.pywebview.api) {
+        window.pywebview.api.open_config();
+      }
+    }
+
+    const manualState = {
+      box: "",
+      fieldCondition: "",
+      q: "",
+      goldAvg: "",
+      purpleCount: "",
+      knownGold: "",
+      knownRed: "",
+      knownPurple: "",
+      options: { boxes: [], fieldConditions: [] },
+      suppress: false,
+      dirty: false,
+      matchId: "",
+      suggest: { rarity: null, items: [], index: 0, tokenStart: 0, token: "" }
+    };
+    let manualSaveTimer = null;
+
+    function sendHost(payload) {
+      if(window.chrome && window.chrome.webview) {
+        window.chrome.webview.postMessage(JSON.stringify(payload));
+        return true;
+      }
+      const api = window.pywebview && window.pywebview.api;
+      if(api) {
+        if(payload.action === "manual_facts" && typeof api.apply_manual_facts === "function") {
+          api.apply_manual_facts(payload.facts || payload);
+          return true;
+        }
+        if(payload.action === "manual_next_match" && typeof api.begin_next_manual_match === "function") {
+          api.begin_next_manual_match();
+          return true;
+        }
+        if(payload.action === "manual_bootstrap" && typeof api.manual_bootstrap === "function") {
+          api.manual_bootstrap();
+          return true;
+        }
+      }
+      if(hudWsClient && hudWsClient.readyState === WebSocket.OPEN) {
+        hudWsClient.send(JSON.stringify({ ...payload, type: payload.action || payload.type }));
+        return true;
+      }
+      return false;
+    }
+
+    function catalogPrices(rarity) {
+      const engine = window.AuctionEngineV06 || {};
+      const list = rarity === "gold" ? engine.GOLD_ITEMS : rarity === "red" ? engine.RED_ITEMS : engine.PURPLE_ITEMS;
+      return (list || []).map(x => Number(x[1])).filter(n => Number.isFinite(n) && n > 0);
+    }
+
+    function currentToken(input) {
+      const value = String(input.value || "");
+      const caret = input.selectionStart == null ? value.length : input.selectionStart;
+      const left = value.slice(0, caret);
+      const start = Math.max(left.lastIndexOf("+"), left.lastIndexOf("/")) + 1;
+      return { start, token: left.slice(start).replace(/\*\d*$/, "").replace(/[,\s]/g, "") };
+    }
+
+    function hideSuggest() {
+      ["goldSuggest", "redSuggest", "purpleSuggest"].forEach(id => {
+        const el = document.getElementById(id);
+        if(el) { el.style.display = "none"; el.innerHTML = ""; }
+      });
+      manualState.suggest = { rarity: null, items: [], index: 0, tokenStart: 0, token: "" };
+    }
+
+    function renderSuggest(rarity) {
+      const box = document.getElementById(rarity === "gold" ? "goldSuggest" : rarity === "red" ? "redSuggest" : "purpleSuggest");
+      if(!box) return;
+      const items = manualState.suggest.items;
+      if(!items.length) { box.style.display = "none"; box.innerHTML = ""; return; }
+      box.style.display = "block";
+      box.innerHTML = items.map((n, i) => `<div class="suggest-item${i === manualState.suggest.index ? " active" : ""}">${n}</div>`).join("");
+    }
+
+    function applySuggest(input) {
+      const s = manualState.suggest;
+      if(!s.items.length) return;
+      const chosen = String(s.items[s.index] || "");
+      const value = String(input.value || "");
+      const caret = input.selectionStart == null ? value.length : input.selectionStart;
+      const after = value.slice(caret).replace(/^\d+/, "");
+      input.value = value.slice(0, s.tokenStart) + chosen + after;
+      hideSuggest();
+      scheduleManualSave();
+    }
+
+    function updateSuggest(input) {
+      const rarity = input.getAttribute("data-rarity");
+      const { start, token } = currentToken(input);
+      if(!token) { hideSuggest(); return; }
+      const hits = [...new Set(catalogPrices(rarity).filter(n => String(n).startsWith(token)))].slice(0, 6);
+      manualState.suggest = { rarity, items: hits, index: 0, tokenStart: start, token };
+      renderSuggest(rarity);
+    }
+
+    function collectManualFacts() {
+      const num = (id) => {
+        const raw = document.getElementById(id).value.trim();
+        if(!raw) return null;
+        const n = Number(raw.replace(/,/g, ""));
+        return Number.isFinite(n) ? n : null;
+      };
+      return {
+        box: document.getElementById("boxSelect").value || null,
+        fieldCondition: document.getElementById("fieldSelect").value || null,
+        q: num("qInput"),
+        goldAvg: num("goldAvgInput"),
+        purpleCount: num("purpleCountInput"),
+        knownGold: document.getElementById("knownGoldInput").value,
+        knownRed: document.getElementById("knownRedInput").value,
+        knownPurple: document.getElementById("knownPurpleInput").value
+      };
+    }
+
+    function paintManualResult(d) {
+      const fmt = (v) => (v == null || v === "" || Number.isNaN(Number(v))) ? "—" : String(Math.round(Number(v)));
+      const input = (d && d.solverInput) ? d.solverInput : d;
+      let engineResult = null;
+      try {
+        const adapter = window.V06Adapter;
+        const engine = window.AuctionEngineV06;
+        const solverIn = (d && d.canonical && adapter)
+          ? adapter.canonicalToV06SolverInput(d.canonical)
+          : input;
+        if(engine && engine.solveAuctionPipeline) {
+          engineResult = engine.solveAuctionPipeline(solverIn || {});
+        }
+      } catch (err) {
+        console.error("manual solve error", err);
+      }
+      manualState.latestEngineResult = engineResult;
+      const fv = engineResult && engineResult.formalValue || {};
+      const raw = engineResult && engineResult.rawShadow || {};
+      const dec = engineResult && engineResult.decision || {};
+      document.getElementById("alphaP20").innerText = fmt(dec.valueP20 || raw.p20 || fv.p20);
+      document.getElementById("alphaP50").innerText = fmt(dec.valueP50 || raw.p50 || fv.p50);
+      document.getElementById("alphaP80").innerText = fmt(dec.valueP80 || raw.p80 || fv.p80);
+      const status = engineResult ? (engineResult.solverStatus || "fallback") : "incomplete";
+      document.getElementById("alphaStatus").innerText = `${status} · ${(d && d.lifecycleStatus) || "DRAFT"}`;
+      const hint = document.getElementById("draftHint");
+      if(hint) hint.innerText = d && d.draftSaved === false ? "DRAFT 未保存" : "已自动保存 DRAFT";
+    }
+
+    function fillSelect(el, items, selected, labelKey, valueKey) {
+      const cur = selected || "";
+      el.innerHTML = `<option value="">本局重选</option>` + items.map(item => {
+        const value = typeof item === "string" ? item : item[valueKey];
+        const label = typeof item === "string" ? item : (item[labelKey] || item[valueKey]);
+        return `<option value="${value}"${value === cur ? " selected" : ""}>${label}</option>`;
+      }).join("");
+    }
+
+    function applyManualState(d, force) {
+      if(!d) return;
+      const incomingId = d.matchId || (d.canonical && d.canonical.id) || "";
+      const resetMatch = Boolean(force) || (incomingId && incomingId !== manualState.matchId);
+      if(incomingId) manualState.matchId = incomingId;
+      if(manualState.dirty && !resetMatch && !force) {
+        paintManualResult(d);
+        return;
+      }
+      manualState.suppress = true;
+      manualState.dirty = false;
+      if(d.manualOptions) manualState.options = d.manualOptions;
+      fillSelect(document.getElementById("boxSelect"), manualState.options.boxes || [], d.box || "");
+      fillSelect(document.getElementById("fieldSelect"), manualState.options.fieldConditions || [], d.fieldCondition || "", "name", "id");
+      const setVal = (id, v) => { document.getElementById(id).value = (v == null || v === "") ? "" : String(v); };
+      setVal("qInput", d.q);
+      setVal("goldAvgInput", d.goldAvg);
+      setVal("purpleCountInput", d.purpleCount != null ? d.purpleCount : d.purple);
+      setVal("knownGoldInput", d.knownGold);
+      setVal("knownRedInput", d.knownRed);
+      setVal("knownPurpleInput", d.knownPurple);
+      const boxChip = document.getElementById("boxChip");
+      const fieldChip = document.getElementById("fieldChip");
+      const fieldItem = (manualState.options.fieldConditions || []).find(x => x.id === d.fieldCondition);
+      boxChip.innerText = d.box || "选箱子";
+      fieldChip.innerText = (fieldItem && fieldItem.name) || d.fieldCondition || "选场地";
+      boxChip.classList.toggle("active", Boolean(d.box));
+      fieldChip.classList.toggle("active", Boolean(d.fieldCondition));
+      if(d.box && d.fieldCondition) document.getElementById("envPickers").style.display = "none";
+      manualState.lastPayload = d;
+      if(d.venue) manualState.venue = d.venue;
+      paintManualResult(d);
+      manualState.suppress = false;
+    }
+
+    function updateManualLocalSolve() {
+      const facts = collectManualFacts();
+      const lastPayload = manualState.lastPayload || {};
+      const venue = (lastPayload.canonical && lastPayload.canonical.venue) || lastPayload.venue || (manualState.options && manualState.options.venue) || "珊瑚场";
+      const canonical = {
+        venue: venue,
+        box: facts.box,
+        fieldCondition: facts.fieldCondition,
+        q: facts.q,
+        goldAvg: facts.goldAvg,
+        purpleCount: facts.purpleCount,
+        purple: facts.purpleCount,
+        knownGold: facts.knownGold,
+        knownRed: facts.knownRed,
+        knownPurple: facts.knownPurple,
+        source: "manual"
+      };
+      paintManualResult({ canonical: canonical, solverInput: canonical });
+    }
+
+    function scheduleManualSave() {
+      if(manualState.suppress) return;
+      manualState.dirty = true;
+      clearTimeout(manualSaveTimer);
+      manualSaveTimer = setTimeout(() => {
+        const snap = manualState.latestEngineResult?.predictionSnapshot || null;
+        const frozen = manualState.latestEngineResult?.frozenPrediction || null;
+        sendHost({
+          action: "manual_facts",
+          type: "manual_facts",
+          facts: collectManualFacts(),
+          predictionSnapshot: snap,
+          frozenPrediction: frozen
+        });
+      }, 180);
+    }
+
+    function bindManualAlpha() {
+      ["qInput", "goldAvgInput", "purpleCountInput", "knownGoldInput", "knownRedInput", "knownPurpleInput"].forEach(id => {
+        const el = document.getElementById(id);
+        if(!el) return;
+        el.addEventListener("input", () => {
+          if(el.classList.contains("known-input")) updateSuggest(el);
+          updateManualLocalSolve();
+          scheduleManualSave();
+        });
+        el.addEventListener("keydown", (e) => {
+          if(!el.classList.contains("known-input")) return;
+          if(e.key === "Tab" && manualState.suggest.items.length) {
+            e.preventDefault();
+            manualState.suggest.index = (manualState.suggest.index + 1) % manualState.suggest.items.length;
+            renderSuggest(manualState.suggest.rarity);
+          } else if(e.key === " " && manualState.suggest.items.length) {
+            e.preventDefault();
+            applySuggest(el);
+          } else if(e.key === "Escape") {
+            hideSuggest();
+          }
+        });
+      });
+      document.getElementById("boxSelect").addEventListener("change", () => {
+        updateManualLocalSolve();
+        scheduleManualSave();
+      });
+      document.getElementById("fieldSelect").addEventListener("change", () => {
+        updateManualLocalSolve();
+        scheduleManualSave();
+      });
+      document.getElementById("boxChip").addEventListener("click", () => {
+        const pickers = document.getElementById("envPickers");
+        pickers.style.display = pickers.style.display === "none" ? "flex" : "none";
+      });
+      document.getElementById("fieldChip").addEventListener("click", () => {
+        const pickers = document.getElementById("envPickers");
+        pickers.style.display = pickers.style.display === "none" ? "flex" : "none";
+      });
+      document.getElementById("togglePurpleKnown").addEventListener("click", () => {
+        const row = document.getElementById("purpleKnownRow");
+        const hidden = row.style.display === "none";
+        row.style.display = hidden ? "grid" : "none";
+        document.getElementById("togglePurpleKnown").innerText = hidden ? "收起紫色" : "展开紫色";
+      });
+      document.getElementById("nextMatchBtn").addEventListener("click", () => {
+        clearTimeout(manualSaveTimer);
+        manualState.dirty = false;
+        sendHost({ action: "manual_next_match", type: "manual_next_match" });
+      });
+      sendHost({ action: "manual_bootstrap", type: "manual_bootstrap" });
+    }
+
+    function apiOpenLab() {
+      hideContextMenu();
+      if(window.pywebview && window.pywebview.api) {
+        window.pywebview.api.open_lab();
+      }
+    }
+
+    // 4. 抽屉开关
+    function toggleDrawer(show) {
+      const drawer = document.getElementById("drawerOverlay");
+      if(!drawer) return;
+      if(show) {
+        drawer.classList.add("active");
+      } else {
+        drawer.classList.remove("active");
+      }
+    }
+
+    window.addEventListener("keydown", (e) => {
+      if(e.key === "Escape") {
+        toggleDrawer(false);
+        hideContextMenu();
+      }
+    });
+
+    // 5. 仓库预览：当前可见 10×10 viewport，直接画 warehouseVision.slots
+    const GRID_COLS = 10;
+    const GRID_VISIBLE_ROWS = 10;
+    const gp = document.getElementById("gridPreview");
+    const gridCells = [];
+    for(let i=0; i<GRID_COLS * GRID_VISIBLE_ROWS; i++) {
+      const cell = document.createElement("div");
+      cell.className = "grid-cell";
+      gp.appendChild(cell);
+      gridCells.push(cell);
+    }
+
+    function rarityClass(rarity) {
+      if(rarity === "green") return "green";
+      if(rarity === "purple") return "purple";
+      if(rarity === "gold") return "gold";
+      if(rarity === "red") return "red";
+      if(rarity === "blue") return "blue";
+      if(rarity === "white" || rarity === "unknown") return "white";
+      return "";
+    }
+
+    function clearWarehouseGrid() {
+      for(let i=0; i<gridCells.length; i++) {
+        gridCells[i].className = "grid-cell";
+      }
+    }
+
+    function updateWarehouseSlots(vision) {
+      clearWarehouseGrid();
+      if(!vision) return;
+      const cols = Math.max(1, Math.min(GRID_COLS, Number(vision.cols || GRID_COLS)));
+      const rows = Math.max(1, Math.min(GRID_VISIBLE_ROWS, Number(vision.rows || GRID_VISIBLE_ROWS)));
+      const slots = vision.slots || [];
+      slots.forEach(slot => {
+        const col = Number(slot.col);
+        const row = Number(slot.row);
+        const w = Math.max(1, Number(slot.w || 1));
+        const h = Math.max(1, Number(slot.h || 1));
+        if(!Number.isFinite(col) || !Number.isFinite(row)) return;
+        const klass = rarityClass(slot.rarity);
+        for(let rr=row; rr<row+h && rr<rows; rr++) {
+          for(let cc=col; cc<col+w && cc<cols; cc++) {
+            const idx = rr * GRID_COLS + cc;
+            if(idx >= 0 && idx < gridCells.length && klass) {
+              gridCells[idx].className = "grid-cell " + klass;
+            }
+          }
+        }
+      });
+    }
+
+    function formatW(val) {
+      if(!val) return "0 W";
+      return (val / 10000.0).toFixed(1) + " W";
+    }
+
+    // 道具使用建议决策模型 (严格基于配置工具组与可用状态，禁止按轮次盲猜)
+    function resolveToolAdvice(ctx) {
+      if (!ctx || !ctx.inAuction || !ctx.round || ctx.round === 0) {
+        return "等待进入对局";
+      }
+
+      const loadout = ctx.equippedToolSet || ctx.loadout;
+      const availableActions = ctx.availableToolActions || [];
+      const usedActions = ctx.usedToolActions || [];
+
+      // 1. 本局装备道具组尚未确认
+      if (!loadout && (!availableActions || availableActions.length === 0)) {
+        return "⚪ 等待识别道具组 (未确认装备)";
+      }
+
+      // 2. 道具可用状态未知 (存在配置但尚未识别是否在CD/剩余次数)
+      if (ctx.toolStatusKnown === false) {
+        return "⚪ 道具状态未知 (等待确认可用性)";
+      }
+
+      // 3. 计算本局当前实际可用道具
+      const available = availableActions.filter(t => !usedActions.includes(t));
+      if (available.length === 0) {
+        return "道具已全部消耗 / 无可用道具";
+      }
+
+      // 4. 基于对局已知情报 (knownGold / avg / q / totalGrids) 评估使用价值
+      const hasAvg = Boolean(ctx.avg);
+      const hasGoldRange = Boolean(ctx.knownGold && ctx.knownGold.length > 0);
+
+      if ((available.includes("quality_perspective") || available.includes("品质透视")) && !hasGoldRange && hasAvg) {
+        return "💡 建议使用【品质透视】(锁定金色区间)";
+      }
+
+      if ((available.includes("item_perspective") || available.includes("藏品透视")) && hasGoldRange && (!ctx.knownGoldExact || ctx.knownGoldExact.length === 0)) {
+        return "💡 建议使用【藏品透视】(锁定高价值真品)";
+      }
+
+      if ((available.includes("grid_perspective") || available.includes("格数透视")) && !ctx.totalGrids) {
+        return "💡 建议使用【格数透视】(锁定箱体容量)";
+      }
+
+      return `当前可用: 【${available.join(" / ")}】(按需使用)`;
+    }
+
+    // 6. 遥测自检与上报
+    function sendTelemetry(wsConn) {
+      const hasEngine = Boolean(window.AuctionEngineV06 && typeof window.AuctionEngineV06.solveAuctionPipeline === "function");
+      let selfTestPassed = false;
+      let selfTestCount = 0;
+      let reg1553Passed = false;
+
+      if (hasEngine) {
+        try {
+          const selfRes = window.AuctionEngineV06.runV06ReliabilitySelfTests();
+          selfTestPassed = Boolean(selfRes.passed);
+          selfTestCount = Number(selfRes.tested);
+          const regRes = window.AuctionEngineV06.solveExactStatesSync({
+            q: 9, p: 5, avg: 33538, roundingMode: "floor",
+            knownPurple: "拈花小像+金角月芒", knownGold: "万有星仪"
+          });
+          const states = (regRes.states || []).map(s => `${s.G}/${s.P}/${s.R}`);
+          reg1553Passed = states.includes("3/5/1") && states.includes("4/5/0");
+        } catch (err) {
+          console.error("Engine self-test error in HUD", err);
+        }
+      }
+
+      const payload = {
+        pywebviewReady: true,
+        auctionEngineLoaded: hasEngine,
+        sharedCoreSelfTests: { passed: selfTestPassed, tested: selfTestCount },
+        regression1553Passed: reg1553Passed,
+        webSocketState: "connected"
+      };
+
+      if (wsConn && wsConn.readyState === WebSocket.OPEN) {
+        wsConn.send(JSON.stringify({ type: "report_hud_status", status: payload }));
+      }
+
+      const api = window.pywebview && window.pywebview.api;
+      if (api) {
+        if (typeof api.report_hud_status === "function") api.report_hud_status(payload);
+      }
+    }
+
+    // 7. WebSocket 实时通信网关
+    let liveWs = null;
+
+    function renderHudState(d) {
+      try {
+        let engineResult = null;
+        if (window.AuctionEngineV06 && window.AuctionEngineV06.solveAuctionPipeline && (d.q || d.avg || d.goldAvg)) {
+          engineResult = window.AuctionEngineV06.solveAuctionPipeline(d);
+        }
+
+        // 对局前导航以画面 scene 为准，避免求解器旧状态把闲趣/大厅粘成都市大亨
+        const navScene = d.scene || "";
+        const activeStatus = (navScene && navScene !== "UNKNOWN" && navScene !== "IN_AUCTION")
+          ? (d.solverStatus || "incomplete")
+          : (engineResult ? engineResult.solverStatus : (d.solverStatus || "incomplete"));
+        const isDiag = engineResult ? engineResult.diagnosticOnly : Boolean(d.diagnosticOnly);
+
+        const badge = document.getElementById("hudStatus");
+
+        function paintNavShell(opts) {
+          document.getElementById("valP50").innerText = "-- W";
+          document.getElementById("d_p50").innerText = "-- W";
+          document.getElementById("d_p10").innerText = "-- W";
+          document.getElementById("d_p90").innerText = "-- W";
+          document.getElementById("targetProfitLine").innerText = "-- W";
+          const gEl = document.getElementById("globalProfitLine");
+          if(gEl) gEl.innerText = "-- W";
+          document.getElementById("marginalChaseLine").innerText = "-- W";
+          document.getElementById("leaderBid").innerText = opts.leaderBid || "-- W";
+          document.getElementById("leaderBidSub").innerText = opts.leaderSub || "";
+          document.getElementById("valRange").innerText = opts.valRange || "";
+          document.getElementById("marketRatioEst").innerText = opts.market || "导航中";
+          document.getElementById("actionText").innerText = opts.actionText || "";
+          document.getElementById("actionReason").innerText = opts.actionReason || "";
+          document.getElementById("entryGrade").innerText = opts.grade || "导航";
+          document.getElementById("intelItemAdvice").innerText = opts.advice || "对局前导航";
+          document.getElementById("intelQ").innerText = opts.intelQ || "未开局";
+          const boxEl = document.getElementById("intelBox");
+          if(boxEl) boxEl.innerText = opts.intelBox || "—";
+          document.getElementById("intelCond").innerText = opts.intelCond || "—";
+          document.getElementById("hudRoundTimer").innerText = opts.timer || "导航中";
+          document.getElementById("actionHero").className = opts.heroClass || "action-hero standby";
+          if(d.warehouseVision) updateWarehouseSlots(d.warehouseVision);
+          else clearWarehouseGrid();
+        }
+
+        if(d.refreshPending || activeStatus === "refreshing") {
+          badge.innerText = "🔄 识别中";
+          badge.style.background = "rgba(56, 189, 248, 0.2)";
+          badge.style.color = "#38bdf8";
+          paintNavShell({
+            timer: "识别中",
+            valRange: d.lobbyVenue || "会场待识别",
+            leaderSub: "正在识别",
+            market: "助手: 识别中",
+            actionText: d.actionDirective || "🔄 正在识别当前画面",
+            actionReason: d.actionReason || "刷新事务进行中",
+            grade: "识别",
+            advice: "等待本次识别结果",
+            intelQ: "识别中",
+            intelCond: "—",
+            heroClass: "action-hero standby"
+          });
+          return;
+        }
+
+        if(d.isLoading || activeStatus === "loading" || d.scene === "AUCTION_LOADING") {
+          const pct = d.loadingPercent != null ? d.loadingPercent : null;
+          const pctTxt = pct != null ? `${pct}%` : "--%";
+          const lore = d.loadingVenue ? `「${d.loadingVenue}」` : "载入信息未知";
+          const dir = d.loadingDirection || (d.hadSettlement ? "to_lobby" : (d.isSettlement ? "to_lobby" : "to_auction"));
+          const isToLobby = (dir === "to_lobby" || dir === "egress");
+          badge.innerText = isToLobby ? `⏳ 返回大厅 (${pctTxt})` : `⏳ 载入中 (${pctTxt})`;
+          badge.style.background = "rgba(56, 189, 248, 0.2)";
+          badge.style.color = "#38bdf8";
+          paintNavShell({
+            timer: isToLobby ? "返回大厅中" : "对局载入中",
+            valRange: isToLobby ? "对局已结束" : `载入信息: ${lore}`,
+            leaderSub: isToLobby ? `返回大厅中 (${pctTxt})` : `对局加载中 (${pctTxt})`,
+            market: `助手: ${characterLabel(d)}`,
+            actionText: d.actionDirective || (isToLobby ? "🏠 正在返回大厅" : "🚀 正在载入拍卖 · 即将开槌"),
+            actionReason: d.actionReason || (isToLobby ? "对局已结束 · 正在退出拍卖并返回大厅" : `载入信息: ${lore} · 载入进度 ${pctTxt}`),
+            grade: isToLobby ? "返回" : "加载",
+            advice: isToLobby ? "等待返回大厅" : (d.lobbyToolGroup ? `已装配: 【${d.lobbyToolGroup}】` : "装配信息待识别"),
+            intelQ: isToLobby ? "对局结束" : "载入中...",
+            intelCond: isToLobby ? "—" : "等待入场",
+            heroClass: "action-hero standby"
+          });
+          return;
+        }
+
+        if(d.inLobby || activeStatus === "lobby" || d.scene === "AUCTION_LOBBY") {
+          badge.innerText = "🟢 大厅已就绪";
+          badge.style.background = "rgba(16, 185, 129, 0.2)";
+          badge.style.color = "#34d399";
+          const venue = d.lobbyVenue || "会场待识别";
+          const char = characterLabel(d);
+          const tool = d.lobbyToolGroup || "仪器组待识别";
+          const cost = d.lobbyEntryCost != null ? `${(d.lobbyEntryCost / 10000.0).toFixed(2)}W` : "-- W";
+          paintNavShell({
+            timer: "大厅备战中",
+            valRange: `已选: ${venue}`,
+            leaderBid: cost,
+            leaderSub: d.lobbyEntryCost != null ? `门票底费 (${venue})` : "门票待识别",
+            market: `助手: ${char}`,
+            actionText: d.actionDirective || "🎮 准备就绪: 点击开始匹配",
+            actionReason: d.actionReason || `已就绪: ${venue} · ${char} · ${tool}`,
+            grade: "准备",
+            advice: `已装配: 【${tool}】(${char})`,
+            intelQ: "待开局发牌",
+            intelCond: "待开局揭晓",
+            heroClass: "action-hero"
+          });
+          return;
+        }
+
+        if(d.scene === "OPEN_WORLD" || activeStatus === "nav_world") {
+          badge.innerText = "🌍 大世界";
+          badge.style.background = "rgba(56, 189, 248, 0.18)";
+          badge.style.color = "#38bdf8";
+          paintNavShell({
+            timer: "大世界",
+            valRange: "不在拍卖",
+            leaderSub: "大世界",
+            market: "待机",
+            actionText: d.actionDirective || "🌍 大世界",
+            actionReason: d.actionReason || "当前不在拍卖",
+            grade: "待机",
+            advice: "等待进入拍卖",
+            intelQ: "大世界",
+            intelCond: "—"
+          });
+          return;
+        }
+
+        if(d.scene === "CITY_TYCOON_HUB" || activeStatus === "nav_hub") {
+          badge.innerText = "🏙 都市大亨";
+          badge.style.background = "rgba(147, 51, 234, 0.2)";
+          badge.style.color = "#c084fc";
+          paintNavShell({
+            timer: "都市大亨",
+            valRange: "总览菜单",
+            leaderSub: "都市大亨",
+            market: "待机",
+            actionText: d.actionDirective || "🏙 都市大亨",
+            actionReason: d.actionReason || "当前不在拍卖",
+            grade: "待机",
+            advice: "等待进入拍卖",
+            intelQ: "都市大亨",
+            intelCond: "—"
+          });
+          return;
+        }
+
+        if(d.scene === "CITY_LEISURE_MENU" || activeStatus === "nav_leisure") {
+          badge.innerText = "🎮 都市闲趣";
+          badge.style.background = "rgba(249, 115, 22, 0.2)";
+          badge.style.color = "#fb923c";
+          paintNavShell({
+            timer: "都市闲趣",
+            valRange: "活动列表",
+            leaderSub: "即刻落槌",
+            market: "待机",
+            actionText: d.actionDirective || "🎮 都市闲趣",
+            actionReason: d.actionReason || "当前不在拍卖",
+            grade: "待机",
+            advice: d.auctionEntryVisible ? "在都市闲趣列表中点击「即刻落槌」卡片进入大厅" : "等待进入拍卖",
+            intelQ: "都市闲趣",
+            intelCond: "—"
+          });
+          return;
+        }
+
+        const inAuctionView = Boolean(d.inAuction) || d.scene === "IN_AUCTION" || d.scene === "SETTLEMENT";
+        if(!inAuctionView && !d.inAuction && activeStatus !== "valid" && activeStatus !== "fallback") {
+          badge.innerText = "⏳ 待命";
+          badge.style.background = "rgba(156, 163, 175, 0.2)";
+          badge.style.color = "#9ca3af";
+          document.getElementById("actionText").innerText = d.actionDirective || "⏳ 监控待命中";
+          document.getElementById("actionReason").innerText = d.actionReason || "等待进入对局";
+          document.getElementById("valRange").innerText = "—";
+          document.getElementById("valP50").innerText = "-- W";
+          document.getElementById("d_p50").innerText = "-- W";
+          document.getElementById("d_p10").innerText = "-- W";
+          document.getElementById("d_p90").innerText = "-- W";
+          document.getElementById("targetProfitLine").innerText = "-- W";
+          const gEl = document.getElementById("globalProfitLine");
+          if(gEl) gEl.innerText = "-- W";
+          document.getElementById("marginalChaseLine").innerText = "-- W";
+          document.getElementById("marketRatioEst").innerText = "待命";
+          document.getElementById("hudRoundTimer").innerText = "待命";
+          document.getElementById("entryGrade").innerText = d.entryGrade || "待命";
+          document.getElementById("intelItemAdvice").innerText = d.itemAdvice || "等待进入对局";
+          document.getElementById("intelQ").innerText = "等待画面...";
+          document.getElementById("intelCond").innerText = "自动检测中";
+          document.getElementById("actionHero").className = "action-hero standby";
+          clearWarehouseGrid();
+          return;
+        }
+
+        if(activeStatus === "valid") {
+          badge.innerText = isDiag ? "🟢 严格求解有效 [诊断]" : "🟢 严格求解有效";
+          badge.style.background = "rgba(16, 185, 129, 0.2)";
+          badge.style.color = "#34d399";
+        } else if(activeStatus === "fallback" || activeStatus === "incomplete") {
+          const hasQ = (d.q != null && d.q > 0);
+          const hasAvg = (d.avg != null && d.avg > 0) || (d.goldAvg != null && d.goldAvg > 0);
+          if (hasQ && !hasAvg) {
+            badge.innerText = "🟡 等待均价情报";
+          } else if (!hasQ && hasAvg) {
+            badge.innerText = "🟡 等待 Q 情报";
+          } else if (!hasQ && !hasAvg) {
+            badge.innerText = "🟡 等待关键情报";
+          } else {
+            badge.innerText = isDiag ? "🟠 降级估算中 [诊断]" : "🟡 情报尚不完整";
+          }
+          badge.style.background = "rgba(250, 204, 21, 0.2)";
+          badge.style.color = "#facc15";
+        } else if(activeStatus === "stale") {
+          badge.innerText = "⏳ 结果过期中";
+          badge.style.background = "rgba(156, 163, 175, 0.2)";
+          badge.style.color = "#9ca3af";
+        } else if(activeStatus === "timeout") {
+          badge.innerText = "⏸️ 求解超时";
+          badge.style.background = "rgba(244, 63, 94, 0.2)";
+          badge.style.color = "#fb7185";
+        } else if(activeStatus === "no-match") {
+          badge.innerText = "⚠️ 输入无可行解";
+          badge.style.background = "rgba(239, 68, 68, 0.2)";
+          badge.style.color = "#f87171";
+        }
+
+        if(engineResult) {
+          const fv = engineResult.formalValue || {};
+          const rawSh = engineResult.rawShadow || {};
+          const dec = engineResult.decision || {};
+          const mkt = engineResult.marketPrediction || engineResult.market || {};
+          const mode = dec.degradationLevel || engineResult.degradationLevel || "insufficient";
+          const isFullShadow = mode === "full_shadow" && dec.valueP50 != null;
+          const isPartialShadow = mode === "partial_shadow";
+          const isStructural = mode === "structural_only";
+
+          // 1. 整仓 P50 仅 Full Shadow；结构分位不得画进 valP50
+          if(isFullShadow) {
+            const evStr = formatW(dec.valueP50);
+            document.getElementById("valP50").innerText = evStr;
+            document.getElementById("d_p50").innerText = evStr;
+            document.getElementById("d_p10").innerText = formatW(dec.valueP20 || rawSh.p20);
+            document.getElementById("d_p90").innerText = formatW(dec.valueP80 || rawSh.p80);
+            document.getElementById("valRange").innerText = `整仓区间: ${formatW(dec.valueP20 || rawSh.p20)} ~ ${formatW(dec.valueP80 || rawSh.p80)}`;
+          } else if(isPartialShadow) {
+            document.getElementById("valP50").innerText = "—";
+            document.getElementById("d_p50").innerText = "—";
+            document.getElementById("d_p10").innerText = formatW(dec.partialShadowP20);
+            document.getElementById("d_p90").innerText = formatW(dec.partialShadowP80);
+            const cov = ((dec.coverageRatio || 0) * 100).toFixed(1);
+            const partialRange = `条件分布(已覆盖 ${dec.supportedStateCount || "?"}/${dec.totalStateCount || "?"} · ${cov}%) P50 ${formatW(dec.partialShadowP50)} · 非正式整仓`;
+            document.getElementById("valRange").innerText = d.shadowUpdating ? `${partialRange} · Shadow 更新中` : partialRange;
+          } else if(isStructural) {
+            document.getElementById("valP50").innerText = "—";
+            document.getElementById("d_p50").innerText = "—";
+            document.getElementById("d_p10").innerText = formatW(dec.hardFloor || dec.theoreticalMin);
+            document.getElementById("d_p90").innerText = formatW(dec.theoreticalMax);
+            const structRange = `结构参考 ${formatW(dec.theoreticalMin || fv.p20)} ~ ${formatW(dec.theoreticalMax || fv.p80)} · 非 P50`;
+            document.getElementById("valRange").innerText = d.shadowUpdating ? `${structRange} · Shadow 更新中` : structRange;
+          } else {
+            document.getElementById("valP50").innerText = "-- W";
+            document.getElementById("d_p50").innerText = "-- W";
+            document.getElementById("d_p10").innerText = "-- W";
+            document.getElementById("d_p90").innerText = "-- W";
+            document.getElementById("valRange").innerText = d.shadowUpdating ? "Shadow 更新中" : "等待结构/概率事实";
+          }
+          if(d.shadowUpdating) {
+            const vr = document.getElementById("valRange");
+            if(vr && vr.innerText && !String(vr.innerText).includes("Shadow 更新中")) {
+              vr.innerText = `${vr.innerText} · Shadow 更新中`;
+            }
+          }
+
+          // 2. 正式三线仅 Full Shadow
+          if(isFullShadow) {
+            document.getElementById("targetProfitLine").innerText = formatW(dec.safeBuy ?? dec.targetLine);
+            const gEl = document.getElementById("globalProfitLine");
+            if(gEl) gEl.innerText = formatW(dec.recommendedMax ?? dec.globalLine);
+            document.getElementById("marginalChaseLine").innerText = formatW(dec.chaseLimit ?? dec.marginalLine);
+          } else {
+            document.getElementById("targetProfitLine").innerText = "—";
+            const gEl = document.getElementById("globalProfitLine");
+            if(gEl) gEl.innerText = "—";
+            if(isStructural && dec.structuralReferenceBid != null) {
+              document.getElementById("marginalChaseLine").innerText = `结构参考 ${formatW(dec.structuralReferenceBid)}`;
+            } else if(isPartialShadow && dec.structuralReferenceBid != null) {
+              document.getElementById("marginalChaseLine").innerText = `条件参考 ${formatW(dec.structuralReferenceBid)}`;
+            } else {
+              document.getElementById("marginalChaseLine").innerText = "—";
+            }
+          }
+
+          // 3. Market Expectation (Hierarchical Shrinkage from Shared Core)
+          if(mkt.expectedPrice) {
+            document.getElementById("marketRatioEst").innerText = `🟢 正常竞争 (成交预期 ${formatW(mkt.expectedPrice)})`;
+          } else if(mkt.description) {
+            document.getElementById("marketRatioEst").innerText = mkt.description;
+          }
+
+          // 4. Action Directives & Grade (Shared Core)
+          if(!isFullShadow && (isStructural || isPartialShadow || mode === "insufficient")) {
+            if(dec.actionDirective) document.getElementById("actionText").innerText = dec.actionDirective;
+            if(dec.actionReason) document.getElementById("actionReason").innerText = dec.actionReason;
+            document.getElementById("entryGrade").innerText = dec.entryGrade || (isStructural ? "结构参考" : "观望");
+          } else if(activeStatus === "incomplete" || activeStatus === "fallback") {
+            const hasQ = (d.q != null && d.q > 0);
+            const hasAvg = (d.avg != null && d.avg > 0) || (d.goldAvg != null && d.goldAvg > 0);
+            if (hasQ && !hasAvg) {
+              const hasPurpleAvg = d.purpleAvg != null && d.purpleAvg > 0;
+              document.getElementById("actionText").innerText = hasPurpleAvg ? "🟡 已知紫色均价，仍缺金色价格证据" : "🟡 等待均价情报 · 暂不报价";
+              document.getElementById("actionReason").innerText = hasPurpleAvg ? "紫均已进入结构参考，但不能替代金均，不生成正式整仓 P50" : "已获取藏品数量，请使用仪器揭晓均价后再行动";
+            } else if (!hasQ && hasAvg) {
+              document.getElementById("actionText").innerText = "🟡 等待 Q 情报 · 暂不报价";
+              document.getElementById("actionReason").innerText = "已获取均价，等待数量或品质情报揭晓";
+            } else {
+              document.getElementById("actionText").innerText = "🟡 等待关键情报 · 暂不报价";
+              document.getElementById("actionReason").innerText = "当前缺少必要约束情报，等待道具或公告揭晓";
+            }
+            if(dec.entryGrade) document.getElementById("entryGrade").innerText = dec.entryGrade;
+            else document.getElementById("entryGrade").innerText = "观望";
+          } else {
+            if(dec.actionDirective) document.getElementById("actionText").innerText = dec.actionDirective;
+            if(dec.actionReason) document.getElementById("actionReason").innerText = dec.actionReason;
+            if(dec.entryGrade) document.getElementById("entryGrade").innerText = dec.entryGrade;
+          }
+
+          const hero = document.getElementById("actionHero");
+          if(dec.isFold) {
+            hero.className = "action-hero fold";
+          } else {
+            hero.className = "action-hero";
+          }
+        } else if(inAuctionView) {
+          const hasQ = (d.q != null && d.q > 0);
+          const hasAvg = (d.avg != null && d.avg > 0) || (d.goldAvg != null && d.goldAvg > 0);
+          if (hasQ && !hasAvg) {
+            const hasPurpleAvg = d.purpleAvg != null && d.purpleAvg > 0;
+            document.getElementById("actionText").innerText = hasPurpleAvg ? "🟡 已知紫色均价，仍缺金色价格证据" : "🟡 等待均价情报 · 暂不报价";
+            document.getElementById("actionReason").innerText = hasPurpleAvg ? "紫均已进入结构参考，但不能替代金均，不生成正式整仓 P50" : "已获取藏品数量，请使用仪器揭晓均价后再行动";
+          } else if (!hasQ && hasAvg) {
+            document.getElementById("actionText").innerText = "🟡 等待 Q 情报 · 暂不报价";
+            document.getElementById("actionReason").innerText = "已获取均价，等待数量或品质情报揭晓";
+          } else {
+            document.getElementById("actionText").innerText = "🟡 等待关键情报 · 暂不报价";
+            document.getElementById("actionReason").innerText = "当前缺少必要约束情报，等待道具或公告揭晓";
+          }
+          document.getElementById("entryGrade").innerText = "观望";
+          document.getElementById("valRange").innerText = "等待关键情报";
+          document.getElementById("valP50").innerText = "-- W";
+          document.getElementById("d_p50").innerText = "-- W";
+          document.getElementById("d_p10").innerText = "-- W";
+          document.getElementById("d_p90").innerText = "-- W";
+          document.getElementById("targetProfitLine").innerText = "-- W";
+          const gEl = document.getElementById("globalProfitLine");
+          if(gEl) gEl.innerText = "-- W";
+          document.getElementById("marginalChaseLine").innerText = "-- W";
+          document.getElementById("marketRatioEst").innerText = "等待情报";
+          document.getElementById("actionHero").className = "action-hero standby";
+        }
+        
+        if(d.leaderBidFormatted || d.leaderBid) {
+          document.getElementById("leaderBid").innerText = d.leaderBidFormatted || formatW(d.leaderBid);
+        }
+        if(d.leaderBidSub) document.getElementById("leaderBidSub").innerText = d.leaderBidSub;
+
+        if(d.myName) document.getElementById("d_my_name").innerText = d.myName;
+        if(d.myBidFormatted || d.myBid) {
+          document.getElementById("d_my_bid").innerText = d.myBidFormatted || formatW(d.myBid);
+        }
+
+        if(d.round && Number(d.round) > 0) {
+          const t = (d.timer != null) ? ` (${d.timer < 10 ? '0' + d.timer : d.timer}s)` : "";
+          document.getElementById("hudRoundTimer").innerText = `第 ${d.round} 轮${t}`;
+        } else if(inAuctionView) {
+          document.getElementById("hudRoundTimer").innerText = (d.timer != null) ? `回合未知 (${d.timer}s)` : "回合未知";
+        }
+
+        document.getElementById("intelItemAdvice").innerText = resolveToolAdvice(d);
+
+        const intelBits = [];
+        if(d.q) intelBits.push(`Q=${d.q}件`);
+        if(d.purple != null || d.purpleCount != null) intelBits.push(`紫=${d.purple ?? d.purpleCount}`);
+        if(d.goldAvg != null) intelBits.push(`金均:${(d.goldAvg/10000).toFixed(1)}W`);
+        else if(d.avg != null && d.avg > 0) intelBits.push(`均价:${(d.avg/10000).toFixed(1)}W`);
+        if(d.purpleAvg != null) intelBits.push(`紫均:${(d.purpleAvg/10000).toFixed(2)}W`);
+        document.getElementById("intelQ").innerText = intelBits.length ? intelBits.join(" · ") : "等待情报...";
+        const boxEl = document.getElementById("intelBox");
+        if(boxEl) {
+          const boxText = d.box && d.box !== "未知箱型" ? d.box : "等待识别";
+          boxEl.innerText = boxText;
+        }
+        const fieldLabels = {unknown:"未知条件",standard:"标准对局",dark:"天黑了",extraIntel:"一手情报",purpleDouble:"加倍！！",goldDouble:"加倍！！！",sparkle:"闪耀之心",welfare:"福利多多",gemMaze:"宝石迷阵"};
+        document.getElementById("intelCond").innerText = fieldLabels[d.fieldCondition] || fieldLabels.unknown;
+
+        const seatRows = (d.seats && Array.isArray(d.seats) && d.seats.length) ? d.seats : (d.opponents || []);
+        if(seatRows && Array.isArray(seatRows)) {
+          const oppList = document.getElementById("d_opponents_list");
+          oppList.innerHTML = "";
+          seatRows.forEach(seat => {
+            const row = document.createElement("div");
+            row.style.display = "flex";
+            row.style.justifyContent = "space-between";
+            row.style.padding = "2px 6px";
+            row.style.background = "rgba(0,0,0,0.3)";
+            row.style.borderRadius = "4px";
+            const name = seat.name || "未识别";
+            row.innerHTML = `<span style="color:var(--text-muted);">${name}</span><b style="color:#fff;">${formatW(seat.bid || 0)}</b>`;
+            oppList.appendChild(row);
+          });
+        }
+
+        if(d.roundTimeline && typeof d.roundTimeline === "object") {
+          const keys = Object.keys(d.roundTimeline).sort((a,b) => parseInt(a) - parseInt(b));
+          if(keys.length > 0) {
+            let rowsHtml = `<div style="display:grid; grid-template-columns: 26px 1fr 1fr 1.2fr; gap:4px; font-weight:700; color:var(--text-muted); border-bottom:1px solid var(--hud-border); padding-bottom:2px; margin-bottom:3px;">
+              <span>轮次</span><span>情报状态</span><span>我的出价</span><span>全场领跑</span>
+            </div>`;
+
+            keys.forEach(k => {
+              const snap = d.roundTimeline[k];
+              const intelStr = snap.intel ? (snap.intel.avg ? `均价:${(snap.intel.avg/10000).toFixed(1)}W` : (snap.intel.q ? `Q=${snap.intel.q}件` : (snap.intel.totalGrids ? `${snap.intel.totalGrids}格` : `待开`))) : `-`;
+              const myBidStr = formatW(snap.bids?.myBid || 0);
+              const leaderStr = snap.bids?.leaderBid ? `${formatW(snap.bids.leaderBid)} (${snap.bids.leaderName || '无'})` : `0 W`;
+              const isLead = snap.bids?.isMyLead;
+
+              rowsHtml += `<div style="display:grid; grid-template-columns: 26px 1fr 1fr 1.2fr; gap:4px; padding:2px 0; border-bottom:1px dashed rgba(255,255,255,0.06); font-size:10px;">
+                <span style="font-weight:700; color:#93c5fd;">R${k}</span>
+                <span style="color:var(--text-muted);">${intelStr}</span>
+                <span style="color:#34d399; font-weight:600;">${myBidStr}</span>
+                <span style="color:${isLead ? '#34d399' : '#f87171'}; font-weight:600;">${leaderStr}</span>
+              </div>`;
+            });
+
+            document.getElementById("d_bids_timeline").innerHTML = rowsHtml;
+          }
+        }
+
+        if(d.warehouseVision) updateWarehouseSlots(d.warehouseVision);
+        else clearWarehouseGrid();
+      } catch(e) {
+        console.error("Render HUD state error", e);
+      }
+    }
+
+    function connectWS() {
+      const ws = new WebSocket("ws://127.0.0.1:8766");
+      liveWs = ws;
+      hudWsClient = ws;
+      ws.onopen = () => {
+        window.hudWsReady = true;
+        const badge = document.getElementById("hudStatus");
+        badge.innerText = "⚪ 待命监控中";
+        badge.style.background = "rgba(156, 163, 175, 0.2)";
+        badge.style.color = "#9ca3af";
+        sendTelemetry(ws);
+      };
+      ws.onmessage = (event) => {
+        try {
+          const d = JSON.parse(event.data);
+          if(d && d.action === "force_refresh" && d.refreshRequestId) {
+            if(!activeRefreshId || d.refreshRequestId === activeRefreshId || d.refreshPending) {
+              paintRefreshing(d.refreshRequestId);
+            }
+            return;
+          }
+          if(d && (d.type === "manual_alpha_state" || d.manualMode || d.canonical || d.solverInput)) {
+            const forceReset = Boolean(d.matchId && d.matchId !== manualState.matchId);
+            applyManualState(d, forceReset);
+            if(d.manualMode) return;
+          }
+          if(activeRefreshId && d.refreshRequestId && d.refreshRequestId !== activeRefreshId) {
+            return;
+          }
+          if(activeRefreshId && d.refreshRequestId === activeRefreshId && d.refreshPending !== true) {
+            activeRefreshId = null;
+          }
+          renderHudState(d);
+        } catch(e) {
+          console.error("WS Parse error", e);
+        }
+      };
+      ws.onclose = () => {
+        const badge = document.getElementById("hudStatus");
+        badge.innerText = "🔴 重连中...";
+        badge.style.background = "rgba(239, 68, 68, 0.2)";
+        badge.style.color = "#f87171";
+        setTimeout(connectWS, 2000);
+      };
+    }
+
+    window.addEventListener("pywebviewready", () => sendTelemetry(liveWs));
+    document.addEventListener("DOMContentLoaded", () => {
+      bindManualAlpha();
+      sendTelemetry(liveWs);
+    });
+    window.addEventListener("load", () => sendTelemetry(liveWs));
+    connectWS();
+  </script>
+</body>
+</html>

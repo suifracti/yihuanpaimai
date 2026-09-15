@@ -1,0 +1,179 @@
+{
+  "schema": "intel-card-evidence-fixture-v1",
+  "createdAt": "2026-08-25T11:57:51Z",
+  "note": "Derived viewport/center-card fixtures only. Original captures stay outside Git.",
+  "frames": [
+    {
+      "frameId": "r2",
+      "sourcePath": "C:\\Users\\Administrator\\AppData\\Local\\Temp\\codex-clipboard-c0998a24-aecb-49f8-a4fd-46b5e64cd116.png",
+      "sourceSha256": "5714059f96ea6ab1edc11fa4f12b87d212ab99ed8bf4fd31157fbed9dc0adad3",
+      "sourceBytes": 2166514,
+      "sourceSize": {
+        "width": 1923,
+        "height": 1128
+      },
+      "recordingChrome": {
+        "strippedPx": 30,
+        "y2": 1098
+      },
+      "gameSize": {
+        "width": 1923,
+        "height": 1098
+      },
+      "viewportRect": {
+        "x": 0,
+        "y": 8,
+        "width": 1923,
+        "height": 1081
+      },
+      "intelCardStackRoi": [
+        0.34,
+        0.13,
+        0.68,
+        0.8
+      ],
+      "crops": {
+        "viewport": {
+          "file": "r2_viewport.png",
+          "rect": [
+            0,
+            0,
+            1923,
+            1081
+          ],
+          "sha256": "cabed2f3a5a69ec81fbe8e5e0cdec41eaa5a22a9e0b50711354113553b866302",
+          "size": {
+            "width": 1923,
+            "height": 1081
+          }
+        },
+        "intelStack": {
+          "file": "r2_intel_stack.png",
+          "rect": [
+            653,
+            140,
+            1307,
+            864
+          ],
+          "sha256": "faf4910719cb2406a242603f33bd1846d69c3c456456ba6746278737fc1e98de",
+          "size": {
+            "width": 654,
+            "height": 724
+          }
+        },
+        "header": {
+          "file": "r2_header.png",
+          "rect": [
+            807,
+            21,
+            1115,
+            108
+          ],
+          "sha256": "78a4c096c6a32e1765d1c6153505148ee8a54cb33138907d97d58b3ab643e2e6",
+          "size": {
+            "width": 308,
+            "height": 87
+          }
+        }
+      },
+      "redactions": [
+        "recording player chrome stripped when present",
+        "left player names / avatars excluded from derived canvas",
+        "UID / bottom action bar excluded from derived canvas",
+        "right warehouse excluded from derived canvas"
+      ],
+      "headerRoi": [
+        0.42,
+        0.02,
+        0.58,
+        0.1
+      ]
+    },
+    {
+      "frameId": "r3",
+      "sourcePath": "C:\\Users\\Administrator\\AppData\\Local\\Temp\\codex-clipboard-7ae7ea9a-2ba9-4942-a465-f242ce90e3a3.png",
+      "sourceSha256": "a74a2f11ca01c64ff7f5bd6b196397a33b35f13469c4c74c7527fd04ba1c7722",
+      "sourceBytes": 2241481,
+      "sourceSize": {
+        "width": 1885,
+        "height": 1140
+      },
+      "recordingChrome": {
+        "strippedPx": 0,
+        "y2": 1140
+      },
+      "gameSize": {
+        "width": 1885,
+        "height": 1140
+      },
+      "viewportRect": {
+        "x": 0,
+        "y": 40,
+        "width": 1885,
+        "height": 1060
+      },
+      "intelCardStackRoi": [
+        0.34,
+        0.13,
+        0.68,
+        0.8
+      ],
+      "crops": {
+        "viewport": {
+          "file": "r3_viewport.png",
+          "rect": [
+            0,
+            0,
+            1885,
+            1060
+          ],
+          "sha256": "ac5ac31c7aa6ab0f597eb1bc519f7d931d29f7e42d9e4c5b79e24f68d38e0cf3",
+          "size": {
+            "width": 1885,
+            "height": 1060
+          }
+        },
+        "intelStack": {
+          "file": "r3_intel_stack.png",
+          "rect": [
+            640,
+            137,
+            1281,
+            848
+          ],
+          "sha256": "c0d0f8dc59490ce0d1016dc21a1f44c6ebbaab2c6cd831a574586af6c0ba357e",
+          "size": {
+            "width": 641,
+            "height": 711
+          }
+        },
+        "header": {
+          "file": "r3_header.png",
+          "rect": [
+            791,
+            21,
+            1093,
+            106
+          ],
+          "sha256": "26f9f2472e1a26166177f70ce5341a6ede45c7be39a554f9bc411ce28f03295b",
+          "size": {
+            "width": 302,
+            "height": 85
+          }
+        }
+      },
+      "redactions": [
+        "recording player chrome stripped when present",
+        "left player names / avatars excluded from derived canvas",
+        "UID / bottom action bar excluded from derived canvas",
+        "right warehouse excluded from derived canvas"
+      ],
+      "headerRoi": [
+        0.42,
+        0.02,
+        0.58,
+        0.1
+      ]
+    }
+  ]
+}

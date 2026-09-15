@@ -1,0 +1,53 @@
+{
+  "contractVersion": "geometry-contract-v1",
+  "description": "Benchmark v2 single-source admitted geometry; identity remains null.",
+  "instances": [
+    {
+      "bbox": [
+        8,
+        13,
+        38,
+        99
+      ],
+      "bboxCoordinateSpace": "source_pixel",
+      "canonicalItemId": null,
+      "contentVerification": {
+        "contentVerified": true,
+        "evidenceType": "manual_review",
+        "note": "Source review resolves the upper split child to one physical parent bbox; geometry only, with no semantic or quality assertion.",
+        "reviewStatus": "reviewed_consistent",
+        "scope": "crop_instance_binding_only"
+      },
+      "footprint": null,
+      "instanceId": "inst-d65cbfad1fb0a8f5cc0a",
+      "observationLabel": null,
+      "sourceId": "src-c86e85c5712aea00ac7d"
+    }
+  ],
+  "pathBase": "repository_root",
+  "queueSlots": [
+    {
+      "cropPath": "experiments/vision_benchmark_v2/split_child_slices/upper/crops/crop-d65cbfad1fb0a8f5cc0a.png",
+      "instanceId": "inst-d65cbfad1fb0a8f5cc0a",
+      "queueId": "queue-d65cbfad1fb0a8f5cc0a"
+    }
+  ],
+  "sources": [
+    {
+      "coordinateSpace": "source_pixel",
+      "height": 329,
+      "inventoryEligible": true,
+      "inventoryRoi": {
+        "coordinateSpace": "source_pixel",
+        "height": 329,
+        "width": 307,
+        "x": 0,
+        "y": 0
+      },
+      "sceneType": "inventory_crop",
+      "sourceId": "src-c86e85c5712aea00ac7d",
+      "sourcePath": "experiments/vision_benchmark_v2/split_child_slices/upper/snapshots/source-c86e85c5712aea00ac7d.png",
+      "width": 307
+    }
+  ]
+}

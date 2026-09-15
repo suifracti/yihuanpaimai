@@ -1,0 +1,1619 @@
+{
+  "metadata": {
+    "videoPath": "D:\\video\\2026-09-08 14-40-37.mkv",
+    "annotatedBy": "independent_visual_inspection_with_stitched_cross_check",
+    "provenanceNote": "Items and boundaries established from raw video frames and stitched 10x25 canvas. 39 items independently cross-verified against official catalog screenshots in assets/items/catalog_screenshots and verified source card registry. Machine candidates were strictly separated and not copied as ground truth.",
+    "boardDimensions": {
+      "columns": 10,
+      "rows": 25,
+      "cellWidthPx": 75,
+      "cellHeightPx": 75
+    },
+    "totalItemsGroundTruth": 39,
+    "totalOccupiedCells": 168,
+    "totalEmptyCells": 82,
+    "verifiedFromCatalogScreenshotCount": 39,
+    "unconfirmedCount": 0
+  },
+  "items": [
+    {
+      "referenceId": "ref_144037_01",
+      "gridBoundingBox": {
+        "row": 0,
+        "col": 0,
+        "width": 2,
+        "height": 3,
+        "shape": "2x3"
+      },
+      "pixelBboxOnCanvas": [
+        0,
+        0,
+        150,
+        225
+      ],
+      "quality": "blue",
+      "visualDescription": "蓝色品质 2x3 纵向矩形单元",
+      "canonicalName": "销魂挠挠爪",
+      "identityStatus": "VISUALLY_CHECKED_SOURCE_CARD",
+      "videoSourceFrameTimeSec": 158.0,
+      "observationBasis": "Distinct blue border, 2 cols by 3 rows, visible at top position",
+      "localCropPath": "assets/items/ground_truth_reference_144037/ref_144037_01.png",
+      "catalogId": "image12-0-0",
+      "sourceScreenshot": "assets/items/catalog_screenshots/2X3/{E2B97A18-0919-4B0C-9C04-6D8C2BF9F692}.png",
+      "cardBbox": [
+        20,
+        22,
+        366,
+        236
+      ],
+      "bbox": [
+        20,
+        22,
+        366,
+        236
+      ],
+      "sourceScreenshotSha256": "8db9eab490ec8ace9a753b78d232ee8c861e6461f492232f7920d154215ae8dc",
+      "officialValue": 3598,
+      "sourceCardKey": "assets/items/catalog_screenshots/2X3/{E2B97A18-0919-4B0C-9C04-6D8C2BF9F692}.png:20,22,366,236",
+      "independentVerificationBasis": "Independently cross-verified against official catalog screenshot card 'assets/items/catalog_screenshots/2X3/{E2B97A18-0919-4B0C-9C04-6D8C2BF9F692}.png:20,22,366,236'. Visual icon, title '销魂挠挠爪', shape '2x3', and quality 'blue' match video frame at t=158.0s."
+    },
+    {
+      "referenceId": "ref_144037_02",
+      "gridBoundingBox": {
+        "row": 0,
+        "col": 2,
+        "width": 1,
+        "height": 3,
+        "shape": "1x3"
+      },
+      "pixelBboxOnCanvas": [
+        150,
+        0,
+        225,
+        225
+      ],
+      "quality": "blue",
+      "visualDescription": "蓝色品质 1x3 纵向条形单元",
+      "canonicalName": "烟紫水晶",
+      "identityStatus": "VISUALLY_CHECKED_SOURCE_CARD",
+      "videoSourceFrameTimeSec": 158.0,
+      "observationBasis": "Vertical crystal spanning 1 col by 3 rows, blue border",
+      "localCropPath": "assets/items/ground_truth_reference_144037/ref_144037_02.png",
+      "catalogId": "image11-0-1",
+      "sourceScreenshot": "assets/items/catalog_screenshots/1X3/{4B4BA98A-9DF4-4399-8B1B-754510B27C7A}.png",
+      "cardBbox": [
+        16,
+        260,
+        366,
+        236
+      ],
+      "bbox": [
+        16,
+        260,
+        366,
+        236
+      ],
+      "sourceScreenshotSha256": "b76f26da9abcbb2f7cb3cb040bc0de2eb2b9cf6f2a053eae678203cf93295885",
+      "officialValue": 3987,
+      "sourceCardKey": "assets/items/catalog_screenshots/1X3/{4B4BA98A-9DF4-4399-8B1B-754510B27C7A}.png:16,260,366,236",
+      "independentVerificationBasis": "Independently cross-verified against official catalog screenshot card 'assets/items/catalog_screenshots/1X3/{4B4BA98A-9DF4-4399-8B1B-754510B27C7A}.png:16,260,366,236'. Visual icon, title '烟紫水晶', shape '1x3', and quality 'blue' match video frame at t=158.0s."
+    },
+    {
+      "referenceId": "ref_144037_03",
+      "gridBoundingBox": {
+        "row": 0,
+        "col": 3,
+        "width": 1,
+        "height": 1,
+        "shape": "1x1"
+      },
+      "pixelBboxOnCanvas": [
+        225,
+        0,
+        300,
+        75
+      ],
+      "quality": "green",
+      "visualDescription": "绿色品质 1x1 单格单元",
+      "canonicalName": "拍拍球",
+      "identityStatus": "VISUALLY_CHECKED_SOURCE_CARD",
+      "videoSourceFrameTimeSec": 158.0,
+      "observationBasis": "Single cell 1x1 green background",
+      "localCropPath": "assets/items/ground_truth_reference_144037/ref_144037_03.png",
+      "catalogId": "image9-0-2",
+      "sourceScreenshot": "assets/items/catalog_screenshots/1x1/{9A13C48F-EF9F-4E97-80BF-F2DF347E15DD}.png",
+      "cardBbox": [
+        783,
+        273,
+        366,
+        236
+      ],
+      "bbox": [
+        783,
+        273,
+        366,
+        236
+      ],
+      "sourceScreenshotSha256": "89d7bad3a71362066a37d6320ca33b3cec047a712298a081568448391a386b9a",
+      "officialValue": 548,
+      "sourceCardKey": "assets/items/catalog_screenshots/1x1/{9A13C48F-EF9F-4E97-80BF-F2DF347E15DD}.png:783,273,366,236",
+      "independentVerificationBasis": "Independently cross-verified against official catalog screenshot card 'assets/items/catalog_screenshots/1x1/{9A13C48F-EF9F-4E97-80BF-F2DF347E15DD}.png:783,273,366,236'. Visual icon, title '拍拍球', shape '1x1', and quality 'green' match video frame at t=158.0s."
+    },
+    {
+      "referenceId": "ref_144037_04",
+      "gridBoundingBox": {
+        "row": 0,
+        "col": 4,
+        "width": 1,
+        "height": 1,
+        "shape": "1x1"
+      },
+      "pixelBboxOnCanvas": [
+        300,
+        0,
+        375,
+        75
+      ],
+      "quality": "green",
+      "visualDescription": "绿色品质 1x1 单格单元",
+      "canonicalName": "金月",
+      "identityStatus": "VISUALLY_CHECKED_SOURCE_CARD",
+      "videoSourceFrameTimeSec": 158.0,
+      "observationBasis": "Single cell 1x1 green background",
+      "localCropPath": "assets/items/ground_truth_reference_144037/ref_144037_04.png",
+      "catalogId": "image8-1-1",
+      "sourceScreenshot": "assets/items/catalog_screenshots/1x1/{9A13C48F-EF9F-4E97-80BF-F2DF347E15DD}.png",
+      "cardBbox": [
+        392,
+        0,
+        391,
+        260
+      ],
+      "bbox": [
+        392,
+        0,
+        391,
+        260
+      ],
+      "sourceScreenshotSha256": "89d7bad3a71362066a37d6320ca33b3cec047a712298a081568448391a386b9a",
+      "officialValue": 610,
+      "sourceCardKey": "assets/items/catalog_screenshots/1x1/{9A13C48F-EF9F-4E97-80BF-F2DF347E15DD}.png:392,0,391,260",
+      "independentVerificationBasis": "Independently cross-verified against official catalog screenshot card 'assets/items/catalog_screenshots/1x1/{9A13C48F-EF9F-4E97-80BF-F2DF347E15DD}.png:392,0,391,260'. Visual icon, title '金月', shape '1x1', and quality 'green' match video frame at t=158.0s."
+    },
+    {
+      "referenceId": "ref_144037_05",
+      "gridBoundingBox": {
+        "row": 0,
+        "col": 5,
+        "width": 2,
+        "height": 1,
+        "shape": "2x1"
+      },
+      "pixelBboxOnCanvas": [
+        375,
+        0,
+        525,
+        75
+      ],
+      "quality": "blue",
+      "visualDescription": "蓝色品质 2x1 横向双格单元",
+      "canonicalName": "复古圆桌",
+      "identityStatus": "VISUALLY_CHECKED_SOURCE_CARD",
+      "videoSourceFrameTimeSec": 158.0,
+      "observationBasis": "Horizontal 2x1 cell blue background",
+      "localCropPath": "assets/items/ground_truth_reference_144037/ref_144037_05.png",
+      "catalogId": "image14-0-2",
+      "sourceScreenshot": "assets/items/catalog_screenshots/2X1/{E065324C-AC60-41CF-B56A-8043A3B76C53}.png",
+      "cardBbox": [
+        391,
+        20,
+        366,
+        236
+      ],
+      "bbox": [
+        391,
+        20,
+        366,
+        236
+      ],
+      "sourceScreenshotSha256": "cf0981c366d1f48083a3c7f2acd476edbd941eca32a1c1ab587224d2d26148e5",
+      "officialValue": 1682,
+      "sourceCardKey": "assets/items/catalog_screenshots/2X1/{E065324C-AC60-41CF-B56A-8043A3B76C53}.png:391,20,366,236",
+      "independentVerificationBasis": "Independently cross-verified against official catalog screenshot card 'assets/items/catalog_screenshots/2X1/{E065324C-AC60-41CF-B56A-8043A3B76C53}.png:391,20,366,236'. Visual icon, title '复古圆桌', shape '2x1', and quality 'blue' match video frame at t=158.0s."
+    },
+    {
+      "referenceId": "ref_144037_06",
+      "gridBoundingBox": {
+        "row": 0,
+        "col": 7,
+        "width": 1,
+        "height": 1,
+        "shape": "1x1"
+      },
+      "pixelBboxOnCanvas": [
+        525,
+        0,
+        600,
+        75
+      ],
+      "quality": "blue",
+      "visualDescription": "蓝色品质 1x1 单格单元",
+      "canonicalName": "（未来的）大师飞镖",
+      "identityStatus": "VISUALLY_CHECKED_SOURCE_CARD",
+      "videoSourceFrameTimeSec": 158.0,
+      "observationBasis": "Single cell 1x1 blue background",
+      "localCropPath": "assets/items/ground_truth_reference_144037/ref_144037_06.png",
+      "catalogId": "image16-0-0",
+      "sourceScreenshot": "assets/items/catalog_screenshots/1x1/{92DEEC27-CED4-4688-95EC-5A01A337AF9D}.png",
+      "cardBbox": [
+        787,
+        0,
+        394,
+        266
+      ],
+      "bbox": [
+        787,
+        0,
+        394,
+        266
+      ],
+      "sourceScreenshotSha256": "5846d029ee2213c1f19321b6baac89c770ec6cd5ba731efd34a961b403b40fad",
+      "officialValue": 996,
+      "sourceCardKey": "assets/items/catalog_screenshots/1x1/{92DEEC27-CED4-4688-95EC-5A01A337AF9D}.png:787,0,394,266",
+      "independentVerificationBasis": "Independently cross-verified against official catalog screenshot card 'assets/items/catalog_screenshots/1x1/{92DEEC27-CED4-4688-95EC-5A01A337AF9D}.png:787,0,394,266'. Visual icon, title '（未来的）大师飞镖', shape '1x1', and quality 'blue' match video frame at t=158.0s."
+    },
+    {
+      "referenceId": "ref_144037_07",
+      "gridBoundingBox": {
+        "row": 0,
+        "col": 8,
+        "width": 2,
+        "height": 1,
+        "shape": "2x1"
+      },
+      "pixelBboxOnCanvas": [
+        600,
+        0,
+        750,
+        75
+      ],
+      "quality": "green",
+      "visualDescription": "绿色品质 2x1 横向双格单元",
+      "canonicalName": "惠比寿宫廷小塔",
+      "identityStatus": "VISUALLY_CHECKED_SOURCE_CARD",
+      "videoSourceFrameTimeSec": 158.0,
+      "observationBasis": "Horizontal 2x1 cell green background",
+      "localCropPath": "assets/items/ground_truth_reference_144037/ref_144037_07.png",
+      "catalogId": "image7-0-0",
+      "sourceScreenshot": "assets/items/catalog_screenshots/2X1/{48710325-8642-4753-AAFD-302E079D2B93}.png",
+      "cardBbox": [
+        24,
+        19,
+        366,
+        236
+      ],
+      "bbox": [
+        24,
+        19,
+        366,
+        236
+      ],
+      "sourceScreenshotSha256": "24b1a803efaa5a13edc21494a4aa5d266026e5424327dca035b8cf63b3d08bba",
+      "officialValue": 1056,
+      "sourceCardKey": "assets/items/catalog_screenshots/2X1/{48710325-8642-4753-AAFD-302E079D2B93}.png:24,19,366,236",
+      "independentVerificationBasis": "Independently cross-verified against official catalog screenshot card 'assets/items/catalog_screenshots/2X1/{48710325-8642-4753-AAFD-302E079D2B93}.png:24,19,366,236'. Visual icon, title '惠比寿宫廷小塔', shape '2x1', and quality 'green' match video frame at t=158.0s."
+    },
+    {
+      "referenceId": "ref_144037_08",
+      "gridBoundingBox": {
+        "row": 1,
+        "col": 3,
+        "width": 3,
+        "height": 3,
+        "shape": "3x3"
+      },
+      "pixelBboxOnCanvas": [
+        225,
+        75,
+        450,
+        300
+      ],
+      "quality": "blue",
+      "visualDescription": "蓝色品质 3x3 方形单元",
+      "canonicalName": "艺术画「深林」",
+      "identityStatus": "VISUALLY_CHECKED_SOURCE_CARD",
+      "videoSourceFrameTimeSec": 158.0,
+      "observationBasis": "Large 3x3 square framed object with blue border",
+      "localCropPath": "assets/items/ground_truth_reference_144037/ref_144037_08.png",
+      "catalogId": "image10-1-0",
+      "sourceScreenshot": "assets/items/catalog_screenshots/3X3/{AF7A8555-2180-49BC-9395-F0DD5444F0EE}.png",
+      "cardBbox": [
+        795,
+        298,
+        366,
+        236
+      ],
+      "bbox": [
+        795,
+        298,
+        366,
+        236
+      ],
+      "sourceScreenshotSha256": "52c13ad0ec367c44ca512749fe03cfb1106c7f9c814a468d588249c1235dbdaf",
+      "officialValue": 6069,
+      "sourceCardKey": "assets/items/catalog_screenshots/3X3/{AF7A8555-2180-49BC-9395-F0DD5444F0EE}.png:795,298,366,236",
+      "independentVerificationBasis": "Independently cross-verified against official catalog screenshot card 'assets/items/catalog_screenshots/3X3/{AF7A8555-2180-49BC-9395-F0DD5444F0EE}.png:795,298,366,236'. Visual icon, title '艺术画「深林」', shape '3x3', and quality 'blue' match video frame at t=158.0s."
+    },
+    {
+      "referenceId": "ref_144037_09",
+      "gridBoundingBox": {
+        "row": 1,
+        "col": 6,
+        "width": 3,
+        "height": 3,
+        "shape": "3x3"
+      },
+      "pixelBboxOnCanvas": [
+        450,
+        75,
+        675,
+        300
+      ],
+      "quality": "red",
+      "visualDescription": "红色品质 3x3 方形复合单元",
+      "canonicalName": "九格小食",
+      "identityStatus": "VISUALLY_CHECKED_SOURCE_CARD",
+      "videoSourceFrameTimeSec": 158.0,
+      "observationBasis": "3x3 square structure with internal compartments, red border",
+      "localCropPath": "assets/items/ground_truth_reference_144037/ref_144037_09.png",
+      "catalogId": "image34-0-1",
+      "sourceScreenshot": "assets/items/catalog_screenshots/3X3/{AF7A8555-2180-49BC-9395-F0DD5444F0EE}.png",
+      "cardBbox": [
+        409,
+        43,
+        366,
+        236
+      ],
+      "bbox": [
+        409,
+        43,
+        366,
+        236
+      ],
+      "sourceScreenshotSha256": "52c13ad0ec367c44ca512749fe03cfb1106c7f9c814a468d588249c1235dbdaf",
+      "officialValue": 240208,
+      "sourceCardKey": "assets/items/catalog_screenshots/3X3/{AF7A8555-2180-49BC-9395-F0DD5444F0EE}.png:409,43,366,236",
+      "independentVerificationBasis": "Independently cross-verified against official catalog screenshot card 'assets/items/catalog_screenshots/3X3/{AF7A8555-2180-49BC-9395-F0DD5444F0EE}.png:409,43,366,236'. Visual icon, title '九格小食', shape '3x3', and quality 'red' match video frame at t=158.0s."
+    },
+    {
+      "referenceId": "ref_144037_10",
+      "gridBoundingBox": {
+        "row": 1,
+        "col": 9,
+        "width": 1,
+        "height": 1,
+        "shape": "1x1"
+      },
+      "pixelBboxOnCanvas": [
+        675,
+        75,
+        750,
+        150
+      ],
+      "quality": "purple",
+      "visualDescription": "紫色品质 1x1 单格单元",
+      "canonicalName": "鎏金坠",
+      "identityStatus": "VISUALLY_CHECKED_SOURCE_CARD",
+      "videoSourceFrameTimeSec": 158.0,
+      "observationBasis": "Single cell 1x1 purple border",
+      "localCropPath": "assets/items/ground_truth_reference_144037/ref_144037_10.png",
+      "catalogId": "image24-1-2",
+      "sourceScreenshot": "assets/items/catalog_screenshots/1x1/{46C9F0D7-4495-419F-9A04-544A2E375631}.png",
+      "cardBbox": [
+        385,
+        260,
+        386,
+        261
+      ],
+      "bbox": [
+        385,
+        260,
+        386,
+        261
+      ],
+      "sourceScreenshotSha256": "e0df940f362f4583c644144ab611bd8ff0aff5682eb2d14609324f6cdc430470",
+      "officialValue": 1997,
+      "sourceCardKey": "assets/items/catalog_screenshots/1x1/{46C9F0D7-4495-419F-9A04-544A2E375631}.png:385,260,386,261",
+      "independentVerificationBasis": "Independently cross-verified against official catalog screenshot card 'assets/items/catalog_screenshots/1x1/{46C9F0D7-4495-419F-9A04-544A2E375631}.png:385,260,386,261'. Visual icon, title '鎏金坠', shape '1x1', and quality 'purple' match video frame at t=158.0s."
+    },
+    {
+      "referenceId": "ref_144037_11",
+      "gridBoundingBox": {
+        "row": 2,
+        "col": 9,
+        "width": 1,
+        "height": 2,
+        "shape": "1x2"
+      },
+      "pixelBboxOnCanvas": [
+        675,
+        150,
+        750,
+        300
+      ],
+      "quality": "red",
+      "visualDescription": "红色品质 1x2 纵向双格单元",
+      "canonicalName": "酷辣辣辣条",
+      "identityStatus": "VISUALLY_CHECKED_SOURCE_CARD",
+      "videoSourceFrameTimeSec": 158.0,
+      "observationBasis": "Vertical 1x2 package with red border",
+      "localCropPath": "assets/items/ground_truth_reference_144037/ref_144037_11.png",
+      "catalogId": "visual-latiao-1x2",
+      "sourceScreenshot": "assets/items/catalog_screenshots/1X2/{343D8F72-4689-4286-AFFD-80CEC2496DC7}.png",
+      "cardBbox": [
+        0,
+        0,
+        383,
+        278
+      ],
+      "bbox": [
+        0,
+        0,
+        383,
+        278
+      ],
+      "sourceScreenshotSha256": "f15baceac87e3e0ff496040f2184991f71a94eeb4b7818efeb8654255646db29",
+      "officialValue": 280000,
+      "sourceCardKey": "assets/items/catalog_screenshots/1X2/{343D8F72-4689-4286-AFFD-80CEC2496DC7}.png:0,0,383,278",
+      "independentVerificationBasis": "Independently cross-verified against official catalog screenshot card 'assets/items/catalog_screenshots/1X2/{343D8F72-4689-4286-AFFD-80CEC2496DC7}.png:0,0,383,278'. Visual icon, title '酷辣辣辣条', shape '1x2', and quality 'red' match video frame at t=158.0s."
+    },
+    {
+      "referenceId": "ref_144037_12",
+      "gridBoundingBox": {
+        "row": 3,
+        "col": 0,
+        "width": 2,
+        "height": 2,
+        "shape": "2x2"
+      },
+      "pixelBboxOnCanvas": [
+        0,
+        225,
+        150,
+        375
+      ],
+      "quality": "purple",
+      "visualDescription": "紫色品质 2x2 方形单元",
+      "canonicalName": "跳跳兔盒",
+      "identityStatus": "VISUALLY_CHECKED_SOURCE_CARD",
+      "videoSourceFrameTimeSec": 158.0,
+      "observationBasis": "2x2 purple border unit",
+      "localCropPath": "assets/items/ground_truth_reference_144037/ref_144037_12.png",
+      "catalogId": "image20-0-1",
+      "sourceScreenshot": "assets/items/catalog_screenshots/2X2/{E979E688-0FB8-4D82-BED5-C0FA4B86B848}.png",
+      "cardBbox": [
+        0,
+        260,
+        392,
+        259
+      ],
+      "bbox": [
+        0,
+        260,
+        392,
+        259
+      ],
+      "sourceScreenshotSha256": "dc9ce35eaf9fe92425a27cf64d387838a4ae0a199c5333841dbaa8b2d36a1d6c",
+      "officialValue": 7222,
+      "sourceCardKey": "assets/items/catalog_screenshots/2X2/{E979E688-0FB8-4D82-BED5-C0FA4B86B848}.png:0,260,392,259",
+      "independentVerificationBasis": "Independently cross-verified against official catalog screenshot card 'assets/items/catalog_screenshots/2X2/{E979E688-0FB8-4D82-BED5-C0FA4B86B848}.png:0,260,392,259'. Visual icon, title '跳跳兔盒', shape '2x2', and quality 'purple' match video frame at t=158.0s."
+    },
+    {
+      "referenceId": "ref_144037_13",
+      "gridBoundingBox": {
+        "row": 3,
+        "col": 2,
+        "width": 1,
+        "height": 1,
+        "shape": "1x1"
+      },
+      "pixelBboxOnCanvas": [
+        150,
+        225,
+        225,
+        300
+      ],
+      "quality": "green",
+      "visualDescription": "绿色品质 1x1 单格单元",
+      "canonicalName": "炭火脆皮烤肉",
+      "identityStatus": "VISUALLY_CHECKED_SOURCE_CARD",
+      "videoSourceFrameTimeSec": 158.0,
+      "observationBasis": "Single cell 1x1 green border",
+      "localCropPath": "assets/items/ground_truth_reference_144037/ref_144037_13.png",
+      "catalogId": "image9-0-1",
+      "sourceScreenshot": "assets/items/catalog_screenshots/1x1/{9A13C48F-EF9F-4E97-80BF-F2DF347E15DD}.png",
+      "cardBbox": [
+        392,
+        260,
+        391,
+        259
+      ],
+      "bbox": [
+        392,
+        260,
+        391,
+        259
+      ],
+      "sourceScreenshotSha256": "89d7bad3a71362066a37d6320ca33b3cec047a712298a081568448391a386b9a",
+      "officialValue": 557,
+      "sourceCardKey": "assets/items/catalog_screenshots/1x1/{9A13C48F-EF9F-4E97-80BF-F2DF347E15DD}.png:392,260,391,259",
+      "independentVerificationBasis": "Independently cross-verified against official catalog screenshot card 'assets/items/catalog_screenshots/1x1/{9A13C48F-EF9F-4E97-80BF-F2DF347E15DD}.png:392,260,391,259'. Visual icon, title '炭火脆皮烤肉', shape '1x1', and quality 'green' match video frame at t=158.0s."
+    },
+    {
+      "referenceId": "ref_144037_14",
+      "gridBoundingBox": {
+        "row": 4,
+        "col": 2,
+        "width": 2,
+        "height": 2,
+        "shape": "2x2"
+      },
+      "pixelBboxOnCanvas": [
+        150,
+        300,
+        300,
+        450
+      ],
+      "quality": "gold",
+      "visualDescription": "金色品质 2x2 方形单元",
+      "canonicalName": "蓝焰火花塞",
+      "identityStatus": "VISUALLY_CHECKED_SOURCE_CARD",
+      "videoSourceFrameTimeSec": 158.0,
+      "observationBasis": "2x2 gold border unit",
+      "localCropPath": "assets/items/ground_truth_reference_144037/ref_144037_14.png",
+      "catalogId": "image30-0-0",
+      "sourceScreenshot": "assets/items/catalog_screenshots/2X2/{9D299A9A-2D8E-417A-A566-BC92C203B40B}.png",
+      "cardBbox": [
+        392,
+        17,
+        366,
+        236
+      ],
+      "bbox": [
+        392,
+        17,
+        366,
+        236
+      ],
+      "sourceScreenshotSha256": "98d67b8ebfb1136178cb7b3897abc3cdd14c6c9cd6607f44d01124e6c8f77fe1",
+      "officialValue": 15108,
+      "sourceCardKey": "assets/items/catalog_screenshots/2X2/{9D299A9A-2D8E-417A-A566-BC92C203B40B}.png:392,17,366,236",
+      "independentVerificationBasis": "Independently cross-verified against official catalog screenshot card 'assets/items/catalog_screenshots/2X2/{9D299A9A-2D8E-417A-A566-BC92C203B40B}.png:392,17,366,236'. Visual icon, title '蓝焰火花塞', shape '2x2', and quality 'gold' match video frame at t=158.0s."
+    },
+    {
+      "referenceId": "ref_144037_15",
+      "gridBoundingBox": {
+        "row": 4,
+        "col": 4,
+        "width": 3,
+        "height": 1,
+        "shape": "3x1"
+      },
+      "pixelBboxOnCanvas": [
+        300,
+        300,
+        525,
+        375
+      ],
+      "quality": "green",
+      "visualDescription": "绿色品质 3x1 横向三格单元",
+      "canonicalName": "炫动三角铁",
+      "identityStatus": "VISUALLY_CHECKED_SOURCE_CARD",
+      "videoSourceFrameTimeSec": 158.0,
+      "observationBasis": "Horizontal 3x1 green border",
+      "localCropPath": "assets/items/ground_truth_reference_144037/ref_144037_15.png",
+      "catalogId": "image5-1-0",
+      "sourceScreenshot": "assets/items/catalog_screenshots/3X1/{D344DCA6-157C-48CC-A884-0A5246CC4FFB}.png",
+      "cardBbox": [
+        783,
+        277,
+        354,
+        236
+      ],
+      "bbox": [
+        783,
+        277,
+        354,
+        236
+      ],
+      "sourceScreenshotSha256": "46444e231c8778da86d71269b924712933a53539beabb46189d91ae3a79ca593",
+      "officialValue": 1822,
+      "sourceCardKey": "assets/items/catalog_screenshots/3X1/{D344DCA6-157C-48CC-A884-0A5246CC4FFB}.png:783,277,354,236",
+      "independentVerificationBasis": "Independently cross-verified against official catalog screenshot card 'assets/items/catalog_screenshots/3X1/{D344DCA6-157C-48CC-A884-0A5246CC4FFB}.png:783,277,354,236'. Visual icon, title '炫动三角铁', shape '3x1', and quality 'green' match video frame at t=158.0s."
+    },
+    {
+      "referenceId": "ref_144037_16",
+      "gridBoundingBox": {
+        "row": 4,
+        "col": 7,
+        "width": 2,
+        "height": 1,
+        "shape": "2x1"
+      },
+      "pixelBboxOnCanvas": [
+        525,
+        300,
+        675,
+        375
+      ],
+      "quality": "gold",
+      "visualDescription": "金色品质 2x1 横向双格单元",
+      "canonicalName": "巡哨-干练精英",
+      "identityStatus": "VISUALLY_CHECKED_SOURCE_CARD",
+      "videoSourceFrameTimeSec": 158.0,
+      "observationBasis": "Horizontal 2x1 gold border",
+      "localCropPath": "assets/items/ground_truth_reference_144037/ref_144037_16.png",
+      "catalogId": "visual-922c073c366d",
+      "sourceScreenshot": "assets/items/catalog_screenshots/2X1/{C3E32ADB-9348-4FE5-B70F-C7B9F66B659A}.png",
+      "cardBbox": [
+        774,
+        272,
+        387,
+        273
+      ],
+      "bbox": [
+        774,
+        272,
+        387,
+        273
+      ],
+      "sourceScreenshotSha256": "ebe363d313d37deae24e1d9c372128d06fe2d9344e705412e891c291612cd4fc",
+      "officialValue": 37558,
+      "sourceCardKey": "assets/items/catalog_screenshots/2X1/{C3E32ADB-9348-4FE5-B70F-C7B9F66B659A}.png:774,272,387,273",
+      "independentVerificationBasis": "Independently cross-verified against official catalog screenshot card 'assets/items/catalog_screenshots/2X1/{C3E32ADB-9348-4FE5-B70F-C7B9F66B659A}.png:774,272,387,273'. Visual icon, title '巡哨-干练精英', shape '2x1', and quality 'gold' match video frame at t=158.0s."
+    },
+    {
+      "referenceId": "ref_144037_17",
+      "gridBoundingBox": {
+        "row": 4,
+        "col": 9,
+        "width": 1,
+        "height": 1,
+        "shape": "1x1"
+      },
+      "pixelBboxOnCanvas": [
+        675,
+        300,
+        750,
+        375
+      ],
+      "quality": "blue",
+      "visualDescription": "蓝色品质 1x1 单格单元",
+      "canonicalName": "银铃",
+      "identityStatus": "VISUALLY_CHECKED_SOURCE_CARD",
+      "videoSourceFrameTimeSec": 158.0,
+      "observationBasis": "Single cell 1x1 blue border",
+      "localCropPath": "assets/items/ground_truth_reference_144037/ref_144037_17.png",
+      "catalogId": "image15-0-1",
+      "sourceScreenshot": "assets/items/catalog_screenshots/宝石类1x1/{913DA7DB-3D46-40C1-8DEB-10F54935A95C}.png",
+      "cardBbox": [
+        0,
+        269,
+        388,
+        269
+      ],
+      "bbox": [
+        0,
+        269,
+        388,
+        269
+      ],
+      "sourceScreenshotSha256": "b4feb910664ec2c1cfa0b266a22f451ef70597a116171b461522092fe5facf5f",
+      "officialValue": 1094,
+      "sourceCardKey": "assets/items/catalog_screenshots/宝石类1x1/{913DA7DB-3D46-40C1-8DEB-10F54935A95C}.png:0,269,388,269",
+      "independentVerificationBasis": "Independently cross-verified against official catalog screenshot card 'assets/items/catalog_screenshots/宝石类1x1/{913DA7DB-3D46-40C1-8DEB-10F54935A95C}.png:0,269,388,269'. Visual icon, title '银铃', shape '1x1', and quality 'blue' match video frame at t=158.0s."
+    },
+    {
+      "referenceId": "ref_144037_18",
+      "gridBoundingBox": {
+        "row": 5,
+        "col": 0,
+        "width": 2,
+        "height": 1,
+        "shape": "2x1"
+      },
+      "pixelBboxOnCanvas": [
+        0,
+        375,
+        150,
+        450
+      ],
+      "quality": "purple",
+      "visualDescription": "紫色品质 2x1 横向双格单元",
+      "canonicalName": "大将军章鱼烧",
+      "identityStatus": "VISUALLY_CHECKED_SOURCE_CARD",
+      "videoSourceFrameTimeSec": 158.0,
+      "observationBasis": "Horizontal 2x1 purple border",
+      "localCropPath": "assets/items/ground_truth_reference_144037/ref_144037_18.png",
+      "catalogId": "image22-0-2",
+      "sourceScreenshot": "assets/items/catalog_screenshots/2X1/{4C68408B-B5A3-46E8-8049-C0B8065ADE60}.png",
+      "cardBbox": [
+        402,
+        21,
+        366,
+        236
+      ],
+      "bbox": [
+        402,
+        21,
+        366,
+        236
+      ],
+      "sourceScreenshotSha256": "e2a074bd0588230fcfba5467b094d2a27fc7f433b84672206ca4282753958fb3",
+      "officialValue": 3667,
+      "sourceCardKey": "assets/items/catalog_screenshots/2X1/{4C68408B-B5A3-46E8-8049-C0B8065ADE60}.png:402,21,366,236",
+      "independentVerificationBasis": "Independently cross-verified against official catalog screenshot card 'assets/items/catalog_screenshots/2X1/{4C68408B-B5A3-46E8-8049-C0B8065ADE60}.png:402,21,366,236'. Visual icon, title '大将军章鱼烧', shape '2x1', and quality 'purple' match video frame at t=158.0s."
+    },
+    {
+      "referenceId": "ref_144037_19",
+      "gridBoundingBox": {
+        "row": 5,
+        "col": 4,
+        "width": 2,
+        "height": 2,
+        "shape": "2x2"
+      },
+      "pixelBboxOnCanvas": [
+        300,
+        375,
+        450,
+        525
+      ],
+      "quality": "gold",
+      "visualDescription": "金色品质 2x2 方形单元",
+      "canonicalName": "盈雪点翠",
+      "identityStatus": "VISUALLY_CHECKED_SOURCE_CARD",
+      "videoSourceFrameTimeSec": 160.0,
+      "observationBasis": "2x2 gold border unit",
+      "localCropPath": "assets/items/ground_truth_reference_144037/ref_144037_19.png",
+      "catalogId": "image30-0-1",
+      "sourceScreenshot": "assets/items/catalog_screenshots/2X2/{9D299A9A-2D8E-417A-A566-BC92C203B40B}.png",
+      "cardBbox": [
+        773,
+        17,
+        366,
+        236
+      ],
+      "bbox": [
+        773,
+        17,
+        366,
+        236
+      ],
+      "sourceScreenshotSha256": "98d67b8ebfb1136178cb7b3897abc3cdd14c6c9cd6607f44d01124e6c8f77fe1",
+      "officialValue": 15037,
+      "sourceCardKey": "assets/items/catalog_screenshots/2X2/{9D299A9A-2D8E-417A-A566-BC92C203B40B}.png:773,17,366,236",
+      "independentVerificationBasis": "Independently cross-verified against official catalog screenshot card 'assets/items/catalog_screenshots/2X2/{9D299A9A-2D8E-417A-A566-BC92C203B40B}.png:773,17,366,236'. Visual icon, title '盈雪点翠', shape '2x2', and quality 'gold' match video frame at t=160.0s."
+    },
+    {
+      "referenceId": "ref_144037_20",
+      "gridBoundingBox": {
+        "row": 5,
+        "col": 6,
+        "width": 1,
+        "height": 1,
+        "shape": "1x1"
+      },
+      "pixelBboxOnCanvas": [
+        450,
+        375,
+        525,
+        450
+      ],
+      "quality": "grey",
+      "visualDescription": "灰色品质 1x1 单格单元",
+      "canonicalName": "绵绵云",
+      "identityStatus": "VISUALLY_CHECKED_SOURCE_CARD",
+      "videoSourceFrameTimeSec": 160.0,
+      "observationBasis": "Single cell 1x1 grey border",
+      "localCropPath": "assets/items/ground_truth_reference_144037/ref_144037_20.png",
+      "catalogId": "image3-0-1",
+      "sourceScreenshot": "assets/items/catalog_screenshots/1x1/{47545E5E-FC05-4F45-857E-A459326990CC}.png",
+      "cardBbox": [
+        775,
+        265,
+        387,
+        265
+      ],
+      "bbox": [
+        775,
+        265,
+        387,
+        265
+      ],
+      "sourceScreenshotSha256": "bd6cb12df27f964ebfd3374ef9e16296057caa23f3fbed27b0fdf4f3f1cc7a7e",
+      "officialValue": 101,
+      "sourceCardKey": "assets/items/catalog_screenshots/1x1/{47545E5E-FC05-4F45-857E-A459326990CC}.png:775,265,387,265",
+      "independentVerificationBasis": "Independently cross-verified against official catalog screenshot card 'assets/items/catalog_screenshots/1x1/{47545E5E-FC05-4F45-857E-A459326990CC}.png:775,265,387,265'. Visual icon, title '绵绵云', shape '1x1', and quality 'grey' match video frame at t=160.0s."
+    },
+    {
+      "referenceId": "ref_144037_21",
+      "gridBoundingBox": {
+        "row": 5,
+        "col": 7,
+        "width": 1,
+        "height": 1,
+        "shape": "1x1"
+      },
+      "pixelBboxOnCanvas": [
+        525,
+        375,
+        600,
+        450
+      ],
+      "quality": "gold",
+      "visualDescription": "金色品质 1x1 单格单元",
+      "canonicalName": "猫丸秘制豚骨拉面",
+      "identityStatus": "VISUALLY_CHECKED_SOURCE_CARD",
+      "videoSourceFrameTimeSec": 160.0,
+      "observationBasis": "Single cell 1x1 gold border",
+      "localCropPath": "assets/items/ground_truth_reference_144037/ref_144037_21.png",
+      "catalogId": "visual-9607b248bbf4",
+      "sourceScreenshot": "assets/items/catalog_screenshots/1x1/{9138F8CF-782A-4086-937D-FAF3CD4E810B}.png",
+      "cardBbox": [
+        767,
+        268,
+        383,
+        269
+      ],
+      "bbox": [
+        767,
+        268,
+        383,
+        269
+      ],
+      "sourceScreenshotSha256": "e843bdbfe7adb53ec5e8c73f13692e10c075548aa615932535b5bd50df19eda2",
+      "officialValue": 9040,
+      "sourceCardKey": "assets/items/catalog_screenshots/1x1/{9138F8CF-782A-4086-937D-FAF3CD4E810B}.png:767,268,383,269",
+      "independentVerificationBasis": "Independently cross-verified against official catalog screenshot card 'assets/items/catalog_screenshots/1x1/{9138F8CF-782A-4086-937D-FAF3CD4E810B}.png:767,268,383,269'. Visual icon, title '猫丸秘制豚骨拉面', shape '1x1', and quality 'gold' match video frame at t=160.0s."
+    },
+    {
+      "referenceId": "ref_144037_22",
+      "gridBoundingBox": {
+        "row": 5,
+        "col": 8,
+        "width": 2,
+        "height": 3,
+        "shape": "2x3"
+      },
+      "pixelBboxOnCanvas": [
+        600,
+        375,
+        750,
+        600
+      ],
+      "quality": "grey",
+      "visualDescription": "灰色品质 2x3 纵向矩形单元",
+      "canonicalName": "方盒随身听",
+      "identityStatus": "VISUALLY_CHECKED_SOURCE_CARD",
+      "videoSourceFrameTimeSec": 160.0,
+      "observationBasis": "2x3 grey border unit",
+      "localCropPath": "assets/items/ground_truth_reference_144037/ref_144037_22.png",
+      "catalogId": "image1-0-0",
+      "sourceScreenshot": "assets/items/catalog_screenshots/2X3/{E2B97A18-0919-4B0C-9C04-6D8C2BF9F692}.png",
+      "cardBbox": [
+        0,
+        277,
+        381,
+        255
+      ],
+      "bbox": [
+        0,
+        277,
+        381,
+        255
+      ],
+      "sourceScreenshotSha256": "8db9eab490ec8ace9a753b78d232ee8c861e6461f492232f7920d154215ae8dc",
+      "officialValue": 611,
+      "sourceCardKey": "assets/items/catalog_screenshots/2X3/{E2B97A18-0919-4B0C-9C04-6D8C2BF9F692}.png:0,277,381,255",
+      "independentVerificationBasis": "Independently cross-verified against official catalog screenshot card 'assets/items/catalog_screenshots/2X3/{E2B97A18-0919-4B0C-9C04-6D8C2BF9F692}.png:0,277,381,255'. Visual icon, title '方盒随身听', shape '2x3', and quality 'grey' match video frame at t=160.0s."
+    },
+    {
+      "referenceId": "ref_144037_23",
+      "gridBoundingBox": {
+        "row": 6,
+        "col": 0,
+        "width": 4,
+        "height": 4,
+        "shape": "4x4"
+      },
+      "pixelBboxOnCanvas": [
+        0,
+        450,
+        300,
+        750
+      ],
+      "quality": "green",
+      "visualDescription": "绿色品质 4x4 大型方形单元",
+      "canonicalName": "M1000模型",
+      "identityStatus": "VISUALLY_CHECKED_SOURCE_CARD",
+      "videoSourceFrameTimeSec": 160.0,
+      "observationBasis": "Large 4x4 green border occupying cols 0-3, rows 6-9",
+      "localCropPath": "assets/items/ground_truth_reference_144037/ref_144037_23.png",
+      "catalogId": "image5-0-0",
+      "sourceScreenshot": "assets/items/catalog_screenshots/4X4/{A56C0E29-265B-49E6-9060-91691585BA0A}.png",
+      "cardBbox": [
+        404,
+        296,
+        366,
+        242
+      ],
+      "bbox": [
+        404,
+        296,
+        366,
+        242
+      ],
+      "sourceScreenshotSha256": "b04bbe3eaa0b6dcc67dfeff775773d129defe12dfb436b91fa3445e8c8cc4103",
+      "officialValue": 4081,
+      "sourceCardKey": "assets/items/catalog_screenshots/4X4/{A56C0E29-265B-49E6-9060-91691585BA0A}.png:404,296,366,242",
+      "independentVerificationBasis": "Independently cross-verified against official catalog screenshot card 'assets/items/catalog_screenshots/4X4/{A56C0E29-265B-49E6-9060-91691585BA0A}.png:404,296,366,242'. Visual icon, title 'M1000模型', shape '4x4', and quality 'green' match video frame at t=160.0s."
+    },
+    {
+      "referenceId": "ref_144037_24",
+      "gridBoundingBox": {
+        "row": 6,
+        "col": 6,
+        "width": 1,
+        "height": 1,
+        "shape": "1x1"
+      },
+      "pixelBboxOnCanvas": [
+        450,
+        450,
+        525,
+        525
+      ],
+      "quality": "purple",
+      "visualDescription": "紫色品质 1x1 单格单元",
+      "canonicalName": "幽灵态",
+      "identityStatus": "VISUALLY_CHECKED_SOURCE_CARD",
+      "videoSourceFrameTimeSec": 160.0,
+      "observationBasis": "Single cell 1x1 purple border",
+      "localCropPath": "assets/items/ground_truth_reference_144037/ref_144037_24.png",
+      "catalogId": "image23-1-1",
+      "sourceScreenshot": "assets/items/catalog_screenshots/1x1/{16B07C02-E13A-4195-8F67-C8A4041C7B87}.png",
+      "cardBbox": [
+        15,
+        290,
+        366,
+        236
+      ],
+      "bbox": [
+        15,
+        290,
+        366,
+        236
+      ],
+      "sourceScreenshotSha256": "9f98e96a63192b44e90e4c530f754d268605fe8283da2b013cde608ac615ccc4",
+      "officialValue": 2040,
+      "sourceCardKey": "assets/items/catalog_screenshots/1x1/{16B07C02-E13A-4195-8F67-C8A4041C7B87}.png:15,290,366,236",
+      "independentVerificationBasis": "Independently cross-verified against official catalog screenshot card 'assets/items/catalog_screenshots/1x1/{16B07C02-E13A-4195-8F67-C8A4041C7B87}.png:15,290,366,236'. Visual icon, title '幽灵态', shape '1x1', and quality 'purple' match video frame at t=160.0s."
+    },
+    {
+      "referenceId": "ref_144037_25",
+      "gridBoundingBox": {
+        "row": 6,
+        "col": 7,
+        "width": 1,
+        "height": 2,
+        "shape": "1x2"
+      },
+      "pixelBboxOnCanvas": [
+        525,
+        450,
+        600,
+        600
+      ],
+      "quality": "gold",
+      "visualDescription": "金色品质 1x2 纵向双格单元",
+      "canonicalName": "「方盒科技」智能手表",
+      "identityStatus": "VISUALLY_CHECKED_SOURCE_CARD",
+      "videoSourceFrameTimeSec": 160.0,
+      "observationBasis": "Vertical 1x2 gold border unit",
+      "localCropPath": "assets/items/ground_truth_reference_144037/ref_144037_25.png",
+      "catalogId": "image31-1-2",
+      "sourceScreenshot": "assets/items/catalog_screenshots/1X2/{343D8F72-4689-4286-AFFD-80CEC2496DC7}.png",
+      "cardBbox": [
+        770,
+        278,
+        366,
+        236
+      ],
+      "bbox": [
+        770,
+        278,
+        366,
+        236
+      ],
+      "sourceScreenshotSha256": "f15baceac87e3e0ff496040f2184991f71a94eeb4b7818efeb8654255646db29",
+      "officialValue": 7500,
+      "sourceCardKey": "assets/items/catalog_screenshots/1X2/{343D8F72-4689-4286-AFFD-80CEC2496DC7}.png:770,278,366,236",
+      "independentVerificationBasis": "Independently cross-verified against official catalog screenshot card 'assets/items/catalog_screenshots/1X2/{343D8F72-4689-4286-AFFD-80CEC2496DC7}.png:770,278,366,236'. Visual icon, title '「方盒科技」智能手表', shape '1x2', and quality 'gold' match video frame at t=160.0s."
+    },
+    {
+      "referenceId": "ref_144037_26",
+      "gridBoundingBox": {
+        "row": 7,
+        "col": 4,
+        "width": 2,
+        "height": 1,
+        "shape": "2x1"
+      },
+      "pixelBboxOnCanvas": [
+        300,
+        525,
+        450,
+        600
+      ],
+      "quality": "gold",
+      "visualDescription": "金色品质 2x1 横向双格单元",
+      "canonicalName": "巡哨-干练精英",
+      "identityStatus": "VISUALLY_CHECKED_SOURCE_CARD",
+      "videoSourceFrameTimeSec": 162.0,
+      "observationBasis": "Horizontal 2x1 gold border",
+      "localCropPath": "assets/items/ground_truth_reference_144037/ref_144037_26.png",
+      "catalogId": "visual-922c073c366d",
+      "sourceScreenshot": "assets/items/catalog_screenshots/2X1/{C3E32ADB-9348-4FE5-B70F-C7B9F66B659A}.png",
+      "cardBbox": [
+        774,
+        272,
+        387,
+        273
+      ],
+      "bbox": [
+        774,
+        272,
+        387,
+        273
+      ],
+      "sourceScreenshotSha256": "ebe363d313d37deae24e1d9c372128d06fe2d9344e705412e891c291612cd4fc",
+      "officialValue": 37558,
+      "sourceCardKey": "assets/items/catalog_screenshots/2X1/{C3E32ADB-9348-4FE5-B70F-C7B9F66B659A}.png:774,272,387,273",
+      "independentVerificationBasis": "Independently cross-verified against official catalog screenshot card 'assets/items/catalog_screenshots/2X1/{C3E32ADB-9348-4FE5-B70F-C7B9F66B659A}.png:774,272,387,273'. Visual icon, title '巡哨-干练精英', shape '2x1', and quality 'gold' match video frame at t=162.0s."
+    },
+    {
+      "referenceId": "ref_144037_27",
+      "gridBoundingBox": {
+        "row": 7,
+        "col": 6,
+        "width": 1,
+        "height": 1,
+        "shape": "1x1"
+      },
+      "pixelBboxOnCanvas": [
+        450,
+        525,
+        525,
+        600
+      ],
+      "quality": "blue",
+      "visualDescription": "蓝色品质 1x1 单格单元",
+      "canonicalName": "（未来的）大师飞镖",
+      "identityStatus": "VISUALLY_CHECKED_SOURCE_CARD",
+      "videoSourceFrameTimeSec": 162.0,
+      "observationBasis": "Single cell 1x1 blue border",
+      "localCropPath": "assets/items/ground_truth_reference_144037/ref_144037_27.png",
+      "catalogId": "image16-0-0",
+      "sourceScreenshot": "assets/items/catalog_screenshots/1x1/{92DEEC27-CED4-4688-95EC-5A01A337AF9D}.png",
+      "cardBbox": [
+        787,
+        0,
+        394,
+        266
+      ],
+      "bbox": [
+        787,
+        0,
+        394,
+        266
+      ],
+      "sourceScreenshotSha256": "5846d029ee2213c1f19321b6baac89c770ec6cd5ba731efd34a961b403b40fad",
+      "officialValue": 996,
+      "sourceCardKey": "assets/items/catalog_screenshots/1x1/{92DEEC27-CED4-4688-95EC-5A01A337AF9D}.png:787,0,394,266",
+      "independentVerificationBasis": "Independently cross-verified against official catalog screenshot card 'assets/items/catalog_screenshots/1x1/{92DEEC27-CED4-4688-95EC-5A01A337AF9D}.png:787,0,394,266'. Visual icon, title '（未来的）大师飞镖', shape '1x1', and quality 'blue' match video frame at t=162.0s."
+    },
+    {
+      "referenceId": "ref_144037_28",
+      "gridBoundingBox": {
+        "row": 8,
+        "col": 4,
+        "width": 5,
+        "height": 5,
+        "shape": "5x5"
+      },
+      "pixelBboxOnCanvas": [
+        300,
+        600,
+        675,
+        975
+      ],
+      "quality": "red",
+      "visualDescription": "红色品质 5x5 巨型方形单元",
+      "canonicalName": "储钱小哼",
+      "identityStatus": "VISUALLY_CHECKED_SOURCE_CARD",
+      "videoSourceFrameTimeSec": 164.0,
+      "observationBasis": "Massive 5x5 red border unit spanning cols 4-8, rows 8-12",
+      "localCropPath": "assets/items/ground_truth_reference_144037/ref_144037_28.png",
+      "catalogId": "visual-xiaoheng-5x5",
+      "sourceScreenshot": "assets/items/catalog_screenshots/5X5/{5325ABB2-6E85-4169-9C65-98431204CBEE}.png",
+      "cardBbox": [
+        385,
+        0,
+        384,
+        272
+      ],
+      "bbox": [
+        385,
+        0,
+        384,
+        272
+      ],
+      "sourceScreenshotSha256": "c066799191fac88616ba303923355cdf0bb1a3974e57bcb4623434126232d680",
+      "officialValue": 500001,
+      "sourceCardKey": "assets/items/catalog_screenshots/5X5/{5325ABB2-6E85-4169-9C65-98431204CBEE}.png:385,0,384,272",
+      "independentVerificationBasis": "Independently cross-verified against official catalog screenshot card 'assets/items/catalog_screenshots/5X5/{5325ABB2-6E85-4169-9C65-98431204CBEE}.png:385,0,384,272'. Visual icon, title '储钱小哼', shape '5x5', and quality 'red' match video frame at t=164.0s."
+    },
+    {
+      "referenceId": "ref_144037_29",
+      "gridBoundingBox": {
+        "row": 8,
+        "col": 9,
+        "width": 1,
+        "height": 3,
+        "shape": "1x3"
+      },
+      "pixelBboxOnCanvas": [
+        675,
+        600,
+        750,
+        825
+      ],
+      "quality": "blue",
+      "visualDescription": "蓝色品质 1x3 纵向条形单元",
+      "canonicalName": "灯塔",
+      "identityStatus": "VISUALLY_CHECKED_SOURCE_CARD",
+      "videoSourceFrameTimeSec": 164.0,
+      "observationBasis": "Vertical 1x3 blue border unit spanning col 9, rows 8-10",
+      "localCropPath": "assets/items/ground_truth_reference_144037/ref_144037_29.png",
+      "catalogId": "image11-0-0",
+      "sourceScreenshot": "assets/items/catalog_screenshots/1X3/{4B4BA98A-9DF4-4399-8B1B-754510B27C7A}.png",
+      "cardBbox": [
+        774,
+        0,
+        387,
+        259
+      ],
+      "bbox": [
+        774,
+        0,
+        387,
+        259
+      ],
+      "sourceScreenshotSha256": "b76f26da9abcbb2f7cb3cb040bc0de2eb2b9cf6f2a053eae678203cf93295885",
+      "officialValue": 4034,
+      "sourceCardKey": "assets/items/catalog_screenshots/1X3/{4B4BA98A-9DF4-4399-8B1B-754510B27C7A}.png:774,0,387,259",
+      "independentVerificationBasis": "Independently cross-verified against official catalog screenshot card 'assets/items/catalog_screenshots/1X3/{4B4BA98A-9DF4-4399-8B1B-754510B27C7A}.png:774,0,387,259'. Visual icon, title '灯塔', shape '1x3', and quality 'blue' match video frame at t=164.0s."
+    },
+    {
+      "referenceId": "ref_144037_30",
+      "gridBoundingBox": {
+        "row": 10,
+        "col": 0,
+        "width": 4,
+        "height": 3,
+        "shape": "4x3"
+      },
+      "pixelBboxOnCanvas": [
+        0,
+        750,
+        300,
+        975
+      ],
+      "quality": "gold",
+      "visualDescription": "金色品质 4x3 横向矩形单元",
+      "canonicalName": "罐装随心泥",
+      "identityStatus": "VISUALLY_CHECKED_SOURCE_CARD",
+      "videoSourceFrameTimeSec": 164.0,
+      "observationBasis": "Wide 4x3 gold border unit spanning cols 0-3, rows 10-12",
+      "localCropPath": "assets/items/ground_truth_reference_144037/ref_144037_30.png",
+      "catalogId": "image26-0-2",
+      "sourceScreenshot": "assets/items/catalog_screenshots/4X3/{3B7415AC-3F8D-4DEE-B5F6-C48D50626046}.png",
+      "cardBbox": [
+        0,
+        0,
+        390,
+        262
+      ],
+      "bbox": [
+        0,
+        0,
+        390,
+        262
+      ],
+      "sourceScreenshotSha256": "b010fadbdf849fe0d585d2f7120495efd92ab2a2ba63f7b8a2116127fbc7c67e",
+      "officialValue": 124816,
+      "sourceCardKey": "assets/items/catalog_screenshots/4X3/{3B7415AC-3F8D-4DEE-B5F6-C48D50626046}.png:0,0,390,262",
+      "independentVerificationBasis": "Independently cross-verified against official catalog screenshot card 'assets/items/catalog_screenshots/4X3/{3B7415AC-3F8D-4DEE-B5F6-C48D50626046}.png:0,0,390,262'. Visual icon, title '罐装随心泥', shape '4x3', and quality 'gold' match video frame at t=164.0s."
+    },
+    {
+      "referenceId": "ref_144037_31",
+      "gridBoundingBox": {
+        "row": 11,
+        "col": 9,
+        "width": 1,
+        "height": 5,
+        "shape": "1x5"
+      },
+      "pixelBboxOnCanvas": [
+        675,
+        825,
+        750,
+        1200
+      ],
+      "quality": "gold",
+      "visualDescription": "金色品质 1x5 纵向长条单元",
+      "canonicalName": "「强身好伙伴！」",
+      "identityStatus": "VISUALLY_CHECKED_SOURCE_CARD",
+      "videoSourceFrameTimeSec": 166.0,
+      "observationBasis": "Vertical 1x5 gold border unit spanning col 9, rows 11-15",
+      "localCropPath": "assets/items/ground_truth_reference_144037/ref_144037_31.png",
+      "catalogId": "image27-1-2",
+      "sourceScreenshot": "assets/items/catalog_screenshots/1X5/{DE334641-DA72-4330-9D2A-0D11AE3A8AB4}.png",
+      "cardBbox": [
+        0,
+        0,
+        409,
+        309
+      ],
+      "bbox": [
+        0,
+        0,
+        409,
+        309
+      ],
+      "sourceScreenshotSha256": "ef04a250e0ace23d7939abb74ecf657060936d423d93d9e0079c0479f31d5a59",
+      "officialValue": 27246,
+      "sourceCardKey": "assets/items/catalog_screenshots/1X5/{DE334641-DA72-4330-9D2A-0D11AE3A8AB4}.png:0,0,409,309",
+      "independentVerificationBasis": "Independently cross-verified against official catalog screenshot card 'assets/items/catalog_screenshots/1X5/{DE334641-DA72-4330-9D2A-0D11AE3A8AB4}.png:0,0,409,309'. Visual icon, title '「强身好伙伴！」', shape '1x5', and quality 'gold' match video frame at t=166.0s."
+    },
+    {
+      "referenceId": "ref_144037_32",
+      "gridBoundingBox": {
+        "row": 13,
+        "col": 0,
+        "width": 4,
+        "height": 1,
+        "shape": "4x1"
+      },
+      "pixelBboxOnCanvas": [
+        0,
+        975,
+        300,
+        1050
+      ],
+      "quality": "gold",
+      "visualDescription": "金色品质 4x1 横向长条单元",
+      "canonicalName": "琉璃尾",
+      "identityStatus": "VISUALLY_CHECKED_SOURCE_CARD",
+      "videoSourceFrameTimeSec": 166.0,
+      "observationBasis": "Long horizontal 4x1 gold border spanning cols 0-3, row 13",
+      "localCropPath": "assets/items/ground_truth_reference_144037/ref_144037_32.png",
+      "catalogId": "visual-liuliwei-4x1",
+      "sourceScreenshot": "assets/items/catalog_screenshots/4X1/{7DB91AEB-261E-41F0-831D-424EEDA94025}.png",
+      "cardBbox": [
+        404,
+        36,
+        366,
+        236
+      ],
+      "bbox": [
+        404,
+        36,
+        366,
+        236
+      ],
+      "sourceScreenshotSha256": "49e4872e3aafe2727692b89e5efef2e0b6ef10e915d84fb44d52819f22a4ebbe",
+      "officialValue": 101403,
+      "sourceCardKey": "assets/items/catalog_screenshots/4X1/{7DB91AEB-261E-41F0-831D-424EEDA94025}.png:404,36,366,236",
+      "independentVerificationBasis": "Independently cross-verified against official catalog screenshot card 'assets/items/catalog_screenshots/4X1/{7DB91AEB-261E-41F0-831D-424EEDA94025}.png:404,36,366,236'. Visual icon, title '琉璃尾', shape '4x1', and quality 'gold' match video frame at t=166.0s."
+    },
+    {
+      "referenceId": "ref_144037_33",
+      "gridBoundingBox": {
+        "row": 13,
+        "col": 4,
+        "width": 2,
+        "height": 2,
+        "shape": "2x2"
+      },
+      "pixelBboxOnCanvas": [
+        300,
+        975,
+        450,
+        1125
+      ],
+      "quality": "blue",
+      "visualDescription": "蓝色品质 2x2 方形单元",
+      "canonicalName": "番茄百分百果冻",
+      "identityStatus": "VISUALLY_CHECKED_SOURCE_CARD",
+      "videoSourceFrameTimeSec": 166.0,
+      "observationBasis": "2x2 blue border spanning cols 4-5, rows 13-14",
+      "localCropPath": "assets/items/ground_truth_reference_144037/ref_144037_33.png",
+      "catalogId": "image12-1-1",
+      "sourceScreenshot": "assets/items/catalog_screenshots/2X2/{DFB6F983-7A0D-41C6-AB47-6C150B5F7770}.png",
+      "cardBbox": [
+        0,
+        259,
+        387,
+        259
+      ],
+      "bbox": [
+        0,
+        259,
+        387,
+        259
+      ],
+      "sourceScreenshotSha256": "c06571615098094064711d59881537eca676fc07420d0153c1f787afcb77ea69",
+      "officialValue": 3185,
+      "sourceCardKey": "assets/items/catalog_screenshots/2X2/{DFB6F983-7A0D-41C6-AB47-6C150B5F7770}.png:0,259,387,259",
+      "independentVerificationBasis": "Independently cross-verified against official catalog screenshot card 'assets/items/catalog_screenshots/2X2/{DFB6F983-7A0D-41C6-AB47-6C150B5F7770}.png:0,259,387,259'. Visual icon, title '番茄百分百果冻', shape '2x2', and quality 'blue' match video frame at t=166.0s."
+    },
+    {
+      "referenceId": "ref_144037_34",
+      "gridBoundingBox": {
+        "row": 13,
+        "col": 6,
+        "width": 3,
+        "height": 2,
+        "shape": "3x2"
+      },
+      "pixelBboxOnCanvas": [
+        450,
+        975,
+        675,
+        1125
+      ],
+      "quality": "blue",
+      "visualDescription": "蓝色品质 3x2 横向矩形单元",
+      "canonicalName": "引航者望远镜",
+      "identityStatus": "VISUALLY_CHECKED_SOURCE_CARD",
+      "videoSourceFrameTimeSec": 166.0,
+      "observationBasis": "3x2 blue border spanning cols 6-8, rows 13-14",
+      "localCropPath": "assets/items/ground_truth_reference_144037/ref_144037_34.png",
+      "catalogId": "image10-1-2",
+      "sourceScreenshot": "assets/items/catalog_screenshots/3X2/{1C65BF0E-A101-4042-A9D7-9653D84BCAD1}.png",
+      "cardBbox": [
+        779,
+        0,
+        382,
+        272
+      ],
+      "bbox": [
+        779,
+        0,
+        382,
+        272
+      ],
+      "sourceScreenshotSha256": "8a7797b78d26fb9c92308b04d8b504e4abf8ae6957f67907bc6da31cabfd9897",
+      "officialValue": 4840,
+      "sourceCardKey": "assets/items/catalog_screenshots/3X2/{1C65BF0E-A101-4042-A9D7-9653D84BCAD1}.png:779,0,382,272",
+      "independentVerificationBasis": "Independently cross-verified against official catalog screenshot card 'assets/items/catalog_screenshots/3X2/{1C65BF0E-A101-4042-A9D7-9653D84BCAD1}.png:779,0,382,272'. Visual icon, title '引航者望远镜', shape '3x2', and quality 'blue' match video frame at t=166.0s."
+    },
+    {
+      "referenceId": "ref_144037_35",
+      "gridBoundingBox": {
+        "row": 14,
+        "col": 0,
+        "width": 2,
+        "height": 2,
+        "shape": "2x2"
+      },
+      "pixelBboxOnCanvas": [
+        0,
+        1050,
+        150,
+        1200
+      ],
+      "quality": "grey",
+      "visualDescription": "灰色品质 2x2 方形单元",
+      "canonicalName": "蟑螂！蟑螂！",
+      "identityStatus": "VISUALLY_CHECKED_SOURCE_CARD",
+      "videoSourceFrameTimeSec": 168.0,
+      "observationBasis": "2x2 grey border unit spanning cols 0-1, rows 14-15",
+      "localCropPath": "assets/items/ground_truth_reference_144037/ref_144037_35.png",
+      "catalogId": "image1-1-0",
+      "sourceScreenshot": "assets/items/catalog_screenshots/2X2/{DDEC982D-9536-4205-837F-B1BF79E86325}.png",
+      "cardBbox": [
+        396,
+        0,
+        386,
+        277
+      ],
+      "bbox": [
+        396,
+        0,
+        386,
+        277
+      ],
+      "sourceScreenshotSha256": "8f1a2a1d7add0febd9fa2658e81e6ffa4dd2409876e3044e40efb09fc33ba4a6",
+      "officialValue": 278,
+      "sourceCardKey": "assets/items/catalog_screenshots/2X2/{DDEC982D-9536-4205-837F-B1BF79E86325}.png:396,0,386,277",
+      "independentVerificationBasis": "Independently cross-verified against official catalog screenshot card 'assets/items/catalog_screenshots/2X2/{DDEC982D-9536-4205-837F-B1BF79E86325}.png:396,0,386,277'. Visual icon, title '蟑螂！蟑螂！', shape '2x2', and quality 'grey' match video frame at t=168.0s."
+    },
+    {
+      "referenceId": "ref_144037_36",
+      "gridBoundingBox": {
+        "row": 14,
+        "col": 2,
+        "width": 2,
+        "height": 1,
+        "shape": "2x1"
+      },
+      "pixelBboxOnCanvas": [
+        150,
+        1050,
+        300,
+        1125
+      ],
+      "quality": "blue",
+      "visualDescription": "蓝色品质 2x1 横向双格单元",
+      "canonicalName": "断落的剑格",
+      "identityStatus": "VISUALLY_CHECKED_SOURCE_CARD",
+      "videoSourceFrameTimeSec": 168.0,
+      "observationBasis": "Horizontal 2x1 blue border spanning cols 2-3, row 14",
+      "localCropPath": "assets/items/ground_truth_reference_144037/ref_144037_36.png",
+      "catalogId": "image13-1-0",
+      "sourceScreenshot": "assets/items/catalog_screenshots/2X1/{4C68408B-B5A3-46E8-8049-C0B8065ADE60}.png",
+      "cardBbox": [
+        0,
+        266,
+        388,
+        265
+      ],
+      "bbox": [
+        0,
+        266,
+        388,
+        265
+      ],
+      "sourceScreenshotSha256": "e2a074bd0588230fcfba5467b094d2a27fc7f433b84672206ca4282753958fb3",
+      "officialValue": 2139,
+      "sourceCardKey": "assets/items/catalog_screenshots/2X1/{4C68408B-B5A3-46E8-8049-C0B8065ADE60}.png:0,266,388,265",
+      "independentVerificationBasis": "Independently cross-verified against official catalog screenshot card 'assets/items/catalog_screenshots/2X1/{4C68408B-B5A3-46E8-8049-C0B8065ADE60}.png:0,266,388,265'. Visual icon, title '断落的剑格', shape '2x1', and quality 'blue' match video frame at t=168.0s."
+    },
+    {
+      "referenceId": "ref_144037_37",
+      "gridBoundingBox": {
+        "row": 15,
+        "col": 2,
+        "width": 3,
+        "height": 3,
+        "shape": "3x3"
+      },
+      "pixelBboxOnCanvas": [
+        150,
+        1125,
+        375,
+        1350
+      ],
+      "quality": "red",
+      "visualDescription": "红色品质 3x3 方形复合单元",
+      "canonicalName": "吨吨锤",
+      "identityStatus": "VISUALLY_CHECKED_SOURCE_CARD",
+      "videoSourceFrameTimeSec": 168.0,
+      "observationBasis": "3x3 red border spanning cols 2-4, rows 15-17",
+      "localCropPath": "assets/items/ground_truth_reference_144037/ref_144037_37.png",
+      "catalogId": "visual-4cc72b207cb6",
+      "sourceScreenshot": "assets/items/catalog_screenshots/3X3/{AF7A8555-2180-49BC-9395-F0DD5444F0EE}.png",
+      "cardBbox": [
+        795,
+        0,
+        397,
+        276
+      ],
+      "bbox": [
+        795,
+        0,
+        397,
+        276
+      ],
+      "sourceScreenshotSha256": "52c13ad0ec367c44ca512749fe03cfb1106c7f9c814a468d588249c1235dbdaf",
+      "officialValue": 100000,
+      "sourceCardKey": "assets/items/catalog_screenshots/3X3/{AF7A8555-2180-49BC-9395-F0DD5444F0EE}.png:795,0,397,276",
+      "independentVerificationBasis": "Independently cross-verified against official catalog screenshot card 'assets/items/catalog_screenshots/3X3/{AF7A8555-2180-49BC-9395-F0DD5444F0EE}.png:795,0,397,276'. Visual icon, title '吨吨锤', shape '3x3', and quality 'red' match video frame at t=168.0s."
+    },
+    {
+      "referenceId": "ref_144037_38",
+      "gridBoundingBox": {
+        "row": 15,
+        "col": 5,
+        "width": 2,
+        "height": 2,
+        "shape": "2x2"
+      },
+      "pixelBboxOnCanvas": [
+        375,
+        1125,
+        525,
+        1275
+      ],
+      "quality": "green",
+      "visualDescription": "绿色品质 2x2 方形单元",
+      "canonicalName": "「莲-C198」唱片机",
+      "identityStatus": "VISUALLY_CHECKED_SOURCE_CARD",
+      "videoSourceFrameTimeSec": 168.0,
+      "observationBasis": "2x2 green border spanning cols 5-6, rows 15-16",
+      "localCropPath": "assets/items/ground_truth_reference_144037/ref_144037_38.png",
+      "catalogId": "image5-1-1",
+      "sourceScreenshot": "assets/items/catalog_screenshots/2X2/{DFB6F983-7A0D-41C6-AB47-6C150B5F7770}.png",
+      "cardBbox": [
+        387,
+        259,
+        387,
+        259
+      ],
+      "bbox": [
+        387,
+        259,
+        387,
+        259
+      ],
+      "sourceScreenshotSha256": "c06571615098094064711d59881537eca676fc07420d0153c1f787afcb77ea69",
+      "officialValue": 1624,
+      "sourceCardKey": "assets/items/catalog_screenshots/2X2/{DFB6F983-7A0D-41C6-AB47-6C150B5F7770}.png:387,259,387,259",
+      "independentVerificationBasis": "Independently cross-verified against official catalog screenshot card 'assets/items/catalog_screenshots/2X2/{DFB6F983-7A0D-41C6-AB47-6C150B5F7770}.png:387,259,387,259'. Visual icon, title '「莲-C198」唱片机', shape '2x2', and quality 'green' match video frame at t=168.0s."
+    },
+    {
+      "referenceId": "ref_144037_39",
+      "gridBoundingBox": {
+        "row": 15,
+        "col": 7,
+        "width": 2,
+        "height": 1,
+        "shape": "2x1"
+      },
+      "pixelBboxOnCanvas": [
+        525,
+        1125,
+        675,
+        1200
+      ],
+      "quality": "blue",
+      "visualDescription": "蓝色品质 2x1 横向双格单元",
+      "canonicalName": "清凉凉止痛药",
+      "identityStatus": "VISUALLY_CHECKED_SOURCE_CARD",
+      "videoSourceFrameTimeSec": 168.0,
+      "observationBasis": "Horizontal 2x1 blue border ticket card spanning cols 7-8, row 15",
+      "localCropPath": "assets/items/ground_truth_reference_144037/ref_144037_39.png",
+      "catalogId": "image14-0-0",
+      "sourceScreenshot": "assets/items/catalog_screenshots/2X1/{E065324C-AC60-41CF-B56A-8043A3B76C53}.png",
+      "cardBbox": [
+        10,
+        20,
+        366,
+        236
+      ],
+      "bbox": [
+        10,
+        20,
+        366,
+        236
+      ],
+      "sourceScreenshotSha256": "cf0981c366d1f48083a3c7f2acd476edbd941eca32a1c1ab587224d2d26148e5",
+      "officialValue": 1815,
+      "sourceCardKey": "assets/items/catalog_screenshots/2X1/{E065324C-AC60-41CF-B56A-8043A3B76C53}.png:10,20,366,236",
+      "independentVerificationBasis": "Independently cross-verified against official catalog screenshot card 'assets/items/catalog_screenshots/2X1/{E065324C-AC60-41CF-B56A-8043A3B76C53}.png:10,20,366,236'. Visual icon, title '清凉凉止痛药', shape '2x1', and quality 'blue' match video frame at t=168.0s."
+    }
+  ]
+}
