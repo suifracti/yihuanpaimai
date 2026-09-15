@@ -1,0 +1,101 @@
+{
+  "startedPid": 41796,
+  "windows": [
+    {
+      "hwnd": 9316544,
+      "title": "⚡ 异环拍卖战术助手 HUD",
+      "cls": "WindowsForms10.Window.8.app.0.aec740_r21_ad1",
+      "visible": true,
+      "iconic": false,
+      "rect": [
+        1000,
+        681,
+        1560,
+        759,
+        560,
+        78
+      ],
+      "style": "0x16010000",
+      "exStyle": "0x50008",
+      "exFlags": {
+        "WS_EX_TOPMOST": true,
+        "WS_EX_TRANSPARENT": false,
+        "WS_EX_TOOLWINDOW": false,
+        "WS_EX_APPWINDOW": true,
+        "WS_EX_LAYERED": false,
+        "WS_EX_NOACTIVATE": false
+      },
+      "owner": 0,
+      "ownerTitle": "",
+      "parent": 0,
+      "foreground": 9316544,
+      "isForeground": true,
+      "dpi": 96,
+      "monitor": 65537
+    },
+    {
+      "hwnd": 132918,
+      "title": "异环启动器",
+      "cls": "Qt51517QWindowOwnDC",
+      "visible": true,
+      "iconic": false,
+      "rect": [
+        640,
+        373,
+        1920,
+        1093,
+        1280,
+        720
+      ],
+      "style": "0x96c20000",
+      "exStyle": "0x100",
+      "exFlags": {
+        "WS_EX_TOPMOST": false,
+        "WS_EX_TRANSPARENT": false,
+        "WS_EX_TOOLWINDOW": false,
+        "WS_EX_APPWINDOW": false,
+        "WS_EX_LAYERED": false,
+        "WS_EX_NOACTIVATE": false
+      },
+      "owner": 0,
+      "ownerTitle": "",
+      "parent": 0,
+      "foreground": 9316544,
+      "isForeground": false,
+      "dpi": 96,
+      "monitor": 65537
+    },
+    {
+      "hwnd": 148440540,
+      "title": "异环拍卖助手 Overlay Alpha",
+      "cls": "Chrome_WidgetWin_1",
+      "visible": true,
+      "iconic": false,
+      "rect": [
+        1000,
+        681,
+        1560,
+        759,
+        560,
+        78
+      ],
+      "style": "0x96000000",
+      "exStyle": "0x8280080",
+      "exFlags": {
+        "WS_EX_TOPMOST": false,
+        "WS_EX_TRANSPARENT": false,
+        "WS_EX_TOOLWINDOW": true,
+        "WS_EX_APPWINDOW": false,
+        "WS_EX_LAYERED": true,
+        "WS_EX_NOACTIVATE": true
+      },
+      "owner": 0,
+      "ownerTitle": "",
+      "parent": 0,
+      "foreground": 9316544,
+      "isForeground": false,
+      "dpi": 96,
+      "monitor": 65537
+    }
+  ]
+}

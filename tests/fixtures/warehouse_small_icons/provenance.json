@@ -1,0 +1,333 @@
+{
+  "video": "D:/video/2026-09-08 13-44-36.mkv",
+  "recordStableKey": "video_audit_20260908_134436_match2",
+  "gameBbox": [
+    105,
+    150,
+    1545,
+    960
+  ],
+  "sampleTimesSec": [
+    550,
+    550.5,
+    551
+  ],
+  "reference": "assets/items/video_ground_truth_reference_134436_match2_visible.json",
+  "frames": [
+    {
+      "file": "image22-1-1-0.png",
+      "sha256": "3f9dfc73a4703a1ee20b0304b7dd352341b9a5903e17cb3924ba4b37bc5f3e70",
+      "sourceSha256": "e83a070bb08f1974aa28e3b478af6e6084391810eafcabbec5d0d12b904059ad",
+      "bbox": [
+        987.0,
+        328.0,
+        1029.0,
+        412.0
+      ],
+      "widthCells": 1,
+      "heightCells": 2,
+      "catalogId": "image22-1-1",
+      "name": "结的艺术"
+    },
+    {
+      "file": "image22-1-1-1.png",
+      "sha256": "2754273735835c7c1344525a8148c8fa2c849d43350b067dbcb13d1cd333f445",
+      "sourceSha256": "176cfef978c9584945a188a9f3fb5b5149629353670d4bcb882dced380c00f72",
+      "bbox": [
+        987.0,
+        328.0,
+        1029.0,
+        412.0
+      ],
+      "widthCells": 1,
+      "heightCells": 2,
+      "catalogId": "image22-1-1",
+      "name": "结的艺术"
+    },
+    {
+      "file": "image22-1-1-2.png",
+      "sha256": "fd36308a2bd688a9c5a452691c7bb11120249c61b19167b793daecdecd5cfadc",
+      "sourceSha256": "11a06aa02bb82a29a9981282a8e67f3ffcb1481f58e6cafa42c21a0e1dfb5074",
+      "bbox": [
+        987.0,
+        328.0,
+        1029.0,
+        412.0
+      ],
+      "widthCells": 1,
+      "heightCells": 2,
+      "catalogId": "image22-1-1",
+      "name": "结的艺术"
+    },
+    {
+      "file": "image2-0-0-0.png",
+      "sha256": "4b4baf7623c689caa4001998a69e63b8c37a9fc0a9686c38f7e51edada0ff3c0",
+      "sourceSha256": "e83a070bb08f1974aa28e3b478af6e6084391810eafcabbec5d0d12b904059ad",
+      "bbox": [
+        1365.0,
+        202.0,
+        1407.0,
+        286.0
+      ],
+      "widthCells": 1,
+      "heightCells": 2,
+      "catalogId": "image2-0-0",
+      "name": "艺术画「解构」"
+    },
+    {
+      "file": "image2-0-0-1.png",
+      "sha256": "31143b24063e573d3ff5012eb28d66085c8eb4d5a49600643258672fdbb15d04",
+      "sourceSha256": "176cfef978c9584945a188a9f3fb5b5149629353670d4bcb882dced380c00f72",
+      "bbox": [
+        1365.0,
+        202.0,
+        1407.0,
+        286.0
+      ],
+      "widthCells": 1,
+      "heightCells": 2,
+      "catalogId": "image2-0-0",
+      "name": "艺术画「解构」"
+    },
+    {
+      "file": "image2-0-0-2.png",
+      "sha256": "bebbf844921a3121278d34297bbd742457c8505014347d83881f5ad47e94d7de",
+      "sourceSha256": "11a06aa02bb82a29a9981282a8e67f3ffcb1481f58e6cafa42c21a0e1dfb5074",
+      "bbox": [
+        1365.0,
+        202.0,
+        1407.0,
+        286.0
+      ],
+      "widthCells": 1,
+      "heightCells": 2,
+      "catalogId": "image2-0-0",
+      "name": "艺术画「解构」"
+    },
+    {
+      "file": "image22-1-2-0.png",
+      "sha256": "75c9c6dac17b59ea28e2f2fd247a2c88e284e859ef84adc22e10acac241cc923",
+      "sourceSha256": "e83a070bb08f1974aa28e3b478af6e6084391810eafcabbec5d0d12b904059ad",
+      "bbox": [
+        1155.0,
+        160.0,
+        1197.0,
+        244.0
+      ],
+      "widthCells": 1,
+      "heightCells": 2,
+      "catalogId": "image22-1-2",
+      "name": "环的冥思"
+    },
+    {
+      "file": "image22-1-2-1.png",
+      "sha256": "44e71f79f35509421a3550a19bad16804511f9f75cd19b8dc082fddcf1e5f937",
+      "sourceSha256": "176cfef978c9584945a188a9f3fb5b5149629353670d4bcb882dced380c00f72",
+      "bbox": [
+        1155.0,
+        160.0,
+        1197.0,
+        244.0
+      ],
+      "widthCells": 1,
+      "heightCells": 2,
+      "catalogId": "image22-1-2",
+      "name": "环的冥思"
+    },
+    {
+      "file": "image22-1-2-2.png",
+      "sha256": "77f98eee30454d11e028aec33d4b79f6f168eaa46b1046c26742086ff60eb91c",
+      "sourceSha256": "11a06aa02bb82a29a9981282a8e67f3ffcb1481f58e6cafa42c21a0e1dfb5074",
+      "bbox": [
+        1155.0,
+        160.0,
+        1197.0,
+        244.0
+      ],
+      "widthCells": 1,
+      "heightCells": 2,
+      "catalogId": "image22-1-2",
+      "name": "环的冥思"
+    },
+    {
+      "file": "image29-0-0-0.png",
+      "sha256": "37aaa4228c583b90d77df735b6dda1aadf2a73d43a412d4f9956fe4294dbe530",
+      "sourceSha256": "e83a070bb08f1974aa28e3b478af6e6084391810eafcabbec5d0d12b904059ad",
+      "bbox": [
+        1029.0,
+        328.0,
+        1155.0,
+        370.0
+      ],
+      "widthCells": 3,
+      "heightCells": 1,
+      "catalogId": "image29-0-0",
+      "name": "缠枝花纹筷"
+    },
+    {
+      "file": "image29-0-0-1.png",
+      "sha256": "15c6be50858193ed8a420797a07b414495372d48a85ecb61529248ef36781755",
+      "sourceSha256": "176cfef978c9584945a188a9f3fb5b5149629353670d4bcb882dced380c00f72",
+      "bbox": [
+        1029.0,
+        328.0,
+        1155.0,
+        370.0
+      ],
+      "widthCells": 3,
+      "heightCells": 1,
+      "catalogId": "image29-0-0",
+      "name": "缠枝花纹筷"
+    },
+    {
+      "file": "image29-0-0-2.png",
+      "sha256": "bc9f278674233725026045ba607c94314ecc29595ce804e909901eddfc087a00",
+      "sourceSha256": "11a06aa02bb82a29a9981282a8e67f3ffcb1481f58e6cafa42c21a0e1dfb5074",
+      "bbox": [
+        1029.0,
+        328.0,
+        1155.0,
+        370.0
+      ],
+      "widthCells": 3,
+      "heightCells": 1,
+      "catalogId": "image29-0-0",
+      "name": "缠枝花纹筷"
+    },
+    {
+      "file": "image6-1-0-0.png",
+      "sha256": "1b4f40d8156e88ebf927b3020ed0fee47c49750050661cd7dc9c75f64035d696",
+      "sourceSha256": "e83a070bb08f1974aa28e3b478af6e6084391810eafcabbec5d0d12b904059ad",
+      "bbox": [
+        1323.0,
+        160.0,
+        1407.0,
+        202.0
+      ],
+      "widthCells": 2,
+      "heightCells": 1,
+      "catalogId": "image6-1-0",
+      "name": "多彩暴龙"
+    },
+    {
+      "file": "image6-1-0-1.png",
+      "sha256": "824ef5f85208e4d4645ac6722aa45d0976cdca1002100ca4ed3b9285cfe127de",
+      "sourceSha256": "176cfef978c9584945a188a9f3fb5b5149629353670d4bcb882dced380c00f72",
+      "bbox": [
+        1323.0,
+        160.0,
+        1407.0,
+        202.0
+      ],
+      "widthCells": 2,
+      "heightCells": 1,
+      "catalogId": "image6-1-0",
+      "name": "多彩暴龙"
+    },
+    {
+      "file": "image6-1-0-2.png",
+      "sha256": "981900f08d977e16111ef08a76581f7b48310faf6ca0cc1fb601300a5a364862",
+      "sourceSha256": "11a06aa02bb82a29a9981282a8e67f3ffcb1481f58e6cafa42c21a0e1dfb5074",
+      "bbox": [
+        1323.0,
+        160.0,
+        1407.0,
+        202.0
+      ],
+      "widthCells": 2,
+      "heightCells": 1,
+      "catalogId": "image6-1-0",
+      "name": "多彩暴龙"
+    },
+    {
+      "file": "image20-0-2-0.png",
+      "sha256": "205f8de8577e55928426920e1a0d6a49795088910e1b1b6e8e19dd03f6c74dd9",
+      "sourceSha256": "e83a070bb08f1974aa28e3b478af6e6084391810eafcabbec5d0d12b904059ad",
+      "bbox": [
+        1071.0,
+        244.0,
+        1155.0,
+        286.0
+      ],
+      "widthCells": 2,
+      "heightCells": 1,
+      "catalogId": "image20-0-2",
+      "name": "「切玉」"
+    },
+    {
+      "file": "image20-0-2-1.png",
+      "sha256": "a8b9df55717021feddd517f40008fbd98104c72cb52322ed9caccd9ac0402d4a",
+      "sourceSha256": "176cfef978c9584945a188a9f3fb5b5149629353670d4bcb882dced380c00f72",
+      "bbox": [
+        1071.0,
+        244.0,
+        1155.0,
+        286.0
+      ],
+      "widthCells": 2,
+      "heightCells": 1,
+      "catalogId": "image20-0-2",
+      "name": "「切玉」"
+    },
+    {
+      "file": "image20-0-2-2.png",
+      "sha256": "4545102105aa590d86c93b2968d9e9d54438a8ba6eec03551e3bb43a15ba1d9a",
+      "sourceSha256": "11a06aa02bb82a29a9981282a8e67f3ffcb1481f58e6cafa42c21a0e1dfb5074",
+      "bbox": [
+        1071.0,
+        244.0,
+        1155.0,
+        286.0
+      ],
+      "widthCells": 2,
+      "heightCells": 1,
+      "catalogId": "image20-0-2",
+      "name": "「切玉」"
+    },
+    {
+      "file": "image16-0-1-0.png",
+      "sha256": "3e09ecb7057384bed61961eea11a51b63fe0556b40d1fc87363841f725f43eec",
+      "sourceSha256": "e83a070bb08f1974aa28e3b478af6e6084391810eafcabbec5d0d12b904059ad",
+      "bbox": [
+        1113.0,
+        202.0,
+        1155.0,
+        244.0
+      ],
+      "widthCells": 1,
+      "heightCells": 1,
+      "catalogId": "image16-0-1",
+      "name": "复古暖灯"
+    },
+    {
+      "file": "image16-0-1-1.png",
+      "sha256": "c174989eb466fc9ae13f5ca73cba1938f9e8ee02e8edc1aa602a1f635d3fa4c0",
+      "sourceSha256": "176cfef978c9584945a188a9f3fb5b5149629353670d4bcb882dced380c00f72",
+      "bbox": [
+        1113.0,
+        202.0,
+        1155.0,
+        244.0
+      ],
+      "widthCells": 1,
+      "heightCells": 1,
+      "catalogId": "image16-0-1",
+      "name": "复古暖灯"
+    },
+    {
+      "file": "image16-0-1-2.png",
+      "sha256": "51cc778517c06e4c4595c1cc39f281cec9b8bc453b77a0d5e60397eac85310ff",
+      "sourceSha256": "11a06aa02bb82a29a9981282a8e67f3ffcb1481f58e6cafa42c21a0e1dfb5074",
+      "bbox": [
+        1113.0,
+        202.0,
+        1155.0,
+        244.0
+      ],
+      "widthCells": 1,
+      "heightCells": 1,
+      "catalogId": "image16-0-1",
+      "name": "复古暖灯"
+    }
+  ]
+}

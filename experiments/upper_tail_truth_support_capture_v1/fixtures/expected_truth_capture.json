@@ -1,0 +1,89 @@
+{
+  "schemaVersion": "upper-tail-settlement-truth.v1",
+  "contractVersion": 1,
+  "truthId": "utst_c7ae027a5ee70dc8352ec4671c7f5597",
+  "matchId": "fixture-future-match-001",
+  "reviewClass": "CONTRACT_VALID_FIXTURE",
+  "reviewedAt": "2026-08-22T10:15:00+08:00",
+  "predictionCaptureRef": {
+    "captureId": "utsc_6bfcf9756453ece6ccbc3bb0c13301f1",
+    "predictionHash": "6bfcf9756453ece6ccbc3bb0c13301f19d5fdce7b2961a8ecf89bdb20c17d85d",
+    "artifactSha256": "875167ce7edfd903ae7982494df4256d2dc0fde65cbff87c4fef1e39de7b7568"
+  },
+  "verifiedState": {
+    "g": 4,
+    "p": 7,
+    "r": 4,
+    "verificationStatus": "VERIFIED",
+    "verification": {
+      "method": "human_settlement_inventory_review",
+      "version": "v1",
+      "reviewer": {
+        "type": "reviewer",
+        "id": "fixture-reviewer-1"
+      }
+    }
+  },
+  "truthEvidenceReferences": [
+    {
+      "uri": "evidence://settlement/fixture-future-match-001",
+      "sha256": "3333333333333333333333333333333333333333333333333333333333333333",
+      "truthPayloadSha256": "4444444444444444444444444444444444444444444444444444444444444444"
+    }
+  ],
+  "actualValueDecomposition": {
+    "scope": "full_inventory",
+    "actualTotal": 1015283,
+    "decompositionStatus": "COMPLETE",
+    "components": [
+      {
+        "componentId": "actual-gold",
+        "category": "gold",
+        "value": 145954,
+        "evidenceReferences": [
+          {
+            "uri": "evidence://settlement/fixture-future-match-001/gold",
+            "sha256": "5555555555555555555555555555555555555555555555555555555555555555"
+          }
+        ]
+      },
+      {
+        "componentId": "actual-purple",
+        "category": "purple",
+        "value": 97548,
+        "evidenceReferences": [
+          {
+            "uri": "evidence://settlement/fixture-future-match-001/purple",
+            "sha256": "6666666666666666666666666666666666666666666666666666666666666666"
+          }
+        ]
+      },
+      {
+        "componentId": "actual-red",
+        "category": "red",
+        "value": 759781,
+        "evidenceReferences": [
+          {
+            "uri": "evidence://settlement/fixture-future-match-001/red",
+            "sha256": "7777777777777777777777777777777777777777777777777777777777777777"
+          }
+        ]
+      },
+      {
+        "componentId": "actual-low-tier",
+        "category": "lowTier",
+        "value": 12000,
+        "evidenceReferences": [
+          {
+            "uri": "evidence://settlement/fixture-future-match-001/low-tier",
+            "sha256": "8888888888888888888888888888888888888888888888888888888888888888"
+          }
+        ]
+      }
+    ],
+    "unattributedValue": 0,
+    "reconciliationDelta": 0.0
+  },
+  "truthHash": "c7ae027a5ee70dc8352ec4671c7f55975e3350da6aada99f393c3e9037690e7c",
+  "artifactSha256": "2f9daba8c4905516f2ffdc11a159dba475c5ac66489dcfb49d3caa37812f9b80"
+}

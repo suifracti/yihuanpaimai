@@ -1,0 +1,19 @@
+{
+  "adapterVersion": "benchmark-v2-adapter-slice-v1",
+  "candidateSourcePath": "core/settlement_items_crop.png",
+  "expectedSourceSha256": "c86e85c5712aea00ac7dc9fa08b8111faf0e6a14c85f126c4f9a1f4b2bedce17",
+  "expectedWidth": 307,
+  "expectedHeight": 329,
+  "sceneAdmission": {
+    "sceneType": "inventory_crop",
+    "inventoryEligible": true,
+    "decisionMethod": "reviewed_fixture",
+    "note": "Known fixed inventory crop reviewed only for source and geometry admission."
+  },
+  "inventoryRoi": {"x": 0, "y": 0, "width": 307, "height": 329, "coordinateSpace": "source_pixel"},
+  "groupingReview": {
+    "path": "experiments/vision_benchmark_v2/fixtures/grouping_review_split_children_v1.json",
+    "expectedSha256": "070ba143d00f4049ea38cfd624018a43a9c9a1ed7a1dbd7098c9e7794e22317a",
+    "selectedGroupId": "group-split-upper-6bc1a2a9"
+  }
+}

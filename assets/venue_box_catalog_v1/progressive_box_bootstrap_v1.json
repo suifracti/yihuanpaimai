@@ -1,0 +1,44 @@
+{
+  "bootstrapVersion": "progressive-box-bootstrap.v1",
+  "generatedAt": "2026-08-22T18:00:00+08:00",
+  "collectionMode": "PASSIVE_NATURAL_COLLECTION",
+  "catalogStatus": "APPROVED_FOR_ALPHA",
+  "venueEvidenceClass": "CURRENT_GAME_VALID",
+  "operatorAssertions": [
+    {
+      "evidenceId": "operator-confirmed-box-bootstrap-2026-08-22",
+      "confidence": "CONFIRMED",
+      "venues": ["venue-haibei", "venue-shanhu"]
+    },
+    {
+      "evidenceId": "operator-probable-insurance-bootstrap-2026-08-22",
+      "confidence": "PROBABLE",
+      "venues": ["venue-zhenzhu"]
+    }
+  ],
+  "v06Authority": {
+    "path": "assets/business_sot_v06.json",
+    "declaredSource": "lab/index.html VENUE_ALIASES / VENUE_BOXES / BOX_ALIASES / FIELD_CONDITIONS",
+    "limitations": [
+      "Color aliases for 海贝 packages are derived normalization, not raw game text.",
+      "The v0.6 真珠 mapping did not contain a closed insurance-box set; legacy screenshots supply name/effect clues."
+    ]
+  },
+  "legacyInsuranceEvidence": [
+    {"path":"我自己截图的一些资料/高级场箱子/033da4b176d1ca45156c2ef2f9f34cd2_720.png","sha256":"1f7a30c61405e1146f033a29f532ce713879287cfd728ef64e1e52427b0f2461"},
+    {"path":"我自己截图的一些资料/高级场箱子/23a760512d3262a48a9b8087c26ed821_720.png","sha256":"09e96ddd9d85e447be9de74ca10712a0e68134104030c3a29c800bc868c7e020"},
+    {"path":"我自己截图的一些资料/高级场箱子/464f0019643a62b6c6b4733370161c20_720.png","sha256":"8e03802a23e65cbf813eaf485eb4cc4358112669cad57f4c9394d69f2293e18d"},
+    {"path":"我自己截图的一些资料/高级场箱子/f0cb8418d5e56132715a30c696f43630_720.png","sha256":"ed7e570870e8abb22d174f3b094ea188af2e646ca65e8aec2df468b3c3bd8bdf"}
+  ],
+  "progression": {
+    "operatorToObserved": "one approved natural BoxObservation v1 may establish CURRENT_GAME_OBSERVED",
+    "observedToValid": "requires an explicit versioned review decision; no automatic fixed-N promotion",
+    "requiresDedicatedGrinding": false
+  },
+  "unknownBehavior": {
+    "displayName": "未知 / 其他",
+    "boxId": null,
+    "reasonCode": "UNRECOGNIZED_CURRENT_BOX",
+    "defaultToFirstBox": false
+  }
+}

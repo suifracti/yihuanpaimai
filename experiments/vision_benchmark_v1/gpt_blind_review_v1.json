@@ -1,0 +1,187 @@
+{
+  "reviewVersion": "1.0.0",
+  "reviewDate": "2026-08-20",
+  "reviewer": "GPT",
+  "provenance": "gpt_independent_blind_review",
+  "truthStatus": "gpt_only_pseudo_label",
+  "verifiedTruth": false,
+  "geminiComparisonPerformed": false,
+  "scope": {
+    "reviewedSlots": 9,
+    "selection": "All six P0 slots plus three visually difficult P1 slots",
+    "selectionNote": "priority was used only to choose slots, never as visual evidence for identity or quality"
+  },
+  "blindInputAudit": {
+    "read": [
+      "Craft: 异环拍卖助手｜项目总文档 (latest state)",
+      "experiments/vision_benchmark_v1/gpt_blind_queue.json",
+      "queue-listed crops and source images",
+      "assets/catalog_065.json",
+      "assets/items/catalog_screenshots"
+    ],
+    "notRead": [
+      "human_review_queue.json",
+      "pseudo_labels.json",
+      "ground_truth.json",
+      "Gemini predictions",
+      "old score/agreement outputs",
+      "identity-revealing answer files"
+    ],
+    "directGeminiAnswerLeakDetected": false,
+    "indirectSelectionSideChannelDetected": true,
+    "sideChannelNote": "The task discloses that six Red pseudo slots are the first priority, while the blind queue contains exactly six P0 slots. This makes suspected Red-group membership inferable from priority even though no item identity is exposed. Quality-label evaluation is therefore not perfectly blind unless priority is removed or selection is performed outside the reviewer-visible pack.",
+    "cropPackDefects": [
+      {
+        "queueId": "BLIND_REP-04_s04",
+        "issue": "crop and bbox land on webpage text rather than an inventory item"
+      },
+      {
+        "queueId": "BLIND_REP-04_s05",
+        "issue": "crop and bbox are blank webpage background rather than an inventory item"
+      }
+    ]
+  },
+  "results": [
+    {
+      "queueId": "BLIND_REP-01_s01",
+      "imageId": "REP-01",
+      "cropId": "crop_REP-01_s01.png",
+      "slotId": "s01",
+      "top1": {
+        "itemId": "image34-0-1",
+        "name": "九格小食",
+        "quality": "红"
+      },
+      "confidence": 0.98,
+      "visualBasis": "The crop center shows the distinctive square nine-compartment snack table; its silhouette, red corner ornaments, and 3x3 footprint match the allowed SOT reference.",
+      "similarCandidates": [],
+      "indistinguishableSimilarCandidate": false,
+      "abstain": false
+    },
+    {
+      "queueId": "BLIND_REP-01_s03",
+      "imageId": "REP-01",
+      "cropId": "crop_REP-01_s03.png",
+      "slotId": "s03",
+      "top1": {
+        "itemId": "image5-0-2",
+        "name": "新口味上市！",
+        "quality": "绿"
+      },
+      "confidence": 0.99,
+      "visualBasis": "The bbox center falls on the large green 3x3 card. The red-and-cream costumed figure with side tassels and sparkles is an exact visual match to the allowed SOT reference.",
+      "similarCandidates": [],
+      "indistinguishableSimilarCandidate": false,
+      "abstain": false
+    },
+    {
+      "queueId": "BLIND_REP-02_s01",
+      "imageId": "REP-02",
+      "cropId": "crop_REP-02_s01.png",
+      "slotId": "s01",
+      "top1": {
+        "itemId": "image10-0-0",
+        "name": "绝对是亲手钓的鱼",
+        "quality": "蓝"
+      },
+      "confidence": 0.99,
+      "visualBasis": "The full fish icon, red dorsal gradient, white belly, curved tail, blue card, and 5x5 footprint exactly match the allowed SOT reference.",
+      "similarCandidates": [],
+      "indistinguishableSimilarCandidate": false,
+      "abstain": false
+    },
+    {
+      "queueId": "BLIND_REP-02_s11",
+      "imageId": "REP-02",
+      "cropId": "crop_REP-02_s11.png",
+      "slotId": "s11",
+      "top1": {
+        "itemId": "image35-1-2",
+        "name": "「泪滴」",
+        "quality": "红"
+      },
+      "confidence": 0.93,
+      "visualBasis": "The isolated crop is tiny, but the permitted source image shows a one-cell pale-blue teardrop on a Red card at this bbox; the shape and highlight pattern match the SOT reference.",
+      "similarCandidates": [],
+      "indistinguishableSimilarCandidate": false,
+      "abstain": false
+    },
+    {
+      "queueId": "BLIND_REP-04_s04",
+      "imageId": "REP-04",
+      "cropId": "crop_REP-04_s04.png",
+      "slotId": "s04",
+      "top1": null,
+      "top2": null,
+      "top3": null,
+      "confidence": 0.0,
+      "visualBasis": "The crop contains only partial webpage text. The queue bbox points to the browser/document region of the source screenshot, not to an inventory item.",
+      "similarCandidates": [],
+      "indistinguishableSimilarCandidate": true,
+      "abstain": true
+    },
+    {
+      "queueId": "BLIND_REP-04_s05",
+      "imageId": "REP-04",
+      "cropId": "crop_REP-04_s05.png",
+      "slotId": "s05",
+      "top1": null,
+      "top2": null,
+      "top3": null,
+      "confidence": 0.0,
+      "visualBasis": "The crop is blank webpage background. The queue bbox does not contain an inventory item in the permitted source screenshot.",
+      "similarCandidates": [],
+      "indistinguishableSimilarCandidate": true,
+      "abstain": true
+    },
+    {
+      "queueId": "BLIND_REP-01_s06",
+      "imageId": "REP-01",
+      "cropId": "crop_REP-01_s06.png",
+      "slotId": "s06",
+      "top1": {
+        "itemId": "image26-0-0",
+        "name": "乔望尼金雕像",
+        "quality": "金"
+      },
+      "confidence": 0.97,
+      "visualBasis": "The crop is only a rock fragment, but its bbox lies inside the permitted source image's large 4x5 gold sculpture; the full gold figure with two gray rock masses exactly matches the SOT reference.",
+      "similarCandidates": [],
+      "indistinguishableSimilarCandidate": false,
+      "abstain": false
+    },
+    {
+      "queueId": "BLIND_REP-01_s13",
+      "imageId": "REP-01",
+      "cropId": "crop_REP-01_s13.png",
+      "slotId": "s13",
+      "top1": {
+        "itemId": "image26-0-0",
+        "name": "乔望尼金雕像",
+        "quality": "金"
+      },
+      "confidence": 0.96,
+      "visualBasis": "This crop contains another fragment of the same large gold sculpture. Bbox position plus the full permitted source image and the 4x5 SOT reference identify it as 乔望尼金雕像.",
+      "similarCandidates": [],
+      "indistinguishableSimilarCandidate": false,
+      "abstain": false
+    },
+    {
+      "queueId": "BLIND_REP-02_s18",
+      "imageId": "REP-02",
+      "cropId": "crop_REP-02_s18.png",
+      "slotId": "s18",
+      "top1": {
+        "itemId": "image17-1-1",
+        "name": "阿瑞斯动感单车",
+        "quality": "紫"
+      },
+      "confidence": 0.96,
+      "visualBasis": "The isolated crop is mostly purple background, but the permitted source image shows the bbox inside a 3x2 purple exercise-bike card; the monitor, frame, pedals, and green bottle match the SOT reference exactly.",
+      "similarCandidates": [],
+      "indistinguishableSimilarCandidate": false,
+      "abstain": false
+    }
+  ],
+  "promotionRule": "These are GPT-only pseudo-labels. They must not be treated as verified truth. A later independent agreement check may promote matching observations only to strong multi-model pseudo-label; verified truth still requires human confirmation or other independent reliable evidence."
+}

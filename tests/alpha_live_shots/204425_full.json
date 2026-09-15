@@ -1,0 +1,224 @@
+{
+  "type": "manual_alpha_state",
+  "source": "manual",
+  "fillDefaults": false,
+  "manualMode": true,
+  "inAuction": true,
+  "scene": "IN_AUCTION",
+  "sceneLabel": "手动局",
+  "matchId": "draft_1787057065_1",
+  "lifecycleStatus": "DRAFT",
+  "q": 9,
+  "goldAvg": 33538,
+  "avg": 33538,
+  "purple": 5,
+  "purpleCount": 5,
+  "box": "琉璃宝箱 · 宝石类概率提升",
+  "fieldCondition": "standard",
+  "knownGold": "4546/48648+185165",
+  "knownPurple": "454654+489498",
+  "knownRed": "454654*2",
+  "manualOptions": {
+    "boxes": [
+      "破损的包裹 · 紫色提升",
+      "完整的包裹 · 金色提升",
+      "浸水的包裹 · 紫色提升",
+      "无名包裹 · 红色提升",
+      "机械宝箱 · 科技类概率提升",
+      "美食宝箱 · 食品类概率提升",
+      "实木宝箱 · 中级藏品概率提升",
+      "琉璃宝箱 · 宝石类概率提升",
+      "皮制宝箱 · 高级藏品概率提升",
+      "螺钿宝箱 · 古董类概率提升",
+      "未知高级场箱型"
+    ],
+    "fieldConditions": [
+      {
+        "id": "standard",
+        "name": "标准对局"
+      },
+      {
+        "id": "dark",
+        "name": "天黑了"
+      },
+      {
+        "id": "extraIntel",
+        "name": "一手情报"
+      },
+      {
+        "id": "purpleDouble",
+        "name": "加倍！！"
+      },
+      {
+        "id": "goldDouble",
+        "name": "加倍！！！"
+      },
+      {
+        "id": "sparkle",
+        "name": "闪耀之心"
+      },
+      {
+        "id": "welfare",
+        "name": "福利多多"
+      },
+      {
+        "id": "gemMaze",
+        "name": "宝石迷阵"
+      }
+    ]
+  },
+  "canonical": {
+    "schemaVersion": 7,
+    "productVersion": "v0.67-alpha",
+    "id": "draft_1787057065_1",
+    "lifecycleStatus": "DRAFT",
+    "source": "manual",
+    "fillDefaults": false,
+    "playedAt": "2026-08-18T20:44:34",
+    "environment": {
+      "venue": null,
+      "venueName": null,
+      "box": "琉璃宝箱 · 宝石类概率提升",
+      "boxType": null,
+      "fieldCondition": "standard",
+      "fieldConditionName": "标准对局",
+      "fieldConditionSource": "user_override"
+    },
+    "loadout": {
+      "character": null,
+      "lobbyToolGroup": null,
+      "solverToolGroup": null
+    },
+    "costs": {},
+    "publicIntel": {
+      "q": 9,
+      "totalItems": null,
+      "totalGrid": null,
+      "avgValueBasis": null
+    },
+    "qualities": {
+      "white": {
+        "count": null,
+        "avg": null,
+        "grid": null,
+        "knownItems": ""
+      },
+      "green": {
+        "count": null,
+        "avg": null,
+        "grid": null,
+        "knownItems": ""
+      },
+      "blue": {
+        "count": null,
+        "avg": null,
+        "grid": null,
+        "knownItems": ""
+      },
+      "purple": {
+        "count": 5,
+        "minCount": null,
+        "avg": null,
+        "grid": null,
+        "knownItems": "454654+489498"
+      },
+      "gold": {
+        "count": null,
+        "minCount": null,
+        "avg": 33538,
+        "total": null,
+        "grid": null,
+        "knownItems": "4546/48648+185165"
+      },
+      "red": {
+        "count": null,
+        "minCount": null,
+        "maxCount": null,
+        "knownItems": "454654*2",
+        "redInventoryComplete": null,
+        "settlementVerifiedRedItems": ""
+      }
+    },
+    "knownGold": "4546/48648+185165",
+    "knownPurple": "454654+489498",
+    "knownRed": "454654*2",
+    "q": 9,
+    "goldAvg": 33538,
+    "purpleCount": 5,
+    "purple": 5,
+    "box": "琉璃宝箱 · 宝石类概率提升",
+    "fieldCondition": "standard"
+  },
+  "solverInput": {
+    "q": 9,
+    "p": 5,
+    "purple": 5,
+    "purpleCount": 5,
+    "goldCount": null,
+    "redCount": null,
+    "minGold": null,
+    "minPurple": null,
+    "minRed": null,
+    "avg": 33538,
+    "goldAvg": 33538,
+    "purpleAvg": null,
+    "blueAvg": null,
+    "greenAvg": null,
+    "whiteAvg": null,
+    "goldTotal": null,
+    "goldGrid": null,
+    "purpleGrid": null,
+    "blueCount": null,
+    "blueGrid": null,
+    "greenCount": null,
+    "greenGrid": null,
+    "whiteCount": null,
+    "whiteGrid": null,
+    "totalItems": null,
+    "totalGrid": null,
+    "cost": 5000,
+    "costs": {},
+    "targetProfit": 30000,
+    "knownGold": "4546/48648+185165",
+    "knownPurple": "454654+489498",
+    "knownRed": "454654*2",
+    "knownGoldRaw": "4546/48648+185165",
+    "knownPurpleRaw": "454654+489498",
+    "knownRedRaw": "454654*2",
+    "goldGroups": [],
+    "purpleGroups": [],
+    "redGroups": [],
+    "venue": null,
+    "box": "琉璃宝箱 · 宝石类概率提升",
+    "fieldCondition": "standard",
+    "avgValueBasis": "unknown",
+    "roundingMode": "floor",
+    "toolGroup": null,
+    "character": null,
+    "round": 1,
+    "leaderBid": 0,
+    "redInventoryComplete": false,
+    "settlementVerifiedRedItems": "",
+    "publicInfo": {
+      "totalItems": null,
+      "totalGrid": null,
+      "goldGrid": null,
+      "purpleGrid": null,
+      "blueCount": null,
+      "blueGrid": null,
+      "blueAvg": null,
+      "greenCount": null,
+      "greenGrid": null,
+      "greenAvg": null,
+      "whiteCount": null,
+      "whiteGrid": null,
+      "whiteAvg": null,
+      "systemEstimate": null,
+      "singleAvg": null,
+      "nineAvg": null,
+      "publicNote": ""
+    }
+  },
+  "draftSaved": true,
+  "draftId": "draft_1787057065_1"
+}

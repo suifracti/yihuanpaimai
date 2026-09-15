@@ -1,0 +1,49 @@
+{
+  "labelSource": "Amounts and visible layouts manually read from original recording frames; names are partial, not all-catalog ground truth",
+  "matches": [
+    {
+      "video": "2026-08-17 12-42-40.mkv",
+      "referenceSeconds": 109,
+      "clearingPrice": 666666,
+      "actualTotal": 367371,
+      "profit": -299295,
+      "winner": "心念木之",
+      "visibleItemCount": 15
+    },
+    {
+      "video": "2026-08-17 14-11-56.mkv",
+      "referenceSeconds": 240,
+      "clearingPrice": 666666,
+      "actualTotal": 631993,
+      "profit": -34673,
+      "winner": "汐",
+      "visibleItemCount": 23
+    },
+    {
+      "video": "2026-08-18 11-19-25.mkv",
+      "referenceSeconds": 189,
+      "clearingPrice": 555555,
+      "actualTotal": 227253,
+      "profit": -328302,
+      "winner": "米雪儿",
+      "visibleItemCount": 18
+    },
+    {
+      "video": "2026-08-18 11-19-25.mkv",
+      "referenceSeconds": 454,
+      "clearingPrice": 500000,
+      "actualTotal": 426860,
+      "profit": -73140,
+      "visibleItemCount": 29
+    },
+    {
+      "video": "2026-08-25 21-58-33.mkv",
+      "referenceSeconds": 6,
+      "clearingPrice": 666668,
+      "actualTotal": 538255,
+      "profit": -128413,
+      "winner": "DERTAH",
+      "visibleItemCount": 21
+    }
+  ]
+}

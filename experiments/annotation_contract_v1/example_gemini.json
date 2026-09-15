@@ -1,0 +1,1967 @@
+{
+  "schemaVersion": "1.0.0",
+  "runId": "run-20260820-gemini-pilot-57slots",
+  "model": "gemini-2.5-flash",
+  "modelVersion": "2026-08-20",
+  "createdAt": "2026-08-20T14:15:00Z",
+  "taskType": "warehouse_slot_annotation",
+  "recordId": "r-msvzlpww-1rqtl3",
+  "screenshotRef": "assets/settlement_frames/sec_488.jpg",
+  "imageMetadata": {
+    "width": 1920,
+    "height": 1080,
+    "warehouseBbox": [
+      1400,
+      240,
+      1860,
+      700
+    ]
+  },
+  "usedConstraints": {
+    "actualTotal": false,
+    "q": false,
+    "count": false,
+    "grid": false,
+    "knownItems": false
+  },
+  "annotations": [
+    {
+      "slotId": "REP-01_s01",
+      "bbox": [
+        1408,
+        256,
+        1536,
+        384
+      ],
+      "topK": [
+        {
+          "itemId": "red_jiugexiaoshi",
+          "name": "九格小食",
+          "quality": "red",
+          "confidence": 0.95
+        },
+        {
+          "itemId": "red_yicuyouhuo",
+          "name": "yicuyouhuo",
+          "quality": "red",
+          "confidence": 0.5
+        },
+        {
+          "itemId": "gold_dabing",
+          "name": "dabing",
+          "quality": "gold",
+          "confidence": 0.5
+        }
+      ],
+      "predictedQuality": "red",
+      "source": "gemini-2.5-flash",
+      "status": "review_required",
+      "provenance": "model-derived_from_reference_matching",
+      "failureReason": null
+    },
+    {
+      "slotId": "REP-01_s02",
+      "bbox": [
+        1744,
+        256,
+        1872,
+        448
+      ],
+      "topK": [
+        {
+          "itemId": "gold_wanyouxingyi",
+          "name": "万有星仪",
+          "quality": "gold",
+          "confidence": 0.95
+        },
+        {
+          "itemId": "gold_qiaowangnijindiaoxiang",
+          "name": "qiaowangnijindiaoxiang",
+          "quality": "gold",
+          "confidence": 0.5
+        },
+        {
+          "itemId": "purple_arespaobuji",
+          "name": "arespaobuji",
+          "quality": "purple",
+          "confidence": 0.5
+        }
+      ],
+      "predictedQuality": "gold",
+      "source": "gemini-2.5-flash",
+      "status": "pseudo",
+      "provenance": "model-derived_from_reference_matching",
+      "failureReason": null
+    },
+    {
+      "slotId": "REP-01_s03",
+      "bbox": [
+        1744,
+        480,
+        1872,
+        608
+      ],
+      "topK": [
+        {
+          "itemId": "red_xinlietieqi_l3",
+          "name": "心猎铁骑L3",
+          "quality": "red",
+          "confidence": 0.95
+        },
+        {
+          "itemId": "red_xinlietieqi_l2",
+          "name": "xinlietieqi_l2",
+          "quality": "red",
+          "confidence": 0.5
+        },
+        {
+          "itemId": "purple_xinlietieqi_l1",
+          "name": "xinlietieqi_l1",
+          "quality": "purple",
+          "confidence": 0.5
+        }
+      ],
+      "predictedQuality": "red",
+      "source": "gemini-2.5-flash",
+      "status": "review_required",
+      "provenance": "model-derived_from_reference_matching",
+      "failureReason": null
+    },
+    {
+      "slotId": "REP-01_s04",
+      "bbox": [
+        1600,
+        448,
+        1728,
+        576
+      ],
+      "topK": [
+        {
+          "itemId": "purple_slime_mud",
+          "name": "史莱姆随心泥",
+          "quality": "purple",
+          "confidence": 0.95
+        },
+        {
+          "itemId": "gold_guanzhuangsuixinni",
+          "name": "guanzhuangsuixinni",
+          "quality": "gold",
+          "confidence": 0.5
+        },
+        {
+          "itemId": "purple_lvdongdanche",
+          "name": "lvdongdanche",
+          "quality": "purple",
+          "confidence": 0.5
+        }
+      ],
+      "predictedQuality": "purple",
+      "source": "gemini-2.5-flash",
+      "status": "pseudo",
+      "provenance": "model-derived_from_reference_matching",
+      "failureReason": null
+    },
+    {
+      "slotId": "REP-01_s05",
+      "bbox": [
+        1424,
+        384,
+        1552,
+        512
+      ],
+      "topK": [
+        {
+          "itemId": "blue_yishuhua_shenlin",
+          "name": "艺术画「深林」",
+          "quality": "blue",
+          "confidence": 0.95
+        },
+        {
+          "itemId": "blue_yishuhua_haian",
+          "name": "yishuhua_haian",
+          "quality": "blue",
+          "confidence": 0.5
+        },
+        {
+          "itemId": "white_pailidexiangkuang",
+          "name": "pailidexiangkuang",
+          "quality": "white",
+          "confidence": 0.5
+        }
+      ],
+      "predictedQuality": "blue",
+      "source": "gemini-2.5-flash",
+      "status": "pseudo",
+      "provenance": "model-derived_from_reference_matching",
+      "failureReason": null
+    },
+    {
+      "slotId": "REP-01_s06",
+      "bbox": [
+        1664,
+        288,
+        1728,
+        416
+      ],
+      "topK": [
+        {
+          "itemId": "purple_hongyaoshui",
+          "name": "红药水",
+          "quality": "purple",
+          "confidence": 0.7
+        },
+        {
+          "itemId": "purple_chengjieweijiu",
+          "name": "chengjieweijiu",
+          "quality": "purple",
+          "confidence": 0.5
+        },
+        {
+          "itemId": "red_xiahongzuan",
+          "name": "xiahongzuan",
+          "quality": "red",
+          "confidence": 0.5
+        }
+      ],
+      "predictedQuality": "purple",
+      "source": "gemini-2.5-flash",
+      "status": "review_required",
+      "provenance": "model-derived_from_reference_matching",
+      "failureReason": null
+    },
+    {
+      "slotId": "REP-01_s07",
+      "bbox": [
+        1632,
+        576,
+        1696,
+        672
+      ],
+      "topK": [
+        {
+          "itemId": "blue_zhinengshouji",
+          "name": "智能手机",
+          "quality": "blue",
+          "confidence": 0.95
+        },
+        {
+          "itemId": "blue_zhinengchongdianqi",
+          "name": "zhinengchongdianqi",
+          "quality": "blue",
+          "confidence": 0.5
+        },
+        {
+          "itemId": "white_dianyingkaquan",
+          "name": "dianyingkaquan",
+          "quality": "white",
+          "confidence": 0.5
+        }
+      ],
+      "predictedQuality": "blue",
+      "source": "gemini-2.5-flash",
+      "status": "pseudo",
+      "provenance": "model-derived_from_reference_matching",
+      "failureReason": null
+    },
+    {
+      "slotId": "REP-01_s08",
+      "bbox": [
+        1776,
+        448,
+        1840,
+        512
+      ],
+      "topK": [
+        {
+          "itemId": "purple_xiahongzuan",
+          "name": "霞红钻",
+          "quality": "purple",
+          "confidence": 0.95
+        },
+        {
+          "itemId": "red_chixinshuidi",
+          "name": "chixinshuidi",
+          "quality": "red",
+          "confidence": 0.5
+        },
+        {
+          "itemId": "purple_youlingtai",
+          "name": "youlingtai",
+          "quality": "purple",
+          "confidence": 0.5
+        }
+      ],
+      "predictedQuality": "purple",
+      "source": "gemini-2.5-flash",
+      "status": "pseudo",
+      "provenance": "model-derived_from_reference_matching",
+      "failureReason": null
+    },
+    {
+      "slotId": "REP-01_s09",
+      "bbox": [
+        1440,
+        528,
+        1504,
+        576
+      ],
+      "topK": [
+        {
+          "itemId": "white_dianyingkaquan",
+          "name": "电影卡券",
+          "quality": "white",
+          "confidence": 0.7
+        },
+        {
+          "itemId": "blue_zhinengshouji",
+          "name": "zhinengshouji",
+          "quality": "blue",
+          "confidence": 0.5
+        },
+        {
+          "itemId": "white_zhezhibaozhi",
+          "name": "zhezhibaozhi",
+          "quality": "white",
+          "confidence": 0.5
+        }
+      ],
+      "predictedQuality": "white",
+      "source": "gemini-2.5-flash",
+      "status": "review_required",
+      "provenance": "model-derived_from_reference_matching",
+      "failureReason": null
+    },
+    {
+      "slotId": "REP-01_s10",
+      "bbox": [
+        1408,
+        496,
+        1472,
+        592
+      ],
+      "topK": [
+        {
+          "itemId": "purple_liushengjiangbei",
+          "name": "留声奖杯",
+          "quality": "purple",
+          "confidence": 0.95
+        },
+        {
+          "itemId": "purple_liushengjiangzuo",
+          "name": "liushengjiangzuo",
+          "quality": "purple",
+          "confidence": 0.5
+        },
+        {
+          "itemId": "gold_jinwan",
+          "name": "jinwan",
+          "quality": "gold",
+          "confidence": 0.5
+        }
+      ],
+      "predictedQuality": "purple",
+      "source": "gemini-2.5-flash",
+      "status": "pseudo",
+      "provenance": "model-derived_from_reference_matching",
+      "failureReason": null
+    },
+    {
+      "slotId": "REP-01_s11",
+      "bbox": [
+        1728,
+        560,
+        1792,
+        624
+      ],
+      "topK": [
+        {
+          "itemId": "gold_jinwan",
+          "name": "金碗",
+          "quality": "gold",
+          "confidence": 0.7
+        },
+        {
+          "itemId": "white_huadiaowan",
+          "name": "huadiaowan",
+          "quality": "white",
+          "confidence": 0.5
+        },
+        {
+          "itemId": "gold_liushengjilaba",
+          "name": "liushengjilaba",
+          "quality": "gold",
+          "confidence": 0.5
+        }
+      ],
+      "predictedQuality": "gold",
+      "source": "gemini-2.5-flash",
+      "status": "review_required",
+      "provenance": "model-derived_from_reference_matching",
+      "failureReason": null
+    },
+    {
+      "slotId": "REP-01_s12",
+      "bbox": [
+        1744,
+        608,
+        1808,
+        672
+      ],
+      "topK": [
+        {
+          "itemId": "white_caomeiruantang",
+          "name": "草莓软糖",
+          "quality": "white",
+          "confidence": 0.7
+        },
+        {
+          "itemId": "white_caomeitangguo",
+          "name": "caomeitangguo",
+          "quality": "white",
+          "confidence": 0.5
+        },
+        {
+          "itemId": "purple_yuebaisha",
+          "name": "yuebaisha",
+          "quality": "purple",
+          "confidence": 0.5
+        }
+      ],
+      "predictedQuality": "white",
+      "source": "gemini-2.5-flash",
+      "status": "review_required",
+      "provenance": "model-derived_from_reference_matching",
+      "failureReason": null
+    },
+    {
+      "slotId": "REP-01_s13",
+      "bbox": [
+        1680,
+        256,
+        1744,
+        320
+      ],
+      "topK": [
+        {
+          "itemId": "purple_yuebaisha",
+          "name": "月白沙",
+          "quality": "purple",
+          "confidence": 0.7
+        },
+        {
+          "itemId": "white_shuijingqiyuanqiu",
+          "name": "shuijingqiyuanqiu",
+          "quality": "white",
+          "confidence": 0.5
+        },
+        {
+          "itemId": "purple_taomu",
+          "name": "taomu",
+          "quality": "purple",
+          "confidence": 0.5
+        }
+      ],
+      "predictedQuality": "purple",
+      "source": "gemini-2.5-flash",
+      "status": "review_required",
+      "provenance": "model-derived_from_reference_matching",
+      "failureReason": null
+    },
+    {
+      "slotId": "REP-01_s14",
+      "bbox": [
+        1696,
+        368,
+        1760,
+        432
+      ],
+      "topK": [
+        {
+          "itemId": "purple_zhenzhubang",
+          "name": "珍珠蚌",
+          "quality": "purple",
+          "confidence": 0.95
+        },
+        {
+          "itemId": "purple_youlingtai",
+          "name": "youlingtai",
+          "quality": "purple",
+          "confidence": 0.5
+        },
+        {
+          "itemId": "green_liulidanzhu",
+          "name": "liulidanzhu",
+          "quality": "green",
+          "confidence": 0.5
+        }
+      ],
+      "predictedQuality": "purple",
+      "source": "gemini-2.5-flash",
+      "status": "pseudo",
+      "provenance": "model-derived_from_reference_matching",
+      "failureReason": null
+    },
+    {
+      "slotId": "REP-01_s15",
+      "bbox": [
+        1472,
+        480,
+        1536,
+        544
+      ],
+      "topK": [
+        {
+          "itemId": "green_xiaomuzhuo",
+          "name": "小木桌",
+          "quality": "green",
+          "confidence": 0.7
+        },
+        {
+          "itemId": "blue_fuguonandeng",
+          "name": "fuguonandeng",
+          "quality": "blue",
+          "confidence": 0.5
+        },
+        {
+          "itemId": "white_saokingweichen",
+          "name": "saokingweichen",
+          "quality": "white",
+          "confidence": 0.5
+        }
+      ],
+      "predictedQuality": "green",
+      "source": "gemini-2.5-flash",
+      "status": "review_required",
+      "provenance": "model-derived_from_reference_matching",
+      "failureReason": null
+    },
+    {
+      "slotId": "REP-02_s01",
+      "bbox": [
+        92,
+        100,
+        230,
+        230
+      ],
+      "topK": [
+        {
+          "itemId": "red_chiweiyu",
+          "name": "赤尾鱼",
+          "quality": "red",
+          "confidence": 0.95
+        },
+        {
+          "itemId": "red_jinjinlidiaoxiang",
+          "name": "jinjinlidiaoxiang",
+          "quality": "red",
+          "confidence": 0.5
+        },
+        {
+          "itemId": "red_pendragon",
+          "name": "pendragon",
+          "quality": "red",
+          "confidence": 0.5
+        }
+      ],
+      "predictedQuality": "red",
+      "source": "gemini-2.5-flash",
+      "status": "review_required",
+      "provenance": "model-derived_from_reference_matching",
+      "failureReason": null
+    },
+    {
+      "slotId": "REP-02_s02",
+      "bbox": [
+        200,
+        10,
+        275,
+        80
+      ],
+      "topK": [
+        {
+          "itemId": "blue_yishuhua_shenlin",
+          "name": "艺术画「深林」",
+          "quality": "blue",
+          "confidence": 0.95
+        },
+        {
+          "itemId": "blue_yishuhua_haian",
+          "name": "yishuhua_haian",
+          "quality": "blue",
+          "confidence": 0.5
+        },
+        {
+          "itemId": "white_pailidexiangkuang",
+          "name": "pailidexiangkuang",
+          "quality": "white",
+          "confidence": 0.5
+        }
+      ],
+      "predictedQuality": "blue",
+      "source": "gemini-2.5-flash",
+      "status": "pseudo",
+      "provenance": "model-derived_from_reference_matching",
+      "failureReason": null
+    },
+    {
+      "slotId": "REP-02_s03",
+      "bbox": [
+        10,
+        100,
+        85,
+        155
+      ],
+      "topK": [
+        {
+          "itemId": "purple_lvdongdanche",
+          "name": "律动单车A",
+          "quality": "purple",
+          "confidence": 0.95
+        },
+        {
+          "itemId": "purple_arespaobuji",
+          "name": "arespaobuji",
+          "quality": "purple",
+          "confidence": 0.5
+        },
+        {
+          "itemId": "gold_lunyimoxing",
+          "name": "lunyimoxing",
+          "quality": "gold",
+          "confidence": 0.5
+        }
+      ],
+      "predictedQuality": "purple",
+      "source": "gemini-2.5-flash",
+      "status": "pseudo",
+      "provenance": "model-derived_from_reference_matching",
+      "failureReason": null
+    },
+    {
+      "slotId": "REP-02_s04",
+      "bbox": [
+        170,
+        240,
+        245,
+        295
+      ],
+      "topK": [
+        {
+          "itemId": "purple_lvdongdanche",
+          "name": "律动单车B",
+          "quality": "purple",
+          "confidence": 0.95
+        },
+        {
+          "itemId": "purple_arespaobuji",
+          "name": "arespaobuji",
+          "quality": "purple",
+          "confidence": 0.5
+        },
+        {
+          "itemId": "gold_lunyimoxing",
+          "name": "lunyimoxing",
+          "quality": "gold",
+          "confidence": 0.5
+        }
+      ],
+      "predictedQuality": "purple",
+      "source": "gemini-2.5-flash",
+      "status": "pseudo",
+      "provenance": "model-derived_from_reference_matching",
+      "failureReason": null
+    },
+    {
+      "slotId": "REP-02_s05",
+      "bbox": [
+        95,
+        45,
+        145,
+        85
+      ],
+      "topK": [
+        {
+          "itemId": "gold_haibeixunzhang",
+          "name": "海贝勋章",
+          "quality": "gold",
+          "confidence": 0.95
+        },
+        {
+          "itemId": "blue_jinianyinbi",
+          "name": "jinianyinbi",
+          "quality": "blue",
+          "confidence": 0.5
+        },
+        {
+          "itemId": "gold_jinjiweijiu",
+          "name": "jinjiweijiu",
+          "quality": "gold",
+          "confidence": 0.5
+        }
+      ],
+      "predictedQuality": "gold",
+      "source": "gemini-2.5-flash",
+      "status": "pseudo",
+      "provenance": "model-derived_from_reference_matching",
+      "failureReason": null
+    },
+    {
+      "slotId": "REP-02_s06",
+      "bbox": [
+        10,
+        210,
+        85,
+        265
+      ],
+      "topK": [
+        {
+          "itemId": "purple_chengjieweijiu",
+          "name": "橙色鸡尾酒",
+          "quality": "purple",
+          "confidence": 0.95
+        },
+        {
+          "itemId": "gold_jinjiweijiu",
+          "name": "jinjiweijiu",
+          "quality": "gold",
+          "confidence": 0.5
+        },
+        {
+          "itemId": "purple_hongyaoshui",
+          "name": "hongyaoshui",
+          "quality": "purple",
+          "confidence": 0.5
+        }
+      ],
+      "predictedQuality": "purple",
+      "source": "gemini-2.5-flash",
+      "status": "pseudo",
+      "provenance": "model-derived_from_reference_matching",
+      "failureReason": null
+    },
+    {
+      "slotId": "REP-02_s07",
+      "bbox": [
+        225,
+        155,
+        275,
+        220
+      ],
+      "topK": [
+        {
+          "itemId": "gold_jinjiweijiu",
+          "name": "金鸡尾酒",
+          "quality": "gold",
+          "confidence": 0.95
+        },
+        {
+          "itemId": "purple_chengjieweijiu",
+          "name": "chengjieweijiu",
+          "quality": "purple",
+          "confidence": 0.5
+        },
+        {
+          "itemId": "gold_haibeixunzhang",
+          "name": "haibeixunzhang",
+          "quality": "gold",
+          "confidence": 0.5
+        }
+      ],
+      "predictedQuality": "gold",
+      "source": "gemini-2.5-flash",
+      "status": "pseudo",
+      "provenance": "model-derived_from_reference_matching",
+      "failureReason": null
+    },
+    {
+      "slotId": "REP-02_s08",
+      "bbox": [
+        95,
+        240,
+        145,
+        295
+      ],
+      "topK": [
+        {
+          "itemId": "gold_qiuxingwurenji",
+          "name": "球形无人机",
+          "quality": "gold",
+          "confidence": 0.95
+        },
+        {
+          "itemId": "red_xinlietieqi_l3",
+          "name": "xinlietieqi_l3",
+          "quality": "red",
+          "confidence": 0.5
+        },
+        {
+          "itemId": "purple_lvdongdanche",
+          "name": "lvdongdanche",
+          "quality": "purple",
+          "confidence": 0.5
+        }
+      ],
+      "predictedQuality": "gold",
+      "source": "gemini-2.5-flash",
+      "status": "pseudo",
+      "provenance": "model-derived_from_reference_matching",
+      "failureReason": null
+    },
+    {
+      "slotId": "REP-02_s09",
+      "bbox": [
+        10,
+        155,
+        60,
+        205
+      ],
+      "topK": [
+        {
+          "itemId": "white_pailidexiangkuang",
+          "name": "拍立得相框",
+          "quality": "white",
+          "confidence": 0.95
+        },
+        {
+          "itemId": "blue_yishuhua_shenlin",
+          "name": "yishuhua_shenlin",
+          "quality": "blue",
+          "confidence": 0.5
+        },
+        {
+          "itemId": "white_dianyingkaquan",
+          "name": "dianyingkaquan",
+          "quality": "white",
+          "confidence": 0.5
+        }
+      ],
+      "predictedQuality": "white",
+      "source": "gemini-2.5-flash",
+      "status": "pseudo",
+      "provenance": "model-derived_from_reference_matching",
+      "failureReason": null
+    },
+    {
+      "slotId": "REP-02_s10",
+      "bbox": [
+        225,
+        105,
+        275,
+        150
+      ],
+      "topK": [
+        {
+          "itemId": "blue_jinianyinbi",
+          "name": "纪念银币",
+          "quality": "blue",
+          "confidence": 0.95
+        },
+        {
+          "itemId": "gold_haibeixunzhang",
+          "name": "haibeixunzhang",
+          "quality": "gold",
+          "confidence": 0.5
+        },
+        {
+          "itemId": "gold_jinwan",
+          "name": "jinwan",
+          "quality": "gold",
+          "confidence": 0.5
+        }
+      ],
+      "predictedQuality": "blue",
+      "source": "gemini-2.5-flash",
+      "status": "pseudo",
+      "provenance": "model-derived_from_reference_matching",
+      "failureReason": null
+    },
+    {
+      "slotId": "REP-02_s11",
+      "bbox": [
+        65,
+        155,
+        90,
+        180
+      ],
+      "topK": [
+        {
+          "itemId": "red_chixinshuidi",
+          "name": "炽心水滴",
+          "quality": "red",
+          "confidence": 0.7
+        },
+        {
+          "itemId": "purple_xiahongzuan",
+          "name": "xiahongzuan",
+          "quality": "purple",
+          "confidence": 0.5
+        },
+        {
+          "itemId": "purple_youlingtai",
+          "name": "youlingtai",
+          "quality": "purple",
+          "confidence": 0.5
+        }
+      ],
+      "predictedQuality": "red",
+      "source": "gemini-2.5-flash",
+      "status": "review_required",
+      "provenance": "model-derived_from_reference_matching",
+      "failureReason": null
+    },
+    {
+      "slotId": "REP-02_s12",
+      "bbox": [
+        145,
+        45,
+        170,
+        70
+      ],
+      "topK": [
+        {
+          "itemId": "purple_xiahongzuan",
+          "name": "霞红钻A",
+          "quality": "purple",
+          "confidence": 0.95
+        },
+        {
+          "itemId": "red_chixinshuidi",
+          "name": "chixinshuidi",
+          "quality": "red",
+          "confidence": 0.5
+        },
+        {
+          "itemId": "purple_youlingtai",
+          "name": "youlingtai",
+          "quality": "purple",
+          "confidence": 0.5
+        }
+      ],
+      "predictedQuality": "purple",
+      "source": "gemini-2.5-flash",
+      "status": "pseudo",
+      "provenance": "model-derived_from_reference_matching",
+      "failureReason": null
+    },
+    {
+      "slotId": "REP-02_s13",
+      "bbox": [
+        145,
+        70,
+        170,
+        95
+      ],
+      "topK": [
+        {
+          "itemId": "purple_xiahongzuan",
+          "name": "霞红钻B",
+          "quality": "purple",
+          "confidence": 0.95
+        },
+        {
+          "itemId": "red_chixinshuidi",
+          "name": "chixinshuidi",
+          "quality": "red",
+          "confidence": 0.5
+        },
+        {
+          "itemId": "purple_youlingtai",
+          "name": "youlingtai",
+          "quality": "purple",
+          "confidence": 0.5
+        }
+      ],
+      "predictedQuality": "purple",
+      "source": "gemini-2.5-flash",
+      "status": "pseudo",
+      "provenance": "model-derived_from_reference_matching",
+      "failureReason": null
+    },
+    {
+      "slotId": "REP-02_s14",
+      "bbox": [
+        65,
+        180,
+        90,
+        205
+      ],
+      "topK": [
+        {
+          "itemId": "purple_youlingtai",
+          "name": "幽灵态A",
+          "quality": "purple",
+          "confidence": 0.95
+        },
+        {
+          "itemId": "purple_xiahongzuan",
+          "name": "xiahongzuan",
+          "quality": "purple",
+          "confidence": 0.5
+        },
+        {
+          "itemId": "purple_zhenzhubang",
+          "name": "zhenzhubang",
+          "quality": "purple",
+          "confidence": 0.5
+        }
+      ],
+      "predictedQuality": "purple",
+      "source": "gemini-2.5-flash",
+      "status": "pseudo",
+      "provenance": "model-derived_from_reference_matching",
+      "failureReason": null
+    },
+    {
+      "slotId": "REP-02_s15",
+      "bbox": [
+        35,
+        75,
+        60,
+        100
+      ],
+      "topK": [
+        {
+          "itemId": "purple_youlingtai",
+          "name": "幽灵态B",
+          "quality": "purple",
+          "confidence": 0.95
+        },
+        {
+          "itemId": "purple_xiahongzuan",
+          "name": "xiahongzuan",
+          "quality": "purple",
+          "confidence": 0.5
+        },
+        {
+          "itemId": "purple_zhenzhubang",
+          "name": "zhenzhubang",
+          "quality": "purple",
+          "confidence": 0.5
+        }
+      ],
+      "predictedQuality": "purple",
+      "source": "gemini-2.5-flash",
+      "status": "pseudo",
+      "provenance": "model-derived_from_reference_matching",
+      "failureReason": null
+    },
+    {
+      "slotId": "REP-02_s16",
+      "bbox": [
+        10,
+        265,
+        40,
+        295
+      ],
+      "topK": [
+        {
+          "itemId": "gold_liushengjilaba",
+          "name": "留声机喇叭",
+          "quality": "gold",
+          "confidence": 0.95
+        },
+        {
+          "itemId": "gold_jinwan",
+          "name": "jinwan",
+          "quality": "gold",
+          "confidence": 0.5
+        },
+        {
+          "itemId": "purple_liushengjiangzuo",
+          "name": "liushengjiangzuo",
+          "quality": "purple",
+          "confidence": 0.5
+        }
+      ],
+      "predictedQuality": "gold",
+      "source": "gemini-2.5-flash",
+      "status": "pseudo",
+      "provenance": "model-derived_from_reference_matching",
+      "failureReason": null
+    },
+    {
+      "slotId": "REP-02_s17",
+      "bbox": [
+        250,
+        240,
+        275,
+        265
+      ],
+      "topK": [
+        {
+          "itemId": "green_huoqiyin",
+          "name": "火漆印",
+          "quality": "green",
+          "confidence": 0.95
+        },
+        {
+          "itemId": "green_liulidanzhu",
+          "name": "liulidanzhu",
+          "quality": "green",
+          "confidence": 0.5
+        },
+        {
+          "itemId": "green_maorongrongdequeding",
+          "name": "maorongrongdequeding",
+          "quality": "green",
+          "confidence": 0.5
+        }
+      ],
+      "predictedQuality": "green",
+      "source": "gemini-2.5-flash",
+      "status": "pseudo",
+      "provenance": "model-derived_from_reference_matching",
+      "failureReason": null
+    },
+    {
+      "slotId": "REP-02_s18",
+      "bbox": [
+        250,
+        265,
+        275,
+        295
+      ],
+      "topK": [
+        {
+          "itemId": "green_liulidanzhu",
+          "name": "琉璃弹珠",
+          "quality": "green",
+          "confidence": 0.7
+        },
+        {
+          "itemId": "green_huoqiyin",
+          "name": "huoqiyin",
+          "quality": "green",
+          "confidence": 0.5
+        },
+        {
+          "itemId": "purple_taomu",
+          "name": "taomu",
+          "quality": "purple",
+          "confidence": 0.5
+        }
+      ],
+      "predictedQuality": "green",
+      "source": "gemini-2.5-flash",
+      "status": "review_required",
+      "provenance": "model-derived_from_reference_matching",
+      "failureReason": null
+    },
+    {
+      "slotId": "REP-02_s19",
+      "bbox": [
+        65,
+        265,
+        90,
+        295
+      ],
+      "topK": [
+        {
+          "itemId": "white_caomeitangguo",
+          "name": "草莓糖果",
+          "quality": "white",
+          "confidence": 0.95
+        },
+        {
+          "itemId": "white_caomeiruantang",
+          "name": "caomeiruantang",
+          "quality": "white",
+          "confidence": 0.5
+        },
+        {
+          "itemId": "white_saokingweichen",
+          "name": "saokingweichen",
+          "quality": "white",
+          "confidence": 0.5
+        }
+      ],
+      "predictedQuality": "white",
+      "source": "gemini-2.5-flash",
+      "status": "pseudo",
+      "provenance": "model-derived_from_reference_matching",
+      "failureReason": null
+    },
+    {
+      "slotId": "REP-02_s20",
+      "bbox": [
+        115,
+        10,
+        175,
+        30
+      ],
+      "topK": [
+        {
+          "itemId": "blue_xingyinghuaban",
+          "name": "星影滑板",
+          "quality": "blue",
+          "confidence": 0.95
+        },
+        {
+          "itemId": "blue_zhinengshouji",
+          "name": "zhinengshouji",
+          "quality": "blue",
+          "confidence": 0.5
+        },
+        {
+          "itemId": "white_dianyingkaquan",
+          "name": "dianyingkaquan",
+          "quality": "white",
+          "confidence": 0.5
+        }
+      ],
+      "predictedQuality": "blue",
+      "source": "gemini-2.5-flash",
+      "status": "pseudo",
+      "provenance": "model-derived_from_reference_matching",
+      "failureReason": null
+    },
+    {
+      "slotId": "REP-03_s01",
+      "bbox": [
+        15,
+        30,
+        175,
+        190
+      ],
+      "topK": [
+        {
+          "itemId": "blue_yinbaixiongjia",
+          "name": "银白胸甲",
+          "quality": "blue",
+          "confidence": 0.95
+        },
+        {
+          "itemId": "blue_yishuhua_shenlin",
+          "name": "yishuhua_shenlin",
+          "quality": "blue",
+          "confidence": 0.5
+        },
+        {
+          "itemId": "gold_wanyouxingyi",
+          "name": "wanyouxingyi",
+          "quality": "gold",
+          "confidence": 0.5
+        }
+      ],
+      "predictedQuality": "blue",
+      "source": "gemini-2.5-flash",
+      "status": "pseudo",
+      "provenance": "model-derived_from_reference_matching",
+      "failureReason": null
+    },
+    {
+      "slotId": "REP-03_s02",
+      "bbox": [
+        345,
+        15,
+        500,
+        85
+      ],
+      "topK": [
+        {
+          "itemId": "gold_jisujiche",
+          "name": "极速机车",
+          "quality": "gold",
+          "confidence": 0.95
+        },
+        {
+          "itemId": "gold_zhinengchongdianqi",
+          "name": "zhinengchongdianqi",
+          "quality": "gold",
+          "confidence": 0.5
+        },
+        {
+          "itemId": "purple_lvdongdanche",
+          "name": "lvdongdanche",
+          "quality": "purple",
+          "confidence": 0.5
+        }
+      ],
+      "predictedQuality": "gold",
+      "source": "gemini-2.5-flash",
+      "status": "pseudo",
+      "provenance": "model-derived_from_reference_matching",
+      "failureReason": null
+    },
+    {
+      "slotId": "REP-03_s03",
+      "bbox": [
+        235,
+        90,
+        390,
+        160
+      ],
+      "topK": [
+        {
+          "itemId": "gold_zhinengchongdianqi",
+          "name": "智能充电器",
+          "quality": "gold",
+          "confidence": 0.95
+        },
+        {
+          "itemId": "gold_jisujiche",
+          "name": "jisujiche",
+          "quality": "gold",
+          "confidence": 0.5
+        },
+        {
+          "itemId": "blue_zhinengshouji",
+          "name": "zhinengshouji",
+          "quality": "blue",
+          "confidence": 0.5
+        }
+      ],
+      "predictedQuality": "gold",
+      "source": "gemini-2.5-flash",
+      "status": "pseudo",
+      "provenance": "model-derived_from_reference_matching",
+      "failureReason": null
+    },
+    {
+      "slotId": "REP-03_s04",
+      "bbox": [
+        180,
+        15,
+        235,
+        140
+      ],
+      "topK": [
+        {
+          "itemId": "purple_liushengjiangzuo",
+          "name": "留声奖座",
+          "quality": "purple",
+          "confidence": 0.95
+        },
+        {
+          "itemId": "purple_liushengjiangbei",
+          "name": "liushengjiangbei",
+          "quality": "purple",
+          "confidence": 0.5
+        },
+        {
+          "itemId": "gold_jinwan",
+          "name": "jinwan",
+          "quality": "gold",
+          "confidence": 0.5
+        }
+      ],
+      "predictedQuality": "purple",
+      "source": "gemini-2.5-flash",
+      "status": "pseudo",
+      "provenance": "model-derived_from_reference_matching",
+      "failureReason": null
+    },
+    {
+      "slotId": "REP-03_s05",
+      "bbox": [
+        235,
+        15,
+        290,
+        85
+      ],
+      "topK": [
+        {
+          "itemId": "purple_taomu",
+          "name": "饕目",
+          "quality": "purple",
+          "confidence": 0.95
+        },
+        {
+          "itemId": "purple_youlingtai",
+          "name": "youlingtai",
+          "quality": "purple",
+          "confidence": 0.5
+        },
+        {
+          "itemId": "purple_xiahongzuan",
+          "name": "xiahongzuan",
+          "quality": "purple",
+          "confidence": 0.5
+        }
+      ],
+      "predictedQuality": "purple",
+      "source": "gemini-2.5-flash",
+      "status": "pseudo",
+      "provenance": "model-derived_from_reference_matching",
+      "failureReason": null
+    },
+    {
+      "slotId": "REP-03_s06",
+      "bbox": [
+        290,
+        15,
+        345,
+        85
+      ],
+      "topK": [
+        {
+          "itemId": "white_shuijingqiyuanqiu",
+          "name": "水晶祈愿球",
+          "quality": "white",
+          "confidence": 0.95
+        },
+        {
+          "itemId": "purple_yuebaisha",
+          "name": "yuebaisha",
+          "quality": "purple",
+          "confidence": 0.5
+        },
+        {
+          "itemId": "green_liulidanzhu",
+          "name": "liulidanzhu",
+          "quality": "green",
+          "confidence": 0.5
+        }
+      ],
+      "predictedQuality": "white",
+      "source": "gemini-2.5-flash",
+      "status": "pseudo",
+      "provenance": "model-derived_from_reference_matching",
+      "failureReason": null
+    },
+    {
+      "slotId": "REP-03_s07",
+      "bbox": [
+        405,
+        90,
+        455,
+        160
+      ],
+      "topK": [
+        {
+          "itemId": "blue_chunjingkuangquanshui",
+          "name": "纯净矿泉水",
+          "quality": "blue",
+          "confidence": 0.95
+        },
+        {
+          "itemId": "purple_hongyaoshui",
+          "name": "hongyaoshui",
+          "quality": "purple",
+          "confidence": 0.5
+        },
+        {
+          "itemId": "blue_zhinengshouji",
+          "name": "zhinengshouji",
+          "quality": "blue",
+          "confidence": 0.5
+        }
+      ],
+      "predictedQuality": "blue",
+      "source": "gemini-2.5-flash",
+      "status": "pseudo",
+      "provenance": "model-derived_from_reference_matching",
+      "failureReason": null
+    },
+    {
+      "slotId": "REP-03_s08",
+      "bbox": [
+        515,
+        15,
+        565,
+        85
+      ],
+      "topK": [
+        {
+          "itemId": "white_caomeitangguo",
+          "name": "草莓糖果",
+          "quality": "white",
+          "confidence": 0.95
+        },
+        {
+          "itemId": "white_caomeiruantang",
+          "name": "caomeiruantang",
+          "quality": "white",
+          "confidence": 0.5
+        },
+        {
+          "itemId": "white_saokingweichen",
+          "name": "saokingweichen",
+          "quality": "white",
+          "confidence": 0.5
+        }
+      ],
+      "predictedQuality": "white",
+      "source": "gemini-2.5-flash",
+      "status": "pseudo",
+      "provenance": "model-derived_from_reference_matching",
+      "failureReason": null
+    },
+    {
+      "slotId": "REP-04_s01",
+      "bbox": [
+        830,
+        275,
+        875,
+        365
+      ],
+      "topK": [
+        {
+          "itemId": "purple_danfanxiangji",
+          "name": "单反相机",
+          "quality": "purple",
+          "confidence": 0.95
+        },
+        {
+          "itemId": "purple_arespaobuji",
+          "name": "arespaobuji",
+          "quality": "purple",
+          "confidence": 0.5
+        },
+        {
+          "itemId": "purple_lvdongdanche",
+          "name": "lvdongdanche",
+          "quality": "purple",
+          "confidence": 0.5
+        }
+      ],
+      "predictedQuality": "purple",
+      "source": "gemini-2.5-flash",
+      "status": "pseudo",
+      "provenance": "model-derived_from_reference_matching",
+      "failureReason": null
+    },
+    {
+      "slotId": "REP-04_s02",
+      "bbox": [
+        780,
+        380,
+        825,
+        440
+      ],
+      "topK": [
+        {
+          "itemId": "blue_yishuhua_shenlin",
+          "name": "艺术画「深林」",
+          "quality": "blue",
+          "confidence": 0.95
+        },
+        {
+          "itemId": "blue_yishuhua_haian",
+          "name": "yishuhua_haian",
+          "quality": "blue",
+          "confidence": 0.5
+        },
+        {
+          "itemId": "white_pailidexiangkuang",
+          "name": "pailidexiangkuang",
+          "quality": "white",
+          "confidence": 0.5
+        }
+      ],
+      "predictedQuality": "blue",
+      "source": "gemini-2.5-flash",
+      "status": "pseudo",
+      "provenance": "model-derived_from_reference_matching",
+      "failureReason": null
+    },
+    {
+      "slotId": "REP-04_s03",
+      "bbox": [
+        790,
+        255,
+        830,
+        295
+      ],
+      "topK": [
+        {
+          "itemId": "gold_huanxingyi",
+          "name": "环星仪",
+          "quality": "gold",
+          "confidence": 0.95
+        },
+        {
+          "itemId": "gold_wanyouxingyi",
+          "name": "wanyouxingyi",
+          "quality": "gold",
+          "confidence": 0.5
+        },
+        {
+          "itemId": "purple_taomu",
+          "name": "taomu",
+          "quality": "purple",
+          "confidence": 0.5
+        }
+      ],
+      "predictedQuality": "gold",
+      "source": "gemini-2.5-flash",
+      "status": "pseudo",
+      "provenance": "model-derived_from_reference_matching",
+      "failureReason": null
+    },
+    {
+      "slotId": "REP-04_s04",
+      "bbox": [
+        790,
+        305,
+        830,
+        365
+      ],
+      "topK": [
+        {
+          "itemId": "red_xinlietieqi_wanju",
+          "name": "心猎铁骑玩具",
+          "quality": "red",
+          "confidence": 0.7
+        },
+        {
+          "itemId": "red_xinlietieqi_l3",
+          "name": "xinlietieqi_l3",
+          "quality": "red",
+          "confidence": 0.5
+        },
+        {
+          "itemId": "purple_xinlietieqi_l1",
+          "name": "xinlietieqi_l1",
+          "quality": "purple",
+          "confidence": 0.5
+        }
+      ],
+      "predictedQuality": "red",
+      "source": "gemini-2.5-flash",
+      "status": "review_required",
+      "provenance": "model-derived_from_reference_matching",
+      "failureReason": null
+    },
+    {
+      "slotId": "REP-04_s05",
+      "bbox": [
+        875,
+        255,
+        895,
+        295
+      ],
+      "topK": [
+        {
+          "itemId": "red_chixinshuidi",
+          "name": "炽心水滴",
+          "quality": "red",
+          "confidence": 0.95
+        },
+        {
+          "itemId": "purple_xiahongzuan",
+          "name": "xiahongzuan",
+          "quality": "purple",
+          "confidence": 0.5
+        },
+        {
+          "itemId": "purple_youlingtai",
+          "name": "youlingtai",
+          "quality": "purple",
+          "confidence": 0.5
+        }
+      ],
+      "predictedQuality": "red",
+      "source": "gemini-2.5-flash",
+      "status": "review_required",
+      "provenance": "model-derived_from_reference_matching",
+      "failureReason": null
+    },
+    {
+      "slotId": "REP-04_s06",
+      "bbox": [
+        900,
+        255,
+        940,
+        320
+      ],
+      "topK": [
+        {
+          "itemId": "white_pailide",
+          "name": "拍立得",
+          "quality": "white",
+          "confidence": 0.95
+        },
+        {
+          "itemId": "white_pailidexiangkuang",
+          "name": "pailidexiangkuang",
+          "quality": "white",
+          "confidence": 0.5
+        },
+        {
+          "itemId": "purple_danfanxiangji",
+          "name": "danfanxiangji",
+          "quality": "purple",
+          "confidence": 0.5
+        }
+      ],
+      "predictedQuality": "white",
+      "source": "gemini-2.5-flash",
+      "status": "pseudo",
+      "provenance": "model-derived_from_reference_matching",
+      "failureReason": null
+    },
+    {
+      "slotId": "REP-04_s07",
+      "bbox": [
+        900,
+        355,
+        940,
+        420
+      ],
+      "topK": [
+        {
+          "itemId": "blue_zhinengshouji",
+          "name": "智能手机",
+          "quality": "blue",
+          "confidence": 0.95
+        },
+        {
+          "itemId": "blue_zhinengchongdianqi",
+          "name": "zhinengchongdianqi",
+          "quality": "blue",
+          "confidence": 0.5
+        },
+        {
+          "itemId": "white_dianyingkaquan",
+          "name": "dianyingkaquan",
+          "quality": "white",
+          "confidence": 0.5
+        }
+      ],
+      "predictedQuality": "blue",
+      "source": "gemini-2.5-flash",
+      "status": "pseudo",
+      "provenance": "model-derived_from_reference_matching",
+      "failureReason": null
+    },
+    {
+      "slotId": "REP-04_s08",
+      "bbox": [
+        875,
+        365,
+        900,
+        410
+      ],
+      "topK": [
+        {
+          "itemId": "green_shupianlingshi",
+          "name": "薯片零食",
+          "quality": "green",
+          "confidence": 0.7
+        },
+        {
+          "itemId": "white_caomeitangguo",
+          "name": "caomeitangguo",
+          "quality": "white",
+          "confidence": 0.5
+        },
+        {
+          "itemId": "white_dianyingkaquan",
+          "name": "dianyingkaquan",
+          "quality": "white",
+          "confidence": 0.5
+        }
+      ],
+      "predictedQuality": "green",
+      "source": "gemini-2.5-flash",
+      "status": "review_required",
+      "provenance": "model-derived_from_reference_matching",
+      "failureReason": null
+    },
+    {
+      "slotId": "REP-04_s09",
+      "bbox": [
+        875,
+        410,
+        900,
+        450
+      ],
+      "topK": [
+        {
+          "itemId": "green_kaorouchuan",
+          "name": "烤肉串",
+          "quality": "green",
+          "confidence": 0.7
+        },
+        {
+          "itemId": "green_shupianlingshi",
+          "name": "shupianlingshi",
+          "quality": "green",
+          "confidence": 0.5
+        },
+        {
+          "itemId": "white_caomeiruantang",
+          "name": "caomeiruantang",
+          "quality": "white",
+          "confidence": 0.5
+        }
+      ],
+      "predictedQuality": "green",
+      "source": "gemini-2.5-flash",
+      "status": "review_required",
+      "provenance": "model-derived_from_reference_matching",
+      "failureReason": null
+    },
+    {
+      "slotId": "REP-04_s10",
+      "bbox": [
+        875,
+        305,
+        900,
+        365
+      ],
+      "topK": [
+        {
+          "itemId": "purple_liushengjiangzuo",
+          "name": "留声奖座",
+          "quality": "purple",
+          "confidence": 0.95
+        },
+        {
+          "itemId": "purple_liushengjiangbei",
+          "name": "liushengjiangbei",
+          "quality": "purple",
+          "confidence": 0.5
+        },
+        {
+          "itemId": "gold_jinwan",
+          "name": "jinwan",
+          "quality": "gold",
+          "confidence": 0.5
+        }
+      ],
+      "predictedQuality": "purple",
+      "source": "gemini-2.5-flash",
+      "status": "pseudo",
+      "provenance": "model-derived_from_reference_matching",
+      "failureReason": null
+    },
+    {
+      "slotId": "REP-05_s01",
+      "bbox": [
+        1400,
+        300,
+        1550,
+        450
+      ],
+      "topK": [
+        {
+          "itemId": "gold_guanzhuangsuixinni",
+          "name": "罐装随心泥",
+          "quality": "gold",
+          "confidence": 0.7
+        },
+        {
+          "itemId": "purple_slime_mud",
+          "name": "slime_mud",
+          "quality": "purple",
+          "confidence": 0.5
+        },
+        {
+          "itemId": "gold_dabing",
+          "name": "dabing",
+          "quality": "gold",
+          "confidence": 0.5
+        }
+      ],
+      "predictedQuality": "gold",
+      "source": "gemini-2.5-flash",
+      "status": "review_required",
+      "provenance": "model-derived_from_reference_matching",
+      "failureReason": null
+    },
+    {
+      "slotId": "REP-05_s02",
+      "bbox": [
+        1550,
+        300,
+        1700,
+        450
+      ],
+      "topK": [
+        {
+          "itemId": "purple_arespaobuji",
+          "name": "阿瑞斯跑步机",
+          "quality": "purple",
+          "confidence": 0.7
+        },
+        {
+          "itemId": "purple_lvdongdanche",
+          "name": "lvdongdanche",
+          "quality": "purple",
+          "confidence": 0.5
+        },
+        {
+          "itemId": "gold_lunyimoxing",
+          "name": "lunyimoxing",
+          "quality": "gold",
+          "confidence": 0.5
+        }
+      ],
+      "predictedQuality": "purple",
+      "source": "gemini-2.5-flash",
+      "status": "review_required",
+      "provenance": "model-derived_from_reference_matching",
+      "failureReason": null
+    },
+    {
+      "slotId": "REP-05_s03",
+      "bbox": [
+        1400,
+        450,
+        1480,
+        530
+      ],
+      "topK": [
+        {
+          "itemId": "blue_fuguonandeng",
+          "name": "复古暖灯",
+          "quality": "blue",
+          "confidence": 0.4
+        },
+        {
+          "itemId": "green_xiaomuzhuo",
+          "name": "xiaomuzhuo",
+          "quality": "green",
+          "confidence": 0.5
+        },
+        {
+          "itemId": "white_saokingweichen",
+          "name": "saokingweichen",
+          "quality": "white",
+          "confidence": 0.5
+        }
+      ],
+      "predictedQuality": "blue",
+      "source": "gemini-2.5-flash",
+      "status": "review_required",
+      "provenance": "model-derived_from_reference_matching",
+      "failureReason": null
+    },
+    {
+      "slotId": "REP-05_s04",
+      "bbox": [
+        1480,
+        450,
+        1560,
+        530
+      ],
+      "topK": [
+        {
+          "itemId": "green_maorongrongdequeding",
+          "name": "毛茸茸的肯定",
+          "quality": "green",
+          "confidence": 0.4
+        },
+        {
+          "itemId": "green_liulidanzhu",
+          "name": "liulidanzhu",
+          "quality": "green",
+          "confidence": 0.5
+        },
+        {
+          "itemId": "white_mianmianyun",
+          "name": "mianmianyun",
+          "quality": "white",
+          "confidence": 0.5
+        }
+      ],
+      "predictedQuality": "green",
+      "source": "gemini-2.5-flash",
+      "status": "review_required",
+      "provenance": "model-derived_from_reference_matching",
+      "failureReason": null
+    }
+  ]
+}

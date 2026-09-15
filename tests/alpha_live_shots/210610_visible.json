@@ -1,0 +1,106 @@
+[
+  {
+    "hwnd": 1189850,
+    "cls": "WindowsForms10.Window.8.app.0.aec740_r21_ad1",
+    "title": "⚡ 异环拍卖战术助手 HUD",
+    "box": [
+      70,
+      70,
+      630,
+      430,
+      560,
+      360
+    ]
+  },
+  {
+    "hwnd": 132918,
+    "cls": "Qt51517QWindowOwnDC",
+    "title": "异环启动器",
+    "box": [
+      640,
+      373,
+      1920,
+      1093,
+      1280,
+      720
+    ]
+  },
+  {
+    "hwnd": 82779308,
+    "cls": "Chrome_WidgetWin_1",
+    "title": "",
+    "box": [
+      1049,
+      40,
+      2544,
+      1135,
+      1495,
+      1095
+    ]
+  },
+  {
+    "hwnd": 197968,
+    "cls": "Chrome_WidgetWin_1",
+    "title": "算法改进 - 检查Craft连接 - Google Chrome",
+    "box": [
+      408,
+      70,
+      2066,
+      1261,
+      1658,
+      1191
+    ]
+  },
+  {
+    "hwnd": 14887188,
+    "cls": "Chrome_WidgetWin_1",
+    "title": "QQ",
+    "box": [
+      462,
+      322,
+      1891,
+      1322,
+      1429,
+      1000
+    ]
+  },
+  {
+    "hwnd": 120133284,
+    "cls": "Chrome_WidgetWin_1",
+    "title": "百度网盘 · 资源分享",
+    "box": [
+      1218,
+      49,
+      2419,
+      861,
+      1201,
+      812
+    ]
+  },
+  {
+    "hwnd": 74902,
+    "cls": "Chrome_WidgetWin_1",
+    "title": "Spotify Premium",
+    "box": [
+      927,
+      50,
+      2327,
+      1100,
+      1400,
+      1050
+    ]
+  },
+  {
+    "hwnd": 140909698,
+    "cls": "Chrome_WidgetWin_1",
+    "title": "异环拍卖助手 Overlay Alpha",
+    "box": [
+      70,
+      70,
+      630,
+      430,
+      560,
+      360
+    ]
+  }
+]

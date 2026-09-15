@@ -1,0 +1,192 @@
+{
+  "version": "0.6",
+  "source": "lab/index.html VENUE_ALIASES / VENUE_BOXES / BOX_ALIASES / FIELD_CONDITIONS",
+  "unknown": {
+    "venue": "未知场地",
+    "box": "未知箱型",
+    "fieldCondition": "unknown",
+    "toolGroup": null
+  },
+  "venues": [
+    {
+      "id": "未知场地",
+      "label": "未知场地",
+      "aliases": ["未知场地"],
+      "entryCost": null
+    },
+    {
+      "id": "初级场 · 海贝场",
+      "label": "初级场 · 海贝场",
+      "aliases": ["初级场 · 海贝场", "初级场", "海贝场"],
+      "entryCost": 0
+    },
+    {
+      "id": "中级场 · 珊瑚场",
+      "label": "中级场 · 珊瑚场",
+      "aliases": ["中级场 · 珊瑚场", "中级场", "珊瑚场"],
+      "entryCost": 5000
+    },
+    {
+      "id": "高级场 · 真珠场",
+      "label": "高级场 · 真珠场",
+      "aliases": ["高级场 · 真珠场", "高级场", "真珠场", "珍珠场", "终极场"],
+      "entryCost": 20000
+    }
+  ],
+  "fieldConditions": [
+    {
+      "id": "unknown",
+      "name": "未知场地条件",
+      "aliases": ["", "unknown", "未知", "未知条件", "未知场地条件"]
+    },
+    {
+      "id": "standard",
+      "name": "标准对局",
+      "aliases": ["standard", "标准", "标准对局"]
+    },
+    {
+      "id": "dark",
+      "name": "天黑了",
+      "aliases": ["dark", "天黑了"]
+    },
+    {
+      "id": "extraIntel",
+      "name": "一手情报",
+      "aliases": ["extraIntel", "extra_intel", "first_intel", "一手情报"]
+    },
+    {
+      "id": "purpleDouble",
+      "name": "加倍！！",
+      "aliases": ["purpleDouble", "purple_double", "紫色加倍", "加倍！！"]
+    },
+    {
+      "id": "goldDouble",
+      "name": "加倍！！！",
+      "aliases": ["goldDouble", "gold_double", "金色加倍", "加倍！！！"]
+    },
+    {
+      "id": "sparkle",
+      "name": "闪耀之心",
+      "aliases": ["sparkle", "shining_heart", "闪耀之心"]
+    },
+    {
+      "id": "welfare",
+      "name": "福利多多",
+      "aliases": ["welfare", "福利多多"]
+    },
+    {
+      "id": "gemMaze",
+      "name": "宝石迷阵",
+      "aliases": ["gemMaze", "gem_maze", "宝石迷阵", "宝石迷宫"]
+    }
+  ],
+  "boxesByVenue": {
+    "未知场地": ["未知箱型"],
+    "初级场 · 海贝场": [
+      "破损的包裹 · 紫色提升",
+      "完整的包裹 · 金色提升",
+      "浸水的包裹 · 紫色提升",
+      "无名包裹 · 红色提升"
+    ],
+    "中级场 · 珊瑚场": [
+      "机械宝箱 · 科技类概率提升",
+      "美食宝箱 · 食品类概率提升",
+      "实木宝箱 · 中级藏品概率提升",
+      "琉璃宝箱 · 宝石类概率提升",
+      "皮制宝箱 · 高级藏品概率提升",
+      "螺钿宝箱 · 古董类概率提升"
+    ],
+    "高级场 · 真珠场": ["未知高级场箱型"]
+  },
+  "observedBoxes": {
+    "gaoji": [
+      {
+        "name": "完整的保险箱（高级藏品概率提升）",
+        "bias": "高级藏品概率提升",
+        "status": "observed",
+        "source": "user_stream_screenshot",
+        "evidenceFile": "033da4b176d1ca45156c2ef2f9f34cd2_720.png"
+      },
+      {
+        "name": "璀璨的保险箱（宝石类概率提升）",
+        "bias": "宝石类概率提升",
+        "status": "observed",
+        "source": "user_stream_screenshot",
+        "evidenceFile": "23a760512d3262a48a9b8087c26ed821_720.png"
+      },
+      {
+        "name": "古典的保险箱（古董类概率提升）",
+        "bias": "古董类概率提升",
+        "status": "observed",
+        "source": "user_stream_screenshot",
+        "evidenceFile": "464f0019643a62b6c6b4733370161c20_720.png"
+      },
+      {
+        "name": "精工的保险箱（科技类概率提升）",
+        "bias": "科技类概率提升",
+        "status": "observed",
+        "source": "user_stream_screenshot",
+        "evidenceFile": "464f0019643a62b6c6b4733370161c20_720.png"
+      },
+      {
+        "name": "奇趣的保险箱（食品类概率提升）",
+        "bias": "食品类概率提升",
+        "status": "observed",
+        "source": "user_stream_screenshot",
+        "evidenceFile": "f0cb8418d5e56132715a30c696f43630_720.png"
+      },
+      {
+        "name": "锈蚀的保险箱（中级藏品概率提升）",
+        "bias": "中级藏品概率提升",
+        "status": "observed",
+        "source": "user_stream_screenshot",
+        "evidenceFile": "f0cb8418d5e56132715a30c696f43630_720.png"
+      }
+    ]
+  },
+  "boxAliases": {
+    "未知箱型": "未知箱型",
+    "破损": "破损的包裹 · 紫色提升",
+    "破损的包裹": "破损的包裹 · 紫色提升",
+    "破损的包裹 · 紫色提升": "破损的包裹 · 紫色提升",
+    "破损的包裹 · 低级提升": "破损的包裹 · 紫色提升",
+    "完整": "完整的包裹 · 金色提升",
+    "完整的包裹": "完整的包裹 · 金色提升",
+    "完整（中级藏品提升）": "完整的包裹 · 金色提升",
+    "完整的包裹 · 金色提升": "完整的包裹 · 金色提升",
+    "完整的包裹 · 中级提升": "完整的包裹 · 金色提升",
+    "浸水": "浸水的包裹 · 紫色提升",
+    "浸水的包裹": "浸水的包裹 · 紫色提升",
+    "浸水的包裹 · 紫色提升": "浸水的包裹 · 紫色提升",
+    "浸水的包裹 · 低级提升": "浸水的包裹 · 紫色提升",
+    "无名": "无名包裹 · 红色提升",
+    "无名包裹": "无名包裹 · 红色提升",
+    "无名包裹 · 红色提升": "无名包裹 · 红色提升",
+    "无名包裹 · 高级提升": "无名包裹 · 红色提升",
+    "机械宝箱": "机械宝箱 · 科技类概率提升",
+    "机械宝箱 · 科技类概率提升": "机械宝箱 · 科技类概率提升",
+    "美食宝箱": "美食宝箱 · 食品类概率提升",
+    "美食宝箱 · 食品类概率提升": "美食宝箱 · 食品类概率提升",
+    "实木宝箱": "实木宝箱 · 中级藏品概率提升",
+    "实木宝箱 · 中级藏品概率提升": "实木宝箱 · 中级藏品概率提升",
+    "琉璃宝箱": "琉璃宝箱 · 宝石类概率提升",
+    "琉璃宝箱 · 宝石类概率提升": "琉璃宝箱 · 宝石类概率提升",
+    "皮制宝箱": "皮制宝箱 · 高级藏品概率提升",
+    "皮制宝箱 · 高级藏品概率提升": "皮制宝箱 · 高级藏品概率提升",
+    "螺钿宝箱": "螺钿宝箱 · 古董类概率提升",
+    "螺钿宝箱 · 古董类概率提升": "螺钿宝箱 · 古董类概率提升",
+    "未知高级场箱型": "未知高级场箱型"
+  },
+  "toolGroups": [
+    {
+      "id": "group1",
+      "label": "常用流程 · R1金均 / R2紫数",
+      "aliases": ["group1", "常用流程 · R1金均 / R2紫数", "常用流程"]
+    },
+    {
+      "id": "group2",
+      "label": "完全随机 · 按当前可用道具",
+      "aliases": ["group2", "完全随机 · 按当前可用道具", "完全随机"]
+    }
+  ]
+}

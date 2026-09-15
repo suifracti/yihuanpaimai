@@ -1,0 +1,35 @@
+{
+  "hwnd": 206709930,
+  "title": "⚡ 异环拍卖战术助手 HUD",
+  "box": [
+    1960,
+    60,
+    2520,
+    138
+  ],
+  "default": {
+    "type": "overlay_preview_saved",
+    "path": "D:\\yihuanpaimai\\tests\\alpha_live_shots\\review_default.png"
+  },
+  "expanded": {
+    "type": "overlay_preview_saved",
+    "path": "D:\\yihuanpaimai\\tests\\alpha_live_shots\\review_expanded.png"
+  },
+  "popVenue": {
+    "type": "overlay_preview_saved",
+    "path": "D:\\yihuanpaimai\\tests\\alpha_live_shots\\review_popover_venue.png"
+  },
+  "popGaojiBoxes": {
+    "type": "overlay_preview_saved",
+    "path": "D:\\yihuanpaimai\\tests\\alpha_live_shots\\review_popover_gaoji_boxes.png"
+  },
+  "popField": {
+    "type": "overlay_preview_saved",
+    "path": "D:\\yihuanpaimai\\tests\\alpha_live_shots\\review_popover_field.png"
+  },
+  "defaultExists": true,
+  "expandedExists": true,
+  "popVenueExists": true,
+  "popGaojiBoxesExists": true,
+  "popFieldExists": true
+}

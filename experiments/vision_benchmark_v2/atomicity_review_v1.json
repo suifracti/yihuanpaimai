@@ -1,0 +1,345 @@
+{
+  "schemaVersion": "atomicity-review-contract-v1",
+  "reviewVersion": "atomicity-review-v1",
+  "sourceId": "src-c86e85c5712aea00ac7d",
+  "proposalArtifactPath": "experiments/vision_benchmark_v2/proposal_artifact.json",
+  "proposalArtifactHash": "f0103050a96b66fbe696641e30535e41301ce460abad0c0054395d18fdc90314",
+  "reviews": [
+    {
+      "proposalId": "proposal-3f6968ebc9be50c2e62d",
+      "atomicityClassification": "FRAGMENT_OF_ONE_PARENT",
+      "reviewStatus": "reviewed_consistent"
+    },
+    {
+      "proposalId": "proposal-26fe77b641ff1cf7efa9",
+      "atomicityClassification": "ATOMIC_CLEAR",
+      "reviewStatus": "reviewed_consistent"
+    },
+    {
+      "proposalId": "proposal-a35f496a1b87ba304b7e",
+      "atomicityClassification": "FRAGMENT_OF_ONE_PARENT",
+      "reviewStatus": "reviewed_consistent"
+    },
+    {
+      "proposalId": "proposal-7439879df6b916a00aea",
+      "atomicityClassification": "FRAGMENT_OF_ONE_PARENT",
+      "reviewStatus": "reviewed_consistent"
+    },
+    {
+      "proposalId": "proposal-1cfde6cb3957c5a74a51",
+      "atomicityClassification": "FRAGMENT_OF_ONE_PARENT",
+      "reviewStatus": "reviewed_consistent"
+    },
+    {
+      "proposalId": "proposal-51edcfdcacbdf055489e",
+      "atomicityClassification": "FRAGMENT_OF_ONE_PARENT",
+      "reviewStatus": "reviewed_consistent"
+    },
+    {
+      "proposalId": "proposal-e2c85dd8e1f3b6a2cfe6",
+      "atomicityClassification": "FRAGMENT_OF_ONE_PARENT",
+      "reviewStatus": "reviewed_consistent"
+    },
+    {
+      "proposalId": "proposal-42f8be36ecf5587cce57",
+      "atomicityClassification": "FRAGMENT_OF_ONE_PARENT",
+      "reviewStatus": "reviewed_consistent"
+    },
+    {
+      "proposalId": "proposal-7f75bfbaa2fa78bc7c87",
+      "atomicityClassification": "FRAGMENT_OF_ONE_PARENT",
+      "reviewStatus": "reviewed_consistent"
+    },
+    {
+      "proposalId": "proposal-92e623cc46426424b524",
+      "atomicityClassification": "FRAGMENT_OF_ONE_PARENT",
+      "reviewStatus": "reviewed_consistent"
+    },
+    {
+      "proposalId": "proposal-44d473f3458cff319236",
+      "atomicityClassification": "MIXED_MULTI_PARENT",
+      "reviewStatus": "reviewed_consistent"
+    },
+    {
+      "proposalId": "proposal-39a26907892f7bba51a6",
+      "atomicityClassification": "ATOMIC_CLEAR",
+      "reviewStatus": "reviewed_consistent"
+    },
+    {
+      "proposalId": "proposal-c4aed85c702a512aa226",
+      "atomicityClassification": "ATOMIC_CLEAR",
+      "reviewStatus": "reviewed_consistent"
+    },
+    {
+      "proposalId": "proposal-6a5c52733134c803129a",
+      "atomicityClassification": "FRAGMENT_OF_ONE_PARENT",
+      "reviewStatus": "reviewed_consistent"
+    },
+    {
+      "proposalId": "proposal-17cb35cd9c08e980c0e6",
+      "atomicityClassification": "FRAGMENT_OF_ONE_PARENT",
+      "reviewStatus": "reviewed_consistent"
+    },
+    {
+      "proposalId": "proposal-c700f67b2be29f2a288e",
+      "atomicityClassification": "ATOMIC_CLEAR",
+      "reviewStatus": "reviewed_consistent"
+    },
+    {
+      "proposalId": "proposal-5fcee11df94349a175a4",
+      "atomicityClassification": "MIXED_MULTI_PARENT",
+      "reviewStatus": "reviewed_consistent"
+    },
+    {
+      "proposalId": "proposal-ab6e10659fa202f3aba3",
+      "atomicityClassification": "MIXED_MULTI_PARENT",
+      "reviewStatus": "reviewed_consistent"
+    },
+    {
+      "proposalId": "proposal-10cbca300c0d6f203c69",
+      "atomicityClassification": "FRAGMENT_OF_ONE_PARENT",
+      "reviewStatus": "reviewed_consistent"
+    },
+    {
+      "proposalId": "proposal-68f2e7e3150991fbec7b",
+      "atomicityClassification": "ATOMIC_CLEAR",
+      "reviewStatus": "reviewed_consistent"
+    },
+    {
+      "proposalId": "proposal-388973a6aacf3de56f57",
+      "atomicityClassification": "ATOMIC_CLEAR",
+      "reviewStatus": "reviewed_consistent"
+    },
+    {
+      "proposalId": "proposal-66af90cd8e38302ddcd5",
+      "atomicityClassification": "FRAGMENT_OF_ONE_PARENT",
+      "reviewStatus": "reviewed_consistent"
+    },
+    {
+      "proposalId": "proposal-8bd190c9b718b168a694",
+      "atomicityClassification": "FRAGMENT_OF_ONE_PARENT",
+      "reviewStatus": "reviewed_consistent"
+    },
+    {
+      "proposalId": "proposal-fbdead5dc893e8c4f419",
+      "atomicityClassification": "ATOMIC_CLEAR",
+      "reviewStatus": "reviewed_consistent"
+    },
+    {
+      "proposalId": "proposal-1b68b91599db03d3c32a",
+      "atomicityClassification": "MIXED_MULTI_PARENT",
+      "reviewStatus": "reviewed_consistent"
+    },
+    {
+      "proposalId": "proposal-22db60995264fcd59d39",
+      "atomicityClassification": "FRAGMENT_OF_ONE_PARENT",
+      "reviewStatus": "reviewed_consistent"
+    },
+    {
+      "proposalId": "proposal-7bfda0f751c2008b4ad9",
+      "atomicityClassification": "FRAGMENT_OF_ONE_PARENT",
+      "reviewStatus": "reviewed_consistent"
+    },
+    {
+      "proposalId": "proposal-78af733732eccc33714f",
+      "atomicityClassification": "FRAGMENT_OF_ONE_PARENT",
+      "reviewStatus": "reviewed_consistent"
+    },
+    {
+      "proposalId": "proposal-4294fb007503928869b1",
+      "atomicityClassification": "FRAGMENT_OF_ONE_PARENT",
+      "reviewStatus": "reviewed_consistent"
+    },
+    {
+      "proposalId": "proposal-d8081139e14881a54f46",
+      "atomicityClassification": "FRAGMENT_OF_ONE_PARENT",
+      "reviewStatus": "reviewed_consistent"
+    },
+    {
+      "proposalId": "proposal-e62ed642c1b4e844e34b",
+      "atomicityClassification": "FRAGMENT_OF_ONE_PARENT",
+      "reviewStatus": "reviewed_consistent"
+    },
+    {
+      "proposalId": "proposal-b3bc5d0a319756c339b6",
+      "atomicityClassification": "FRAGMENT_OF_ONE_PARENT",
+      "reviewStatus": "reviewed_consistent"
+    },
+    {
+      "proposalId": "proposal-9540e483fbb43d0e9fb3",
+      "atomicityClassification": "FRAGMENT_OF_ONE_PARENT",
+      "reviewStatus": "reviewed_consistent"
+    },
+    {
+      "proposalId": "proposal-9daaa2e1b67a5b5473de",
+      "atomicityClassification": "FRAGMENT_OF_ONE_PARENT",
+      "reviewStatus": "reviewed_consistent"
+    },
+    {
+      "proposalId": "proposal-cb32cb10f80543fbf46c",
+      "atomicityClassification": "FRAGMENT_OF_ONE_PARENT",
+      "reviewStatus": "reviewed_consistent"
+    },
+    {
+      "proposalId": "proposal-0cca811ac3b016de81d9",
+      "atomicityClassification": "FRAGMENT_OF_ONE_PARENT",
+      "reviewStatus": "reviewed_consistent"
+    },
+    {
+      "proposalId": "proposal-6466ce88f36565576c24",
+      "atomicityClassification": "FRAGMENT_OF_ONE_PARENT",
+      "reviewStatus": "reviewed_consistent"
+    },
+    {
+      "proposalId": "proposal-a14206bd4db19be3f104",
+      "atomicityClassification": "FRAGMENT_OF_ONE_PARENT",
+      "reviewStatus": "reviewed_consistent"
+    },
+    {
+      "proposalId": "proposal-9024bee1fb047008467d",
+      "atomicityClassification": "FRAGMENT_OF_ONE_PARENT",
+      "reviewStatus": "reviewed_consistent"
+    },
+    {
+      "proposalId": "proposal-62600c9c9b45210c31f8",
+      "atomicityClassification": "FRAGMENT_OF_ONE_PARENT",
+      "reviewStatus": "reviewed_consistent"
+    },
+    {
+      "proposalId": "proposal-4a057e14bb49d8d9a6ca",
+      "atomicityClassification": "FRAGMENT_OF_ONE_PARENT",
+      "reviewStatus": "reviewed_consistent"
+    },
+    {
+      "proposalId": "proposal-50787b45ecb270fc552a",
+      "atomicityClassification": "FRAGMENT_OF_ONE_PARENT",
+      "reviewStatus": "reviewed_consistent"
+    },
+    {
+      "proposalId": "proposal-57f0e84c5467469bce38",
+      "atomicityClassification": "ATOMIC_CLEAR",
+      "reviewStatus": "reviewed_consistent"
+    },
+    {
+      "proposalId": "proposal-1ce9c560bb170747b4bc",
+      "atomicityClassification": "FRAGMENT_OF_ONE_PARENT",
+      "reviewStatus": "reviewed_consistent"
+    },
+    {
+      "proposalId": "proposal-643f656f5c67a9759dcb",
+      "atomicityClassification": "FRAGMENT_OF_ONE_PARENT",
+      "reviewStatus": "reviewed_consistent"
+    },
+    {
+      "proposalId": "proposal-cf5a1011125ba9833e64",
+      "atomicityClassification": "FRAGMENT_OF_ONE_PARENT",
+      "reviewStatus": "reviewed_consistent"
+    },
+    {
+      "proposalId": "proposal-41c72082eb5676c5cb4d",
+      "atomicityClassification": "FRAGMENT_OF_ONE_PARENT",
+      "reviewStatus": "reviewed_consistent"
+    },
+    {
+      "proposalId": "proposal-4b4a67d66377dc176b31",
+      "atomicityClassification": "FRAGMENT_OF_ONE_PARENT",
+      "reviewStatus": "reviewed_consistent"
+    },
+    {
+      "proposalId": "proposal-ab0548530ddf07334e23",
+      "atomicityClassification": "FRAGMENT_OF_ONE_PARENT",
+      "reviewStatus": "reviewed_consistent"
+    },
+    {
+      "proposalId": "proposal-42b04e25cf65f2010053",
+      "atomicityClassification": "FRAGMENT_OF_ONE_PARENT",
+      "reviewStatus": "reviewed_consistent"
+    },
+    {
+      "proposalId": "proposal-fed9c538fda981abd20c",
+      "atomicityClassification": "FRAGMENT_OF_ONE_PARENT",
+      "reviewStatus": "reviewed_consistent"
+    },
+    {
+      "proposalId": "proposal-4f1d2323f20a56e14ab5",
+      "atomicityClassification": "FRAGMENT_OF_ONE_PARENT",
+      "reviewStatus": "reviewed_consistent"
+    },
+    {
+      "proposalId": "proposal-69e17bc320b5754c02a0",
+      "atomicityClassification": "ATOMIC_CLEAR",
+      "reviewStatus": "reviewed_consistent"
+    },
+    {
+      "proposalId": "proposal-4f4b8f809073855ed857",
+      "atomicityClassification": "FRAGMENT_OF_ONE_PARENT",
+      "reviewStatus": "reviewed_consistent"
+    },
+    {
+      "proposalId": "proposal-a7d6a91229f4935c139b",
+      "atomicityClassification": "FRAGMENT_OF_ONE_PARENT",
+      "reviewStatus": "reviewed_consistent"
+    },
+    {
+      "proposalId": "proposal-99ffee4f75a9bb602d7a",
+      "atomicityClassification": "FRAGMENT_OF_ONE_PARENT",
+      "reviewStatus": "reviewed_consistent"
+    },
+    {
+      "proposalId": "proposal-f28ddd713184a1d3ff00",
+      "atomicityClassification": "FRAGMENT_OF_ONE_PARENT",
+      "reviewStatus": "reviewed_consistent"
+    },
+    {
+      "proposalId": "proposal-6c0f34068689cb1e5410",
+      "atomicityClassification": "FRAGMENT_OF_ONE_PARENT",
+      "reviewStatus": "reviewed_consistent"
+    },
+    {
+      "proposalId": "proposal-1802df13bf9f65596ca3",
+      "atomicityClassification": "FRAGMENT_OF_ONE_PARENT",
+      "reviewStatus": "reviewed_consistent"
+    },
+    {
+      "proposalId": "proposal-b35740512967dcdd6510",
+      "atomicityClassification": "FRAGMENT_OF_ONE_PARENT",
+      "reviewStatus": "reviewed_consistent"
+    },
+    {
+      "proposalId": "proposal-90c567e697a0f910895f",
+      "atomicityClassification": "FRAGMENT_OF_ONE_PARENT",
+      "reviewStatus": "reviewed_consistent"
+    },
+    {
+      "proposalId": "proposal-43a94e18c191c9268276",
+      "atomicityClassification": "FRAGMENT_OF_ONE_PARENT",
+      "reviewStatus": "reviewed_consistent"
+    },
+    {
+      "proposalId": "proposal-f647a67177f085529d0f",
+      "atomicityClassification": "FRAGMENT_OF_ONE_PARENT",
+      "reviewStatus": "reviewed_consistent"
+    },
+    {
+      "proposalId": "proposal-031da3c8719343f83304",
+      "atomicityClassification": "FRAGMENT_OF_ONE_PARENT",
+      "reviewStatus": "reviewed_consistent"
+    },
+    {
+      "proposalId": "proposal-4f5a25c82b1c75408c72",
+      "atomicityClassification": "FRAGMENT_OF_ONE_PARENT",
+      "reviewStatus": "reviewed_consistent"
+    },
+    {
+      "proposalId": "proposal-ec6fd5dc2c4f4c90e4a9",
+      "atomicityClassification": "FRAGMENT_OF_ONE_PARENT",
+      "reviewStatus": "reviewed_consistent"
+    }
+  ],
+  "reviewEvidence": {
+    "evidenceType": "manual_source_geometry_review",
+    "sourceSnapshotPath": "experiments/vision_benchmark_v2/snapshots/source-c86e85c5712aea00ac7d.png",
+    "reviewerRole": "human_reviewer",
+    "note": "Geometry-only manual review of all 66 frozen production proposals. No item identity, quality, truth, or queue authority is asserted."
+  }
+}

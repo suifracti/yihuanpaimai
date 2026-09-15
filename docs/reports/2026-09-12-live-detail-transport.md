@@ -1,0 +1,11 @@
+# 自动估价详细字段传递与缓存
+
+业务提交f7aa1ae。live_shadow._solver_ctx此前漏传totalItems/goldTotal/goldGrid/purpleGrid及蓝绿白数量/均价/占格；缓存只含totalGrids而不含totalGrid及publicInfo。新增同一_detail_context供运行输入与缓存键使用：保留0、统一totalGrid/totalGrids别名、合并publicInfo，输入改变不能继续命中过时支持结果。
+
+live-detail-final-tests.json 15项通过5.516秒，无跳过。逐字段0/7进入运行上下文并改变缓存键；总占格别名等价、嵌套0优先；真实Node shadow_profile_v06.similarityFor验证输入总件/总格/金格/紫格/蓝数后相似度得分确实变化。异步调度及历史刷新回归通过。本轮未跑真实Main/HUD完整估价，不声称所有字段都是硬约束或提升准确率。
+
+首次14项回归中一项旧测试失败：_archive_ctx仅给账单且无核准truth，当前AutoArchiver正确保存DRAFT，旧断言却要求进入历史估价快照。更正该测试为DRAFT落盘、内存样本数量/代次不变、不含新草稿id；没有放宽生产准入。初次结果live-detail-tests.json保留。
+
+尚发现生产live_shadow_compute精确枚举传递字段有限，auction_engine_v06的totalGrids/goldGrids在该精确枚举函数中仅声明、未用于筛选。部分字段目前用于历史相似度或组成补偿，不能仅凭本轮传递称精确占格约束完成。下一步核对精确组成推断的占格约束与UI作用说明，同时核对人工修改遇到旧publicInfo的优先级，再推进隔离包。
+
+P3 PARTIAL，逐件匹配暂停，本人获胜实录仍缺。正式历史SHA256仍19100479bbb2dfd8e09faa2adbaf5117919126df4b4bcf92e377ad88c4da3431，v13未覆盖，无真实游戏输入。

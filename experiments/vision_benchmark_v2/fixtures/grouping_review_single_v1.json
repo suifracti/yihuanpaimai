@@ -1,0 +1,25 @@
+{
+  "groupingVersion": "parent-grouping-review-v1",
+  "sourceId": "src-c86e85c5712aea00ac7d",
+  "proposalArtifactPath": "experiments/vision_benchmark_v2/proposal_artifact.json",
+  "proposalArtifactHash": "f0103050a96b66fbe696641e30535e41301ce460abad0c0054395d18fdc90314",
+  "atomicityReviewPath": "experiments/vision_benchmark_v2/atomicity_review_v1.json",
+  "atomicityReviewHash": "8e0e7d63420028516f8792992dbf7dbc47107f99fe9172380e666a8759b64415",
+  "groups": [
+    {
+      "groupId": "group-4a71692b765b68a8",
+      "memberProposalIds": ["proposal-57f0e84c5467469bce38"],
+      "resolvedParentBbox": [61, 164, 92, 197],
+      "bboxCoordinateSpace": "source_pixel",
+      "bboxDerivation": "proposal_bbox",
+      "resolutionMethod": "single_proposal",
+      "reviewStatus": "reviewed_consistent",
+      "reviewEvidence": {
+        "evidenceType": "manual_source_review",
+        "sourceSnapshotPath": "experiments/vision_benchmark_v2/snapshots/source-c86e85c5712aea00ac7d.png",
+        "reviewerRole": "human_reviewer",
+        "note": "Source review confirms this saved proposal is one physical parent; no identity or quality is asserted."
+      }
+    }
+  ]
+}

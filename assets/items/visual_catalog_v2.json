@@ -1,0 +1,1937 @@
+{
+  "schemaVersion": "visual-catalog.v2",
+  "scope": "Verified screenshot reference facts for recognition only; does not replace historical solver price snapshots.",
+  "records": [
+    {
+      "catalogId": "image18-1-2",
+      "name": "智能笔筒",
+      "value": 8177,
+      "rarity": "purple",
+      "width": 2,
+      "height": 2,
+      "sourcePath": "assets/items/catalog_screenshots/2X2/{E979E688-0FB8-4D82-BED5-C0FA4B86B848}.png",
+      "sourceSha256": "dc9ce35eaf9fe92425a27cf64d387838a4ae0a199c5333841dbaa8b2d36a1d6c",
+      "cardBbox": [
+        17,
+        20,
+        366,
+        236
+      ],
+      "reviewStatus": "VISUALLY_CHECKED_SOURCE_CARD",
+      "legacyCatalogId": "image18-1-2"
+    },
+    {
+      "catalogId": "visual-9607b248bbf4",
+      "name": "猫丸秘制豚骨拉面",
+      "value": 9040,
+      "rarity": "gold",
+      "width": 1,
+      "height": 1,
+      "sourcePath": "assets/items/catalog_screenshots/1x1/{9138F8CF-782A-4086-937D-FAF3CD4E810B}.png",
+      "sourceSha256": "e843bdbfe7adb53ec5e8c73f13692e10c075548aa615932535b5bd50df19eda2",
+      "cardBbox": [
+        767,
+        268,
+        383,
+        269
+      ],
+      "reviewStatus": "VISUALLY_CHECKED_SOURCE_CARD",
+      "legacyCatalogId": null
+    },
+    {
+      "catalogId": "image34-0-0",
+      "name": "一簇幽火",
+      "value": 260423,
+      "rarity": "red",
+      "width": 3,
+      "height": 3,
+      "sourcePath": "assets/items/catalog_screenshots/3X3/{AF7A8555-2180-49BC-9395-F0DD5444F0EE}.png",
+      "sourceSha256": "52c13ad0ec367c44ca512749fe03cfb1106c7f9c814a468d588249c1235dbdaf",
+      "cardBbox": [
+        28,
+        43,
+        366,
+        236
+      ],
+      "reviewStatus": "VISUALLY_CHECKED_SOURCE_CARD",
+      "legacyCatalogId": "image34-0-0"
+    },
+    {
+      "catalogId": "image10-1-2",
+      "name": "引航者望远镜",
+      "value": 4840,
+      "rarity": "blue",
+      "width": 3,
+      "height": 2,
+      "sourcePath": "assets/items/catalog_screenshots/3X2/{1C65BF0E-A101-4042-A9D7-9653D84BCAD1}.png",
+      "sourceSha256": "8a7797b78d26fb9c92308b04d8b504e4abf8ae6957f67907bc6da31cabfd9897",
+      "cardBbox": [
+        779,
+        0,
+        382,
+        272
+      ],
+      "reviewStatus": "VISUALLY_CHECKED_SOURCE_CARD",
+      "legacyCatalogId": "image10-1-2"
+    },
+    {
+      "catalogId": "image16-0-2",
+      "name": "噗卡好梦棉花糖",
+      "value": 995,
+      "rarity": "blue",
+      "width": 1,
+      "height": 1,
+      "sourcePath": "assets/items/catalog_screenshots/1x1/{92DEEC27-CED4-4688-95EC-5A01A337AF9D}.png",
+      "sourceSha256": "5846d029ee2213c1f19321b6baac89c770ec6cd5ba731efd34a961b403b40fad",
+      "cardBbox": [
+        415,
+        287,
+        366,
+        236
+      ],
+      "reviewStatus": "VISUALLY_CHECKED_SOURCE_CARD",
+      "legacyCatalogId": "image16-0-2"
+    },
+    {
+      "catalogId": "image15-0-2",
+      "name": "扭扭饼干",
+      "value": 1021,
+      "rarity": "blue",
+      "width": 1,
+      "height": 1,
+      "sourcePath": "assets/items/catalog_screenshots/1x1/{E4BB419A-6292-4A50-9CEB-D3351D50AF74}.png",
+      "sourceSha256": "2efe7afa85c29ef1243203ccb1772c7b33ef8351720a297787e86dc4c11bf1e9",
+      "cardBbox": [
+        394,
+        280,
+        366,
+        241
+      ],
+      "reviewStatus": "VISUALLY_CHECKED_SOURCE_CARD",
+      "legacyCatalogId": "image15-0-2"
+    },
+    {
+      "catalogId": "image23-1-0",
+      "name": "月白沙",
+      "value": 2441,
+      "rarity": "purple",
+      "width": 1,
+      "height": 1,
+      "sourcePath": "assets/items/catalog_screenshots/1x1/{16B07C02-E13A-4195-8F67-C8A4041C7B87}.png",
+      "sourceSha256": "9f98e96a63192b44e90e4c530f754d268605fe8283da2b013cde608ac615ccc4",
+      "cardBbox": [
+        780,
+        0,
+        390,
+        271
+      ],
+      "reviewStatus": "VISUALLY_CHECKED_SOURCE_CARD",
+      "legacyCatalogId": "image23-1-0"
+    },
+    {
+      "catalogId": "image17-1-2",
+      "name": "落雪水晶球",
+      "value": 15257,
+      "rarity": "purple",
+      "width": 2,
+      "height": 3,
+      "sourcePath": "assets/items/catalog_screenshots/2X3/{5432C3CC-00E0-43D0-8461-DD6A7E64552D}.png",
+      "sourceSha256": "b7c9219049c3f10b1452cd3b196515759373fc72ca2203b358a6f1ac2a0d160c",
+      "cardBbox": [
+        783,
+        0,
+        392,
+        264
+      ],
+      "reviewStatus": "VISUALLY_CHECKED_SOURCE_CARD",
+      "legacyCatalogId": "image17-1-2"
+    },
+    {
+      "catalogId": "image26-0-0",
+      "name": "乔望尼金雕像",
+      "value": 271827,
+      "rarity": "gold",
+      "width": 4,
+      "height": 5,
+      "sourcePath": "assets/items/catalog_screenshots/4X5/{3926DFDD-7627-4780-B786-3D4910511CA2}.png",
+      "sourceSha256": "a936c0ffebad090b7bafebf130ddebdd0db71338264e385657b35b34c1e31a1c",
+      "cardBbox": [
+        33,
+        70,
+        368,
+        236
+      ],
+      "reviewStatus": "VISUALLY_CHECKED_SOURCE_CARD",
+      "legacyCatalogId": "image26-0-0"
+    },
+    {
+      "catalogId": "image21-1-1",
+      "name": "万能遥控器",
+      "value": 4557,
+      "rarity": "purple",
+      "width": 2,
+      "height": 1,
+      "sourcePath": "assets/items/catalog_screenshots/2X1/{82CFB2D0-B389-4430-B693-85C796393974}.png",
+      "sourceSha256": "f20d22e344b30ff3d790da9f8309254e835add8920c2afbe7e3eb0f440fc3089",
+      "cardBbox": [
+        394,
+        285,
+        366,
+        236
+      ],
+      "reviewStatus": "VISUALLY_CHECKED_SOURCE_CARD",
+      "legacyCatalogId": "image21-1-1"
+    },
+    {
+      "catalogId": "image31-1-0",
+      "name": "大满贯手握",
+      "value": 7610,
+      "rarity": "gold",
+      "width": 2,
+      "height": 1,
+      "sourcePath": "assets/items/catalog_screenshots/2X1/{82CFB2D0-B389-4430-B693-85C796393974}.png",
+      "sourceSha256": "f20d22e344b30ff3d790da9f8309254e835add8920c2afbe7e3eb0f440fc3089",
+      "cardBbox": [
+        13,
+        30,
+        366,
+        236
+      ],
+      "reviewStatus": "VISUALLY_CHECKED_SOURCE_CARD",
+      "legacyCatalogId": "image31-1-0"
+    },
+    {
+      "catalogId": "image11-1-0",
+      "name": "断落的剑刃",
+      "value": 3665,
+      "rarity": "blue",
+      "width": 1,
+      "height": 3,
+      "sourcePath": "assets/items/catalog_screenshots/1X3/{4B4BA98A-9DF4-4399-8B1B-754510B27C7A}.png",
+      "sourceSha256": "b76f26da9abcbb2f7cb3cb040bc0de2eb2b9cf6f2a053eae678203cf93295885",
+      "cardBbox": [
+        397,
+        260,
+        366,
+        236
+      ],
+      "reviewStatus": "VISUALLY_CHECKED_SOURCE_CARD",
+      "legacyCatalogId": "image11-1-0"
+    },
+    {
+      "catalogId": "image22-1-0",
+      "name": "双色冰棍",
+      "value": 3666,
+      "rarity": "purple",
+      "width": 2,
+      "height": 1,
+      "sourcePath": "assets/items/catalog_screenshots/2X1/{4C68408B-B5A3-46E8-8049-C0B8065ADE60}.png",
+      "sourceSha256": "e2a074bd0588230fcfba5467b094d2a27fc7f433b84672206ca4282753958fb3",
+      "cardBbox": [
+        776,
+        0,
+        388,
+        266
+      ],
+      "reviewStatus": "VISUALLY_CHECKED_SOURCE_CARD",
+      "legacyCatalogId": "image22-1-0"
+    },
+    {
+      "catalogId": "image8-0-1",
+      "name": "墨染瓶",
+      "value": 909,
+      "rarity": "green",
+      "width": 1,
+      "height": 2,
+      "sourcePath": "assets/items/catalog_screenshots/1X2/{39EB6D1F-C312-4C1E-A622-BFADD00F264F}.png",
+      "sourceSha256": "0024658bc1d009e357b95cd25681f5fb1ff804faabccabe85e12a12924fd7138",
+      "cardBbox": [
+        395,
+        279,
+        366,
+        236
+      ],
+      "reviewStatus": "VISUALLY_CHECKED_SOURCE_CARD",
+      "legacyCatalogId": "image8-0-1"
+    },
+    {
+      "catalogId": "image22-0-2",
+      "name": "大将军章鱼烧",
+      "value": 3667,
+      "rarity": "purple",
+      "width": 2,
+      "height": 1,
+      "sourcePath": "assets/items/catalog_screenshots/2X1/{4C68408B-B5A3-46E8-8049-C0B8065ADE60}.png",
+      "sourceSha256": "e2a074bd0588230fcfba5467b094d2a27fc7f433b84672206ca4282753958fb3",
+      "cardBbox": [
+        402,
+        21,
+        366,
+        236
+      ],
+      "reviewStatus": "VISUALLY_CHECKED_SOURCE_CARD",
+      "legacyCatalogId": "image22-0-2"
+    },
+    {
+      "catalogId": "image14-0-0",
+      "name": "清凉凉止痛药",
+      "value": 1815,
+      "rarity": "blue",
+      "width": 2,
+      "height": 1,
+      "sourcePath": "assets/items/catalog_screenshots/2X1/{E065324C-AC60-41CF-B56A-8043A3B76C53}.png",
+      "sourceSha256": "cf0981c366d1f48083a3c7f2acd476edbd941eca32a1c1ab587224d2d26148e5",
+      "cardBbox": [
+        10,
+        20,
+        366,
+        236
+      ],
+      "reviewStatus": "VISUALLY_CHECKED_SOURCE_CARD",
+      "legacyCatalogId": "image14-0-0"
+    },
+    {
+      "catalogId": "image14-0-2",
+      "name": "复古圆桌",
+      "value": 1682,
+      "rarity": "blue",
+      "width": 2,
+      "height": 1,
+      "sourcePath": "assets/items/catalog_screenshots/2X1/{E065324C-AC60-41CF-B56A-8043A3B76C53}.png",
+      "sourceSha256": "cf0981c366d1f48083a3c7f2acd476edbd941eca32a1c1ab587224d2d26148e5",
+      "cardBbox": [
+        391,
+        20,
+        366,
+        236
+      ],
+      "reviewStatus": "VISUALLY_CHECKED_SOURCE_CARD",
+      "legacyCatalogId": "image14-0-2"
+    },
+    {
+      "catalogId": "image15-1-2",
+      "name": "无梦果核",
+      "value": 1012,
+      "rarity": "blue",
+      "width": 1,
+      "height": 1,
+      "sourcePath": "assets/items/catalog_screenshots/1x1/{92DEEC27-CED4-4688-95EC-5A01A337AF9D}.png",
+      "sourceSha256": "5846d029ee2213c1f19321b6baac89c770ec6cd5ba731efd34a961b403b40fad",
+      "cardBbox": [
+        394,
+        0,
+        393,
+        266
+      ],
+      "reviewStatus": "VISUALLY_CHECKED_SOURCE_CARD",
+      "legacyCatalogId": "image15-1-2"
+    },
+    {
+      "catalogId": "image18-0-1",
+      "name": "「方盒科技」平板",
+      "value": 11038,
+      "rarity": "purple",
+      "width": 2,
+      "height": 3,
+      "sourcePath": "assets/items/catalog_screenshots/2X3/{5432C3CC-00E0-43D0-8461-DD6A7E64552D}.png",
+      "sourceSha256": "b7c9219049c3f10b1452cd3b196515759373fc72ca2203b358a6f1ac2a0d160c",
+      "cardBbox": [
+        392,
+        264,
+        391,
+        263
+      ],
+      "reviewStatus": "VISUALLY_CHECKED_SOURCE_CARD",
+      "legacyCatalogId": "image18-0-1"
+    },
+    {
+      "catalogId": "image12-0-1",
+      "name": "涂鸦板",
+      "value": 3502,
+      "rarity": "blue",
+      "width": 4,
+      "height": 1,
+      "sourcePath": "assets/items/catalog_screenshots/4X1/{7DB91AEB-261E-41F0-831D-424EEDA94025}.png",
+      "sourceSha256": "49e4872e3aafe2727692b89e5efef2e0b6ef10e915d84fb44d52819f22a4ebbe",
+      "cardBbox": [
+        791,
+        36,
+        370,
+        236
+      ],
+      "reviewStatus": "VISUALLY_CHECKED_SOURCE_CARD",
+      "legacyCatalogId": "image12-0-1"
+    },
+    {
+      "catalogId": "image11-0-1",
+      "name": "烟紫水晶",
+      "value": 3987,
+      "rarity": "blue",
+      "width": 1,
+      "height": 3,
+      "sourcePath": "assets/items/catalog_screenshots/1X3/{4B4BA98A-9DF4-4399-8B1B-754510B27C7A}.png",
+      "sourceSha256": "b76f26da9abcbb2f7cb3cb040bc0de2eb2b9cf6f2a053eae678203cf93295885",
+      "cardBbox": [
+        16,
+        260,
+        366,
+        236
+      ],
+      "reviewStatus": "VISUALLY_CHECKED_SOURCE_CARD",
+      "legacyCatalogId": "image11-0-1"
+    },
+    {
+      "catalogId": "image5-1-0",
+      "name": "炫动三角铁",
+      "value": 1822,
+      "rarity": "green",
+      "width": 3,
+      "height": 1,
+      "sourcePath": "assets/items/catalog_screenshots/3X1/{D344DCA6-157C-48CC-A884-0A5246CC4FFB}.png",
+      "sourceSha256": "46444e231c8778da86d71269b924712933a53539beabb46189d91ae3a79ca593",
+      "cardBbox": [
+        783,
+        277,
+        354,
+        236
+      ],
+      "reviewStatus": "VISUALLY_CHECKED_SOURCE_CARD",
+      "legacyCatalogId": "image5-1-0"
+    },
+    {
+      "catalogId": "image13-0-1",
+      "name": "柠檬气泡水",
+      "value": 2224,
+      "rarity": "blue",
+      "width": 1,
+      "height": 3,
+      "sourcePath": "assets/items/catalog_screenshots/1X3/{4B4BA98A-9DF4-4399-8B1B-754510B27C7A}.png",
+      "sourceSha256": "b76f26da9abcbb2f7cb3cb040bc0de2eb2b9cf6f2a053eae678203cf93295885",
+      "cardBbox": [
+        774,
+        259,
+        387,
+        259
+      ],
+      "reviewStatus": "VISUALLY_CHECKED_SOURCE_CARD",
+      "legacyCatalogId": "image13-0-1"
+    },
+    {
+      "catalogId": "image3-1-0",
+      "name": "崭新的弹珠",
+      "value": 100,
+      "rarity": "white",
+      "width": 1,
+      "height": 1,
+      "sourcePath": "assets/items/catalog_screenshots/1x1/{F65172DF-A42B-433D-A395-E648C0D920E1}.png",
+      "sourceSha256": "06f9dbe6bdba81100f0c98822a6b74973669c7552fec905b7a36754512e5be38",
+      "cardBbox": [
+        405,
+        26,
+        366,
+        236
+      ],
+      "reviewStatus": "VISUALLY_CHECKED_SOURCE_CARD",
+      "legacyCatalogId": "image3-1-0"
+    },
+    {
+      "catalogId": "image1-1-2",
+      "name": "艺术画「花原」",
+      "value": 241,
+      "rarity": "white",
+      "width": 1,
+      "height": 2,
+      "sourcePath": "assets/items/catalog_screenshots/1X2/{39EB6D1F-C312-4C1E-A622-BFADD00F264F}.png",
+      "sourceSha256": "0024658bc1d009e357b95cd25681f5fb1ff804faabccabe85e12a12924fd7138",
+      "cardBbox": [
+        776,
+        279,
+        366,
+        236
+      ],
+      "reviewStatus": "VISUALLY_CHECKED_SOURCE_CARD",
+      "legacyCatalogId": "image1-1-2"
+    },
+    {
+      "catalogId": "image16-0-0",
+      "name": "（未来的）大师飞镖",
+      "value": 996,
+      "rarity": "blue",
+      "width": 1,
+      "height": 1,
+      "sourcePath": "assets/items/catalog_screenshots/1x1/{92DEEC27-CED4-4688-95EC-5A01A337AF9D}.png",
+      "sourceSha256": "5846d029ee2213c1f19321b6baac89c770ec6cd5ba731efd34a961b403b40fad",
+      "cardBbox": [
+        787,
+        0,
+        394,
+        266
+      ],
+      "reviewStatus": "VISUALLY_CHECKED_SOURCE_CARD",
+      "legacyCatalogId": "image16-0-0"
+    },
+    {
+      "catalogId": "image7-0-0",
+      "name": "惠比寿宫廷小塔",
+      "value": 1056,
+      "rarity": "green",
+      "width": 2,
+      "height": 1,
+      "sourcePath": "assets/items/catalog_screenshots/2X1/{48710325-8642-4753-AAFD-302E079D2B93}.png",
+      "sourceSha256": "24b1a803efaa5a13edc21494a4aa5d266026e5424327dca035b8cf63b3d08bba",
+      "cardBbox": [
+        24,
+        19,
+        366,
+        236
+      ],
+      "reviewStatus": "VISUALLY_CHECKED_SOURCE_CARD",
+      "legacyCatalogId": "image7-0-0"
+    },
+    {
+      "catalogId": "image30-0-2",
+      "name": "气象指南",
+      "value": 15024,
+      "rarity": "gold",
+      "width": 3,
+      "height": 1,
+      "sourcePath": "assets/items/catalog_screenshots/3X1/{D344DCA6-157C-48CC-A884-0A5246CC4FFB}.png",
+      "sourceSha256": "46444e231c8778da86d71269b924712933a53539beabb46189d91ae3a79ca593",
+      "cardBbox": [
+        783,
+        22,
+        354,
+        236
+      ],
+      "reviewStatus": "VISUALLY_CHECKED_SOURCE_CARD",
+      "legacyCatalogId": "image30-0-2"
+    },
+    {
+      "catalogId": "image11-1-1",
+      "name": "失落的甲胄",
+      "value": 3626,
+      "rarity": "blue",
+      "width": 3,
+      "height": 3,
+      "sourcePath": "assets/items/catalog_screenshots/3X3/{E16EEBF5-DDE4-48DC-B4B5-A7862E8D5FA5}.png",
+      "sourceSha256": "9e182266888e3966da22a4d7b0ef4f25797205006379d2caa1334c5ddf8a2a2f",
+      "cardBbox": [
+        0,
+        0,
+        382,
+        258
+      ],
+      "reviewStatus": "VISUALLY_CHECKED_SOURCE_CARD",
+      "legacyCatalogId": "image11-1-1"
+    },
+    {
+      "catalogId": "image8-0-0",
+      "name": "小小麻雀",
+      "value": 911,
+      "rarity": "green",
+      "width": 1,
+      "height": 2,
+      "sourcePath": "assets/items/catalog_screenshots/1X2/{39EB6D1F-C312-4C1E-A622-BFADD00F264F}.png",
+      "sourceSha256": "0024658bc1d009e357b95cd25681f5fb1ff804faabccabe85e12a12924fd7138",
+      "cardBbox": [
+        14,
+        279,
+        366,
+        236
+      ],
+      "reviewStatus": "VISUALLY_CHECKED_SOURCE_CARD",
+      "legacyCatalogId": "image8-0-0"
+    },
+    {
+      "catalogId": "image23-0-1",
+      "name": "饕目",
+      "value": 3060,
+      "rarity": "purple",
+      "width": 1,
+      "height": 1,
+      "sourcePath": "assets/items/catalog_screenshots/1x1/{16B07C02-E13A-4195-8F67-C8A4041C7B87}.png",
+      "sourceSha256": "9f98e96a63192b44e90e4c530f754d268605fe8283da2b013cde608ac615ccc4",
+      "cardBbox": [
+        0,
+        0,
+        390,
+        271
+      ],
+      "reviewStatus": "VISUALLY_CHECKED_SOURCE_CARD",
+      "legacyCatalogId": "image23-0-1"
+    },
+    {
+      "catalogId": "image27-0-0",
+      "name": "名为显赫的权杖",
+      "value": 77777,
+      "rarity": "gold",
+      "width": 1,
+      "height": 3,
+      "sourcePath": "assets/items/catalog_screenshots/1X3/{8443FC6A-7C86-4902-BAB8-454E077003BF}.png",
+      "sourceSha256": "6f824c36d49ed95947cd348d392dfeb3cf9c32fc283f2827ac107850f83bca64",
+      "cardBbox": [
+        393,
+        31,
+        366,
+        236
+      ],
+      "reviewStatus": "VISUALLY_CHECKED_SOURCE_CARD",
+      "legacyCatalogId": "image27-0-0"
+    },
+    {
+      "catalogId": "image3-1-1",
+      "name": "布妮果实",
+      "value": 99,
+      "rarity": "white",
+      "width": 1,
+      "height": 1,
+      "sourcePath": "assets/items/catalog_screenshots/1x1/{F65172DF-A42B-433D-A395-E648C0D920E1}.png",
+      "sourceSha256": "06f9dbe6bdba81100f0c98822a6b74973669c7552fec905b7a36754512e5be38",
+      "cardBbox": [
+        796,
+        0,
+        398,
+        264
+      ],
+      "reviewStatus": "VISUALLY_CHECKED_SOURCE_CARD",
+      "legacyCatalogId": "image3-1-1"
+    },
+    {
+      "catalogId": "image11-1-2",
+      "name": "觊觎钱币",
+      "value": 3618,
+      "rarity": "blue",
+      "width": 2,
+      "height": 2,
+      "sourcePath": "assets/items/catalog_screenshots/2X2/{DFB6F983-7A0D-41C6-AB47-6C150B5F7770}.png",
+      "sourceSha256": "c06571615098094064711d59881537eca676fc07420d0153c1f787afcb77ea69",
+      "cardBbox": [
+        774,
+        0,
+        387,
+        259
+      ],
+      "reviewStatus": "VISUALLY_CHECKED_SOURCE_CARD",
+      "legacyCatalogId": "image11-1-2"
+    },
+    {
+      "catalogId": "image23-1-1",
+      "name": "幽灵态",
+      "value": 2040,
+      "rarity": "purple",
+      "width": 1,
+      "height": 1,
+      "sourcePath": "assets/items/catalog_screenshots/1x1/{16B07C02-E13A-4195-8F67-C8A4041C7B87}.png",
+      "sourceSha256": "9f98e96a63192b44e90e4c530f754d268605fe8283da2b013cde608ac615ccc4",
+      "cardBbox": [
+        15,
+        290,
+        366,
+        236
+      ],
+      "reviewStatus": "VISUALLY_CHECKED_SOURCE_CARD",
+      "legacyCatalogId": "image23-1-1"
+    },
+    {
+      "catalogId": "image27-1-2",
+      "name": "「强身好伙伴！」",
+      "value": 27246,
+      "rarity": "gold",
+      "width": 1,
+      "height": 5,
+      "sourcePath": "assets/items/catalog_screenshots/1X5/{DE334641-DA72-4330-9D2A-0D11AE3A8AB4}.png",
+      "sourceSha256": "ef04a250e0ace23d7939abb74ecf657060936d423d93d9e0079c0479f31d5a59",
+      "cardBbox": [
+        0,
+        0,
+        409,
+        309
+      ],
+      "reviewStatus": "VISUALLY_CHECKED_SOURCE_CARD",
+      "legacyCatalogId": "image27-1-2"
+    },
+    {
+      "catalogId": "image29-0-2",
+      "name": "「截云」",
+      "value": 18288,
+      "rarity": "gold",
+      "width": 1,
+      "height": 5,
+      "sourcePath": "assets/items/catalog_screenshots/1X5/{DE334641-DA72-4330-9D2A-0D11AE3A8AB4}.png",
+      "sourceSha256": "ef04a250e0ace23d7939abb74ecf657060936d423d93d9e0079c0479f31d5a59",
+      "cardBbox": [
+        409,
+        0,
+        409,
+        309
+      ],
+      "reviewStatus": "VISUALLY_CHECKED_SOURCE_CARD",
+      "legacyCatalogId": "image29-0-2"
+    },
+    {
+      "catalogId": "image4-0-0",
+      "name": "咕比奇原味薯片",
+      "value": 99,
+      "rarity": "white",
+      "width": 1,
+      "height": 1,
+      "sourcePath": "assets/items/catalog_screenshots/1x1/{F65172DF-A42B-433D-A395-E648C0D920E1}.png",
+      "sourceSha256": "06f9dbe6bdba81100f0c98822a6b74973669c7552fec905b7a36754512e5be38",
+      "cardBbox": [
+        405,
+        281,
+        366,
+        236
+      ],
+      "reviewStatus": "VISUALLY_CHECKED_SOURCE_CARD",
+      "legacyCatalogId": "image4-0-0"
+    },
+    {
+      "catalogId": "image26-1-0",
+      "name": "金龙鱼",
+      "value": 111111,
+      "rarity": "gold",
+      "width": 4,
+      "height": 1,
+      "sourcePath": "assets/items/catalog_screenshots/4X1/{7DB91AEB-261E-41F0-831D-424EEDA94025}.png",
+      "sourceSha256": "49e4872e3aafe2727692b89e5efef2e0b6ef10e915d84fb44d52819f22a4ebbe",
+      "cardBbox": [
+        17,
+        36,
+        366,
+        236
+      ],
+      "reviewStatus": "VISUALLY_CHECKED_SOURCE_CARD",
+      "legacyCatalogId": "image26-1-0"
+    },
+    {
+      "catalogId": "image11-0-0",
+      "name": "灯塔",
+      "value": 4034,
+      "rarity": "blue",
+      "width": 1,
+      "height": 3,
+      "sourcePath": "assets/items/catalog_screenshots/1X3/{4B4BA98A-9DF4-4399-8B1B-754510B27C7A}.png",
+      "sourceSha256": "b76f26da9abcbb2f7cb3cb040bc0de2eb2b9cf6f2a053eae678203cf93295885",
+      "cardBbox": [
+        774,
+        0,
+        387,
+        259
+      ],
+      "reviewStatus": "VISUALLY_CHECKED_SOURCE_CARD",
+      "legacyCatalogId": "image11-0-0"
+    },
+    {
+      "catalogId": "image11-0-2",
+      "name": "鳞纹",
+      "value": 3677,
+      "rarity": "blue",
+      "width": 2,
+      "height": 2,
+      "sourcePath": "assets/items/catalog_screenshots/2X2/{DFB6F983-7A0D-41C6-AB47-6C150B5F7770}.png",
+      "sourceSha256": "c06571615098094064711d59881537eca676fc07420d0153c1f787afcb77ea69",
+      "cardBbox": [
+        398,
+        18,
+        366,
+        236
+      ],
+      "reviewStatus": "VISUALLY_CHECKED_SOURCE_CARD",
+      "legacyCatalogId": "image11-0-2"
+    },
+    {
+      "catalogId": "image19-0-2",
+      "name": "角斗士之歌",
+      "value": 8019,
+      "rarity": "purple",
+      "width": 1,
+      "height": 3,
+      "sourcePath": "assets/items/catalog_screenshots/1X3/{8443FC6A-7C86-4902-BAB8-454E077003BF}.png",
+      "sourceSha256": "6f824c36d49ed95947cd348d392dfeb3cf9c32fc283f2827ac107850f83bca64",
+      "cardBbox": [
+        769,
+        262,
+        385,
+        263
+      ],
+      "reviewStatus": "VISUALLY_CHECKED_SOURCE_CARD",
+      "legacyCatalogId": "image19-0-2"
+    },
+    {
+      "catalogId": "visual-dc9ba21be2ec",
+      "name": "双颈玉瓶-白",
+      "value": 80754,
+      "rarity": "gold",
+      "width": 2,
+      "height": 2,
+      "sourcePath": "assets/items/catalog_screenshots/2X2/{3D2983C4-2C10-49CB-8E12-4E20E57E0F4C}.png",
+      "sourceSha256": "d2dcded2e611ec8c196ddb345ebe89bf16b374c37b18eef3ccc723f4f81a4a7c",
+      "cardBbox": [
+        386,
+        264,
+        387,
+        265
+      ],
+      "reviewStatus": "VISUALLY_CHECKED_SOURCE_CARD",
+      "legacyCatalogId": null
+    },
+    {
+      "catalogId": "image27-0-2",
+      "name": "万有星仪",
+      "value": 51077,
+      "rarity": "gold",
+      "width": 5,
+      "height": 5,
+      "sourcePath": "assets/items/catalog_screenshots/5X5/{5325ABB2-6E85-4169-9C65-98431204CBEE}.png",
+      "sourceSha256": "c066799191fac88616ba303923355cdf0bb1a3974e57bcb4623434126232d680",
+      "cardBbox": [
+        769,
+        0,
+        385,
+        272
+      ],
+      "reviewStatus": "VISUALLY_CHECKED_SOURCE_CARD",
+      "legacyCatalogId": "image27-0-2"
+    },
+    {
+      "catalogId": "image10-0-0",
+      "name": "绝对是亲手钓的鱼",
+      "value": 9952,
+      "rarity": "blue",
+      "width": 5,
+      "height": 5,
+      "sourcePath": "assets/items/catalog_screenshots/5X5/{5325ABB2-6E85-4169-9C65-98431204CBEE}.png",
+      "sourceSha256": "c066799191fac88616ba303923355cdf0bb1a3974e57bcb4623434126232d680",
+      "cardBbox": [
+        0,
+        272,
+        385,
+        273
+      ],
+      "reviewStatus": "VISUALLY_CHECKED_SOURCE_CARD",
+      "legacyCatalogId": "image10-0-0"
+    },
+    {
+      "catalogId": "image26-0-2",
+      "name": "罐装随心泥",
+      "value": 124816,
+      "rarity": "gold",
+      "width": 4,
+      "height": 3,
+      "sourcePath": "assets/items/catalog_screenshots/4X3/{3B7415AC-3F8D-4DEE-B5F6-C48D50626046}.png",
+      "sourceSha256": "b010fadbdf849fe0d585d2f7120495efd92ab2a2ba63f7b8a2116127fbc7c67e",
+      "cardBbox": [
+        0,
+        0,
+        390,
+        262
+      ],
+      "reviewStatus": "VISUALLY_CHECKED_SOURCE_CARD",
+      "legacyCatalogId": "image26-0-2"
+    },
+    {
+      "catalogId": "visual-37894825cf77",
+      "name": "心猎铁骑L3-一以当千",
+      "value": 22297,
+      "rarity": "gold",
+      "width": 2,
+      "height": 3,
+      "sourcePath": "assets/items/catalog_screenshots/2X3/{5432C3CC-00E0-43D0-8461-DD6A7E64552D}.png",
+      "sourceSha256": "b7c9219049c3f10b1452cd3b196515759373fc72ca2203b358a6f1ac2a0d160c",
+      "cardBbox": [
+        392,
+        0,
+        391,
+        264
+      ],
+      "reviewStatus": "VISUALLY_CHECKED_SOURCE_CARD",
+      "legacyCatalogId": null
+    },
+    {
+      "catalogId": "image22-1-2",
+      "name": "环的冥思",
+      "value": 3644,
+      "rarity": "purple",
+      "width": 1,
+      "height": 2,
+      "sourcePath": "assets/items/catalog_screenshots/1X2/{C8C0E0D0-AD0B-43F9-A2E8-6453DE902C79}.png",
+      "sourceSha256": "70480994d882de0565f400f2be0f40d69787ab139e9611d1dc066b29c580642d",
+      "cardBbox": [
+        0,
+        0,
+        384,
+        258
+      ],
+      "reviewStatus": "VISUALLY_CHECKED_SOURCE_CARD",
+      "legacyCatalogId": "image22-1-2"
+    },
+    {
+      "catalogId": "image19-1-1",
+      "name": "奇异引火石",
+      "value": 7639,
+      "rarity": "purple",
+      "width": 2,
+      "height": 1,
+      "sourcePath": "assets/items/catalog_screenshots/2X1/{82CFB2D0-B389-4430-B693-85C796393974}.png",
+      "sourceSha256": "f20d22e344b30ff3d790da9f8309254e835add8920c2afbe7e3eb0f440fc3089",
+      "cardBbox": [
+        767,
+        0,
+        384,
+        266
+      ],
+      "reviewStatus": "VISUALLY_CHECKED_SOURCE_CARD",
+      "legacyCatalogId": "image19-1-1"
+    },
+    {
+      "catalogId": "visual-4974ca9119b0",
+      "name": "浅绯祈手办",
+      "value": 30264,
+      "rarity": "gold",
+      "width": 3,
+      "height": 3,
+      "sourcePath": "assets/items/catalog_screenshots/3X3/{AF7A8555-2180-49BC-9395-F0DD5444F0EE}.png",
+      "sourceSha256": "52c13ad0ec367c44ca512749fe03cfb1106c7f9c814a468d588249c1235dbdaf",
+      "cardBbox": [
+        0,
+        276,
+        397,
+        277
+      ],
+      "reviewStatus": "VISUALLY_CHECKED_SOURCE_CARD",
+      "legacyCatalogId": null
+    },
+    {
+      "catalogId": "image14-1-0",
+      "name": "沸腾之火",
+      "value": 1642,
+      "rarity": "blue",
+      "width": 1,
+      "height": 2,
+      "sourcePath": "assets/items/catalog_screenshots/1X2/{F1E0B7B4-D27E-4BF5-A471-40C0FDDDAFE6}.png",
+      "sourceSha256": "e8f052691c008a5d2f107814eeab729818d0abbb2e3b2f9110467861046a6dcb",
+      "cardBbox": [
+        388,
+        0,
+        388,
+        262
+      ],
+      "reviewStatus": "VISUALLY_CHECKED_SOURCE_CARD",
+      "legacyCatalogId": "image14-1-0"
+    },
+    {
+      "catalogId": "image14-1-1",
+      "name": "专属客服",
+      "value": 1632,
+      "rarity": "blue",
+      "width": 1,
+      "height": 2,
+      "sourcePath": "assets/items/catalog_screenshots/1X2/{F1E0B7B4-D27E-4BF5-A471-40C0FDDDAFE6}.png",
+      "sourceSha256": "e8f052691c008a5d2f107814eeab729818d0abbb2e3b2f9110467861046a6dcb",
+      "cardBbox": [
+        776,
+        0,
+        388,
+        262
+      ],
+      "reviewStatus": "VISUALLY_CHECKED_SOURCE_CARD",
+      "legacyCatalogId": "image14-1-1"
+    },
+    {
+      "catalogId": "image15-0-0",
+      "name": "漫画书",
+      "value": 1114,
+      "rarity": "blue",
+      "width": 1,
+      "height": 1,
+      "sourcePath": "assets/items/catalog_screenshots/1x1/{E4BB419A-6292-4A50-9CEB-D3351D50AF74}.png",
+      "sourceSha256": "2efe7afa85c29ef1243203ccb1772c7b33ef8351720a297787e86dc4c11bf1e9",
+      "cardBbox": [
+        758,
+        0,
+        379,
+        260
+      ],
+      "reviewStatus": "VISUALLY_CHECKED_SOURCE_CARD",
+      "legacyCatalogId": "image15-0-0"
+    },
+    {
+      "catalogId": "visual-latiao-1x2",
+      "name": "酷辣辣辣条",
+      "value": 280000,
+      "rarity": "red",
+      "width": 1,
+      "height": 2,
+      "sourcePath": "assets/items/catalog_screenshots/1X2/{343D8F72-4689-4286-AFFD-80CEC2496DC7}.png",
+      "sourceSha256": "f15baceac87e3e0ff496040f2184991f71a94eeb4b7818efeb8654255646db29",
+      "cardBbox": [
+        0,
+        0,
+        383,
+        278
+      ],
+      "reviewStatus": "VISUALLY_CHECKED_SOURCE_CARD",
+      "legacyCatalogId": "image3-0-2"
+    },
+    {
+      "catalogId": "image3-1-2",
+      "name": "劲爽「冰川」",
+      "value": 99,
+      "rarity": "white",
+      "width": 1,
+      "height": 1,
+      "sourcePath": "assets/items/catalog_screenshots/1x1/{F65172DF-A42B-433D-A395-E648C0D920E1}.png",
+      "sourceSha256": "06f9dbe6bdba81100f0c98822a6b74973669c7552fec905b7a36754512e5be38",
+      "cardBbox": [
+        0,
+        264,
+        398,
+        263
+      ],
+      "reviewStatus": "VISUALLY_CHECKED_SOURCE_CARD",
+      "legacyCatalogId": "image3-1-2"
+    },
+    {
+      "catalogId": "image4-0-1",
+      "name": "绿林",
+      "value": 99,
+      "rarity": "white",
+      "width": 1,
+      "height": 1,
+      "sourcePath": "assets/items/catalog_screenshots/1x1/{F65172DF-A42B-433D-A395-E648C0D920E1}.png",
+      "sourceSha256": "06f9dbe6bdba81100f0c98822a6b74973669c7552fec905b7a36754512e5be38",
+      "cardBbox": [
+        796,
+        264,
+        398,
+        263
+      ],
+      "reviewStatus": "VISUALLY_CHECKED_SOURCE_CARD",
+      "legacyCatalogId": "image4-0-1"
+    },
+    {
+      "catalogId": "image9-1-0",
+      "name": "肥皂",
+      "value": 509,
+      "rarity": "green",
+      "width": 1,
+      "height": 1,
+      "sourcePath": "assets/items/catalog_screenshots/1x1/{47545E5E-FC05-4F45-857E-A459326990CC}.png",
+      "sourceSha256": "bd6cb12df27f964ebfd3374ef9e16296057caa23f3fbed27b0fdf4f3f1cc7a7e",
+      "cardBbox": [
+        0,
+        0,
+        387,
+        265
+      ],
+      "reviewStatus": "VISUALLY_CHECKED_SOURCE_CARD",
+      "legacyCatalogId": "image9-1-0"
+    },
+    {
+      "catalogId": "image8-1-1",
+      "name": "金月",
+      "value": 610,
+      "rarity": "green",
+      "width": 1,
+      "height": 1,
+      "sourcePath": "assets/items/catalog_screenshots/1x1/{9A13C48F-EF9F-4E97-80BF-F2DF347E15DD}.png",
+      "sourceSha256": "89d7bad3a71362066a37d6320ca33b3cec047a712298a081568448391a386b9a",
+      "cardBbox": [
+        392,
+        0,
+        391,
+        260
+      ],
+      "reviewStatus": "VISUALLY_CHECKED_SOURCE_CARD",
+      "legacyCatalogId": "image8-1-1"
+    },
+    {
+      "catalogId": "image9-0-1",
+      "name": "炭火脆皮烤肉",
+      "value": 557,
+      "rarity": "green",
+      "width": 1,
+      "height": 1,
+      "sourcePath": "assets/items/catalog_screenshots/1x1/{9A13C48F-EF9F-4E97-80BF-F2DF347E15DD}.png",
+      "sourceSha256": "89d7bad3a71362066a37d6320ca33b3cec047a712298a081568448391a386b9a",
+      "cardBbox": [
+        392,
+        260,
+        391,
+        259
+      ],
+      "reviewStatus": "VISUALLY_CHECKED_SOURCE_CARD",
+      "legacyCatalogId": "image9-0-1"
+    },
+    {
+      "catalogId": "image23-0-2",
+      "name": "蔚蓝旋律",
+      "value": 3037,
+      "rarity": "purple",
+      "width": 1,
+      "height": 1,
+      "sourcePath": "assets/items/catalog_screenshots/1x1/{16B07C02-E13A-4195-8F67-C8A4041C7B87}.png",
+      "sourceSha256": "9f98e96a63192b44e90e4c530f754d268605fe8283da2b013cde608ac615ccc4",
+      "cardBbox": [
+        390,
+        0,
+        390,
+        271
+      ],
+      "reviewStatus": "VISUALLY_CHECKED_SOURCE_CARD",
+      "legacyCatalogId": "image23-0-2"
+    },
+    {
+      "catalogId": "image23-1-2",
+      "name": "海中栗",
+      "value": 2036,
+      "rarity": "purple",
+      "width": 1,
+      "height": 1,
+      "sourcePath": "assets/items/catalog_screenshots/1x1/{16B07C02-E13A-4195-8F67-C8A4041C7B87}.png",
+      "sourceSha256": "9f98e96a63192b44e90e4c530f754d268605fe8283da2b013cde608ac615ccc4",
+      "cardBbox": [
+        390,
+        271,
+        390,
+        271
+      ],
+      "reviewStatus": "VISUALLY_CHECKED_SOURCE_CARD",
+      "legacyCatalogId": "image23-1-2"
+    },
+    {
+      "catalogId": "image24-0-0",
+      "name": "霞红钻",
+      "value": 2036,
+      "rarity": "purple",
+      "width": 1,
+      "height": 1,
+      "sourcePath": "assets/items/catalog_screenshots/1x1/{16B07C02-E13A-4195-8F67-C8A4041C7B87}.png",
+      "sourceSha256": "9f98e96a63192b44e90e4c530f754d268605fe8283da2b013cde608ac615ccc4",
+      "cardBbox": [
+        780,
+        271,
+        390,
+        271
+      ],
+      "reviewStatus": "VISUALLY_CHECKED_SOURCE_CARD",
+      "legacyCatalogId": "image24-0-0"
+    },
+    {
+      "catalogId": "image24-0-1",
+      "name": "焰火海鲜饭",
+      "value": 2035,
+      "rarity": "purple",
+      "width": 1,
+      "height": 1,
+      "sourcePath": "assets/items/catalog_screenshots/1x1/{46C9F0D7-4495-419F-9A04-544A2E375631}.png",
+      "sourceSha256": "e0df940f362f4583c644144ab611bd8ff0aff5682eb2d14609324f6cdc430470",
+      "cardBbox": [
+        0,
+        0,
+        385,
+        260
+      ],
+      "reviewStatus": "VISUALLY_CHECKED_SOURCE_CARD",
+      "legacyCatalogId": "image24-0-1"
+    },
+    {
+      "catalogId": "image24-0-2",
+      "name": "压缩纸盒",
+      "value": 2028,
+      "rarity": "purple",
+      "width": 1,
+      "height": 1,
+      "sourcePath": "assets/items/catalog_screenshots/1x1/{46C9F0D7-4495-419F-9A04-544A2E375631}.png",
+      "sourceSha256": "e0df940f362f4583c644144ab611bd8ff0aff5682eb2d14609324f6cdc430470",
+      "cardBbox": [
+        385,
+        0,
+        386,
+        260
+      ],
+      "reviewStatus": "VISUALLY_CHECKED_SOURCE_CARD",
+      "legacyCatalogId": "image24-0-2"
+    },
+    {
+      "catalogId": "image24-1-0",
+      "name": "炫彩扭蛋",
+      "value": 2011,
+      "rarity": "purple",
+      "width": 1,
+      "height": 1,
+      "sourcePath": "assets/items/catalog_screenshots/1x1/{46C9F0D7-4495-419F-9A04-544A2E375631}.png",
+      "sourceSha256": "e0df940f362f4583c644144ab611bd8ff0aff5682eb2d14609324f6cdc430470",
+      "cardBbox": [
+        771,
+        0,
+        385,
+        260
+      ],
+      "reviewStatus": "VISUALLY_CHECKED_SOURCE_CARD",
+      "legacyCatalogId": "image24-1-0"
+    },
+    {
+      "catalogId": "image24-1-1",
+      "name": "棉花心",
+      "value": 2001,
+      "rarity": "purple",
+      "width": 1,
+      "height": 1,
+      "sourcePath": "assets/items/catalog_screenshots/1x1/{46C9F0D7-4495-419F-9A04-544A2E375631}.png",
+      "sourceSha256": "e0df940f362f4583c644144ab611bd8ff0aff5682eb2d14609324f6cdc430470",
+      "cardBbox": [
+        0,
+        260,
+        385,
+        261
+      ],
+      "reviewStatus": "VISUALLY_CHECKED_SOURCE_CARD",
+      "legacyCatalogId": "image24-1-1"
+    },
+    {
+      "catalogId": "image24-1-2",
+      "name": "鎏金坠",
+      "value": 1997,
+      "rarity": "purple",
+      "width": 1,
+      "height": 1,
+      "sourcePath": "assets/items/catalog_screenshots/1x1/{46C9F0D7-4495-419F-9A04-544A2E375631}.png",
+      "sourceSha256": "e0df940f362f4583c644144ab611bd8ff0aff5682eb2d14609324f6cdc430470",
+      "cardBbox": [
+        385,
+        260,
+        386,
+        261
+      ],
+      "reviewStatus": "VISUALLY_CHECKED_SOURCE_CARD",
+      "legacyCatalogId": "image24-1-2"
+    },
+    {
+      "catalogId": "image25-0-0",
+      "name": "弹性球",
+      "value": 1992,
+      "rarity": "purple",
+      "width": 1,
+      "height": 1,
+      "sourcePath": "assets/items/catalog_screenshots/1x1/{46C9F0D7-4495-419F-9A04-544A2E375631}.png",
+      "sourceSha256": "e0df940f362f4583c644144ab611bd8ff0aff5682eb2d14609324f6cdc430470",
+      "cardBbox": [
+        771,
+        260,
+        385,
+        261
+      ],
+      "reviewStatus": "VISUALLY_CHECKED_SOURCE_CARD",
+      "legacyCatalogId": "image25-0-0"
+    },
+    {
+      "catalogId": "image22-0-1",
+      "name": "秋枫镇纸",
+      "value": 3675,
+      "rarity": "purple",
+      "width": 2,
+      "height": 1,
+      "sourcePath": "assets/items/catalog_screenshots/2X1/{4C68408B-B5A3-46E8-8049-C0B8065ADE60}.png",
+      "sourceSha256": "e2a074bd0588230fcfba5467b094d2a27fc7f433b84672206ca4282753958fb3",
+      "cardBbox": [
+        0,
+        0,
+        388,
+        266
+      ],
+      "reviewStatus": "VISUALLY_CHECKED_SOURCE_CARD",
+      "legacyCatalogId": "image22-0-1"
+    },
+    {
+      "catalogId": "image13-1-0",
+      "name": "断落的剑格",
+      "value": 2139,
+      "rarity": "blue",
+      "width": 2,
+      "height": 1,
+      "sourcePath": "assets/items/catalog_screenshots/2X1/{4C68408B-B5A3-46E8-8049-C0B8065ADE60}.png",
+      "sourceSha256": "e2a074bd0588230fcfba5467b094d2a27fc7f433b84672206ca4282753958fb3",
+      "cardBbox": [
+        0,
+        266,
+        388,
+        265
+      ],
+      "reviewStatus": "VISUALLY_CHECKED_SOURCE_CARD",
+      "legacyCatalogId": "image13-1-0"
+    },
+    {
+      "catalogId": "image13-1-1",
+      "name": "棉绒绒手办",
+      "value": 2101,
+      "rarity": "blue",
+      "width": 2,
+      "height": 1,
+      "sourcePath": "assets/items/catalog_screenshots/2X1/{4C68408B-B5A3-46E8-8049-C0B8065ADE60}.png",
+      "sourceSha256": "e2a074bd0588230fcfba5467b094d2a27fc7f433b84672206ca4282753958fb3",
+      "cardBbox": [
+        388,
+        266,
+        388,
+        265
+      ],
+      "reviewStatus": "VISUALLY_CHECKED_SOURCE_CARD",
+      "legacyCatalogId": "image13-1-1"
+    },
+    {
+      "catalogId": "image13-1-2",
+      "name": "观蝶纪念章",
+      "value": 2095,
+      "rarity": "blue",
+      "width": 2,
+      "height": 1,
+      "sourcePath": "assets/items/catalog_screenshots/2X1/{4C68408B-B5A3-46E8-8049-C0B8065ADE60}.png",
+      "sourceSha256": "e2a074bd0588230fcfba5467b094d2a27fc7f433b84672206ca4282753958fb3",
+      "cardBbox": [
+        776,
+        266,
+        388,
+        265
+      ],
+      "reviewStatus": "VISUALLY_CHECKED_SOURCE_CARD",
+      "legacyCatalogId": "image13-1-2"
+    },
+    {
+      "catalogId": "image7-0-1",
+      "name": "轨道之心",
+      "value": 1055,
+      "rarity": "green",
+      "width": 2,
+      "height": 1,
+      "sourcePath": "assets/items/catalog_screenshots/2X1/{48710325-8642-4753-AAFD-302E079D2B93}.png",
+      "sourceSha256": "24b1a803efaa5a13edc21494a4aa5d266026e5424327dca035b8cf63b3d08bba",
+      "cardBbox": [
+        390,
+        0,
+        391,
+        265
+      ],
+      "reviewStatus": "VISUALLY_CHECKED_SOURCE_CARD",
+      "legacyCatalogId": "image7-0-1"
+    },
+    {
+      "catalogId": "visual-0ca7ed25ad80",
+      "name": "吃薯片专用洗指机",
+      "value": 1040,
+      "rarity": "green",
+      "width": 2,
+      "height": 1,
+      "sourcePath": "assets/items/catalog_screenshots/2X1/{48710325-8642-4753-AAFD-302E079D2B93}.png",
+      "sourceSha256": "24b1a803efaa5a13edc21494a4aa5d266026e5424327dca035b8cf63b3d08bba",
+      "cardBbox": [
+        781,
+        0,
+        390,
+        265
+      ],
+      "reviewStatus": "VISUALLY_CHECKED_SOURCE_CARD",
+      "legacyCatalogId": null
+    },
+    {
+      "catalogId": "image8-0-2",
+      "name": "炭烤青花鱼",
+      "value": 893,
+      "rarity": "green",
+      "width": 2,
+      "height": 1,
+      "sourcePath": "assets/items/catalog_screenshots/2X1/{48710325-8642-4753-AAFD-302E079D2B93}.png",
+      "sourceSha256": "24b1a803efaa5a13edc21494a4aa5d266026e5424327dca035b8cf63b3d08bba",
+      "cardBbox": [
+        0,
+        265,
+        390,
+        265
+      ],
+      "reviewStatus": "VISUALLY_CHECKED_SOURCE_CARD",
+      "legacyCatalogId": "image8-0-2"
+    },
+    {
+      "catalogId": "visual-65250f2f6c5a",
+      "name": "锻刀石",
+      "value": 167,
+      "rarity": "white",
+      "width": 2,
+      "height": 1,
+      "sourcePath": "assets/items/catalog_screenshots/2X1/{48710325-8642-4753-AAFD-302E079D2B93}.png",
+      "sourceSha256": "24b1a803efaa5a13edc21494a4aa5d266026e5424327dca035b8cf63b3d08bba",
+      "cardBbox": [
+        390,
+        265,
+        391,
+        265
+      ],
+      "reviewStatus": "VISUALLY_CHECKED_SOURCE_CARD",
+      "legacyCatalogId": null
+    },
+    {
+      "catalogId": "visual-04d191b44682",
+      "name": "霜铁交响",
+      "value": 80608,
+      "rarity": "red",
+      "width": 2,
+      "height": 3,
+      "sourcePath": "assets/items/catalog_screenshots/2X3/{FD33E1F1-6A47-4A1A-9A89-9163570FEA0A}.png",
+      "sourceSha256": "c0dd93ede20b8cf08649736c47fae9ccd0d185b44e24e6a2616480211a5ad6dd",
+      "cardBbox": [
+        0,
+        0,
+        393,
+        274
+      ],
+      "reviewStatus": "VISUALLY_CHECKED_SOURCE_CARD",
+      "legacyCatalogId": null
+    },
+    {
+      "catalogId": "image26-1-2",
+      "name": "片刻驻足",
+      "value": 88888,
+      "rarity": "gold",
+      "width": 2,
+      "height": 3,
+      "sourcePath": "assets/items/catalog_screenshots/2X3/{FD33E1F1-6A47-4A1A-9A89-9163570FEA0A}.png",
+      "sourceSha256": "c0dd93ede20b8cf08649736c47fae9ccd0d185b44e24e6a2616480211a5ad6dd",
+      "cardBbox": [
+        393,
+        0,
+        392,
+        274
+      ],
+      "reviewStatus": "VISUALLY_CHECKED_SOURCE_CARD",
+      "legacyCatalogId": "image26-1-2"
+    },
+    {
+      "catalogId": "visual-bbc3262913a7",
+      "name": "映像机",
+      "value": 76591,
+      "rarity": "gold",
+      "width": 2,
+      "height": 3,
+      "sourcePath": "assets/items/catalog_screenshots/2X3/{FD33E1F1-6A47-4A1A-9A89-9163570FEA0A}.png",
+      "sourceSha256": "c0dd93ede20b8cf08649736c47fae9ccd0d185b44e24e6a2616480211a5ad6dd",
+      "cardBbox": [
+        785,
+        0,
+        393,
+        274
+      ],
+      "reviewStatus": "VISUALLY_CHECKED_SOURCE_CARD",
+      "legacyCatalogId": null
+    },
+    {
+      "catalogId": "image27-1-1",
+      "name": "海盐心迷宫",
+      "value": 30211,
+      "rarity": "gold",
+      "width": 2,
+      "height": 3,
+      "sourcePath": "assets/items/catalog_screenshots/2X3/{FD33E1F1-6A47-4A1A-9A89-9163570FEA0A}.png",
+      "sourceSha256": "c0dd93ede20b8cf08649736c47fae9ccd0d185b44e24e6a2616480211a5ad6dd",
+      "cardBbox": [
+        0,
+        274,
+        393,
+        273
+      ],
+      "reviewStatus": "VISUALLY_CHECKED_SOURCE_CARD",
+      "legacyCatalogId": "image27-1-1"
+    },
+    {
+      "catalogId": "image28-0-1",
+      "name": "心猎铁骑L1-必杀一击",
+      "value": 22847,
+      "rarity": "gold",
+      "width": 2,
+      "height": 3,
+      "sourcePath": "assets/items/catalog_screenshots/2X3/{FD33E1F1-6A47-4A1A-9A89-9163570FEA0A}.png",
+      "sourceSha256": "c0dd93ede20b8cf08649736c47fae9ccd0d185b44e24e6a2616480211a5ad6dd",
+      "cardBbox": [
+        393,
+        274,
+        392,
+        273
+      ],
+      "reviewStatus": "VISUALLY_CHECKED_SOURCE_CARD",
+      "legacyCatalogId": "image28-0-1"
+    },
+    {
+      "catalogId": "image28-0-2",
+      "name": "心猎铁骑L2-闪焰冲锋",
+      "value": 22770,
+      "rarity": "gold",
+      "width": 2,
+      "height": 3,
+      "sourcePath": "assets/items/catalog_screenshots/2X3/{FD33E1F1-6A47-4A1A-9A89-9163570FEA0A}.png",
+      "sourceSha256": "c0dd93ede20b8cf08649736c47fae9ccd0d185b44e24e6a2616480211a5ad6dd",
+      "cardBbox": [
+        785,
+        274,
+        393,
+        273
+      ],
+      "reviewStatus": "VISUALLY_CHECKED_SOURCE_CARD",
+      "legacyCatalogId": "image28-0-2"
+    },
+    {
+      "catalogId": "visual-922c073c366d",
+      "name": "巡哨-干练精英",
+      "value": 37558,
+      "rarity": "gold",
+      "width": 2,
+      "height": 1,
+      "sourcePath": "assets/items/catalog_screenshots/2X1/{C3E32ADB-9348-4FE5-B70F-C7B9F66B659A}.png",
+      "sourceSha256": "ebe363d313d37deae24e1d9c372128d06fe2d9344e705412e891c291612cd4fc",
+      "cardBbox": [
+        774,
+        272,
+        387,
+        273
+      ],
+      "reviewStatus": "VISUALLY_CHECKED_SOURCE_CARD",
+      "legacyCatalogId": null
+    },
+    {
+      "catalogId": "image34-0-2",
+      "name": "便携式折叠屏",
+      "value": 239342,
+      "rarity": "red",
+      "width": 3,
+      "height": 2,
+      "sourcePath": "assets/items/catalog_screenshots/3X2/{08AEF60D-14B8-4F18-93F5-0EF794BF950E}.png",
+      "sourceSha256": "8f34a7b84cfa7abfdffa800f71834cfaea58a1c8665c536b9e63e57dae405018",
+      "cardBbox": [
+        779,
+        0,
+        390,
+        268
+      ],
+      "reviewStatus": "VISUALLY_CHECKED_SOURCE_CARD",
+      "legacyCatalogId": "image34-0-2"
+    },
+    {
+      "catalogId": "image17-1-1",
+      "name": "阿瑞斯动感单车",
+      "value": 17847,
+      "rarity": "purple",
+      "width": 3,
+      "height": 2,
+      "sourcePath": "assets/items/catalog_screenshots/3X2/{1C65BF0E-A101-4042-A9D7-9653D84BCAD1}.png",
+      "sourceSha256": "8a7797b78d26fb9c92308b04d8b504e4abf8ae6957f67907bc6da31cabfd9897",
+      "cardBbox": [
+        0,
+        0,
+        387,
+        272
+      ],
+      "reviewStatus": "VISUALLY_CHECKED_SOURCE_CARD",
+      "legacyCatalogId": "image17-1-1"
+    },
+    {
+      "catalogId": "image13-0-2",
+      "name": "断落的剑柄",
+      "value": 2139,
+      "rarity": "blue",
+      "width": 1,
+      "height": 2,
+      "sourcePath": "assets/items/catalog_screenshots/1X2/{C8C0E0D0-AD0B-43F9-A2E8-6453DE902C79}.png",
+      "sourceSha256": "70480994d882de0565f400f2be0f40d69787ab139e9611d1dc066b29c580642d",
+      "cardBbox": [
+        769,
+        258,
+        384,
+        258
+      ],
+      "reviewStatus": "VISUALLY_CHECKED_SOURCE_CARD",
+      "legacyCatalogId": "image13-0-2"
+    },
+    {
+      "catalogId": "image6-1-1",
+      "name": "断线之筝",
+      "value": 1072,
+      "rarity": "green",
+      "width": 1,
+      "height": 2,
+      "sourcePath": "assets/items/catalog_screenshots/1X2/{F1E0B7B4-D27E-4BF5-A471-40C0FDDDAFE6}.png",
+      "sourceSha256": "e8f052691c008a5d2f107814eeab729818d0abbb2e3b2f9110467861046a6dcb",
+      "cardBbox": [
+        776,
+        262,
+        388,
+        261
+      ],
+      "reviewStatus": "VISUALLY_CHECKED_SOURCE_CARD",
+      "legacyCatalogId": "image6-1-1"
+    },
+    {
+      "catalogId": "image15-1-1",
+      "name": "VitalMax能量棒",
+      "value": 1012,
+      "rarity": "blue",
+      "width": 1,
+      "height": 1,
+      "sourcePath": "assets/items/catalog_screenshots/1x1/{92DEEC27-CED4-4688-95EC-5A01A337AF9D}.png",
+      "sourceSha256": "5846d029ee2213c1f19321b6baac89c770ec6cd5ba731efd34a961b403b40fad",
+      "cardBbox": [
+        0,
+        0,
+        394,
+        266
+      ],
+      "reviewStatus": "VISUALLY_CHECKED_SOURCE_CARD",
+      "legacyCatalogId": "image15-1-1"
+    },
+    {
+      "catalogId": "image20-0-1",
+      "name": "跳跳兔盒",
+      "value": 7222,
+      "rarity": "purple",
+      "width": 2,
+      "height": 2,
+      "sourcePath": "assets/items/catalog_screenshots/2X2/{E979E688-0FB8-4D82-BED5-C0FA4B86B848}.png",
+      "sourceSha256": "dc9ce35eaf9fe92425a27cf64d387838a4ae0a199c5333841dbaa8b2d36a1d6c",
+      "cardBbox": [
+        0,
+        260,
+        392,
+        259
+      ],
+      "reviewStatus": "VISUALLY_CHECKED_SOURCE_CARD",
+      "legacyCatalogId": "image20-0-1"
+    },
+    {
+      "catalogId": "image9-0-0",
+      "name": "几何灯",
+      "value": 561,
+      "rarity": "green",
+      "width": 1,
+      "height": 1,
+      "sourcePath": "assets/items/catalog_screenshots/1x1/{9A13C48F-EF9F-4E97-80BF-F2DF347E15DD}.png",
+      "sourceSha256": "89d7bad3a71362066a37d6320ca33b3cec047a712298a081568448391a386b9a",
+      "cardBbox": [
+        0,
+        260,
+        392,
+        259
+      ],
+      "reviewStatus": "VISUALLY_CHECKED_SOURCE_CARD",
+      "legacyCatalogId": "image9-0-0"
+    },
+    {
+      "catalogId": "image5-1-1",
+      "name": "「莲-C198」唱片机",
+      "value": 1624,
+      "rarity": "green",
+      "width": 2,
+      "height": 2,
+      "sourcePath": "assets/items/catalog_screenshots/2X2/{DFB6F983-7A0D-41C6-AB47-6C150B5F7770}.png",
+      "sourceSha256": "c06571615098094064711d59881537eca676fc07420d0153c1f787afcb77ea69",
+      "cardBbox": [
+        387,
+        259,
+        387,
+        259
+      ],
+      "reviewStatus": "VISUALLY_CHECKED_SOURCE_CARD",
+      "legacyCatalogId": "image5-1-1"
+    },
+    {
+      "catalogId": "image14-1-2",
+      "name": "蓝釉瓶",
+      "value": 1616,
+      "rarity": "blue",
+      "width": 1,
+      "height": 1,
+      "sourcePath": "assets/items/catalog_screenshots/1x1/{E4BB419A-6292-4A50-9CEB-D3351D50AF74}.png",
+      "sourceSha256": "2efe7afa85c29ef1243203ccb1772c7b33ef8351720a297787e86dc4c11bf1e9",
+      "cardBbox": [
+        379,
+        0,
+        379,
+        260
+      ],
+      "reviewStatus": "VISUALLY_CHECKED_SOURCE_CARD",
+      "legacyCatalogId": "image14-1-2"
+    },
+    {
+      "catalogId": "image17-0-2",
+      "name": "寻星者望远镜",
+      "value": 18317,
+      "rarity": "purple",
+      "width": 3,
+      "height": 2,
+      "sourcePath": "assets/items/catalog_screenshots/3X2/{08AEF60D-14B8-4F18-93F5-0EF794BF950E}.png",
+      "sourceSha256": "8f34a7b84cfa7abfdffa800f71834cfaea58a1c8665c536b9e63e57dae405018",
+      "cardBbox": [
+        390,
+        268,
+        389,
+        267
+      ],
+      "reviewStatus": "VISUALLY_CHECKED_SOURCE_CARD",
+      "legacyCatalogId": "image17-0-2"
+    },
+    {
+      "catalogId": "visual-4cc72b207cb6",
+      "name": "吨吨锤",
+      "value": 100000,
+      "rarity": "red",
+      "width": 3,
+      "height": 3,
+      "sourcePath": "assets/items/catalog_screenshots/3X3/{AF7A8555-2180-49BC-9395-F0DD5444F0EE}.png",
+      "sourceSha256": "52c13ad0ec367c44ca512749fe03cfb1106c7f9c814a468d588249c1235dbdaf",
+      "cardBbox": [
+        795,
+        0,
+        397,
+        276
+      ],
+      "reviewStatus": "VISUALLY_CHECKED_SOURCE_CARD",
+      "legacyCatalogId": null
+    },
+    {
+      "catalogId": "image12-1-1",
+      "name": "番茄百分百果冻",
+      "value": 3185,
+      "rarity": "blue",
+      "width": 2,
+      "height": 2,
+      "sourcePath": "assets/items/catalog_screenshots/2X2/{DFB6F983-7A0D-41C6-AB47-6C150B5F7770}.png",
+      "sourceSha256": "c06571615098094064711d59881537eca676fc07420d0153c1f787afcb77ea69",
+      "cardBbox": [
+        0,
+        259,
+        387,
+        259
+      ],
+      "reviewStatus": "VISUALLY_CHECKED_SOURCE_CARD",
+      "legacyCatalogId": "image12-1-1"
+    },
+    {
+      "catalogId": "image16-0-1",
+      "name": "复古暖灯",
+      "value": 995,
+      "rarity": "blue",
+      "width": 1,
+      "height": 1,
+      "sourcePath": "assets/items/catalog_screenshots/1x1/{92DEEC27-CED4-4688-95EC-5A01A337AF9D}.png",
+      "sourceSha256": "5846d029ee2213c1f19321b6baac89c770ec6cd5ba731efd34a961b403b40fad",
+      "cardBbox": [
+        0,
+        266,
+        394,
+        267
+      ],
+      "reviewStatus": "VISUALLY_CHECKED_SOURCE_CARD",
+      "legacyCatalogId": "image16-0-1"
+    },
+    {
+      "catalogId": "image16-1-0",
+      "name": "毛茸茸的应答",
+      "value": 993,
+      "rarity": "blue",
+      "width": 1,
+      "height": 1,
+      "sourcePath": "assets/items/catalog_screenshots/1x1/{92DEEC27-CED4-4688-95EC-5A01A337AF9D}.png",
+      "sourceSha256": "5846d029ee2213c1f19321b6baac89c770ec6cd5ba731efd34a961b403b40fad",
+      "cardBbox": [
+        787,
+        266,
+        394,
+        267
+      ],
+      "reviewStatus": "VISUALLY_CHECKED_SOURCE_CARD",
+      "legacyCatalogId": "image16-1-0"
+    },
+    {
+      "catalogId": "image9-1-2",
+      "name": "鎏金盂",
+      "value": 496,
+      "rarity": "green",
+      "width": 1,
+      "height": 1,
+      "sourcePath": "assets/items/catalog_screenshots/1x1/{47545E5E-FC05-4F45-857E-A459326990CC}.png",
+      "sourceSha256": "bd6cb12df27f964ebfd3374ef9e16296057caa23f3fbed27b0fdf4f3f1cc7a7e",
+      "cardBbox": [
+        775,
+        0,
+        387,
+        265
+      ],
+      "reviewStatus": "VISUALLY_CHECKED_SOURCE_CARD",
+      "legacyCatalogId": "image9-1-2"
+    },
+    {
+      "catalogId": "image12-0-2",
+      "name": "褪色谜",
+      "value": 3351,
+      "rarity": "blue",
+      "width": 2,
+      "height": 3,
+      "sourcePath": "assets/items/catalog_screenshots/2X3/{E2B97A18-0919-4B0C-9C04-6D8C2BF9F692}.png",
+      "sourceSha256": "8db9eab490ec8ace9a753b78d232ee8c861e6461f492232f7920d154215ae8dc",
+      "cardBbox": [
+        386,
+        0,
+        387,
+        266
+      ],
+      "reviewStatus": "VISUALLY_CHECKED_SOURCE_CARD",
+      "legacyCatalogId": "image12-0-2"
+    },
+    {
+      "catalogId": "image22-1-1",
+      "name": "结的艺术",
+      "value": 3652,
+      "rarity": "purple",
+      "width": 1,
+      "height": 2,
+      "sourcePath": "assets/items/catalog_screenshots/1X2/{DC23CF1B-F79F-40AF-BB9F-5CB790598626}.png",
+      "sourceSha256": "5b7af849aff4c329714ff001e03c3d1e25bc669e624d36f8239fdf2d8567bba4",
+      "cardBbox": [
+        755,
+        259,
+        377,
+        259
+      ],
+      "reviewStatus": "VISUALLY_CHECKED_SOURCE_CARD",
+      "legacyCatalogId": "image22-1-1"
+    },
+    {
+      "catalogId": "image31-0-2",
+      "name": "桂冠",
+      "value": 7648,
+      "rarity": "gold",
+      "width": 1,
+      "height": 1,
+      "sourcePath": "assets/items/catalog_screenshots/1x1/{60C0E71A-D308-4533-9AD9-1ADF34119353}.png",
+      "sourceSha256": "2ee85038dc214cf62098f6a265612f00b0116bda585726dea3af4b2dedc42fb8",
+      "cardBbox": [
+        0,
+        0,
+        384,
+        267
+      ],
+      "reviewStatus": "VISUALLY_CHECKED_SOURCE_CARD",
+      "legacyCatalogId": "image31-0-2"
+    },
+    {
+      "catalogId": "visual-0f696df33258",
+      "name": "算力面包",
+      "value": 60040,
+      "rarity": "gold",
+      "width": 1,
+      "height": 2,
+      "sourcePath": "assets/items/catalog_screenshots/1X2/{343D8F72-4689-4286-AFFD-80CEC2496DC7}.png",
+      "sourceSha256": "f15baceac87e3e0ff496040f2184991f71a94eeb4b7818efeb8654255646db29",
+      "cardBbox": [
+        767,
+        0,
+        383,
+        278
+      ],
+      "reviewStatus": "VISUALLY_CHECKED_SOURCE_CARD",
+      "legacyCatalogId": null
+    },
+    {
+      "catalogId": "image15-0-1",
+      "name": "银铃",
+      "value": 1094,
+      "rarity": "blue",
+      "width": 1,
+      "height": 1,
+      "sourcePath": "assets/items/catalog_screenshots/宝石类1x1/{913DA7DB-3D46-40C1-8DEB-10F54935A95C}.png",
+      "sourceSha256": "b4feb910664ec2c1cfa0b266a22f451ef70597a116171b461522092fe5facf5f",
+      "cardBbox": [
+        0,
+        269,
+        388,
+        269
+      ],
+      "reviewStatus": "VISUALLY_CHECKED_SOURCE_CARD",
+      "legacyCatalogId": "image15-0-1"
+    },
+    {
+      "catalogId": "image1-0-1",
+      "name": "起司",
+      "value": 366,
+      "rarity": "white",
+      "width": 2,
+      "height": 2,
+      "sourcePath": "assets/items/catalog_screenshots/2X2/{DFB6F983-7A0D-41C6-AB47-6C150B5F7770}.png",
+      "sourceSha256": "c06571615098094064711d59881537eca676fc07420d0153c1f787afcb77ea69",
+      "cardBbox": [
+        774,
+        259,
+        387,
+        259
+      ],
+      "reviewStatus": "VISUALLY_CHECKED_SOURCE_CARD",
+      "legacyCatalogId": "image1-0-1"
+    },
+    {
+      "catalogId": "image20-0-2",
+      "name": "「切玉」",
+      "value": 6011,
+      "rarity": "purple",
+      "width": 2,
+      "height": 1,
+      "sourcePath": "assets/items/catalog_screenshots/2X1/{82CFB2D0-B389-4430-B693-85C796393974}.png",
+      "sourceSha256": "f20d22e344b30ff3d790da9f8309254e835add8920c2afbe7e3eb0f440fc3089",
+      "cardBbox": [
+        13,
+        285,
+        366,
+        236
+      ],
+      "reviewStatus": "VISUALLY_CHECKED_SOURCE_CARD",
+      "legacyCatalogId": "image20-0-2"
+    },
+    {
+      "catalogId": "image32-1-0",
+      "name": "落日珍珠",
+      "value": 4975,
+      "rarity": "gold",
+      "width": 1,
+      "height": 1,
+      "sourcePath": "assets/items/catalog_screenshots/1x1/{60C0E71A-D308-4533-9AD9-1ADF34119353}.png",
+      "sourceSha256": "2ee85038dc214cf62098f6a265612f00b0116bda585726dea3af4b2dedc42fb8",
+      "cardBbox": [
+        394,
+        275,
+        366,
+        236
+      ],
+      "reviewStatus": "VISUALLY_CHECKED_SOURCE_CARD",
+      "legacyCatalogId": "image32-1-0",
+      "geometryEvidence": {
+        "sourceFootprint": "1x1",
+        "legacyCatalogGeometry": "1x2",
+        "resolution": "source-card-footprint-plus-live-warehouse-neighbor-separation"
+      }
+    },
+    {
+      "catalogId": "image3-0-1",
+      "name": "绵绵云",
+      "value": 101,
+      "rarity": "white",
+      "width": 1,
+      "height": 1,
+      "sourcePath": "assets/items/catalog_screenshots/1x1/{47545E5E-FC05-4F45-857E-A459326990CC}.png",
+      "sourceSha256": "bd6cb12df27f964ebfd3374ef9e16296057caa23f3fbed27b0fdf4f3f1cc7a7e",
+      "cardBbox": [
+        775,
+        265,
+        387,
+        265
+      ],
+      "reviewStatus": "VISUALLY_CHECKED_SOURCE_CARD",
+      "legacyCatalogId": "image3-0-1"
+    }
+  ]
+}

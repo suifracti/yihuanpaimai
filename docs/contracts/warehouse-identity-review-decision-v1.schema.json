@@ -1,0 +1,64 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://yihuanpaimai.local/schemas/warehouse-identity-review-decision-v1.schema.json",
+  "title": "Warehouse Identity Review Decision v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "recordStableKey",
+    "packetFingerprint",
+    "reviewedAt",
+    "reviewerType",
+    "decisions"
+  ],
+  "properties": {
+    "schemaVersion": { "const": "warehouse-identity-review-decision.v1" },
+    "recordStableKey": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$"
+    },
+    "packetFingerprint": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "reviewedAt": { "type": "string", "minLength": 1 },
+    "reviewerType": { "const": "HUMAN" },
+    "decisions": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["decisionId", "trackId", "action"],
+        "properties": {
+          "decisionId": { "type": "string", "minLength": 1 },
+          "trackId": { "type": "string", "minLength": 1 },
+          "action": {
+            "enum": [
+              "CONFIRM_CANDIDATE",
+              "CONFIRM_CATALOG_OVERRIDE",
+              "MARK_OUT_OF_CATALOG",
+              "DEFER",
+              "EXCLUDE_FALSE_COMPONENT",
+              "FLAG_GEOMETRY_ERROR"
+            ]
+          },
+          "selectedCatalogId": { "type": ["string", "null"], "minLength": 1 },
+          "confirmedByHuman": { "type": "boolean" },
+          "overrideReason": {
+            "type": ["string", "null"],
+            "enum": [
+              null,
+              "CLIPPED_GEOMETRY",
+              "SEGMENTATION_ERROR",
+              "CATALOG_GEOMETRY_MISMATCH",
+              "HUMAN_VISUAL_IDENTIFICATION"
+            ]
+          },
+          "reason": { "type": ["string", "null"], "minLength": 1 },
+          "geometryErrorType": { "type": ["string", "null"], "minLength": 1 }
+        }
+      }
+    }
+  }
+}

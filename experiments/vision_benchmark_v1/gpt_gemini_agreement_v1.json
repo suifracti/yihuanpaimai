@@ -1,0 +1,474 @@
+{
+  "auditVersion": "1.0.0",
+  "auditDate": "2026-08-20",
+  "auditType": "gemini_gpt_independent_agreement_audit",
+  "verifiedTruthWritten": false,
+  "geminiComparisonPerformed": true,
+  "promotionCeiling": "strong_multi_model_pseudo_label",
+  "frozenInputHashesSha256": {
+    "gpt_blind_review_v1.json": "654CAF4501DE995F5157E6B01B8DD1E5BEAC7577B0382902002986E2607D06CE",
+    "gpt_blind_review_v1_batch2.json": "4697CFAF1F97833E35D67524ACF953AE285B33F4750BF6D13310D2D9D3AE0EA2",
+    "gpt_blind_queue.json": "21861E5615E4E685B7D31358CDAC88AE377EF6851F4B2F2F1D07A3EA74F33CD9",
+    "pseudo_labels.json": "AC6298F64D2F2F53672A33837484D5BBABC759075843ECC51042FA430FCFEAE0"
+  },
+  "joinAudit": {
+    "gptQueueSlotCount": 19,
+    "gptFrozenResultCount": 19,
+    "geminiPseudoLabelGlobalCount": 57,
+    "geminiPredictionsJoinedToQueue": 19,
+    "primaryJoin": "gpt_blind_queue.representativeId == pseudo_labels.items.benchmarkId AND slotId == slotId",
+    "queueIdDerivationCheck": "queueId == 'BLIND_' + benchmarkId + '_' + slotId",
+    "secondaryJoinChecks": [
+      "cropRelativePath == cropPath",
+      "sourceImage == sourceImage",
+      "bbox arrays are identical",
+      "GPT imageId/slotId/cropId match the queue record"
+    ],
+    "queueIdDuplicates": 0,
+    "queueImageSlotDuplicates": 0,
+    "gptQueueIdDuplicates": 0,
+    "geminiGlobalImageSlotDuplicates": 0,
+    "missingGptResults": 0,
+    "missingGeminiPredictions": 0,
+    "mismatchedJoinFields": 0,
+    "unjoinableQueueSlots": 0,
+    "geminiSourceUsed": "pseudo_labels.json items in REP-*/s* namespace",
+    "excludedGeminiSource": "gemini_blind_predictions.json and gemini_reranked_predictions.json use the older BM1-*/slot_* namespace and do not directly identify these 19 queue records",
+    "invalidPackCount": 8,
+    "invalidPackSlots": [
+      "BLIND_REP-04_s04",
+      "BLIND_REP-04_s05",
+      "BLIND_REP-04_s08",
+      "BLIND_REP-04_s09",
+      "BLIND_REP-05_s01",
+      "BLIND_REP-05_s02",
+      "BLIND_REP-05_s03",
+      "BLIND_REP-05_s04"
+    ],
+    "effectiveComparableSlotCount": 11,
+    "denominatorRule": "All agreement rates use only the 11 valid, joinable slots. The 8 invalid-pack slots are excluded from exact, quality, Top-K, and disagreement denominators."
+  },
+  "identityComparisonPolicy": {
+    "gptNamespace": "catalog_065 canonical image*-*-* itemId",
+    "geminiNamespace": "ad-hoc quality_pinyin semantic itemId",
+    "exactItemRule": "Exact agreement requires the Gemini name to match a unique catalog_065 canonical name and resolve to the same GPT canonical itemId. Unmapped aliases or visually similar labels are not inferred as exact.",
+    "topKRule": "GPT Top-1 is counted in Gemini Top-K only when an authoritative canonical identity mapping is available. Unmapped semantic aliases are not credited.",
+    "qualityNormalization": {
+      "红": "red",
+      "金": "gold",
+      "紫": "purple",
+      "蓝": "blue",
+      "绿": "green",
+      "灰": "white"
+    },
+    "strictnessNote": "This deliberately avoids silently treating Gemini labels such as 炽心水滴 or 赤尾鱼 as catalog aliases without an authoritative mapping."
+  },
+  "metrics": {
+    "effectiveComparableSlots": 11,
+    "exactAgreement": {
+      "count": 1,
+      "denominator": 11,
+      "rate": 0.090909
+    },
+    "qualityAgreementIncludingExact": {
+      "count": 2,
+      "denominator": 11,
+      "rate": 0.181818
+    },
+    "qualityOnlyAgreement": {
+      "count": 1,
+      "denominator": 11,
+      "rate": 0.090909
+    },
+    "gptTop1InGeminiTopK": {
+      "count": 1,
+      "denominator": 11,
+      "rate": 0.090909
+    },
+    "topkPartialAgreement": {
+      "count": 0,
+      "denominator": 11,
+      "rate": 0.0
+    },
+    "disagreement": {
+      "count": 9,
+      "denominator": 11,
+      "rate": 0.818182
+    },
+    "invalidPack": {
+      "count": 8,
+      "denominator": 19,
+      "rate": 0.421053,
+      "excludedFromModelAgreementRates": true
+    },
+    "unjoinable": {
+      "count": 0,
+      "denominator": 19,
+      "rate": 0.0
+    }
+  },
+  "slotResults": [
+    {
+      "queueId": "BLIND_REP-01_s01",
+      "gptFrozenTop1": {"itemId": "image34-0-1", "name": "九格小食", "quality": "红"},
+      "geminiTop1": {"itemId": "red_jiugexiaoshi", "name": "九格小食", "quality": "red"},
+      "geminiTopK": ["red_jiugexiaoshi", "red_yicuyouhuo", "gold_dabing"],
+      "gptConfidence": 0.98,
+      "geminiConfidence": "high",
+      "exact_item_agreement": true,
+      "quality_agreement": true,
+      "gpt_top1_in_gemini_topk": true,
+      "gemini_top1_conflicts_with_gpt_similar_candidate": false,
+      "agreementStatus": "exact_agreement",
+      "promotionStatus": "strong_multi_model_pseudo_label"
+    },
+    {
+      "queueId": "BLIND_REP-01_s03",
+      "gptFrozenTop1": {"itemId": "image5-0-2", "name": "新口味上市！", "quality": "绿"},
+      "geminiTop1": {"itemId": "red_xinlietieqi_l3", "name": "心猎铁骑L3", "quality": "red"},
+      "geminiTopK": ["red_xinlietieqi_l3", "red_xinlietieqi_l2", "purple_xinlietieqi_l1"],
+      "gptConfidence": 0.99,
+      "geminiConfidence": "high",
+      "exact_item_agreement": false,
+      "quality_agreement": false,
+      "gpt_top1_in_gemini_topk": false,
+      "gemini_top1_conflicts_with_gpt_similar_candidate": false,
+      "agreementStatus": "disagreement"
+    },
+    {
+      "queueId": "BLIND_REP-01_s06",
+      "gptFrozenTop1": {"itemId": "image26-0-0", "name": "乔望尼金雕像", "quality": "金"},
+      "geminiTop1": {"itemId": "purple_hongyaoshui", "name": "红药水", "quality": "purple"},
+      "geminiTopK": ["purple_hongyaoshui", "purple_chengjieweijiu", "red_xiahongzuan"],
+      "gptConfidence": 0.97,
+      "geminiConfidence": "medium",
+      "exact_item_agreement": false,
+      "quality_agreement": false,
+      "gpt_top1_in_gemini_topk": false,
+      "gemini_top1_conflicts_with_gpt_similar_candidate": false,
+      "agreementStatus": "disagreement"
+    },
+    {
+      "queueId": "BLIND_REP-01_s09",
+      "gptFrozenTop1": {"itemId": "image22-1-2", "name": "环的冥思", "quality": "紫"},
+      "geminiTop1": {"itemId": "white_dianyingkaquan", "name": "电影卡券", "quality": "white"},
+      "geminiTopK": ["white_dianyingkaquan", "blue_zhinengshouji", "white_zhezhibaozhi"],
+      "gptConfidence": 0.97,
+      "geminiConfidence": "medium",
+      "exact_item_agreement": false,
+      "quality_agreement": false,
+      "gpt_top1_in_gemini_topk": false,
+      "gemini_top1_conflicts_with_gpt_similar_candidate": false,
+      "agreementStatus": "disagreement"
+    },
+    {
+      "queueId": "BLIND_REP-01_s11",
+      "gptFrozenTop1": {"itemId": "image5-0-2", "name": "新口味上市！", "quality": "绿"},
+      "geminiTop1": {"itemId": "gold_jinwan", "name": "金碗", "quality": "gold"},
+      "geminiTopK": ["gold_jinwan", "white_huadiaowan", "gold_liushengjilaba"],
+      "gptConfidence": 0.97,
+      "geminiConfidence": "medium",
+      "exact_item_agreement": false,
+      "quality_agreement": false,
+      "gpt_top1_in_gemini_topk": false,
+      "gemini_top1_conflicts_with_gpt_similar_candidate": false,
+      "agreementStatus": "disagreement"
+    },
+    {
+      "queueId": "BLIND_REP-01_s12",
+      "gptFrozenTop1": {"itemId": "image5-0-2", "name": "新口味上市！", "quality": "绿"},
+      "geminiTop1": {"itemId": "white_caomeiruantang", "name": "草莓软糖", "quality": "white"},
+      "geminiTopK": ["white_caomeiruantang", "white_caomeitangguo", "purple_yuebaisha"],
+      "gptConfidence": 0.96,
+      "geminiConfidence": "medium",
+      "exact_item_agreement": false,
+      "quality_agreement": false,
+      "gpt_top1_in_gemini_topk": false,
+      "gemini_top1_conflicts_with_gpt_similar_candidate": false,
+      "agreementStatus": "disagreement"
+    },
+    {
+      "queueId": "BLIND_REP-01_s13",
+      "gptFrozenTop1": {"itemId": "image26-0-0", "name": "乔望尼金雕像", "quality": "金"},
+      "geminiTop1": {"itemId": "purple_yuebaisha", "name": "月白沙", "quality": "purple"},
+      "geminiTopK": ["purple_yuebaisha", "white_shuijingqiyuanqiu", "purple_taomu"],
+      "gptConfidence": 0.96,
+      "geminiConfidence": "medium",
+      "exact_item_agreement": false,
+      "quality_agreement": false,
+      "gpt_top1_in_gemini_topk": false,
+      "gemini_top1_conflicts_with_gpt_similar_candidate": false,
+      "agreementStatus": "disagreement"
+    },
+    {
+      "queueId": "BLIND_REP-01_s15",
+      "gptFrozenTop1": {"itemId": "image10-1-0", "name": "艺术画「深林」", "quality": "蓝"},
+      "gptSimilarCandidates": [{"itemId": "image14-0-2", "name": "复古圆桌", "quality": "蓝"}],
+      "geminiTop1": {"itemId": "green_xiaomuzhuo", "name": "小木桌", "quality": "green"},
+      "geminiTopK": ["green_xiaomuzhuo", "blue_fuguonandeng", "white_saokingweichen"],
+      "gptConfidence": 0.86,
+      "geminiConfidence": "medium",
+      "exact_item_agreement": false,
+      "quality_agreement": false,
+      "gpt_top1_in_gemini_topk": false,
+      "gemini_top1_conflicts_with_gpt_similar_candidate": false,
+      "similarCandidateNote": "Gemini selected another table-family label, but it is not the GPT similar candidate 复古圆桌 and has no authoritative canonical mapping.",
+      "agreementStatus": "disagreement"
+    },
+    {
+      "queueId": "BLIND_REP-02_s01",
+      "gptFrozenTop1": {"itemId": "image10-0-0", "name": "绝对是亲手钓的鱼", "quality": "蓝"},
+      "geminiTop1": {"itemId": "red_chiweiyu", "name": "赤尾鱼", "quality": "red"},
+      "geminiTopK": ["red_chiweiyu", "red_jinjinlidiaoxiang", "red_pendragon"],
+      "gptConfidence": 0.99,
+      "geminiConfidence": "high",
+      "exact_item_agreement": false,
+      "quality_agreement": false,
+      "gpt_top1_in_gemini_topk": false,
+      "gemini_top1_conflicts_with_gpt_similar_candidate": false,
+      "agreementStatus": "disagreement",
+      "auditNote": "Gemini's 赤尾鱼 label has no exact catalog_065 mapping; no fish-family alias inference was used."
+    },
+    {
+      "queueId": "BLIND_REP-02_s11",
+      "gptFrozenTop1": {"itemId": "image35-1-2", "name": "「泪滴」", "quality": "红"},
+      "geminiTop1": {"itemId": "red_chixinshuidi", "name": "炽心水滴", "quality": "red"},
+      "geminiTopK": ["red_chixinshuidi", "purple_xiahongzuan", "purple_youlingtai"],
+      "gptConfidence": 0.93,
+      "geminiConfidence": "medium",
+      "exact_item_agreement": false,
+      "quality_agreement": true,
+      "gpt_top1_in_gemini_topk": false,
+      "gemini_top1_conflicts_with_gpt_similar_candidate": false,
+      "agreementStatus": "quality_only_agreement",
+      "auditNote": "炽心水滴 is not an exact catalog_065 name and no authoritative alias map to 「泪滴」 exists, so strict exact/Top-K credit is withheld."
+    },
+    {
+      "queueId": "BLIND_REP-02_s18",
+      "gptFrozenTop1": {"itemId": "image17-1-1", "name": "阿瑞斯动感单车", "quality": "紫"},
+      "geminiTop1": {"itemId": "green_liulidanzhu", "name": "琉璃弹珠", "quality": "green"},
+      "geminiTopK": ["green_liulidanzhu", "green_huoqiyin", "purple_taomu"],
+      "gptConfidence": 0.96,
+      "geminiConfidence": "medium",
+      "exact_item_agreement": false,
+      "quality_agreement": false,
+      "gpt_top1_in_gemini_topk": false,
+      "gemini_top1_conflicts_with_gpt_similar_candidate": false,
+      "agreementStatus": "disagreement"
+    },
+    {
+      "queueId": "BLIND_REP-04_s04",
+      "gptFrozenTop1": null,
+      "geminiTop1": {"itemId": "red_xinlietieqi_wanju", "name": "心猎铁骑玩具", "quality": "red"},
+      "geminiTopK": ["red_xinlietieqi_wanju", "red_xinlietieqi_l3", "purple_xinlietieqi_l1"],
+      "gptConfidence": 0.0,
+      "geminiConfidence": "medium",
+      "exact_item_agreement": null,
+      "quality_agreement": null,
+      "gpt_top1_in_gemini_topk": null,
+      "gemini_top1_conflicts_with_gpt_similar_candidate": null,
+      "agreementStatus": "invalid_pack",
+      "excludedFromModelDenominator": true
+    },
+    {
+      "queueId": "BLIND_REP-04_s05",
+      "gptFrozenTop1": null,
+      "geminiTop1": {"itemId": "red_chixinshuidi", "name": "炽心水滴", "quality": "red"},
+      "geminiTopK": ["red_chixinshuidi", "purple_xiahongzuan", "purple_youlingtai"],
+      "gptConfidence": 0.0,
+      "geminiConfidence": "high",
+      "exact_item_agreement": null,
+      "quality_agreement": null,
+      "gpt_top1_in_gemini_topk": null,
+      "gemini_top1_conflicts_with_gpt_similar_candidate": null,
+      "agreementStatus": "invalid_pack",
+      "excludedFromModelDenominator": true
+    },
+    {
+      "queueId": "BLIND_REP-04_s08",
+      "gptFrozenTop1": null,
+      "geminiTop1": {"itemId": "green_shupianlingshi", "name": "薯片零食", "quality": "green"},
+      "geminiTopK": ["green_shupianlingshi", "white_caomeitangguo", "white_dianyingkaquan"],
+      "gptConfidence": 0.0,
+      "geminiConfidence": "medium",
+      "agreementStatus": "invalid_pack",
+      "excludedFromModelDenominator": true
+    },
+    {
+      "queueId": "BLIND_REP-04_s09",
+      "gptFrozenTop1": null,
+      "geminiTop1": {"itemId": "green_kaorouchuan", "name": "烤肉串", "quality": "green"},
+      "geminiTopK": ["green_kaorouchuan", "green_shupianlingshi", "white_caomeiruantang"],
+      "gptConfidence": 0.0,
+      "geminiConfidence": "medium",
+      "agreementStatus": "invalid_pack",
+      "excludedFromModelDenominator": true
+    },
+    {
+      "queueId": "BLIND_REP-05_s01",
+      "gptFrozenTop1": null,
+      "geminiTop1": {"itemId": "gold_guanzhuangsuixinni", "name": "罐装随心泥", "quality": "gold"},
+      "geminiTopK": ["gold_guanzhuangsuixinni", "purple_slime_mud", "gold_dabing"],
+      "gptConfidence": 0.0,
+      "geminiConfidence": "medium",
+      "agreementStatus": "invalid_pack",
+      "excludedFromModelDenominator": true
+    },
+    {
+      "queueId": "BLIND_REP-05_s02",
+      "gptFrozenTop1": null,
+      "geminiTop1": {"itemId": "purple_arespaobuji", "name": "阿瑞斯跑步机", "quality": "purple"},
+      "geminiTopK": ["purple_arespaobuji", "purple_lvdongdanche", "gold_lunyimoxing"],
+      "gptConfidence": 0.0,
+      "geminiConfidence": "medium",
+      "agreementStatus": "invalid_pack",
+      "excludedFromModelDenominator": true
+    },
+    {
+      "queueId": "BLIND_REP-05_s03",
+      "gptFrozenTop1": null,
+      "geminiTop1": {"itemId": "blue_fuguonandeng", "name": "复古暖灯", "quality": "blue"},
+      "geminiTopK": ["blue_fuguonandeng", "green_xiaomuzhuo", "white_saokingweichen"],
+      "gptConfidence": 0.0,
+      "geminiConfidence": "low",
+      "agreementStatus": "invalid_pack",
+      "excludedFromModelDenominator": true
+    },
+    {
+      "queueId": "BLIND_REP-05_s04",
+      "gptFrozenTop1": null,
+      "geminiTop1": {"itemId": "green_maorongrongdequeding", "name": "毛茸茸的肯定", "quality": "green"},
+      "geminiTopK": ["green_maorongrongdequeding", "green_liulidanzhu", "white_mianmianyun"],
+      "gptConfidence": 0.0,
+      "geminiConfidence": "low",
+      "agreementStatus": "invalid_pack",
+      "excludedFromModelDenominator": true
+    }
+  ],
+  "disagreementList": [
+    "BLIND_REP-01_s03",
+    "BLIND_REP-01_s06",
+    "BLIND_REP-01_s09",
+    "BLIND_REP-01_s11",
+    "BLIND_REP-01_s12",
+    "BLIND_REP-01_s13",
+    "BLIND_REP-01_s15",
+    "BLIND_REP-02_s01",
+    "BLIND_REP-02_s18"
+  ],
+  "redPseudoSlotAudit": {
+    "geminiRedSlotCount": 6,
+    "p0SideChannelHypothesisConfirmed": true,
+    "note": "The six Gemini Red pseudo slots are exactly the six P0 queue entries. Priority was therefore a real quality-group side channel, although it was not used as visual evidence in the frozen GPT predictions.",
+    "effectiveComparableRedSlots": 4,
+    "invalidPackRedSlots": 2,
+    "exactAgreementCount": 1,
+    "qualityOnlyAgreementCount": 1,
+    "disagreementCount": 2,
+    "slots": [
+      {
+        "queueId": "BLIND_REP-01_s01",
+        "gemini": "九格小食 / red",
+        "gpt": "九格小食 / 红",
+        "status": "exact_agreement"
+      },
+      {
+        "queueId": "BLIND_REP-01_s03",
+        "gemini": "心猎铁骑L3 / red",
+        "gpt": "新口味上市！ / 绿",
+        "status": "disagreement"
+      },
+      {
+        "queueId": "BLIND_REP-02_s01",
+        "gemini": "赤尾鱼 / red",
+        "gpt": "绝对是亲手钓的鱼 / 蓝",
+        "status": "disagreement"
+      },
+      {
+        "queueId": "BLIND_REP-02_s11",
+        "gemini": "炽心水滴 / red",
+        "gpt": "「泪滴」 / 红",
+        "status": "quality_only_agreement",
+        "note": "No authoritative catalog alias mapping exists, so exact identity is not credited."
+      },
+      {
+        "queueId": "BLIND_REP-04_s04",
+        "gemini": "心猎铁骑玩具 / red",
+        "gpt": "abstain",
+        "status": "invalid_pack"
+      },
+      {
+        "queueId": "BLIND_REP-04_s05",
+        "gemini": "炽心水滴 / red",
+        "gpt": "abstain",
+        "status": "invalid_pack"
+      }
+    ]
+  },
+  "strongMultiModelPseudoLabelCandidates": [
+    {
+      "queueId": "BLIND_REP-01_s01",
+      "canonicalItemId": "image34-0-1",
+      "name": "九格小食",
+      "quality": "红",
+      "status": "strong_multi_model_pseudo_label",
+      "verifiedTruth": false
+    }
+  ],
+  "humanReviewRequired": {
+    "count": 10,
+    "scope": "All valid comparable slots without strict exact agreement; invalid-pack slots are excluded and instead require pack repair before any item review.",
+    "slots": [
+      "BLIND_REP-01_s03",
+      "BLIND_REP-01_s06",
+      "BLIND_REP-01_s09",
+      "BLIND_REP-01_s11",
+      "BLIND_REP-01_s12",
+      "BLIND_REP-01_s13",
+      "BLIND_REP-01_s15",
+      "BLIND_REP-02_s01",
+      "BLIND_REP-02_s11",
+      "BLIND_REP-02_s18"
+    ],
+    "packRepairRequiredBeforeReview": [
+      "BLIND_REP-04_s04",
+      "BLIND_REP-04_s05",
+      "BLIND_REP-04_s08",
+      "BLIND_REP-04_s09",
+      "BLIND_REP-05_s01",
+      "BLIND_REP-05_s02",
+      "BLIND_REP-05_s03",
+      "BLIND_REP-05_s04"
+    ]
+  },
+  "benchmarkStructureFindings": [
+    {
+      "severity": "high",
+      "issue": "Gemini semantic itemIds are not the catalog_065 canonical itemIds and no authoritative alias mapping is present.",
+      "impact": "Strict exact-item and Top-K agreement cannot safely credit labels whose Gemini names do not exactly resolve to a unique catalog item."
+    },
+    {
+      "severity": "medium",
+      "issue": "Gemini data exists in two incompatible slot namespaces: BM1-*/slot_* predictions and REP-*/s* pseudo labels.",
+      "impact": "The agreement source must be chosen explicitly; joining the old BM1 prediction files to this 19-slot queue would be structurally invalid."
+    },
+    {
+      "severity": "medium",
+      "issue": "The six P0 entries exactly equal the six Gemini Red pseudo slots.",
+      "impact": "The blind queue priority field leaked quality-group membership even though it did not expose item identity."
+    },
+    {
+      "severity": "high",
+      "issue": "Eight joined queue records have crop/bbox content outside the alleged inventory item region.",
+      "impact": "They are pack defects, not model disagreements, and are excluded from every model-agreement denominator."
+    }
+  ],
+  "prohibitedActionsPerformed": {
+    "groundTruthModified": false,
+    "historicalJsonModified": false,
+    "redPriorModified": false,
+    "solverModified": false,
+    "verifiedPromotionPerformed": false,
+    "disagreementArbitrated": false
+  }
+}

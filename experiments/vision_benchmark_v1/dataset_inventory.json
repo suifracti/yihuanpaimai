@@ -1,0 +1,1159 @@
+{
+  "generatedAt": "2026-08-20T14:15:00+08:00",
+  "scannedRawImagesCount": 711,
+  "independentSessionsCount": 7,
+  "independentWarehouseStatesCount": 14,
+  "representativeImagesSelected": 5,
+  "collapsedRawFramesCount": 68,
+  "totalGeneratedSlotCrops": 57,
+  "representativeManifest": [
+    {
+      "repId": "REP-01",
+      "session": "Session_Replay_A",
+      "state": "Final_Settlement",
+      "imagePath": "assets/settlement_frames/sec_488.jpg",
+      "collapsedFrameCount": 13,
+      "difficulty": "clear",
+      "isSettlement": true,
+      "declaredQ": 10,
+      "actualTotal": 972970,
+      "slots": [
+        {
+          "slotId": "s01",
+          "name": "九格小食",
+          "itemId": "red_jiugexiaoshi",
+          "quality": "red",
+          "bbox": [
+            1408,
+            256,
+            1536,
+            384
+          ],
+          "top3": [
+            "red_jiugexiaoshi",
+            "red_yicuyouhuo",
+            "gold_dabing"
+          ],
+          "conf": "high",
+          "impact": "Red item in settlement"
+        },
+        {
+          "slotId": "s02",
+          "name": "万有星仪",
+          "itemId": "gold_wanyouxingyi",
+          "quality": "gold",
+          "bbox": [
+            1744,
+            256,
+            1872,
+            448
+          ],
+          "top3": [
+            "gold_wanyouxingyi",
+            "gold_qiaowangnijindiaoxiang",
+            "purple_arespaobuji"
+          ],
+          "conf": "high",
+          "impact": "Large Gold 2x3"
+        },
+        {
+          "slotId": "s03",
+          "name": "心猎铁骑L3",
+          "itemId": "red_xinlietieqi_l3",
+          "quality": "red",
+          "bbox": [
+            1744,
+            480,
+            1872,
+            608
+          ],
+          "top3": [
+            "red_xinlietieqi_l3",
+            "red_xinlietieqi_l2",
+            "purple_xinlietieqi_l1"
+          ],
+          "conf": "high",
+          "impact": "Red character toy 2x2"
+        },
+        {
+          "slotId": "s04",
+          "name": "史莱姆随心泥",
+          "itemId": "purple_slime_mud",
+          "quality": "purple",
+          "bbox": [
+            1600,
+            448,
+            1728,
+            576
+          ],
+          "top3": [
+            "purple_slime_mud",
+            "gold_guanzhuangsuixinni",
+            "purple_lvdongdanche"
+          ],
+          "conf": "high",
+          "impact": "Purple 2x2"
+        },
+        {
+          "slotId": "s05",
+          "name": "艺术画「深林」",
+          "itemId": "blue_yishuhua_shenlin",
+          "quality": "blue",
+          "bbox": [
+            1424,
+            384,
+            1552,
+            512
+          ],
+          "top3": [
+            "blue_yishuhua_shenlin",
+            "blue_yishuhua_haian",
+            "white_pailidexiangkuang"
+          ],
+          "conf": "high",
+          "impact": "Blue 2x2 painting"
+        },
+        {
+          "slotId": "s06",
+          "name": "红药水",
+          "itemId": "purple_hongyaoshui",
+          "quality": "purple",
+          "bbox": [
+            1664,
+            288,
+            1728,
+            416
+          ],
+          "top3": [
+            "purple_hongyaoshui",
+            "purple_chengjieweijiu",
+            "red_xiahongzuan"
+          ],
+          "conf": "medium",
+          "impact": "Purple 1x2 potion"
+        },
+        {
+          "slotId": "s07",
+          "name": "智能手机",
+          "itemId": "blue_zhinengshouji",
+          "quality": "blue",
+          "bbox": [
+            1632,
+            576,
+            1696,
+            672
+          ],
+          "top3": [
+            "blue_zhinengshouji",
+            "blue_zhinengchongdianqi",
+            "white_dianyingkaquan"
+          ],
+          "conf": "high",
+          "impact": "Blue 1x2"
+        },
+        {
+          "slotId": "s08",
+          "name": "霞红钻",
+          "itemId": "purple_xiahongzuan",
+          "quality": "purple",
+          "bbox": [
+            1776,
+            448,
+            1840,
+            512
+          ],
+          "top3": [
+            "purple_xiahongzuan",
+            "red_chixinshuidi",
+            "purple_youlingtai"
+          ],
+          "conf": "high",
+          "impact": "Small gem 1x1"
+        },
+        {
+          "slotId": "s09",
+          "name": "电影卡券",
+          "itemId": "white_dianyingkaquan",
+          "quality": "white",
+          "bbox": [
+            1440,
+            528,
+            1504,
+            576
+          ],
+          "top3": [
+            "white_dianyingkaquan",
+            "blue_zhinengshouji",
+            "white_zhezhibaozhi"
+          ],
+          "conf": "medium",
+          "impact": "Small ticket 1x1"
+        },
+        {
+          "slotId": "s10",
+          "name": "留声奖杯",
+          "itemId": "purple_liushengjiangbei",
+          "quality": "purple",
+          "bbox": [
+            1408,
+            496,
+            1472,
+            592
+          ],
+          "top3": [
+            "purple_liushengjiangbei",
+            "purple_liushengjiangzuo",
+            "gold_jinwan"
+          ],
+          "conf": "high",
+          "impact": "Purple trophy 1x2"
+        },
+        {
+          "slotId": "s11",
+          "name": "金碗",
+          "itemId": "gold_jinwan",
+          "quality": "gold",
+          "bbox": [
+            1728,
+            560,
+            1792,
+            624
+          ],
+          "top3": [
+            "gold_jinwan",
+            "white_huadiaowan",
+            "gold_liushengjilaba"
+          ],
+          "conf": "medium",
+          "impact": "Gold bowl 1x1"
+        },
+        {
+          "slotId": "s12",
+          "name": "草莓软糖",
+          "itemId": "white_caomeiruantang",
+          "quality": "white",
+          "bbox": [
+            1744,
+            608,
+            1808,
+            672
+          ],
+          "top3": [
+            "white_caomeiruantang",
+            "white_caomeitangguo",
+            "purple_yuebaisha"
+          ],
+          "conf": "medium",
+          "impact": "Small candy 1x1"
+        },
+        {
+          "slotId": "s13",
+          "name": "月白沙",
+          "itemId": "purple_yuebaisha",
+          "quality": "purple",
+          "bbox": [
+            1680,
+            256,
+            1744,
+            320
+          ],
+          "top3": [
+            "purple_yuebaisha",
+            "white_shuijingqiyuanqiu",
+            "purple_taomu"
+          ],
+          "conf": "medium",
+          "impact": "Small gem 1x1"
+        },
+        {
+          "slotId": "s14",
+          "name": "珍珠蚌",
+          "itemId": "purple_zhenzhubang",
+          "quality": "purple",
+          "bbox": [
+            1696,
+            368,
+            1760,
+            432
+          ],
+          "top3": [
+            "purple_zhenzhubang",
+            "purple_youlingtai",
+            "green_liulidanzhu"
+          ],
+          "conf": "high",
+          "impact": "Purple clam 1x1"
+        },
+        {
+          "slotId": "s15",
+          "name": "小木桌",
+          "itemId": "green_xiaomuzhuo",
+          "quality": "green",
+          "bbox": [
+            1472,
+            480,
+            1536,
+            544
+          ],
+          "top3": [
+            "green_xiaomuzhuo",
+            "blue_fuguonandeng",
+            "white_saokingweichen"
+          ],
+          "conf": "medium",
+          "impact": "Green table 1x1"
+        }
+      ]
+    },
+    {
+      "repId": "REP-02",
+      "session": "Session_Warehouse_Crop",
+      "state": "Full_Grid_20_Items",
+      "imagePath": "core/settlement_items_crop.png",
+      "collapsedFrameCount": 1,
+      "difficulty": "clear",
+      "isSettlement": true,
+      "declaredQ": 10,
+      "actualTotal": null,
+      "slots": [
+        {
+          "slotId": "s01",
+          "name": "赤尾鱼",
+          "itemId": "red_chiweiyu",
+          "quality": "red",
+          "bbox": [
+            92,
+            100,
+            230,
+            230
+          ],
+          "top3": [
+            "red_chiweiyu",
+            "red_jinjinlidiaoxiang",
+            "red_pendragon"
+          ],
+          "conf": "high",
+          "impact": "Giant Red Fish 3x3"
+        },
+        {
+          "slotId": "s02",
+          "name": "艺术画「深林」",
+          "itemId": "blue_yishuhua_shenlin",
+          "quality": "blue",
+          "bbox": [
+            200,
+            10,
+            275,
+            80
+          ],
+          "top3": [
+            "blue_yishuhua_shenlin",
+            "blue_yishuhua_haian",
+            "white_pailidexiangkuang"
+          ],
+          "conf": "high",
+          "impact": "Blue 2x2 frame"
+        },
+        {
+          "slotId": "s03",
+          "name": "律动单车A",
+          "itemId": "purple_lvdongdanche",
+          "quality": "purple",
+          "bbox": [
+            10,
+            100,
+            85,
+            155
+          ],
+          "top3": [
+            "purple_lvdongdanche",
+            "purple_arespaobuji",
+            "gold_lunyimoxing"
+          ],
+          "conf": "high",
+          "impact": "Purple bike 2x2"
+        },
+        {
+          "slotId": "s04",
+          "name": "律动单车B",
+          "itemId": "purple_lvdongdanche",
+          "quality": "purple",
+          "bbox": [
+            170,
+            240,
+            245,
+            295
+          ],
+          "top3": [
+            "purple_lvdongdanche",
+            "purple_arespaobuji",
+            "gold_lunyimoxing"
+          ],
+          "conf": "high",
+          "impact": "Purple bike 2x2 (Instance 2)"
+        },
+        {
+          "slotId": "s05",
+          "name": "海贝勋章",
+          "itemId": "gold_haibeixunzhang",
+          "quality": "gold",
+          "bbox": [
+            95,
+            45,
+            145,
+            85
+          ],
+          "top3": [
+            "gold_haibeixunzhang",
+            "blue_jinianyinbi",
+            "gold_jinjiweijiu"
+          ],
+          "conf": "high",
+          "impact": "Gold badge 2x2"
+        },
+        {
+          "slotId": "s06",
+          "name": "橙色鸡尾酒",
+          "itemId": "purple_chengjieweijiu",
+          "quality": "purple",
+          "bbox": [
+            10,
+            210,
+            85,
+            265
+          ],
+          "top3": [
+            "purple_chengjieweijiu",
+            "gold_jinjiweijiu",
+            "purple_hongyaoshui"
+          ],
+          "conf": "high",
+          "impact": "Purple cocktail 2x2"
+        },
+        {
+          "slotId": "s07",
+          "name": "金鸡尾酒",
+          "itemId": "gold_jinjiweijiu",
+          "quality": "gold",
+          "bbox": [
+            225,
+            155,
+            275,
+            220
+          ],
+          "top3": [
+            "gold_jinjiweijiu",
+            "purple_chengjieweijiu",
+            "gold_haibeixunzhang"
+          ],
+          "conf": "high",
+          "impact": "Gold cocktail 2x2"
+        },
+        {
+          "slotId": "s08",
+          "name": "球形无人机",
+          "itemId": "gold_qiuxingwurenji",
+          "quality": "gold",
+          "bbox": [
+            95,
+            240,
+            145,
+            295
+          ],
+          "top3": [
+            "gold_qiuxingwurenji",
+            "red_xinlietieqi_l3",
+            "purple_lvdongdanche"
+          ],
+          "conf": "high",
+          "impact": "Gold drone 2x2"
+        },
+        {
+          "slotId": "s09",
+          "name": "拍立得相框",
+          "itemId": "white_pailidexiangkuang",
+          "quality": "white",
+          "bbox": [
+            10,
+            155,
+            60,
+            205
+          ],
+          "top3": [
+            "white_pailidexiangkuang",
+            "blue_yishuhua_shenlin",
+            "white_dianyingkaquan"
+          ],
+          "conf": "high",
+          "impact": "White camera 2x2"
+        },
+        {
+          "slotId": "s10",
+          "name": "纪念银币",
+          "itemId": "blue_jinianyinbi",
+          "quality": "blue",
+          "bbox": [
+            225,
+            105,
+            275,
+            150
+          ],
+          "top3": [
+            "blue_jinianyinbi",
+            "gold_haibeixunzhang",
+            "gold_jinwan"
+          ],
+          "conf": "high",
+          "impact": "Blue disc 2x2"
+        },
+        {
+          "slotId": "s11",
+          "name": "炽心水滴",
+          "itemId": "red_chixinshuidi",
+          "quality": "red",
+          "bbox": [
+            65,
+            155,
+            90,
+            180
+          ],
+          "top3": [
+            "red_chixinshuidi",
+            "purple_xiahongzuan",
+            "purple_youlingtai"
+          ],
+          "conf": "medium",
+          "impact": "Red gem 1x1 (High value)"
+        },
+        {
+          "slotId": "s12",
+          "name": "霞红钻A",
+          "itemId": "purple_xiahongzuan",
+          "quality": "purple",
+          "bbox": [
+            145,
+            45,
+            170,
+            70
+          ],
+          "top3": [
+            "purple_xiahongzuan",
+            "red_chixinshuidi",
+            "purple_youlingtai"
+          ],
+          "conf": "high",
+          "impact": "Purple gem 1x1"
+        },
+        {
+          "slotId": "s13",
+          "name": "霞红钻B",
+          "itemId": "purple_xiahongzuan",
+          "quality": "purple",
+          "bbox": [
+            145,
+            70,
+            170,
+            95
+          ],
+          "top3": [
+            "purple_xiahongzuan",
+            "red_chixinshuidi",
+            "purple_youlingtai"
+          ],
+          "conf": "high",
+          "impact": "Purple gem 1x1 (Instance 2)"
+        },
+        {
+          "slotId": "s14",
+          "name": "幽灵态A",
+          "itemId": "purple_youlingtai",
+          "quality": "purple",
+          "bbox": [
+            65,
+            180,
+            90,
+            205
+          ],
+          "top3": [
+            "purple_youlingtai",
+            "purple_xiahongzuan",
+            "purple_zhenzhubang"
+          ],
+          "conf": "high",
+          "impact": "Purple pearl 1x1"
+        },
+        {
+          "slotId": "s15",
+          "name": "幽灵态B",
+          "itemId": "purple_youlingtai",
+          "quality": "purple",
+          "bbox": [
+            35,
+            75,
+            60,
+            100
+          ],
+          "top3": [
+            "purple_youlingtai",
+            "purple_xiahongzuan",
+            "purple_zhenzhubang"
+          ],
+          "conf": "high",
+          "impact": "Purple pearl 1x1 (Instance 2)"
+        },
+        {
+          "slotId": "s16",
+          "name": "留声机喇叭",
+          "itemId": "gold_liushengjilaba",
+          "quality": "gold",
+          "bbox": [
+            10,
+            265,
+            40,
+            295
+          ],
+          "top3": [
+            "gold_liushengjilaba",
+            "gold_jinwan",
+            "purple_liushengjiangzuo"
+          ],
+          "conf": "high",
+          "impact": "Gold horn 1x1"
+        },
+        {
+          "slotId": "s17",
+          "name": "火漆印",
+          "itemId": "green_huoqiyin",
+          "quality": "green",
+          "bbox": [
+            250,
+            240,
+            275,
+            265
+          ],
+          "top3": [
+            "green_huoqiyin",
+            "green_liulidanzhu",
+            "green_maorongrongdequeding"
+          ],
+          "conf": "high",
+          "impact": "Green wax seal 1x1"
+        },
+        {
+          "slotId": "s18",
+          "name": "琉璃弹珠",
+          "itemId": "green_liulidanzhu",
+          "quality": "green",
+          "bbox": [
+            250,
+            265,
+            275,
+            295
+          ],
+          "top3": [
+            "green_liulidanzhu",
+            "green_huoqiyin",
+            "purple_taomu"
+          ],
+          "conf": "medium",
+          "impact": "Green marble 1x1"
+        },
+        {
+          "slotId": "s19",
+          "name": "草莓糖果",
+          "itemId": "white_caomeitangguo",
+          "quality": "white",
+          "bbox": [
+            65,
+            265,
+            90,
+            295
+          ],
+          "top3": [
+            "white_caomeitangguo",
+            "white_caomeiruantang",
+            "white_saokingweichen"
+          ],
+          "conf": "high",
+          "impact": "White candy 1x1"
+        },
+        {
+          "slotId": "s20",
+          "name": "星影滑板",
+          "itemId": "blue_xingyinghuaban",
+          "quality": "blue",
+          "bbox": [
+            115,
+            10,
+            175,
+            30
+          ],
+          "top3": [
+            "blue_xingyinghuaban",
+            "blue_zhinengshouji",
+            "white_dianyingkaquan"
+          ],
+          "conf": "high",
+          "impact": "Blue 1x3 board"
+        }
+      ]
+    },
+    {
+      "repId": "REP-03",
+      "session": "Session_LiveAuc_t078",
+      "state": "Auction_Grid_8_Items",
+      "imagePath": "build/live_auc/t078_grid.png",
+      "collapsedFrameCount": 4,
+      "difficulty": "clear",
+      "isSettlement": false,
+      "declaredQ": 4,
+      "actualTotal": null,
+      "slots": [
+        {
+          "slotId": "s01",
+          "name": "银白胸甲",
+          "itemId": "blue_yinbaixiongjia",
+          "quality": "blue",
+          "bbox": [
+            15,
+            30,
+            175,
+            190
+          ],
+          "top3": [
+            "blue_yinbaixiongjia",
+            "blue_yishuhua_shenlin",
+            "gold_wanyouxingyi"
+          ],
+          "conf": "high",
+          "impact": "Large Blue 3x3 armor"
+        },
+        {
+          "slotId": "s02",
+          "name": "极速机车",
+          "itemId": "gold_jisujiche",
+          "quality": "gold",
+          "bbox": [
+            345,
+            15,
+            500,
+            85
+          ],
+          "top3": [
+            "gold_jisujiche",
+            "gold_zhinengchongdianqi",
+            "purple_lvdongdanche"
+          ],
+          "conf": "high",
+          "impact": "Gold motorcycle 2x1"
+        },
+        {
+          "slotId": "s03",
+          "name": "智能充电器",
+          "itemId": "gold_zhinengchongdianqi",
+          "quality": "gold",
+          "bbox": [
+            235,
+            90,
+            390,
+            160
+          ],
+          "top3": [
+            "gold_zhinengchongdianqi",
+            "gold_jisujiche",
+            "blue_zhinengshouji"
+          ],
+          "conf": "high",
+          "impact": "Gold USB cable 2x1"
+        },
+        {
+          "slotId": "s04",
+          "name": "留声奖座",
+          "itemId": "purple_liushengjiangzuo",
+          "quality": "purple",
+          "bbox": [
+            180,
+            15,
+            235,
+            140
+          ],
+          "top3": [
+            "purple_liushengjiangzuo",
+            "purple_liushengjiangbei",
+            "gold_jinwan"
+          ],
+          "conf": "high",
+          "impact": "Purple trophy 1x2"
+        },
+        {
+          "slotId": "s05",
+          "name": "饕目",
+          "itemId": "purple_taomu",
+          "quality": "purple",
+          "bbox": [
+            235,
+            15,
+            290,
+            85
+          ],
+          "top3": [
+            "purple_taomu",
+            "purple_youlingtai",
+            "purple_xiahongzuan"
+          ],
+          "conf": "high",
+          "impact": "Purple eye gem 1x1"
+        },
+        {
+          "slotId": "s06",
+          "name": "水晶祈愿球",
+          "itemId": "white_shuijingqiyuanqiu",
+          "quality": "white",
+          "bbox": [
+            290,
+            15,
+            345,
+            85
+          ],
+          "top3": [
+            "white_shuijingqiyuanqiu",
+            "purple_yuebaisha",
+            "green_liulidanzhu"
+          ],
+          "conf": "high",
+          "impact": "White crystal doll ball 1x1"
+        },
+        {
+          "slotId": "s07",
+          "name": "纯净矿泉水",
+          "itemId": "blue_chunjingkuangquanshui",
+          "quality": "blue",
+          "bbox": [
+            405,
+            90,
+            455,
+            160
+          ],
+          "top3": [
+            "blue_chunjingkuangquanshui",
+            "purple_hongyaoshui",
+            "blue_zhinengshouji"
+          ],
+          "conf": "high",
+          "impact": "Blue water bottle 1x1"
+        },
+        {
+          "slotId": "s08",
+          "name": "草莓糖果",
+          "itemId": "white_caomeitangguo",
+          "quality": "white",
+          "bbox": [
+            515,
+            15,
+            565,
+            85
+          ],
+          "top3": [
+            "white_caomeitangguo",
+            "white_caomeiruantang",
+            "white_saokingweichen"
+          ],
+          "conf": "high",
+          "impact": "White candy 1x1"
+        }
+      ]
+    },
+    {
+      "repId": "REP-04",
+      "session": "Session_Replay_A",
+      "state": "Round_4_Auction_Grid",
+      "imagePath": "assets/video_frames/sec_210.jpg",
+      "collapsedFrameCount": 18,
+      "difficulty": "medium",
+      "isSettlement": false,
+      "declaredQ": 9,
+      "actualTotal": null,
+      "slots": [
+        {
+          "slotId": "s01",
+          "name": "单反相机",
+          "itemId": "purple_danfanxiangji",
+          "quality": "purple",
+          "bbox": [
+            830,
+            275,
+            875,
+            365
+          ],
+          "top3": [
+            "purple_danfanxiangji",
+            "purple_arespaobuji",
+            "purple_lvdongdanche"
+          ],
+          "conf": "high",
+          "impact": "Purple SLR 2x2"
+        },
+        {
+          "slotId": "s02",
+          "name": "艺术画「深林」",
+          "itemId": "blue_yishuhua_shenlin",
+          "quality": "blue",
+          "bbox": [
+            780,
+            380,
+            825,
+            440
+          ],
+          "top3": [
+            "blue_yishuhua_shenlin",
+            "blue_yishuhua_haian",
+            "white_pailidexiangkuang"
+          ],
+          "conf": "high",
+          "impact": "Blue frame 2x2"
+        },
+        {
+          "slotId": "s03",
+          "name": "环星仪",
+          "itemId": "gold_huanxingyi",
+          "quality": "gold",
+          "bbox": [
+            790,
+            255,
+            830,
+            295
+          ],
+          "top3": [
+            "gold_huanxingyi",
+            "gold_wanyouxingyi",
+            "purple_taomu"
+          ],
+          "conf": "high",
+          "impact": "Gold planet model 2x2"
+        },
+        {
+          "slotId": "s04",
+          "name": "心猎铁骑玩具",
+          "itemId": "red_xinlietieqi_wanju",
+          "quality": "red",
+          "bbox": [
+            790,
+            305,
+            830,
+            365
+          ],
+          "top3": [
+            "red_xinlietieqi_wanju",
+            "red_xinlietieqi_l3",
+            "purple_xinlietieqi_l1"
+          ],
+          "conf": "medium",
+          "impact": "Red toy 2x2 (High impact)"
+        },
+        {
+          "slotId": "s05",
+          "name": "炽心水滴",
+          "itemId": "red_chixinshuidi",
+          "quality": "red",
+          "bbox": [
+            875,
+            255,
+            895,
+            295
+          ],
+          "top3": [
+            "red_chixinshuidi",
+            "purple_xiahongzuan",
+            "purple_youlingtai"
+          ],
+          "conf": "high",
+          "impact": "Red teardrop gem 1x1"
+        },
+        {
+          "slotId": "s06",
+          "name": "拍立得",
+          "itemId": "white_pailide",
+          "quality": "white",
+          "bbox": [
+            900,
+            255,
+            940,
+            320
+          ],
+          "top3": [
+            "white_pailide",
+            "white_pailidexiangkuang",
+            "purple_danfanxiangji"
+          ],
+          "conf": "high",
+          "impact": "Pink polaroid 1x2"
+        },
+        {
+          "slotId": "s07",
+          "name": "智能手机",
+          "itemId": "blue_zhinengshouji",
+          "quality": "blue",
+          "bbox": [
+            900,
+            355,
+            940,
+            420
+          ],
+          "top3": [
+            "blue_zhinengshouji",
+            "blue_zhinengchongdianqi",
+            "white_dianyingkaquan"
+          ],
+          "conf": "high",
+          "impact": "Blue phone 1x2"
+        },
+        {
+          "slotId": "s08",
+          "name": "薯片零食",
+          "itemId": "green_shupianlingshi",
+          "quality": "green",
+          "bbox": [
+            875,
+            365,
+            900,
+            410
+          ],
+          "top3": [
+            "green_shupianlingshi",
+            "white_caomeitangguo",
+            "white_dianyingkaquan"
+          ],
+          "conf": "medium",
+          "impact": "Snack bag 1x2"
+        },
+        {
+          "slotId": "s09",
+          "name": "烤肉串",
+          "itemId": "green_kaorouchuan",
+          "quality": "green",
+          "bbox": [
+            875,
+            410,
+            900,
+            450
+          ],
+          "top3": [
+            "green_kaorouchuan",
+            "green_shupianlingshi",
+            "white_caomeiruantang"
+          ],
+          "conf": "medium",
+          "impact": "Skewer 1x2"
+        },
+        {
+          "slotId": "s10",
+          "name": "留声奖座",
+          "itemId": "purple_liushengjiangzuo",
+          "quality": "purple",
+          "bbox": [
+            875,
+            305,
+            900,
+            365
+          ],
+          "top3": [
+            "purple_liushengjiangzuo",
+            "purple_liushengjiangbei",
+            "gold_jinwan"
+          ],
+          "conf": "high",
+          "impact": "Trophy 1x2"
+        }
+      ]
+    },
+    {
+      "repId": "REP-05",
+      "session": "Session_LiveFail_t004",
+      "state": "Low_Contrast_Grid",
+      "imagePath": "build/live_fail/t004.jpg",
+      "collapsedFrameCount": 32,
+      "difficulty": "hard",
+      "isSettlement": false,
+      "declaredQ": 6,
+      "actualTotal": null,
+      "slots": [
+        {
+          "slotId": "s01",
+          "name": "罐装随心泥",
+          "itemId": "gold_guanzhuangsuixinni",
+          "quality": "gold",
+          "bbox": [
+            1400,
+            300,
+            1550,
+            450
+          ],
+          "top3": [
+            "gold_guanzhuangsuixinni",
+            "purple_slime_mud",
+            "gold_dabing"
+          ],
+          "conf": "medium",
+          "impact": "Gold mud 2x2"
+        },
+        {
+          "slotId": "s02",
+          "name": "阿瑞斯跑步机",
+          "itemId": "purple_arespaobuji",
+          "quality": "purple",
+          "bbox": [
+            1550,
+            300,
+            1700,
+            450
+          ],
+          "top3": [
+            "purple_arespaobuji",
+            "purple_lvdongdanche",
+            "gold_lunyimoxing"
+          ],
+          "conf": "medium",
+          "impact": "Purple treadmill 2x2"
+        },
+        {
+          "slotId": "s03",
+          "name": "复古暖灯",
+          "itemId": "blue_fuguonandeng",
+          "quality": "blue",
+          "bbox": [
+            1400,
+            450,
+            1480,
+            530
+          ],
+          "top3": [
+            "blue_fuguonandeng",
+            "green_xiaomuzhuo",
+            "white_saokingweichen"
+          ],
+          "conf": "low",
+          "impact": "Blue lamp 1x1 (Ambiguous)"
+        },
+        {
+          "slotId": "s04",
+          "name": "毛茸茸的肯定",
+          "itemId": "green_maorongrongdequeding",
+          "quality": "green",
+          "bbox": [
+            1480,
+            450,
+            1560,
+            530
+          ],
+          "top3": [
+            "green_maorongrongdequeding",
+            "green_liulidanzhu",
+            "white_mianmianyun"
+          ],
+          "conf": "low",
+          "impact": "Green plush 1x1 (Low confidence)"
+        }
+      ]
+    }
+  ]
+}

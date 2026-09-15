@@ -1,0 +1,53 @@
+{
+  "contractVersion": "geometry-contract-v1",
+  "description": "Benchmark v2 single-source admitted geometry; identity remains null.",
+  "instances": [
+    {
+      "bbox": [
+        99,
+        101,
+        248,
+        251
+      ],
+      "bboxCoordinateSpace": "source_pixel",
+      "canonicalItemId": null,
+      "contentVerification": {
+        "contentVerified": true,
+        "evidenceType": "manual_review",
+        "note": "Source-pixel review confirms these contiguous proposal regions are fragments of one visible large physical tile; the reviewed bbox follows that tile boundary. No identity or quality is asserted.",
+        "reviewStatus": "reviewed_consistent",
+        "scope": "crop_instance_binding_only"
+      },
+      "footprint": null,
+      "instanceId": "inst-8c2adb20dd29a96a6834",
+      "observationLabel": null,
+      "sourceId": "src-c86e85c5712aea00ac7d"
+    }
+  ],
+  "pathBase": "repository_root",
+  "queueSlots": [
+    {
+      "cropPath": "experiments/vision_benchmark_v2/multi_group_slice/crops/crop-8c2adb20dd29a96a6834.png",
+      "instanceId": "inst-8c2adb20dd29a96a6834",
+      "queueId": "queue-8c2adb20dd29a96a6834"
+    }
+  ],
+  "sources": [
+    {
+      "coordinateSpace": "source_pixel",
+      "height": 329,
+      "inventoryEligible": true,
+      "inventoryRoi": {
+        "coordinateSpace": "source_pixel",
+        "height": 329,
+        "width": 307,
+        "x": 0,
+        "y": 0
+      },
+      "sceneType": "inventory_crop",
+      "sourceId": "src-c86e85c5712aea00ac7d",
+      "sourcePath": "experiments/vision_benchmark_v2/multi_group_slice/snapshots/source-c86e85c5712aea00ac7d.png",
+      "width": 307
+    }
+  ]
+}

@@ -1,0 +1,60 @@
+{
+  "reconciliationVersion": "venue-box-evidence-reconciliation.v1",
+  "generatedAt": "2026-08-22T14:30:00+08:00",
+  "venueTruthEvidenceId": "current-game-2026-08-22-venue-selection-full",
+  "productionCatalogApproval": "APPROVED_FOR_ALPHA_PROGRESSIVE_VERIFICATION",
+  "venues": [
+    {
+      "venueId": "venue-haibei",
+      "displayName": "海贝场",
+      "membershipStatus": "OPERATOR_ASSERTED_CURRENT",
+      "boxes": [
+        {"displayName": "破损的包裹", "textStatus": "DERIVED_ONLY", "rawGameText": null},
+        {"displayName": "完整的包裹", "textStatus": "DERIVED_ONLY", "rawGameText": null},
+        {"displayName": "浸水的包裹", "textStatus": "DERIVED_ONLY", "rawGameText": "低级藏品概率提升"},
+        {"displayName": "无名包裹", "textStatus": "DERIVED_ONLY", "rawGameText": null}
+      ],
+      "blockingGaps": ["passive current-game observations for production-grade verification"]
+    },
+    {
+      "venueId": "venue-shanhu",
+      "displayName": "珊瑚场",
+      "membershipStatus": "OPERATOR_ASSERTED_CURRENT",
+      "boxes": [
+        {"displayName": "机械宝箱", "textStatus": "DERIVED_ONLY", "rawGameText": "科技类概率提升"},
+        {"displayName": "美食宝箱", "textStatus": "DERIVED_ONLY", "rawGameText": "食品类概率提升"},
+        {"displayName": "实木宝箱", "textStatus": "DERIVED_ONLY", "rawGameText": "中级藏品概率提升"},
+        {"displayName": "琉璃宝箱", "textStatus": "DERIVED_ONLY", "rawGameText": "宝石类概率提升"},
+        {"displayName": "皮制宝箱", "textStatus": "DERIVED_ONLY", "rawGameText": "高级藏品概率提升"},
+        {"displayName": "螺钿宝箱", "textStatus": "DERIVED_ONLY", "rawGameText": "古董类概率提升"}
+      ],
+      "blockingGaps": ["passive current-game observations for production-grade verification"]
+    },
+    {
+      "venueId": "venue-zhenzhu",
+      "displayName": "真珠场",
+      "membershipStatus": "OPERATOR_ASSERTED_CURRENT_PROBABLE",
+      "boxes": [
+        {"displayName": "完整的保险箱", "textStatus": "LEGACY_GAME_EVIDENCE", "rawGameText": "高级藏品概率提升"},
+        {"displayName": "璀璨的保险箱", "textStatus": "LEGACY_GAME_EVIDENCE", "rawGameText": "宝石类概率提升"},
+        {"displayName": "古典的保险箱", "textStatus": "LEGACY_GAME_EVIDENCE", "rawGameText": "古董类概率提升"},
+        {"displayName": "精工的保险箱", "textStatus": "LEGACY_GAME_EVIDENCE", "rawGameText": "科技类概率提升"},
+        {"displayName": "奇趣的保险箱", "textStatus": "LEGACY_GAME_EVIDENCE", "rawGameText": "食品类概率提升"},
+        {"displayName": "锈蚀的保险箱", "textStatus": "LEGACY_GAME_EVIDENCE", "rawGameText": "中级藏品概率提升"}
+      ],
+      "textEvidencePaths": [
+        "我自己截图的一些资料/高级场箱子/033da4b176d1ca45156c2ef2f9f34cd2_720.png",
+        "我自己截图的一些资料/高级场箱子/23a760512d3262a48a9b8087c26ed821_720.png",
+        "我自己截图的一些资料/高级场箱子/464f0019643a62b6c6b4733370161c20_720.png",
+        "我自己截图的一些资料/高级场箱子/f0cb8418d5e56132715a30c696f43630_720.png"
+      ],
+      "blockingGaps": ["passive current-game observations confirming 真珠场 membership"]
+    }
+  ],
+  "excludedCurrentProductionHardcodes": ["纸箱", "铁皮箱", "金库保险箱", "顶级场"],
+  "notes": [
+    "Legacy screenshots prove visible insurance-box names/effect text at capture time, not current-game venue membership.",
+    "Derived color aliases such as 紫色提升 are not raw game text and are not promoted.",
+    "A complete box-option screen is not a valid requirement because boxes appear progressively in natural matches."
+  ]
+}

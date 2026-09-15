@@ -1,0 +1,34 @@
+{
+  "when": "2026-09-14T23:39:33.928331+08:00",
+  "phase": "after_this_round",
+  "dirs": {
+    "daily": {
+      "root": "C:\\Users\\Administrator\\AppData\\Local\\异环拍卖助手",
+      "exists": true,
+      "files": 1602,
+      "aggregateSha256": "9ff6609a150316391adbd3d244820c8de6cfcfe3c1c4cf02e354b9f5783fd499"
+    },
+    "trial": {
+      "root": "C:\\Users\\Administrator\\AppData\\Local\\异环拍卖助手试用",
+      "exists": true,
+      "files": 61,
+      "aggregateSha256": "925192231719443fdd794ba0bfadc518025f89015fa8c370c54caf65ebeb265b"
+    }
+  },
+  "compare": {
+    "daily": {
+      "beforeFiles": 1602,
+      "afterFiles": 1602,
+      "beforeSha": "9ff6609a150316391adbd3d244820c8de6cfcfe3c1c4cf02e354b9f5783fd499",
+      "afterSha": "9ff6609a150316391adbd3d244820c8de6cfcfe3c1c4cf02e354b9f5783fd499",
+      "unchanged": true
+    },
+    "trial": {
+      "beforeFiles": 61,
+      "afterFiles": 61,
+      "beforeSha": "925192231719443fdd794ba0bfadc518025f89015fa8c370c54caf65ebeb265b",
+      "afterSha": "925192231719443fdd794ba0bfadc518025f89015fa8c370c54caf65ebeb265b",
+      "unchanged": true
+    }
+  }
+}

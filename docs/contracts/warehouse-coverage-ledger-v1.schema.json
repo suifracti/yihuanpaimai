@@ -1,0 +1,136 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://yihuanpaimai.local/schemas/warehouse-coverage-ledger-v1.schema.json",
+  "title": "Warehouse Coverage Ledger v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "recordStableKey",
+    "coverageStatus",
+    "finalized",
+    "finalizedAt",
+    "terminationReason",
+    "segments",
+    "topEndpoint",
+    "bottomEndpoint",
+    "overlapProofs",
+    "conflicts",
+    "gaps"
+  ],
+  "properties": {
+    "schemaVersion": { "const": "warehouse-coverage-ledger.v1" },
+    "recordStableKey": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$"
+    },
+    "coverageStatus": {
+      "enum": ["COVERAGE_UNPROVEN", "PARTIAL", "COMPLETE"]
+    },
+    "finalized": { "type": "boolean" },
+    "finalizedAt": { "type": ["string", "null"], "minLength": 1 },
+    "terminationReason": {
+      "type": ["string", "null"],
+      "enum": [
+        null,
+        "COMPLETE",
+        "USER_STOP",
+        "TIMEOUT",
+        "WINDOW_LOST",
+        "MISSING_TOP",
+        "MISSING_BOTTOM",
+        "MISSING_OVERLAP",
+        "ORDER_CONFLICT",
+        "HASH_CONFLICT",
+        "INCOMPLETE"
+      ]
+    },
+    "segments": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "evidenceId",
+          "sha256",
+          "sequenceIndex",
+          "coverageStatus",
+          "topEndpointTrusted",
+          "bottomEndpointTrusted",
+          "fileOriginal"
+        ],
+        "properties": {
+          "evidenceId": { "type": "string", "minLength": 1 },
+          "sha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+          "sequenceIndex": { "type": "integer" },
+          "coverageStatus": { "enum": ["PARTIAL", "COVERAGE_UNPROVEN"] },
+          "topEndpointTrusted": { "type": "boolean" },
+          "bottomEndpointTrusted": { "type": "boolean" },
+          "fileOriginal": {
+            "$ref": "https://yihuanpaimai.local/schemas/settlement-evidence-original-v2.schema.json"
+          }
+        }
+      }
+    },
+    "topEndpoint": {
+      "type": ["object", "null"],
+      "additionalProperties": false,
+      "required": ["evidenceId", "trusted", "proofId"],
+      "properties": {
+        "evidenceId": { "type": "string", "minLength": 1 },
+        "trusted": { "type": "boolean" },
+        "proofId": { "type": "string", "minLength": 1 }
+      }
+    },
+    "bottomEndpoint": {
+      "type": ["object", "null"],
+      "additionalProperties": false,
+      "required": ["evidenceId", "trusted", "proofId"],
+      "properties": {
+        "evidenceId": { "type": "string", "minLength": 1 },
+        "trusted": { "type": "boolean" },
+        "proofId": { "type": "string", "minLength": 1 }
+      }
+    },
+    "overlapProofs": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["fromEvidenceId", "toEvidenceId", "trusted", "aligned", "proofId"],
+        "properties": {
+          "fromEvidenceId": { "type": "string", "minLength": 1 },
+          "toEvidenceId": { "type": "string", "minLength": 1 },
+          "trusted": { "type": "boolean" },
+          "aligned": { "type": "boolean" },
+          "proofId": { "type": "string", "minLength": 1 }
+        }
+      }
+    },
+    "conflicts": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["code", "evidenceId"],
+        "properties": {
+          "code": { "type": "string", "minLength": 1 },
+          "evidenceId": { "type": "string", "minLength": 1 }
+        }
+      }
+    },
+    "gaps": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["code", "fromEvidenceId", "toEvidenceId"],
+        "properties": {
+          "code": { "type": "string", "minLength": 1 },
+          "fromEvidenceId": { "type": ["string", "null"] },
+          "toEvidenceId": { "type": ["string", "null"] }
+        }
+      }
+    }
+  }
+}

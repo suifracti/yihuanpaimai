@@ -1,0 +1,690 @@
+{
+  "schemaVersion": "shadow-distribution-dataset-manifest.v1.2",
+  "databaseSha256": "e9c75f920646839f3dafa02e7a6dff1802827e0d4c4dcbbe121f21c7b82847fe",
+  "sampleCount": 63,
+  "globalOosRecordIds": [
+    "r-mspu12lv-om6031",
+    "r-mspu6itb-cs90yu",
+    "r-mspu9g6u-jf4ku2",
+    "r-mspubgvg-31z6r5",
+    "r-mspuhlj0-4e0ipm",
+    "r-mspun3k0-pho9we",
+    "r-msput1r9-x9w6mj",
+    "r-mspuz81m-i7y9vm",
+    "r-mspv4104-4wib7u",
+    "r-mspv9u2n-nqldhi",
+    "r-mspvfr77-6zwzvu",
+    "r-mspvjp1i-kpyt6n",
+    "r-mspvo9n4-4y1984",
+    "r-mspw0jmd-2av6gf",
+    "r-mspw54uj-k8idg4",
+    "r-mspwahol-2cuhu0",
+    "r-mspx4xtt-i9xoag",
+    "r-mspxaub6-d0zxts",
+    "r-mspxdzom-7ywn8b",
+    "r-mspxkvp9-crelwi",
+    "r-msshu5ki-2y5sxh",
+    "r-msshzosk-9z7pfc",
+    "r-mssi85je-2ulgt2",
+    "r-msslrctk-pr15lm",
+    "r-msslw1z1-0cfc3p",
+    "r-mssm2h3l-5g7kp0",
+    "r-mssm7suy-fh29y9",
+    "r-mssmdaxy-uodvsp",
+    "r-mssmlpc5-3mbarq",
+    "r-mssmr523-0khhgo",
+    "r-mssn3fnm-ditki5",
+    "r-mssn8cc6-71oqrc",
+    "r-mssnfz1o-bbg7te",
+    "r-msvt5jxu-kewgma",
+    "r-msvz1kf0-eze7o9",
+    "r-msvzrdkz-pdr0gc",
+    "r-msvzv133-3y6ljx",
+    "r-msw014jf-ug8f80",
+    "r-msw06101-mve216",
+    "r-msw0datl-ozwk1k",
+    "r-msw0kfc6-9tzjie",
+    "r-msw0sh9u-94rikb",
+    "r-msw0zatl-b2gtr8",
+    "r-msw16drb-13km2k",
+    "r-msw1jsym-kuccw9",
+    "r-msw1pux4-r1tgou",
+    "r-msw1svxg-ywh6e5",
+    "r-msw1vzqp-k4wsht"
+  ],
+  "folds": [
+    {
+      "fold": 1,
+      "trainRange": [
+        0,
+        15
+      ],
+      "testRange": [
+        15,
+        27
+      ],
+      "trainMaxEpoch": 1786523100.0,
+      "testMinEpoch": 1786523340.0,
+      "proxyCoefficient": 0.1,
+      "nullScalePoolN": 15,
+      "timeSafe": true
+    },
+    {
+      "fold": 2,
+      "trainRange": [
+        0,
+        27
+      ],
+      "testRange": [
+        27,
+        39
+      ],
+      "trainMaxEpoch": 1786525980.0,
+      "testMinEpoch": 1786526160.0,
+      "proxyCoefficient": 0.1,
+      "nullScalePoolN": 27,
+      "timeSafe": true
+    },
+    {
+      "fold": 3,
+      "trainRange": [
+        0,
+        39
+      ],
+      "testRange": [
+        39,
+        51
+      ],
+      "trainMaxEpoch": 1786690920.0,
+      "testMinEpoch": 1786691160.0,
+      "proxyCoefficient": 0.1,
+      "nullScalePoolN": 39,
+      "timeSafe": true
+    },
+    {
+      "fold": 4,
+      "trainRange": [
+        0,
+        51
+      ],
+      "testRange": [
+        51,
+        63
+      ],
+      "trainMaxEpoch": 1786895760.0,
+      "testMinEpoch": 1786896000.0,
+      "proxyCoefficient": 0.1,
+      "nullScalePoolN": 51,
+      "timeSafe": true
+    }
+  ],
+  "samples": [
+    {
+      "id": "r-msppjndn-20qgga",
+      "playedAt": "2026-08-12T13:38",
+      "modelVersion": "v0.3-dynamic-walkforward",
+      "solverVersion": "unknown",
+      "baselineP20": 344085.6153846154,
+      "baselineP50": 395196.6153846154,
+      "baselineP80": 395196.6153846154
+    },
+    {
+      "id": "r-mspri2ym-dyp969",
+      "playedAt": "2026-08-12T14:52",
+      "modelVersion": "v0.3-dynamic-walkforward",
+      "solverVersion": "unknown",
+      "baselineP20": 436230.814,
+      "baselineP50": 436230.814,
+      "baselineP80": 436230.814
+    },
+    {
+      "id": "r-mspruk7m-24lwfh",
+      "playedAt": "2026-08-12T15:28",
+      "modelVersion": "v0.3-dynamic-walkforward",
+      "solverVersion": "unknown",
+      "baselineP20": 562571.9153846154,
+      "baselineP50": 562571.9153846154,
+      "baselineP80": 562571.9153846154
+    },
+    {
+      "id": "r-msps0xfg-gwi5ux",
+      "playedAt": "2026-08-12T15:32",
+      "modelVersion": "v0.3-dynamic-walkforward",
+      "solverVersion": "unknown",
+      "baselineP20": 408559.56153846154,
+      "baselineP50": 422848.56153846154,
+      "baselineP80": 459670.56153846154
+    },
+    {
+      "id": "r-msps89vq-x1ipc0",
+      "playedAt": "2026-08-12T15:39",
+      "modelVersion": "v0.3-dynamic-walkforward",
+      "solverVersion": "unknown",
+      "baselineP20": 397705.9,
+      "baselineP50": 397705.9,
+      "baselineP80": 397705.9
+    },
+    {
+      "id": "r-mspsdoag-m2e2rk",
+      "playedAt": "2026-08-12T15:43",
+      "modelVersion": "v0.3-dynamic-walkforward",
+      "solverVersion": "unknown",
+      "baselineP20": 523668.96153846156,
+      "baselineP50": 553468.9615384615,
+      "baselineP80": 672581.9615384615
+    },
+    {
+      "id": "r-mspsjpzm-anl04p",
+      "playedAt": "2026-08-12T15:47",
+      "modelVersion": "v0.3-dynamic-walkforward",
+      "solverVersion": "unknown",
+      "baselineP20": 175184.46153846153,
+      "baselineP50": 229956.76153846155,
+      "baselineP80": 384549.4615384615
+    },
+    {
+      "id": "r-mspsqvpg-y8s9am",
+      "playedAt": "2026-08-12T15:52",
+      "modelVersion": "v0.3-dynamic-walkforward",
+      "solverVersion": "unknown",
+      "baselineP20": 93810.66153846154,
+      "baselineP50": 105949.96153846153,
+      "baselineP80": 105949.96153846153
+    },
+    {
+      "id": "r-mspsw7r3-pmx3cg",
+      "playedAt": "2026-08-12T15:58",
+      "modelVersion": "v0.3-dynamic-walkforward",
+      "solverVersion": "unknown",
+      "baselineP20": 714359.5,
+      "baselineP50": 867110.0,
+      "baselineP80": 923724.5
+    },
+    {
+      "id": "r-mspt1txs-b7y38a",
+      "playedAt": "2026-08-12T16:03",
+      "modelVersion": "v0.3-dynamic-walkforward",
+      "solverVersion": "unknown",
+      "baselineP20": 562721.2,
+      "baselineP50": 562721.2,
+      "baselineP80": 562721.2
+    },
+    {
+      "id": "r-mspt6pn9-7pf3tm",
+      "playedAt": "2026-08-12T16:06",
+      "modelVersion": "v0.3-dynamic-walkforward",
+      "solverVersion": "unknown",
+      "baselineP20": 500899.95,
+      "baselineP50": 552010.95,
+      "baselineP80": 710264.95
+    },
+    {
+      "id": "r-msptchwv-5e1fol",
+      "playedAt": "2026-08-12T16:10",
+      "modelVersion": "v0.3-dynamic-walkforward",
+      "solverVersion": "unknown",
+      "baselineP20": 564391.72875,
+      "baselineP50": 741993.72875,
+      "baselineP80": 763074.72875
+    },
+    {
+      "id": "r-mspthtn9-hky8b0",
+      "playedAt": "2026-08-12T16:14",
+      "modelVersion": "v0.3-dynamic-walkforward",
+      "solverVersion": "unknown",
+      "baselineP20": 447387.6349090909,
+      "baselineP50": 615970.6349090908,
+      "baselineP80": 676192.6349090908
+    },
+    {
+      "id": "r-msptq8xc-2k149r",
+      "playedAt": "2026-08-12T16:22",
+      "modelVersion": "v0.3-dynamic-walkforward",
+      "solverVersion": "unknown",
+      "baselineP20": 375490.914,
+      "baselineP50": 393144.414,
+      "baselineP80": 572479.414
+    },
+    {
+      "id": "r-msptw4gu-hs4roo",
+      "playedAt": "2026-08-12T16:25",
+      "modelVersion": "v0.3-dynamic-walkforward",
+      "solverVersion": "unknown",
+      "baselineP20": 496050.91538461536,
+      "baselineP50": 623551.4153846153,
+      "baselineP80": 784635.9153846153
+    },
+    {
+      "id": "r-mspu12lv-om6031",
+      "playedAt": "2026-08-12T16:29",
+      "modelVersion": "v0.3-dynamic-walkforward",
+      "solverVersion": "unknown",
+      "baselineP20": 238610.0,
+      "baselineP50": 294192.5,
+      "baselineP80": 473527.5
+    },
+    {
+      "id": "r-mspu6itb-cs90yu",
+      "playedAt": "2026-08-12T16:33",
+      "modelVersion": "v0.3-dynamic-walkforward",
+      "solverVersion": "unknown",
+      "baselineP20": 482821.2691346154,
+      "baselineP50": 681477.2691346153,
+      "baselineP80": 916694.2691346153
+    },
+    {
+      "id": "r-mspu9g6u-jf4ku2",
+      "playedAt": "2026-08-12T16:38",
+      "modelVersion": "v0.3-dynamic-walkforward",
+      "solverVersion": "unknown",
+      "baselineP20": 180138.63636363635,
+      "baselineP50": 180138.63636363635,
+      "baselineP80": 180138.63636363635
+    },
+    {
+      "id": "r-mspubgvg-31z6r5",
+      "playedAt": "2026-08-12T16:39",
+      "modelVersion": "v0.3-dynamic-walkforward",
+      "solverVersion": "unknown",
+      "baselineP20": 223913.0909090909,
+      "baselineP50": 421447.7909090909,
+      "baselineP80": 724480.3909090909
+    },
+    {
+      "id": "r-mspuhlj0-4e0ipm",
+      "playedAt": "2026-08-12T16:41",
+      "modelVersion": "v0.3-dynamic-walkforward",
+      "solverVersion": "unknown",
+      "baselineP20": 250334.714,
+      "baselineP50": 449017.71400000004,
+      "baselineP80": 449017.71400000004
+    },
+    {
+      "id": "r-mspun3k0-pho9we",
+      "playedAt": "2026-08-12T16:47",
+      "modelVersion": "v0.3-dynamic-walkforward",
+      "solverVersion": "unknown",
+      "baselineP20": 551575.3349090909,
+      "baselineP50": 747415.3349090909,
+      "baselineP80": 948398.3349090909
+    },
+    {
+      "id": "r-msput1r9-x9w6mj",
+      "playedAt": "2026-08-12T16:51",
+      "modelVersion": "v0.3-dynamic-walkforward",
+      "solverVersion": "unknown",
+      "baselineP20": 419127.0153846154,
+      "baselineP50": 447126.0153846154,
+      "baselineP80": 626461.0153846154
+    },
+    {
+      "id": "r-mspuz81m-i7y9vm",
+      "playedAt": "2026-08-12T16:56",
+      "modelVersion": "v0.3-dynamic-walkforward",
+      "solverVersion": "unknown",
+      "baselineP20": 358417.5753846154,
+      "baselineP50": 368157.5753846154,
+      "baselineP80": 566840.5753846155
+    },
+    {
+      "id": "r-mspv4104-4wib7u",
+      "playedAt": "2026-08-12T17:00",
+      "modelVersion": "v0.3-dynamic-walkforward",
+      "solverVersion": "unknown",
+      "baselineP20": 204713.81663461536,
+      "baselineP50": 226013.81663461536,
+      "baselineP80": 424696.81663461536
+    },
+    {
+      "id": "r-mspv9u2n-nqldhi",
+      "playedAt": "2026-08-12T17:04",
+      "modelVersion": "v0.3-dynamic-walkforward",
+      "solverVersion": "unknown",
+      "baselineP20": 189216.66666666666,
+      "baselineP50": 189216.66666666666,
+      "baselineP80": 189216.66666666666
+    },
+    {
+      "id": "r-mspvfr77-6zwzvu",
+      "playedAt": "2026-08-12T17:08",
+      "modelVersion": "v0.3-dynamic-walkforward",
+      "solverVersion": "unknown",
+      "baselineP20": 651305.8,
+      "baselineP50": 672953.8,
+      "baselineP80": 852288.8
+    },
+    {
+      "id": "r-mspvjp1i-kpyt6n",
+      "playedAt": "2026-08-12T17:13",
+      "modelVersion": "v0.3-dynamic-walkforward",
+      "solverVersion": "unknown",
+      "baselineP20": 515626.8666666667,
+      "baselineP50": 705643.8666666667,
+      "baselineP80": 943903.8666666667
+    },
+    {
+      "id": "r-mspvo9n4-4y1984",
+      "playedAt": "2026-08-12T17:16",
+      "modelVersion": "v0.3-dynamic-walkforward",
+      "solverVersion": "unknown",
+      "baselineP20": 225119.714,
+      "baselineP50": 225119.714,
+      "baselineP80": 225119.714
+    },
+    {
+      "id": "r-mspw0jmd-2av6gf",
+      "playedAt": "2026-08-12T17:25",
+      "modelVersion": "v0.3-dynamic-walkforward",
+      "solverVersion": "unknown",
+      "baselineP20": 538354.4285714286,
+      "baselineP50": 538354.4285714286,
+      "baselineP80": 538354.4285714286
+    },
+    {
+      "id": "r-mspw54uj-k8idg4",
+      "playedAt": "2026-08-12T17:29",
+      "modelVersion": "v0.3-dynamic-walkforward",
+      "solverVersion": "unknown",
+      "baselineP20": 457459.35542857146,
+      "baselineP50": 457459.35542857146,
+      "baselineP80": 457459.35542857146
+    },
+    {
+      "id": "r-mspwahol-2cuhu0",
+      "playedAt": "2026-08-12T17:32",
+      "modelVersion": "v0.3-dynamic-walkforward",
+      "solverVersion": "unknown",
+      "baselineP20": 368402.028,
+      "baselineP50": 408522.028,
+      "baselineP80": 567085.0279999999
+    },
+    {
+      "id": "r-mspx4xtt-i9xoag",
+      "playedAt": "2026-08-12T17:54",
+      "modelVersion": "v0.3-dynamic-walkforward",
+      "solverVersion": "unknown",
+      "baselineP20": 1143144.290909091,
+      "baselineP50": 1216226.290909091,
+      "baselineP80": 1404160.290909091
+    },
+    {
+      "id": "r-mspxaub6-d0zxts",
+      "playedAt": "2026-08-12T18:00",
+      "modelVersion": "v0.3-dynamic-walkforward",
+      "solverVersion": "unknown",
+      "baselineP20": 247260.65,
+      "baselineP50": 268908.65,
+      "baselineP80": 448243.65
+    },
+    {
+      "id": "r-mspxdzom-7ywn8b",
+      "playedAt": "2026-08-12T18:05",
+      "modelVersion": "v0.3-dynamic-walkforward",
+      "solverVersion": "unknown",
+      "baselineP20": 478504.61933333334,
+      "baselineP50": 751799.6193333333,
+      "baselineP80": 1169393.6193333333
+    },
+    {
+      "id": "r-mspxkvp9-crelwi",
+      "playedAt": "2026-08-12T18:08",
+      "modelVersion": "v0.3-dynamic-walkforward",
+      "solverVersion": "unknown",
+      "baselineP20": 394234.6,
+      "baselineP50": 396597.6,
+      "baselineP80": 595217.6
+    },
+    {
+      "id": "r-msshu5ki-2y5sxh",
+      "playedAt": "2026-08-14T13:11",
+      "modelVersion": "v0.5-field-conditions",
+      "solverVersion": "unknown",
+      "baselineP20": 269665.5,
+      "baselineP50": 269665.5,
+      "baselineP80": 269665.5
+    },
+    {
+      "id": "r-msshzosk-9z7pfc",
+      "playedAt": "2026-08-14T13:15",
+      "modelVersion": "v0.5-field-conditions",
+      "solverVersion": "unknown",
+      "baselineP20": 659207.5333333333,
+      "baselineP50": 659207.5333333333,
+      "baselineP80": 659207.5333333333
+    },
+    {
+      "id": "r-mssi85je-2ulgt2",
+      "playedAt": "2026-08-14T13:20",
+      "modelVersion": "v0.5-field-conditions",
+      "solverVersion": "unknown",
+      "baselineP20": 560616.3,
+      "baselineP50": 618306.3,
+      "baselineP80": 745202.8
+    },
+    {
+      "id": "r-msslrctk-pr15lm",
+      "playedAt": "2026-08-14T15:02",
+      "modelVersion": "v0.5-field-conditions",
+      "solverVersion": "unknown",
+      "baselineP20": 248846.66875,
+      "baselineP50": 296317.66375,
+      "baselineP80": 381148.65875
+    },
+    {
+      "id": "r-msslw1z1-0cfc3p",
+      "playedAt": "2026-08-14T15:06",
+      "modelVersion": "v0.5-field-conditions",
+      "solverVersion": "unknown",
+      "baselineP20": 302530.66875,
+      "baselineP50": 302530.66875,
+      "baselineP80": 302530.66875
+    },
+    {
+      "id": "r-mssm2h3l-5g7kp0",
+      "playedAt": "2026-08-14T15:08",
+      "modelVersion": "v0.5-field-conditions",
+      "solverVersion": "unknown",
+      "baselineP20": 742566.66375,
+      "baselineP50": 742566.66375,
+      "baselineP80": 742566.66375
+    },
+    {
+      "id": "r-mssm7suy-fh29y9",
+      "playedAt": "2026-08-14T15:14",
+      "modelVersion": "v0.5-field-conditions",
+      "solverVersion": "unknown",
+      "baselineP20": 528253.3,
+      "baselineP50": 626304.3,
+      "baselineP80": 724355.3
+    },
+    {
+      "id": "r-mssmdaxy-uodvsp",
+      "playedAt": "2026-08-14T15:18",
+      "modelVersion": "v0.5-field-conditions",
+      "solverVersion": "unknown",
+      "baselineP20": 929732.9333333333,
+      "baselineP50": 1004183.9333333333,
+      "baselineP80": 1078632.9333333333
+    },
+    {
+      "id": "r-mssmlpc5-3mbarq",
+      "playedAt": "2026-08-14T15:25",
+      "modelVersion": "v0.5-field-conditions",
+      "solverVersion": "unknown",
+      "baselineP20": 197086.0,
+      "baselineP50": 197086.0,
+      "baselineP80": 197086.0
+    },
+    {
+      "id": "r-mssmr523-0khhgo",
+      "playedAt": "2026-08-14T15:30",
+      "modelVersion": "v0.5-field-conditions",
+      "solverVersion": "unknown",
+      "baselineP20": 1039346.1,
+      "baselineP50": 1137397.1,
+      "baselineP80": 1137397.1
+    },
+    {
+      "id": "r-mssn3fnm-ditki5",
+      "playedAt": "2026-08-14T15:37",
+      "modelVersion": "v0.5-field-conditions",
+      "solverVersion": "unknown",
+      "baselineP20": 324421.2,
+      "baselineP50": 422472.2,
+      "baselineP80": 520523.2
+    },
+    {
+      "id": "r-mssn8cc6-71oqrc",
+      "playedAt": "2026-08-14T15:43",
+      "modelVersion": "v0.5-field-conditions",
+      "solverVersion": "unknown",
+      "baselineP20": 486083.1269090909,
+      "baselineP50": 491918.1269090909,
+      "baselineP80": 589969.1269090909
+    },
+    {
+      "id": "r-mssnfz1o-bbg7te",
+      "playedAt": "2026-08-14T15:46",
+      "modelVersion": "v0.5-field-conditions",
+      "solverVersion": "unknown",
+      "baselineP20": 715128.6269090909,
+      "baselineP50": 731270.1269090909,
+      "baselineP80": 805105.6269090909
+    },
+    {
+      "id": "r-msvt5jxu-kewgma",
+      "playedAt": "2026-08-16T20:47",
+      "modelVersion": "v0.5-field-conditions",
+      "solverVersion": "v0.6-reliability",
+      "baselineP20": 965123.926909091,
+      "baselineP50": 1023610.426909091,
+      "baselineP80": 1063174.926909091
+    },
+    {
+      "id": "r-msvz1kf0-eze7o9",
+      "playedAt": "2026-08-16T23:37",
+      "modelVersion": "v0.5-field-conditions",
+      "solverVersion": "v0.6-reliability",
+      "baselineP20": 402981.0269090909,
+      "baselineP50": 501032.0269090909,
+      "baselineP80": 501032.0269090909
+    },
+    {
+      "id": "r-msvzrdkz-pdr0gc",
+      "playedAt": "2026-08-16T23:56",
+      "modelVersion": "v0.5-field-conditions",
+      "solverVersion": "v0.6-reliability",
+      "baselineP20": 409948.2993333333,
+      "baselineP50": 433940.2993333333,
+      "baselineP80": 478330.2993333333
+    },
+    {
+      "id": "r-msvzv133-3y6ljx",
+      "playedAt": "2026-08-17T00:00",
+      "modelVersion": "v0.5-field-conditions",
+      "solverVersion": "v0.6-reliability",
+      "baselineP20": 277783.3,
+      "baselineP50": 277783.3,
+      "baselineP80": 277783.3
+    },
+    {
+      "id": "r-msw014jf-ug8f80",
+      "playedAt": "2026-08-17T00:03",
+      "modelVersion": "v0.5-field-conditions",
+      "solverVersion": "v0.6-reliability",
+      "baselineP20": 844282.8993333334,
+      "baselineP50": 909054.8993333334,
+      "baselineP80": 959105.8993333334
+    },
+    {
+      "id": "r-msw06101-mve216",
+      "playedAt": "2026-08-17T00:08",
+      "modelVersion": "v0.5-field-conditions",
+      "solverVersion": "v0.6-reliability",
+      "baselineP20": 227745.11538461538,
+      "baselineP50": 301788.1153846154,
+      "baselineP80": 399839.1153846154
+    },
+    {
+      "id": "r-msw0datl-ozwk1k",
+      "playedAt": "2026-08-17T00:13",
+      "modelVersion": "v0.5-field-conditions",
+      "solverVersion": "v0.6-reliability",
+      "baselineP20": 413465.5,
+      "baselineP50": 436622.8,
+      "baselineP80": 511516.5
+    },
+    {
+      "id": "r-msw0kfc6-9tzjie",
+      "playedAt": "2026-08-17T00:18",
+      "modelVersion": "v0.5-field-conditions",
+      "solverVersion": "v0.6-reliability",
+      "baselineP20": 635430.5153846154,
+      "baselineP50": 635430.5153846154,
+      "baselineP80": 733481.5153846154
+    },
+    {
+      "id": "r-msw0sh9u-94rikb",
+      "playedAt": "2026-08-17T00:23",
+      "modelVersion": "v0.5-field-conditions",
+      "solverVersion": "v0.6-reliability",
+      "baselineP20": 679616.8,
+      "baselineP50": 723990.8,
+      "baselineP80": 787517.8
+    },
+    {
+      "id": "r-msw0zatl-b2gtr8",
+      "playedAt": "2026-08-17T00:29",
+      "modelVersion": "v0.5-field-conditions",
+      "solverVersion": "v0.6-reliability",
+      "baselineP20": 639041.476,
+      "baselineP50": 683431.476,
+      "baselineP80": 736559.976
+    },
+    {
+      "id": "r-msw16drb-13km2k",
+      "playedAt": "2026-08-17T00:34",
+      "modelVersion": "v0.5-field-conditions",
+      "solverVersion": "v0.6-reliability",
+      "baselineP20": 394817.93333333335,
+      "baselineP50": 418825.93333333335,
+      "baselineP80": 442817.93333333335
+    },
+    {
+      "id": "r-msw1jsym-kuccw9",
+      "playedAt": "2026-08-17T00:46",
+      "modelVersion": "v0.5-field-conditions",
+      "solverVersion": "v0.6-reliability",
+      "baselineP20": 164695.39933333333,
+      "baselineP50": 164695.39933333333,
+      "baselineP80": 185553.89933333333
+    },
+    {
+      "id": "r-msw1pux4-r1tgou",
+      "playedAt": "2026-08-17T00:50",
+      "modelVersion": "v0.5-field-conditions",
+      "solverVersion": "v0.6-reliability",
+      "baselineP20": 720410.4153846154,
+      "baselineP50": 720410.4153846154,
+      "baselineP80": 799270.9153846154
+    },
+    {
+      "id": "r-msw1svxg-ywh6e5",
+      "playedAt": "2026-08-17T00:55",
+      "modelVersion": "v0.5-field-conditions",
+      "solverVersion": "v0.6-reliability",
+      "baselineP20": 427743.67600000004,
+      "baselineP50": 427743.67600000004,
+      "baselineP80": 427743.67600000004
+    },
+    {
+      "id": "r-msw1vzqp-k4wsht",
+      "playedAt": "2026-08-17T00:57",
+      "modelVersion": "v0.5-field-conditions",
+      "solverVersion": "v0.6-reliability",
+      "baselineP20": 266734.3,
+      "baselineP50": 266734.3,
+      "baselineP80": 266734.3
+    }
+  ]
+}

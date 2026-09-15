@@ -1,0 +1,105 @@
+{
+  "kind": "DEVELOPER_FIXTURE_EXPECTATION",
+  "notGroundTruth": true,
+  "notTrainingLabel": true,
+  "schema": "warehouse-grid-geometry-fixture-v1",
+  "source": {
+    "path": "C:\\Users\\Administrator\\Videos\\2026-08-25 21-58-33.mkv",
+    "sha256": "792d82a772a985831f8cf054a32be4d84bf9da3484396c8ec647b5f24f19c637",
+    "note": "Reuses 4B1 warehouse ROI crops. These numbers are engineering regression expectations, not reviewed truth."
+  },
+  "frames": [
+    {
+      "id": "top",
+      "file": "../warehouse_scrollbar_v1/top_warehouse.png",
+      "timecodeSec": 8.0,
+      "alreadyCropped": true,
+      "grid": {
+        "columnCount": 10,
+        "visibleRowMin": 8,
+        "visibleRowMax": 11,
+        "cellMin": 50,
+        "cellMax": 62,
+        "status": "OK"
+      },
+      "confirmedComponents": [
+        {
+          "viewportColumn": 0,
+          "viewportRow": 0,
+          "widthCells": 5,
+          "heightCells": 5,
+          "spanCells": 25,
+          "clippedTop": true,
+          "clippedBottom": false,
+          "status": "AMBIGUOUS",
+          "note": "Large left tile touching the top edge; size is not inferred beyond the visible rectangle."
+        },
+        {
+          "viewportColumn": 0,
+          "viewportRow": 5,
+          "widthCells": 5,
+          "heightCells": 5,
+          "spanCells": 25,
+          "clippedTop": false,
+          "clippedBottom": true,
+          "status": "AMBIGUOUS",
+          "note": "Same 5-wide family as the middle-frame fish; bottom edge of this viewport."
+        }
+      ]
+    },
+    {
+      "id": "middle",
+      "file": "../warehouse_scrollbar_v1/middle_warehouse.png",
+      "timecodeSec": 20.0,
+      "alreadyCropped": true,
+      "grid": {
+        "columnCount": 10,
+        "visibleRowMin": 8,
+        "visibleRowMax": 11,
+        "cellMin": 50,
+        "cellMax": 62,
+        "status": "OK"
+      },
+      "confirmedComponents": [
+        {
+          "viewportColumn": 0,
+          "viewportRow": 0,
+          "widthCells": 5,
+          "heightCells": 5,
+          "spanCells": 25,
+          "clippedTop": true,
+          "clippedBottom": false,
+          "status": "AMBIGUOUS",
+          "note": "Fish family clipped at the top. Width stays 5; height is not trusted."
+        }
+      ]
+    },
+    {
+      "id": "bottom",
+      "file": "../warehouse_scrollbar_v1/bottom_warehouse.png",
+      "timecodeSec": 40.0,
+      "alreadyCropped": true,
+      "grid": {
+        "columnCount": 10,
+        "visibleRowMin": 8,
+        "visibleRowMax": 11,
+        "cellMin": 50,
+        "cellMax": 62,
+        "status": "OK"
+      },
+      "confirmedComponents": [],
+      "expectEmptyViewport": true
+    },
+    {
+      "id": "unknown",
+      "file": "../warehouse_scrollbar_v1/unknown_warehouse.png",
+      "timecodeSec": 0.0,
+      "alreadyCropped": true,
+      "grid": {
+        "status": "UNKNOWN"
+      },
+      "confirmedComponents": [],
+      "note": "Settlement reveal / non-grid chrome. Must not invent occupancy."
+    }
+  ]
+}

@@ -1,0 +1,39 @@
+{
+  "admissionStatus": "PASS",
+  "items": [
+    {
+      "cropDimensions": {
+        "height": 33,
+        "width": 31
+      },
+      "cropPath": "experiments/vision_benchmark_v2/crops/crop-493853f8a7b780ec4fe4.png",
+      "cropSha256": "161a95526768b82f3b1a56861fbd8c2ced823324b47cf52fe769564b0b5b4095",
+      "instanceId": "inst-493853f8a7b780ec4fe4",
+      "materializer": {
+        "bbox": [
+          61,
+          164,
+          92,
+          197
+        ],
+        "coordinateSpace": "source_pixel",
+        "enhancement": null,
+        "library": "Pillow 12.3.0",
+        "name": "fixed_source_bbox_crop",
+        "padding": 0,
+        "resize": null,
+        "sourceSha256": "c86e85c5712aea00ac7dc9fa08b8111faf0e6a14c85f126c4f9a1f4b2bedce17",
+        "version": "exact-source-bbox-v1"
+      },
+      "queueId": "queue-493853f8a7b780ec4fe4",
+      "sourceId": "src-c86e85c5712aea00ac7d"
+    }
+  ],
+  "packVersion": "benchmark-v2-single-source-slice-v1",
+  "validation": {
+    "finalAdmission": "PASS",
+    "geometryContractVersion": "geometry-contract-v1",
+    "preflight": "PASS",
+    "validator": "experiments/vision_benchmark_v1/validate_geometry_contract.py"
+  }
+}

@@ -1,0 +1,118 @@
+{
+  "schema": "warehouse-scrollbar-fixture-v1",
+  "createdAt": "2026-08-25T14:09:09Z",
+  "sourcePath": "C:\\Users\\Administrator\\Videos\\2026-08-25 21-58-33.mkv",
+  "sourceSha256": "792d82a772a985831f8cf054a32be4d84bf9da3484396c8ec647b5f24f19c637",
+  "sourceBytes": 76970772,
+  "note": "Warehouse panel + scrollbar crops only. Original MKV stays outside Git.",
+  "frames": [
+    {
+      "role": "top",
+      "file": "top_warehouse.png",
+      "timecodeSec": 8.0,
+      "sourceSize": {
+        "width": 1920,
+        "height": 1080
+      },
+      "viewportRect": {
+        "x": 0,
+        "y": 0,
+        "width": 1920,
+        "height": 1080
+      },
+      "cropRect": [
+        1315,
+        216,
+        1915,
+        847
+      ],
+      "cropSize": {
+        "width": 600,
+        "height": 631
+      },
+      "scaled": false,
+      "sha256": "0bbce6ab83d7ca636c6c1df8bfd1819c49efbbdf0473805bbd59cab6e62cab8b"
+    },
+    {
+      "role": "middle",
+      "file": "middle_warehouse.png",
+      "timecodeSec": 20.0,
+      "sourceSize": {
+        "width": 1920,
+        "height": 1080
+      },
+      "viewportRect": {
+        "x": 0,
+        "y": 0,
+        "width": 1920,
+        "height": 1080
+      },
+      "cropRect": [
+        1315,
+        216,
+        1915,
+        847
+      ],
+      "cropSize": {
+        "width": 600,
+        "height": 631
+      },
+      "scaled": false,
+      "sha256": "e75675bf61df50d7f77bac78dadc40fe91c0d7f0b26064a7c930a30be5b7b201"
+    },
+    {
+      "role": "bottom",
+      "file": "bottom_warehouse.png",
+      "timecodeSec": 40.0,
+      "sourceSize": {
+        "width": 1920,
+        "height": 1080
+      },
+      "viewportRect": {
+        "x": 0,
+        "y": 0,
+        "width": 1920,
+        "height": 1080
+      },
+      "cropRect": [
+        1315,
+        216,
+        1915,
+        847
+      ],
+      "cropSize": {
+        "width": 600,
+        "height": 631
+      },
+      "scaled": false,
+      "sha256": "54287a4d99ec411974a64abceeff49481dc1099a92b3c77f3740f03b5d7bd865"
+    },
+    {
+      "role": "unknown",
+      "file": "unknown_warehouse.png",
+      "timecodeSec": 0.0,
+      "sourceSize": {
+        "width": 1920,
+        "height": 1080
+      },
+      "viewportRect": {
+        "x": 0,
+        "y": 0,
+        "width": 1920,
+        "height": 1080
+      },
+      "cropRect": [
+        1315,
+        216,
+        1915,
+        847
+      ],
+      "cropSize": {
+        "width": 600,
+        "height": 631
+      },
+      "scaled": false,
+      "sha256": "e540ee7ee8cfef262c56cebc40f23b8309a966e212a0935403bd6ae83b7a61fc"
+    }
+  ]
+}

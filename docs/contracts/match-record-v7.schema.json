@@ -1,0 +1,190 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://yihuanpaimai.local/schemas/match-record-v7.schema.json",
+  "title": "Canonical MatchRecord v7",
+  "type": "object",
+  "required": [
+    "schemaVersion",
+    "productVersion",
+    "id",
+    "playedAt",
+    "lifecycleStatus",
+    "source",
+    "environment",
+    "loadout",
+    "costs",
+    "publicIntel",
+    "qualities",
+    "bidding",
+    "settlement"
+  ],
+  "properties": {
+    "schemaVersion": { "const": 7 },
+    "productVersion": { "type": "string", "minLength": 1 },
+    "id": { "type": "string", "minLength": 1 },
+    "playedAt": { "type": "string" },
+    "lifecycleStatus": { "enum": ["DRAFT", "FINALIZED", "CANCELLED"] },
+    "source": { "type": "string", "minLength": 1 },
+    "environment": {
+      "type": "object",
+      "required": ["venueTier", "venue", "box", "boxType", "fieldCondition"],
+      "properties": {
+        "venueTier": { "type": ["string", "null"], "enum": ["chuji", "zhongji", "gaoji", "dingji", null] },
+        "venue": { "type": ["string", "null"] },
+        "venueName": { "type": ["string", "null"] },
+        "box": { "type": ["string", "null"] },
+        "boxType": { "type": ["string", "null"] },
+        "fieldCondition": { "type": ["string", "null"] },
+        "fieldConditionName": { "type": ["string", "null"] },
+        "fieldConditionSource": { "type": ["string", "null"] }
+      },
+      "additionalProperties": false
+    },
+    "loadout": {
+      "type": "object",
+      "required": ["character", "lobbyToolGroup", "solverToolGroup"],
+      "properties": {
+        "character": { "type": ["string", "null"] },
+        "lobbyToolGroup": { "type": ["string", "null"] },
+        "solverToolGroup": { "type": ["string", "null"] }
+      },
+      "additionalProperties": false
+    },
+    "costs": {
+      "type": "object",
+      "properties": {
+        "entry": { "type": ["number", "null"] },
+        "intel": { "type": ["number", "null"] },
+        "other": { "type": ["number", "null"] },
+        "sunkCost": { "type": ["number", "null"] },
+        "futureIncrementalCost": { "type": ["number", "null"] },
+        "total": { "type": ["number", "null"] }
+      },
+      "additionalProperties": false
+    },
+    "publicIntel": {
+      "type": "object",
+      "required": ["q", "totalItems", "totalGrid"],
+      "properties": {
+        "q": { "type": ["integer", "null"] },
+        "totalItems": { "type": ["integer", "null"] },
+        "totalGrid": { "type": ["integer", "null"] },
+        "avgValueBasis": { "type": ["string", "null"] }
+      },
+      "additionalProperties": false
+    },
+    "qualities": {
+      "type": "object",
+      "required": ["white", "green", "blue", "purple", "gold", "red"],
+      "properties": {
+        "white": {
+          "type": "object",
+          "properties": { "count": { "type": ["integer", "null"] }, "avg": { "type": ["number", "null"] }, "grid": { "type": ["integer", "null"] }, "knownItems": { "type": "array" } },
+          "additionalProperties": false
+        },
+        "green": {
+          "type": "object",
+          "properties": { "count": { "type": ["integer", "null"] }, "avg": { "type": ["number", "null"] }, "grid": { "type": ["integer", "null"] }, "knownItems": { "type": "array" } },
+          "additionalProperties": false
+        },
+        "blue": {
+          "type": "object",
+          "properties": { "count": { "type": ["integer", "null"] }, "avg": { "type": ["number", "null"] }, "grid": { "type": ["integer", "null"] }, "knownItems": { "type": "array" } },
+          "additionalProperties": false
+        },
+        "purple": {
+          "type": "object",
+          "properties": { "count": { "type": ["integer", "null"] }, "minCount": { "type": ["integer", "null"] }, "avg": { "type": ["number", "null"] }, "grid": { "type": ["integer", "null"] }, "knownItems": { "type": "array" } },
+          "additionalProperties": false
+        },
+        "gold": {
+          "type": "object",
+          "properties": { "count": { "type": ["integer", "null"] }, "minCount": { "type": ["integer", "null"] }, "avg": { "type": ["number", "null"] }, "total": { "type": ["number", "null"] }, "grid": { "type": ["integer", "null"] }, "knownItems": { "type": "array" } },
+          "additionalProperties": false
+        },
+        "red": {
+          "type": "object",
+          "properties": { "count": { "type": ["integer", "null"] }, "minCount": { "type": ["integer", "null"] }, "maxCount": { "type": ["integer", "null"] }, "grid": { "type": ["integer", "null"] }, "knownItems": { "type": "array" }, "redInventoryComplete": { "type": ["boolean", "null"] }, "settlementVerifiedRedItems": { "type": ["string", "null"] } },
+          "additionalProperties": false
+        }
+      },
+      "additionalProperties": false
+    },
+    "bidding": {
+      "type": "object",
+      "required": ["seats", "myName", "myFinalBid", "leaderName", "leaderBid", "leaderTies", "isMyLead", "historicalBids", "finalBids", "rounds"],
+      "properties": {
+        "seats": { "type": "array" },
+        "myName": { "type": ["string", "null"] },
+        "myFinalBid": { "type": ["number", "null"] },
+        "leaderName": { "type": ["string", "null"] },
+        "leaderBid": { "type": ["number", "null"] },
+        "leaderTies": { "type": "array" },
+        "isMyLead": { "type": ["boolean", "null"] },
+        "historicalBids": { "type": "object" },
+        "finalBids": { "type": "object" },
+        "rounds": { "type": "array" }
+      },
+      "additionalProperties": false
+    },
+    "settlement": {
+      "type": "object",
+      "required": ["status", "verified", "clearingPrice", "actualTotal", "realizedProfit", "acquired", "winner", "settlementItems"],
+      "properties": {
+        "status": { "type": ["string", "null"] },
+        "verified": { "type": ["boolean", "null"] },
+        "clearingPrice": { "type": ["number", "null"] },
+        "actualTotal": { "type": ["number", "null"] },
+        "realizedProfit": { "type": ["number", "null"] },
+        "acquired": { "type": ["boolean", "null"] },
+        "winner": { "type": ["string", "null"] },
+        "settlementItems": { "type": "array" },
+        "truthEvidence": {
+          "oneOf": [
+            { "$ref": "https://yihuanpaimai.local/schemas/settlement-truth-evidence-v1.schema.json" },
+            { "$ref": "https://yihuanpaimai.local/schemas/settlement-truth-evidence-v2.schema.json" }
+          ]
+        },
+        "warehouseIdentityReview": {
+          "$ref": "https://yihuanpaimai.local/schemas/warehouse-identity-review-v1.schema.json"
+        },
+        "warehouseIdentityReviewHistory": {
+          "type": "array",
+          "items": { "oneOf": [
+            { "$ref": "https://yihuanpaimai.local/schemas/warehouse-identity-review-v1.schema.json" },
+            { "$ref": "https://yihuanpaimai.local/schemas/warehouse-identity-review-v2.schema.json" }
+          ] }
+        },
+        "warehouseReviewPacket": { "type": "object" },
+        "warehouseOccupancy": {
+          "type": "object",
+          "required": ["schemaVersion", "tracks"],
+          "properties": {
+            "schemaVersion": { "type": "string", "enum": ["settlement-warehouse-occupancy.v1"] },
+            "tracks": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "required": ["trackId", "geometryStatus", "width", "height", "evidenceLevel", "identityStatus"],
+                "properties": {
+                  "trackId": { "type": "string" },
+                  "geometryStatus": { "type": "string", "enum": ["RESOLVED", "AMBIGUOUS", "UNKNOWN"] },
+                  "width": { "type": ["integer", "null"] },
+                  "height": { "type": ["integer", "null"] },
+                  "evidenceLevel": { "type": "string", "enum": ["OUTLINE_ONLY"] },
+                  "identityStatus": { "type": "string", "enum": ["unresolved"] }
+                },
+                "additionalProperties": false
+              }
+            }
+          },
+          "additionalProperties": false
+        }
+      },
+      "additionalProperties": false
+    },
+    "predictionSnapshot": { "type": "object" },
+    "solverResult": { "type": "object" }
+  },
+  "additionalProperties": false
+}

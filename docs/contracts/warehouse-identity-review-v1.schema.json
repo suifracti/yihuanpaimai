@@ -1,0 +1,171 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://yihuanpaimai.local/schemas/warehouse-identity-review-v1.schema.json",
+  "title": "Warehouse Identity Review v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "recordStableKey",
+    "packetFingerprint",
+    "reviewedAt",
+    "reviewerType",
+    "warehouseCoverageStatus",
+    "reviewCompletion",
+    "identityResolution",
+    "resolvedItems",
+    "unresolvedTracks",
+    "excludedTracks",
+    "decisions",
+    "summary",
+    "artifactFingerprint"
+  ],
+  "properties": {
+    "schemaVersion": { "const": "warehouse-identity-review.v1" },
+    "recordStableKey": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$"
+    },
+    "packetFingerprint": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "reviewedAt": { "type": "string", "minLength": 1 },
+    "reviewerType": { "const": "HUMAN" },
+    "warehouseCoverageStatus": {
+      "enum": ["COVERAGE_UNPROVEN", "PARTIAL", "COMPLETE"]
+    },
+    "reviewCompletion": { "enum": ["NOT_STARTED", "PARTIAL", "COMPLETE"] },
+    "identityResolution": { "enum": ["NONE", "PARTIAL", "FULLY_RESOLVED"] },
+    "resolvedItems": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "trackId",
+          "catalogId",
+          "name",
+          "quality",
+          "action",
+          "packetFingerprint",
+          "recordStableKey",
+          "evidenceId",
+          "sha256",
+          "bbox",
+          "sequenceIndex",
+          "provenanceType",
+          "catalogGeometryStatus",
+          "overrideReason"
+        ],
+        "properties": {
+          "trackId": { "type": "string", "minLength": 1 },
+          "catalogId": { "type": "string", "minLength": 1 },
+          "name": { "type": "string" },
+          "quality": { "type": ["string", "null"] },
+          "action": {
+            "enum": ["CONFIRM_CANDIDATE", "CONFIRM_CATALOG_OVERRIDE"]
+          },
+          "packetFingerprint": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+          "recordStableKey": { "type": "string", "minLength": 1 },
+          "evidenceId": { "type": "string", "minLength": 1 },
+          "sha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+          "bbox": {
+            "type": "array",
+            "minItems": 4,
+            "maxItems": 4,
+            "items": { "type": "number" }
+          },
+          "sequenceIndex": { "type": "integer" },
+          "provenanceType": { "const": "HUMAN_REVIEWED_CATALOG_ID" },
+          "catalogGeometryStatus": { "enum": ["INDEXED", "QUARANTINED"] },
+          "overrideReason": {
+            "type": ["string", "null"],
+            "enum": [
+              null,
+              "CLIPPED_GEOMETRY",
+              "SEGMENTATION_ERROR",
+              "CATALOG_GEOMETRY_MISMATCH",
+              "HUMAN_VISUAL_IDENTIFICATION"
+            ]
+          }
+        }
+      }
+    },
+    "unresolvedTracks": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["trackId", "action", "reason", "identityStatus"],
+        "properties": {
+          "trackId": { "type": "string", "minLength": 1 },
+          "action": {
+            "type": ["string", "null"],
+            "enum": [null, "DEFER", "MARK_OUT_OF_CATALOG", "FLAG_GEOMETRY_ERROR"]
+          },
+          "reason": { "type": ["string", "null"] },
+          "identityStatus": { "const": "UNRESOLVED" }
+        }
+      }
+    },
+    "excludedTracks": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["trackId", "action", "reason"],
+        "properties": {
+          "trackId": { "type": "string", "minLength": 1 },
+          "action": { "const": "EXCLUDE_FALSE_COMPONENT" },
+          "reason": { "type": "string", "minLength": 1 }
+        }
+      }
+    },
+    "decisions": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "decisionId",
+          "trackId",
+          "action",
+          "selectedCatalogId",
+          "overrideReason",
+          "reason"
+        ],
+        "properties": {
+          "decisionId": { "type": "string", "minLength": 1 },
+          "trackId": { "type": "string", "minLength": 1 },
+          "action": { "type": "string", "minLength": 1 },
+          "selectedCatalogId": { "type": ["string", "null"] },
+          "overrideReason": { "type": ["string", "null"] },
+          "reason": { "type": ["string", "null"] }
+        }
+      }
+    },
+    "summary": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "trackCount",
+        "decisionCount",
+        "resolvedItemCount",
+        "unresolvedTrackCount",
+        "excludedTrackCount"
+      ],
+      "properties": {
+        "trackCount": { "type": "integer", "minimum": 0 },
+        "decisionCount": { "type": "integer", "minimum": 0 },
+        "resolvedItemCount": { "type": "integer", "minimum": 0 },
+        "unresolvedTrackCount": { "type": "integer", "minimum": 0 },
+        "excludedTrackCount": { "type": "integer", "minimum": 0 }
+      }
+    },
+    "artifactFingerprint": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    }
+  }
+}

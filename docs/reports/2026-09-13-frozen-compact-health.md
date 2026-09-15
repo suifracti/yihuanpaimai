@@ -1,0 +1,9 @@
+# 冻结异常提示与收起状态
+
+4ae2f5f修复异常信息只在HUD展开区域可见的问题：收起条显示“识别异常”，标题改“上次估值”；详细区说明正在重试及上次结果。READY/WAITING清除异常并恢复估值标题。
+
+源码build/vision_health_20260913/compact-ui/report.json及冻结build/isolated_trial_health_20260913/compact-health-ui/report.json均PASS。实际Main/HUD窗口通过原生工作连接接收ERROR→WAITING→ERROR→READY，检查主窗口/展开HUD文字和隐藏状态；每个状态真实收起HUD并检查错误标记矩形在viewport内、标题切换，最后正常退出。状态是测试注入，不冒充实机OCR故障或进程崩溃恢复。此前9d114dd包展开提示验证也通过，最终候选为干净4ae2f5f。
+
+最新候选build/isolated_trial_health_20260913/dist/异环拍卖助手。成本/历史导出等前轮证据保留各自构建版本，不冒充本轮全部功能再验。正式历史SHA256仍19100479bbb2dfd8e09faa2adbaf5117919126df4b4bcf92e377ad88c4da3431，v13未覆盖。
+
+检查表已纠正过时的“冻结文件占用恢复/异常提示待验”：文件占用恢复已由7e18ea2真实验证，健康提示已由4ae2f5f验证。仍待完整连续识别/跨局、识别进程退出恢复、真实本人获胜素材、实机输入与性能、其余完整规划和最终试用交付。P3 PARTIAL，逐件匹配调优延后。

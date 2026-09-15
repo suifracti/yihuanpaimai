@@ -1,0 +1,248 @@
+{
+  "reviewVersion": "1.0.0-batch2",
+  "reviewDate": "2026-08-20",
+  "reviewer": "GPT",
+  "provenance": "gpt_independent_blind_review",
+  "truthStatus": "gpt_only_pseudo_label",
+  "verifiedTruth": false,
+  "geminiComparisonPerformed": false,
+  "scope": {
+    "queueTotalSlots": 19,
+    "previouslyFrozenSlots": 9,
+    "reviewedSlots": 10,
+    "remainingUnreviewedSlots": 0,
+    "selection": "Every queue slot not covered by the frozen batch-1 queueId set",
+    "priorityIgnoredAsIdentityOrQualityEvidence": true
+  },
+  "confidenceBands": {
+    "high": "confidence >= 0.90 and abstain=false",
+    "mediumLow": "confidence < 0.90 and abstain=false",
+    "abstain": "abstain=true",
+    "counts": {
+      "high": 3,
+      "mediumLow": 1,
+      "abstain": 6
+    }
+  },
+  "blindInputAudit": {
+    "read": [
+      "experiments/vision_benchmark_v1/gpt_blind_queue.json",
+      "queueId values only from experiments/vision_benchmark_v1/gpt_blind_review_v1.json",
+      "queue-listed crops and source images",
+      "assets/catalog_065.json",
+      "assets/items/catalog_screenshots"
+    ],
+    "notRead": [
+      "human_review_queue.json",
+      "pseudo_labels.json",
+      "ground_truth.json",
+      "Gemini predictions or Top-K/confidence/quality",
+      "score or agreement outputs",
+      "identity-revealing answer files"
+    ],
+    "unexpectedGeminiAnswerContact": false,
+    "priorityUsedAsVisualEvidence": false,
+    "cropPackDefectCount": 6,
+    "cropPackDefects": [
+      {
+        "queueId": "BLIND_REP-04_s08",
+        "issue": "crop and bbox contain partial webpage text rather than an inventory item"
+      },
+      {
+        "queueId": "BLIND_REP-04_s09",
+        "issue": "crop and bbox are blank webpage background rather than an inventory item"
+      },
+      {
+        "queueId": "BLIND_REP-05_s01",
+        "issue": "crop and bbox contain the confirmation-dialog artwork and HUD edge rather than an inventory item"
+      },
+      {
+        "queueId": "BLIND_REP-05_s02",
+        "issue": "crop and bbox contain an empty HUD grid/status panel rather than an inventory item"
+      },
+      {
+        "queueId": "BLIND_REP-05_s03",
+        "issue": "crop and bbox are blank confirmation-dialog background rather than an inventory item"
+      },
+      {
+        "queueId": "BLIND_REP-05_s04",
+        "issue": "crop and bbox are blank confirmation-dialog background rather than an inventory item"
+      }
+    ]
+  },
+  "results": [
+    {
+      "queueId": "BLIND_REP-01_s09",
+      "imageId": "REP-01",
+      "cropId": "crop_REP-01_s09.png",
+      "slotId": "s09",
+      "top1": {
+        "itemId": "image22-1-2",
+        "name": "环的冥思",
+        "quality": "紫"
+      },
+      "confidence": 0.97,
+      "visualBasis": "The bbox lies inside the narrow 1x2 purple card. Its gold loop sculpture on a dark rectangular plinth matches the allowed SOT reference exactly.",
+      "top2": null,
+      "top3": null,
+      "similarCandidates": [],
+      "indistinguishableSimilarCandidate": false,
+      "abstain": false
+    },
+    {
+      "queueId": "BLIND_REP-01_s11",
+      "imageId": "REP-01",
+      "cropId": "crop_REP-01_s11.png",
+      "slotId": "s11",
+      "top1": {
+        "itemId": "image5-0-2",
+        "name": "新口味上市！",
+        "quality": "绿"
+      },
+      "confidence": 0.97,
+      "visualBasis": "The bbox is within the upper-left portion of the 3x3 green card. The red-and-cream costumed figure, gold side tassel, and sparkle match the SOT reference.",
+      "top2": null,
+      "top3": null,
+      "similarCandidates": [],
+      "indistinguishableSimilarCandidate": false,
+      "abstain": false
+    },
+    {
+      "queueId": "BLIND_REP-01_s12",
+      "imageId": "REP-01",
+      "cropId": "crop_REP-01_s12.png",
+      "slotId": "s12",
+      "top1": {
+        "itemId": "image5-0-2",
+        "name": "新口味上市！",
+        "quality": "绿"
+      },
+      "confidence": 0.96,
+      "visualBasis": "The bbox is within the lower portion of the same 3x3 green card. The red body, gold tassel ends, and green card geometry align with the full permitted source image and SOT reference.",
+      "top2": null,
+      "top3": null,
+      "similarCandidates": [],
+      "indistinguishableSimilarCandidate": false,
+      "abstain": false
+    },
+    {
+      "queueId": "BLIND_REP-01_s15",
+      "imageId": "REP-01",
+      "cropId": "crop_REP-01_s15.png",
+      "slotId": "s15",
+      "top1": {
+        "itemId": "image10-1-0",
+        "name": "艺术画「深林」",
+        "quality": "蓝"
+      },
+      "confidence": 0.86,
+      "visualBasis": "The bbox center remains inside the lower part of the large 3x3 blue painting card, whose tilted gold frame and landscape match the SOT reference. The neighboring round table enters the bottom edge of the crop, lowering confidence.",
+      "top2": {
+        "itemId": "image14-0-2",
+        "name": "复古圆桌",
+        "quality": "蓝"
+      },
+      "top3": null,
+      "similarCandidates": [
+        {
+          "itemId": "image14-0-2",
+          "name": "复古圆桌",
+          "reason": "The adjacent table icon is partially visible along the crop's lower edge, but the bbox center and majority parent card belong to the painting."
+        }
+      ],
+      "indistinguishableSimilarCandidate": false,
+      "abstain": false
+    },
+    {
+      "queueId": "BLIND_REP-04_s08",
+      "imageId": "REP-04",
+      "cropId": "crop_REP-04_s08.png",
+      "slotId": "s08",
+      "top1": null,
+      "top2": null,
+      "top3": null,
+      "confidence": 0.0,
+      "visualBasis": "The crop contains only partial webpage text; the permitted source bbox is outside the inventory item region.",
+      "similarCandidates": [],
+      "indistinguishableSimilarCandidate": true,
+      "abstain": true,
+      "cropPackDefect": true
+    },
+    {
+      "queueId": "BLIND_REP-04_s09",
+      "imageId": "REP-04",
+      "cropId": "crop_REP-04_s09.png",
+      "slotId": "s09",
+      "top1": null,
+      "top2": null,
+      "top3": null,
+      "confidence": 0.0,
+      "visualBasis": "The crop is blank webpage background; the permitted source bbox is outside the inventory item region.",
+      "similarCandidates": [],
+      "indistinguishableSimilarCandidate": true,
+      "abstain": true,
+      "cropPackDefect": true
+    },
+    {
+      "queueId": "BLIND_REP-05_s01",
+      "imageId": "REP-05",
+      "cropId": "crop_REP-05_s01.png",
+      "slotId": "s01",
+      "top1": null,
+      "top2": null,
+      "top3": null,
+      "confidence": 0.0,
+      "visualBasis": "The crop shows the confirmation-dialog artwork and HUD edge rather than any catalog item.",
+      "similarCandidates": [],
+      "indistinguishableSimilarCandidate": true,
+      "abstain": true,
+      "cropPackDefect": true
+    },
+    {
+      "queueId": "BLIND_REP-05_s02",
+      "imageId": "REP-05",
+      "cropId": "crop_REP-05_s02.png",
+      "slotId": "s02",
+      "top1": null,
+      "top2": null,
+      "top3": null,
+      "confidence": 0.0,
+      "visualBasis": "The crop contains an empty HUD grid and status text, not a visible inventory item.",
+      "similarCandidates": [],
+      "indistinguishableSimilarCandidate": true,
+      "abstain": true,
+      "cropPackDefect": true
+    },
+    {
+      "queueId": "BLIND_REP-05_s03",
+      "imageId": "REP-05",
+      "cropId": "crop_REP-05_s03.png",
+      "slotId": "s03",
+      "top1": null,
+      "top2": null,
+      "top3": null,
+      "confidence": 0.0,
+      "visualBasis": "The crop is blank confirmation-dialog background and contains no catalog item evidence.",
+      "similarCandidates": [],
+      "indistinguishableSimilarCandidate": true,
+      "abstain": true,
+      "cropPackDefect": true
+    },
+    {
+      "queueId": "BLIND_REP-05_s04",
+      "imageId": "REP-05",
+      "cropId": "crop_REP-05_s04.png",
+      "slotId": "s04",
+      "top1": null,
+      "top2": null,
+      "top3": null,
+      "confidence": 0.0,
+      "visualBasis": "The crop is blank confirmation-dialog background and contains no catalog item evidence.",
+      "similarCandidates": [],
+      "indistinguishableSimilarCandidate": true,
+      "abstain": true,
+      "cropPackDefect": true
+    }
+  ],
+  "promotionRule": "These observations remain GPT-only pseudo-labels. No Gemini comparison, model-agreement calculation, promotion, or verified-truth update was performed."
+}

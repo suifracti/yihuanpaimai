@@ -1,0 +1,46 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://yihuanpaimai.local/schemas/settlement-evidence-original-v2.schema.json",
+  "title": "Settlement Evidence Original v2",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "evidenceId",
+    "recordStableKey",
+    "kind",
+    "capturedAt",
+    "storageMode",
+    "relativePath",
+    "sha256",
+    "byteSize",
+    "mimeType",
+    "width",
+    "height",
+    "coverageMode",
+    "coverageStatus"
+  ],
+  "properties": {
+    "schemaVersion": { "const": "settlement-evidence-original-v2" },
+    "evidenceId": { "type": "string", "minLength": 1 },
+    "recordStableKey": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$"
+    },
+    "kind": { "enum": ["main-settlement", "warehouse-supplement", "warehouse-segment", "manual-game"] },
+    "capturedAt": { "type": "string", "minLength": 1 },
+    "storageMode": { "const": "file" },
+    "relativePath": {
+      "type": "string",
+      "pattern": "^evidence/settlement_v2/blobs/[0-9a-f]{2}/[0-9a-f]{64}\\.(png|jpg)$"
+    },
+    "sha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+    "byteSize": { "type": "integer", "exclusiveMinimum": 0 },
+    "mimeType": { "enum": ["image/png", "image/jpeg"] },
+    "width": { "type": "integer", "minimum": 1 },
+    "height": { "type": "integer", "minimum": 1 },
+    "coverageMode": { "enum": ["viewport-segment", "unspecified"] },
+    "coverageStatus": { "enum": ["PARTIAL", "COVERAGE_UNPROVEN"] },
+    "evidenceOrigin": { "enum": ["runtime-capture", "user-import"] }
+  }
+}

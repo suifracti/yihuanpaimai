@@ -1,0 +1,56 @@
+{
+  "contractVersion": "geometry-contract-v1",
+  "description": "Benchmark v2 single-source admitted geometry; identity remains null.",
+  "instances": [
+    {
+      "bbox": [
+        61,
+        164,
+        92,
+        197
+      ],
+      "bboxCoordinateSpace": "source_pixel",
+      "canonicalItemId": null,
+      "contentVerification": {
+        "contentVerified": true,
+        "evidenceType": "manual_review",
+        "note": "Source review confirms this saved proposal is one physical parent; no identity or quality is asserted.",
+        "reviewStatus": "reviewed_consistent",
+        "scope": "crop_instance_binding_only"
+      },
+      "footprint": {
+        "heightCells": 1,
+        "widthCells": 1
+      },
+      "instanceId": "inst-493853f8a7b780ec4fe4",
+      "observationLabel": null,
+      "sourceId": "src-c86e85c5712aea00ac7d"
+    }
+  ],
+  "pathBase": "repository_root",
+  "queueSlots": [
+    {
+      "cropPath": "experiments/vision_benchmark_v2/crops/crop-493853f8a7b780ec4fe4.png",
+      "instanceId": "inst-493853f8a7b780ec4fe4",
+      "queueId": "queue-493853f8a7b780ec4fe4"
+    }
+  ],
+  "sources": [
+    {
+      "coordinateSpace": "source_pixel",
+      "height": 329,
+      "inventoryEligible": true,
+      "inventoryRoi": {
+        "coordinateSpace": "source_pixel",
+        "height": 329,
+        "width": 307,
+        "x": 0,
+        "y": 0
+      },
+      "sceneType": "inventory_crop",
+      "sourceId": "src-c86e85c5712aea00ac7d",
+      "sourcePath": "experiments/vision_benchmark_v2/snapshots/source-c86e85c5712aea00ac7d.png",
+      "width": 307
+    }
+  ]
+}

@@ -1,0 +1,11 @@
+# 冻结晚启动与保存恢复
+
+7e18ea2修复结算页晚启动缺归属证据摘要：AuctionFlowEvidence支持以明确matchId在SETTLEMENT初始化，标记startedAtSettlement=true，保留空出价/情报，不补造拍卖阶段。不同matchId重新绑定，避免同场景跨局串证据；新局不被旧结算退出状态误标hasReturned。
+
+25项流程/归属回归PASS，0.328秒。5c0a91f增加冻结实际文件独占故障探针；首次探针已确认释放后保存恢复，但新Store缺auctionEvidence而失败，暴露并促成本修复，失败video-probe/report.json保留。
+
+build/isolated_trial_recovery_20260912/video-probe-verified/report.json success=true/frozen=true/codeRevision=7e18ea2。真实14-40-37录像159/162/165/168秒顺序采样，仅从结算开始，磁盘昵称PLAYER_LOCAL；OCR赢家致敬最良心不歪，连续稳定后acquired=false，roster=[]。冻结宿主归属投影一致；实际Windows独占目标历史文件令AutoArchiver失败，原上下文和原历史字节不变，解除占用后等待1.1秒再次调用归档成功，新Store读回归属和CONFIGURED_EXACT_NAME_V1来源摘要。这是冻结数据链的真实文件故障验证，不是完整GUI故障提示或连续实机录像验收。
+
+新候选包build/isolated_trial_recovery_20260912/dist/异环拍卖助手基于干净7e18ea2；前轮15c9911的UI六次启动是前轮版本证据，未挪算成本轮UI复验。当前已证明配置昵称可辅助结算晚启动，未配置且无名单仍未知。本人获胜实录、同名歧义实录、完整连续跨局、实机滚仓/性能及完整试用交付仍未完成；P3 PARTIAL，v13未覆盖。
+
+下一步继续实际识别故障提示/恢复与延迟定位，按完整规划收敛试用交付，不再把已通过的文件占用恢复列为缺口。

@@ -1,0 +1,28 @@
+[
+  {
+    "hwnd": 202122942,
+    "title": "⚡ 异环拍卖战术助手 HUD",
+    "cls": "WindowsForms10.Window.8.app.0.aec740_r21_ad1",
+    "box": [
+      1000,
+      681,
+      1560,
+      759,
+      560,
+      78
+    ]
+  },
+  {
+    "hwnd": 39003254,
+    "title": "异环拍卖助手 Overlay Alpha",
+    "cls": "Chrome_WidgetWin_1",
+    "box": [
+      1000,
+      681,
+      1560,
+      759,
+      560,
+      78
+    ]
+  }
+]

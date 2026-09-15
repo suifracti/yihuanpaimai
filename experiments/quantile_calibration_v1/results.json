@@ -1,0 +1,795 @@
+{
+  "metadata": {
+    "generatedAt": "2026-08-22T00:42:36.953398",
+    "experimentVersion": "offline-quantile-calibration-v1",
+    "source": "D:\\yihuanpaimai\\异环拍卖数据.json"
+  },
+  "auditCloseouts": {
+    "cleanerSubsetCount": 21,
+    "cleanerQuantileCount": 14,
+    "auditSummary": {
+      "totalRecords": 289,
+      "admittedCount": 155,
+      "pointCandidateCount": 127,
+      "quantileCandidateCount": 63,
+      "targetProvenanceCounts": {
+        "TARGET_AMBIGUOUS": 19,
+        "TARGET_LIKELY_COMPATIBLE": 69,
+        "TARGET_PROVEN_COMPATIBLE": 39
+      },
+      "cohortDistribution": {
+        "v0.3-dynamic-walkforward": 35,
+        "v0.5-field-conditions": 28
+      }
+    },
+    "regressions": {
+      "cleanerSubset": {
+        "n": 21,
+        "ols": {
+          "slope": 1.1413,
+          "intercept": 155596.04,
+          "slope_95_ci": [
+            -1.0712,
+            3.3538
+          ],
+          "intercept_95_ci": [
+            -984007.9,
+            1295199.99
+          ]
+        },
+        "bootstrap": {
+          "slope_95_ci": [
+            -0.1947,
+            2.2329
+          ],
+          "intercept_95_ci": [
+            -424721.65,
+            1082411.9
+          ]
+        },
+        "theil_sen_robust": {
+          "slope": 1.3444,
+          "intercept": -161042.46
+        },
+        "correlations": {
+          "pearson_r": 0.2303,
+          "spearman_rho": 0.6221
+        },
+        "slope_verdict": "SLOPE_INCLUDES_1_INSUFFICIENT_STANDALONE_COMPRESSION_EVIDENCE"
+      },
+      "provenOnly": {
+        "n": 39,
+        "ols": {
+          "slope": 0.9841,
+          "intercept": 193871.54,
+          "slope_95_ci": [
+            0.2661,
+            1.7021
+          ],
+          "intercept_95_ci": [
+            -234037.8,
+            621780.88
+          ]
+        },
+        "bootstrap": {
+          "slope_95_ci": [
+            0.4381,
+            1.3762
+          ],
+          "intercept_95_ci": [
+            -110217.89,
+            638057.48
+          ]
+        },
+        "theil_sen_robust": {
+          "slope": 1.1665,
+          "intercept": -55509.79
+        },
+        "correlations": {
+          "pearson_r": 0.4109,
+          "spearman_rho": 0.6314
+        },
+        "slope_verdict": "SLOPE_INCLUDES_1_INSUFFICIENT_STANDALONE_COMPRESSION_EVIDENCE"
+      },
+      "provenLikely": {
+        "n": 108,
+        "ols": {
+          "slope": 0.5991,
+          "intercept": 344720.25,
+          "slope_95_ci": [
+            0.3085,
+            0.8897
+          ],
+          "intercept_95_ci": [
+            153429.91,
+            536010.59
+          ]
+        },
+        "bootstrap": {
+          "slope_95_ci": [
+            0.2953,
+            0.9929
+          ],
+          "intercept_95_ci": [
+            110283.0,
+            550780.42
+          ]
+        },
+        "theil_sen_robust": {
+          "slope": 0.8923,
+          "intercept": 39458.94
+        },
+        "correlations": {
+          "pearson_r": 0.3653,
+          "spearman_rho": 0.5892
+        },
+        "slope_verdict": "PROVISIONAL"
+      },
+      "broadSubset": {
+        "n": 127,
+        "ols": {
+          "slope": 0.6985,
+          "intercept": 267320.3,
+          "slope_95_ci": [
+            0.4314,
+            0.9656
+          ],
+          "intercept_95_ci": [
+            93486.82,
+            441153.79
+          ]
+        },
+        "bootstrap": {
+          "slope_95_ci": [
+            0.3997,
+            1.0949
+          ],
+          "intercept_95_ci": [
+            42888.51,
+            455482.63
+          ]
+        },
+        "theil_sen_robust": {
+          "slope": 0.9741,
+          "intercept": -5965.63
+        },
+        "correlations": {
+          "pearson_r": 0.4168,
+          "spearman_rho": 0.6173
+        },
+        "slope_verdict": "SLOPE_INCLUDES_1_INSUFFICIENT_STANDALONE_COMPRESSION_EVIDENCE"
+      }
+    }
+  },
+  "heavyTailAnalysis": {
+    "sampleCount": 63,
+    "meanAbsoluteError": 137351.56,
+    "medianSignedResidual": -4991.33,
+    "meanSignedResidual": -69902.29,
+    "errorConcentration": {
+      "top1WorstMissShare": 0.1144,
+      "top5WorstMissShare": 0.36,
+      "top10WorstMissShare": 0.5395
+    },
+    "tailPercentiles": {
+      "p80AbsoluteError": 220544.73,
+      "p90AbsoluteError": 326262.7,
+      "p95AbsoluteError": 441275.57,
+      "maxUnderestimationRate": 0.9033
+    }
+  },
+  "outOfSampleCalibrationOverall": {
+    "totalSamplesEvaluated": 48,
+    "foldCount": 4,
+    "foldSplits": [
+      [
+        15,
+        27
+      ],
+      [
+        27,
+        39
+      ],
+      [
+        39,
+        51
+      ],
+      [
+        51,
+        63
+      ]
+    ],
+    "models": {
+      "E0_Baseline": {
+        "n": 48,
+        "meanPinballLoss20": 35934.74,
+        "meanPinballLoss50": 57029.42,
+        "meanPinballLoss80": 51833.09,
+        "meanTotalPinballLoss": 48265.75,
+        "meanWinklerIntervalScore": 438839.12,
+        "empiricalFP20": 0.3125,
+        "empiricalFP50": 0.4583,
+        "empiricalFP80": 0.5833,
+        "central60Coverage": 0.2708,
+        "wilson95CiCentral60": [
+          0.1657,
+          0.41
+        ],
+        "wilson95CiP80": [
+          0.4428,
+          0.7115
+        ],
+        "medianWidth": 103886.0,
+        "medianNormalizedWidth": 0.1576,
+        "p50Mae": 114058.84,
+        "p50Mare": 0.265,
+        "underestimateRate10": 0.3333,
+        "underestimateRate20": 0.2083
+      },
+      "E1_SymmetricWidthScaling": {
+        "n": 48,
+        "meanPinballLoss20": 36593.83,
+        "meanPinballLoss50": 57029.42,
+        "meanPinballLoss80": 50491.14,
+        "meanTotalPinballLoss": 48038.13,
+        "meanWinklerIntervalScore": 435424.85,
+        "empiricalFP20": 0.25,
+        "empiricalFP50": 0.4583,
+        "empiricalFP80": 0.6042,
+        "central60Coverage": 0.3542,
+        "wilson95CiCentral60": [
+          0.2343,
+          0.4956
+        ],
+        "wilson95CiP80": [
+          0.4631,
+          0.7298
+        ],
+        "medianWidth": 158762.39,
+        "medianNormalizedWidth": 0.2521,
+        "p50Mae": 114058.84,
+        "p50Mare": 0.265,
+        "underestimateRate10": 0.3333,
+        "underestimateRate20": 0.2083
+      },
+      "E2_AsymmetricUpperTailScaling": {
+        "n": 48,
+        "meanPinballLoss20": 36072.43,
+        "meanPinballLoss50": 57029.42,
+        "meanPinballLoss80": 55685.11,
+        "meanTotalPinballLoss": 49595.65,
+        "meanWinklerIntervalScore": 458787.71,
+        "empiricalFP20": 0.2917,
+        "empiricalFP50": 0.4583,
+        "empiricalFP80": 0.625,
+        "central60Coverage": 0.3333,
+        "wilson95CiCentral60": [
+          0.2168,
+          0.4746
+        ],
+        "wilson95CiP80": [
+          0.4836,
+          0.7478
+        ],
+        "medianWidth": 158722.6,
+        "medianNormalizedWidth": 0.2394,
+        "p50Mae": 114058.84,
+        "p50Mare": 0.265,
+        "underestimateRate10": 0.3333,
+        "underestimateRate20": 0.2083
+      },
+      "E3_EmpiricalResidualCalibration": {
+        "n": 48,
+        "meanPinballLoss20": 38393.79,
+        "meanPinballLoss50": 57029.42,
+        "meanPinballLoss80": 62986.13,
+        "meanTotalPinballLoss": 52803.11,
+        "meanWinklerIntervalScore": 506899.6,
+        "empiricalFP20": 0.3125,
+        "empiricalFP50": 0.4583,
+        "empiricalFP80": 0.8542,
+        "central60Coverage": 0.5417,
+        "wilson95CiCentral60": [
+          0.4029,
+          0.6742
+        ],
+        "wilson95CiP80": [
+          0.7283,
+          0.9275
+        ],
+        "medianWidth": 308351.15,
+        "medianNormalizedWidth": 0.6154,
+        "p50Mae": 114058.84,
+        "p50Mare": 0.265,
+        "underestimateRate10": 0.3333,
+        "underestimateRate20": 0.2083
+      },
+      "E4_FeatureConditionedScaling": {
+        "n": 48,
+        "meanPinballLoss20": 35934.74,
+        "meanPinballLoss50": 57029.42,
+        "meanPinballLoss80": 53256.76,
+        "meanTotalPinballLoss": 48740.3,
+        "meanWinklerIntervalScore": 445957.47,
+        "empiricalFP20": 0.3125,
+        "empiricalFP50": 0.4583,
+        "empiricalFP80": 0.6458,
+        "central60Coverage": 0.3333,
+        "wilson95CiCentral60": [
+          0.2168,
+          0.4746
+        ],
+        "wilson95CiP80": [
+          0.5044,
+          0.7657
+        ],
+        "medianWidth": 184133.4,
+        "medianNormalizedWidth": 0.2803,
+        "p50Mae": 114058.84,
+        "p50Mare": 0.265,
+        "underestimateRate10": 0.3333,
+        "underestimateRate20": 0.2083
+      }
+    }
+  },
+  "cohortSpecificCalibration": {
+    "v0.3-dynamic-walkforward": {
+      "totalSamplesEvaluated": 28,
+      "foldCount": 4,
+      "foldSplits": [
+        [
+          7,
+          14
+        ],
+        [
+          14,
+          21
+        ],
+        [
+          21,
+          28
+        ],
+        [
+          28,
+          35
+        ]
+      ],
+      "models": {
+        "E0_Baseline": {
+          "n": 28,
+          "meanPinballLoss20": 42453.54,
+          "meanPinballLoss50": 84488.24,
+          "meanPinballLoss80": 84826.89,
+          "meanTotalPinballLoss": 70589.56,
+          "meanWinklerIntervalScore": 636402.16,
+          "empiricalFP20": 0.2143,
+          "empiricalFP50": 0.4286,
+          "empiricalFP80": 0.5714,
+          "central60Coverage": 0.3571,
+          "wilson95CiCentral60": [
+            0.2071,
+            0.5417
+          ],
+          "wilson95CiP80": [
+            0.3907,
+            0.7349
+          ],
+          "medianWidth": 207334.0,
+          "medianNormalizedWidth": 0.4628,
+          "p50Mae": 168976.49,
+          "p50Mare": 0.303,
+          "underestimateRate10": 0.3571,
+          "underestimateRate20": 0.3571
+        },
+        "E1_SymmetricWidthScaling": {
+          "n": 28,
+          "meanPinballLoss20": 49810.33,
+          "meanPinballLoss50": 84488.24,
+          "meanPinballLoss80": 85253.8,
+          "meanTotalPinballLoss": 73184.13,
+          "meanWinklerIntervalScore": 675320.66,
+          "empiricalFP20": 0.1429,
+          "empiricalFP50": 0.4286,
+          "empiricalFP80": 0.6071,
+          "central60Coverage": 0.4643,
+          "wilson95CiCentral60": [
+            0.2953,
+            0.6419
+          ],
+          "wilson95CiP80": [
+            0.4241,
+            0.7643
+          ],
+          "medianWidth": 263979.6,
+          "medianNormalizedWidth": 0.6371,
+          "p50Mae": 168976.49,
+          "p50Mare": 0.303,
+          "underestimateRate10": 0.3571,
+          "underestimateRate20": 0.3571
+        },
+        "E2_AsymmetricUpperTailScaling": {
+          "n": 28,
+          "meanPinballLoss20": 43500.83,
+          "meanPinballLoss50": 84488.24,
+          "meanPinballLoss80": 93924.9,
+          "meanTotalPinballLoss": 73971.32,
+          "meanWinklerIntervalScore": 687128.64,
+          "empiricalFP20": 0.1786,
+          "empiricalFP50": 0.4286,
+          "empiricalFP80": 0.6429,
+          "central60Coverage": 0.4643,
+          "wilson95CiCentral60": [
+            0.2953,
+            0.6419
+          ],
+          "wilson95CiP80": [
+            0.4583,
+            0.7929
+          ],
+          "medianWidth": 289844.2,
+          "medianNormalizedWidth": 0.6612,
+          "p50Mae": 168976.49,
+          "p50Mare": 0.303,
+          "underestimateRate10": 0.3571,
+          "underestimateRate20": 0.3571
+        },
+        "E3_EmpiricalResidualCalibration": {
+          "n": 28,
+          "meanPinballLoss20": 53966.06,
+          "meanPinballLoss50": 84488.24,
+          "meanPinballLoss80": 91982.67,
+          "meanTotalPinballLoss": 76812.33,
+          "meanWinklerIntervalScore": 729743.66,
+          "empiricalFP20": 0.2143,
+          "empiricalFP50": 0.4286,
+          "empiricalFP80": 0.75,
+          "central60Coverage": 0.5357,
+          "wilson95CiCentral60": [
+            0.3581,
+            0.7047
+          ],
+          "wilson95CiP80": [
+            0.5664,
+            0.8732
+          ],
+          "medianWidth": 250481.92,
+          "medianNormalizedWidth": 0.5602,
+          "p50Mae": 168976.49,
+          "p50Mare": 0.303,
+          "underestimateRate10": 0.3571,
+          "underestimateRate20": 0.3571
+        },
+        "E4_FeatureConditionedScaling": {
+          "n": 28,
+          "meanPinballLoss20": 42453.54,
+          "meanPinballLoss50": 84488.24,
+          "meanPinballLoss80": 98047.06,
+          "meanTotalPinballLoss": 74996.28,
+          "meanWinklerIntervalScore": 702503.01,
+          "empiricalFP20": 0.2143,
+          "empiricalFP50": 0.4286,
+          "empiricalFP80": 0.5714,
+          "central60Coverage": 0.3571,
+          "wilson95CiCentral60": [
+            0.2071,
+            0.5417
+          ],
+          "wilson95CiP80": [
+            0.3907,
+            0.7349
+          ],
+          "medianWidth": 228805.0,
+          "medianNormalizedWidth": 0.4863,
+          "p50Mae": 168976.49,
+          "p50Mare": 0.303,
+          "underestimateRate10": 0.3571,
+          "underestimateRate20": 0.3571
+        }
+      }
+    },
+    "v0.5-field-conditions": {
+      "totalSamplesEvaluated": 21,
+      "foldCount": 5,
+      "foldSplits": [
+        [
+          7,
+          12
+        ],
+        [
+          12,
+          17
+        ],
+        [
+          17,
+          22
+        ],
+        [
+          22,
+          27
+        ],
+        [
+          27,
+          28
+        ]
+      ],
+      "models": {
+        "E0_Baseline": {
+          "n": 21,
+          "meanPinballLoss20": 33498.79,
+          "meanPinballLoss50": 50047.53,
+          "meanPinballLoss80": 48254.05,
+          "meanTotalPinballLoss": 43933.46,
+          "meanWinklerIntervalScore": 408764.19,
+          "empiricalFP20": 0.381,
+          "empiricalFP50": 0.4762,
+          "empiricalFP80": 0.5714,
+          "central60Coverage": 0.1905,
+          "wilson95CiCentral60": [
+            0.0767,
+            0.4
+          ],
+          "wilson95CiP80": [
+            0.3655,
+            0.7553
+          ],
+          "medianWidth": 98051.0,
+          "medianNormalizedWidth": 0.1266,
+          "p50Mae": 100095.06,
+          "p50Mare": 0.2039,
+          "underestimateRate10": 0.381,
+          "underestimateRate20": 0.0952
+        },
+        "E1_SymmetricWidthScaling": {
+          "n": 21,
+          "meanPinballLoss20": 34852.98,
+          "meanPinballLoss50": 50047.53,
+          "meanPinballLoss80": 43185.65,
+          "meanTotalPinballLoss": 42695.39,
+          "meanWinklerIntervalScore": 390193.18,
+          "empiricalFP20": 0.2857,
+          "empiricalFP50": 0.4762,
+          "empiricalFP80": 0.7143,
+          "central60Coverage": 0.4286,
+          "wilson95CiCentral60": [
+            0.2447,
+            0.6345
+          ],
+          "wilson95CiP80": [
+            0.5004,
+            0.8619
+          ],
+          "medianWidth": 215712.2,
+          "medianNormalizedWidth": 0.2786,
+          "p50Mae": 100095.06,
+          "p50Mare": 0.2039,
+          "underestimateRate10": 0.381,
+          "underestimateRate20": 0.0952
+        },
+        "E2_AsymmetricUpperTailScaling": {
+          "n": 21,
+          "meanPinballLoss20": 34712.39,
+          "meanPinballLoss50": 50047.53,
+          "meanPinballLoss80": 43239.35,
+          "meanTotalPinballLoss": 42666.42,
+          "meanWinklerIntervalScore": 389758.68,
+          "empiricalFP20": 0.381,
+          "empiricalFP50": 0.4762,
+          "empiricalFP80": 0.7619,
+          "central60Coverage": 0.381,
+          "wilson95CiCentral60": [
+            0.2075,
+            0.5912
+          ],
+          "wilson95CiP80": [
+            0.5491,
+            0.8937
+          ],
+          "medianWidth": 152394.7,
+          "medianNormalizedWidth": 0.2408,
+          "p50Mae": 100095.06,
+          "p50Mare": 0.2039,
+          "underestimateRate10": 0.381,
+          "underestimateRate20": 0.0952
+        },
+        "E3_EmpiricalResidualCalibration": {
+          "n": 21,
+          "meanPinballLoss20": 33574.29,
+          "meanPinballLoss50": 50047.53,
+          "meanPinballLoss80": 45066.7,
+          "meanTotalPinballLoss": 42896.17,
+          "meanWinklerIntervalScore": 393204.93,
+          "empiricalFP20": 0.1429,
+          "empiricalFP50": 0.4762,
+          "empiricalFP80": 0.7619,
+          "central60Coverage": 0.619,
+          "wilson95CiCentral60": [
+            0.4088,
+            0.7925
+          ],
+          "wilson95CiP80": [
+            0.5491,
+            0.8937
+          ],
+          "medianWidth": 209505.99,
+          "medianNormalizedWidth": 0.4259,
+          "p50Mae": 100095.06,
+          "p50Mare": 0.2039,
+          "underestimateRate10": 0.381,
+          "underestimateRate20": 0.0952
+        },
+        "E4_FeatureConditionedScaling": {
+          "n": 21,
+          "meanPinballLoss20": 33498.79,
+          "meanPinballLoss50": 50047.53,
+          "meanPinballLoss80": 42101.07,
+          "meanTotalPinballLoss": 41882.46,
+          "meanWinklerIntervalScore": 377999.31,
+          "empiricalFP20": 0.381,
+          "empiricalFP50": 0.4762,
+          "empiricalFP80": 0.7619,
+          "central60Coverage": 0.381,
+          "wilson95CiCentral60": [
+            0.2075,
+            0.5912
+          ],
+          "wilson95CiP80": [
+            0.5491,
+            0.8937
+          ],
+          "medianWidth": 172094.0,
+          "medianNormalizedWidth": 0.2669,
+          "p50Mae": 100095.06,
+          "p50Mare": 0.2039,
+          "underestimateRate10": 0.381,
+          "underestimateRate20": 0.0952
+        }
+      }
+    },
+    "v0.6-reliability": {
+      "totalSamplesEvaluated": 8,
+      "foldCount": 2,
+      "foldSplits": [
+        [
+          7,
+          12
+        ],
+        [
+          12,
+          15
+        ]
+      ],
+      "models": {
+        "E0_Baseline": {
+          "n": 8,
+          "meanPinballLoss20": 36846.48,
+          "meanPinballLoss50": 40897.51,
+          "meanPinballLoss80": 38050.7,
+          "meanTotalPinballLoss": 38598.23,
+          "meanWinklerIntervalScore": 374485.89,
+          "empiricalFP20": 0.75,
+          "empiricalFP50": 0.75,
+          "empiricalFP80": 0.875,
+          "central60Coverage": 0.125,
+          "wilson95CiCentral60": [
+            0.0224,
+            0.4709
+          ],
+          "wilson95CiP80": [
+            0.5291,
+            0.9776
+          ],
+          "medianWidth": 78860.5,
+          "medianNormalizedWidth": 0.1266,
+          "p50Mae": 81795.01,
+          "p50Mare": 0.147,
+          "underestimateRate10": 0.125,
+          "underestimateRate20": 0.125
+        },
+        "E1_SymmetricWidthScaling": {
+          "n": 8,
+          "meanPinballLoss20": 31272.14,
+          "meanPinballLoss50": 40897.51,
+          "meanPinballLoss80": 39068.48,
+          "meanTotalPinballLoss": 37079.38,
+          "meanWinklerIntervalScore": 351703.11,
+          "empiricalFP20": 0.625,
+          "empiricalFP50": 0.75,
+          "empiricalFP80": 0.875,
+          "central60Coverage": 0.25,
+          "wilson95CiCentral60": [
+            0.0715,
+            0.5907
+          ],
+          "wilson95CiP80": [
+            0.5291,
+            0.9776
+          ],
+          "medianWidth": 189265.2,
+          "medianNormalizedWidth": 0.2786,
+          "p50Mae": 81795.01,
+          "p50Mare": 0.147,
+          "underestimateRate10": 0.125,
+          "underestimateRate20": 0.125
+        },
+        "E2_AsymmetricUpperTailScaling": {
+          "n": 8,
+          "meanPinballLoss20": 35700.39,
+          "meanPinballLoss50": 40897.51,
+          "meanPinballLoss80": 38674.18,
+          "meanTotalPinballLoss": 38424.02,
+          "meanWinklerIntervalScore": 371872.81,
+          "empiricalFP20": 0.75,
+          "empiricalFP50": 0.75,
+          "empiricalFP80": 0.875,
+          "central60Coverage": 0.125,
+          "wilson95CiCentral60": [
+            0.0224,
+            0.4709
+          ],
+          "wilson95CiP80": [
+            0.5291,
+            0.9776
+          ],
+          "medianWidth": 170150.7,
+          "medianNormalizedWidth": 0.249,
+          "p50Mae": 81795.01,
+          "p50Mare": 0.147,
+          "underestimateRate10": 0.125,
+          "underestimateRate20": 0.125
+        },
+        "E3_EmpiricalResidualCalibration": {
+          "n": 8,
+          "meanPinballLoss20": 27270.64,
+          "meanPinballLoss50": 40897.51,
+          "meanPinballLoss80": 45866.42,
+          "meanTotalPinballLoss": 38011.52,
+          "meanWinklerIntervalScore": 365685.31,
+          "empiricalFP20": 0.5,
+          "empiricalFP50": 0.75,
+          "empiricalFP80": 0.875,
+          "central60Coverage": 0.375,
+          "wilson95CiCentral60": [
+            0.1368,
+            0.6943
+          ],
+          "wilson95CiP80": [
+            0.5291,
+            0.9776
+          ],
+          "medianWidth": 147763.4,
+          "medianNormalizedWidth": 0.3528,
+          "p50Mae": 81795.01,
+          "p50Mare": 0.147,
+          "underestimateRate10": 0.125,
+          "underestimateRate20": 0.125
+        },
+        "E4_FeatureConditionedScaling": {
+          "n": 8,
+          "meanPinballLoss20": 36846.48,
+          "meanPinballLoss50": 40897.51,
+          "meanPinballLoss80": 39462.02,
+          "meanTotalPinballLoss": 39068.67,
+          "meanWinklerIntervalScore": 381542.49,
+          "empiricalFP20": 0.75,
+          "empiricalFP50": 0.75,
+          "empiricalFP80": 0.875,
+          "central60Coverage": 0.125,
+          "wilson95CiCentral60": [
+            0.0224,
+            0.4709
+          ],
+          "wilson95CiP80": [
+            0.5291,
+            0.9776
+          ],
+          "medianWidth": 182524.1,
+          "medianNormalizedWidth": 0.2786,
+          "p50Mae": 81795.01,
+          "p50Mare": 0.147,
+          "underestimateRate10": 0.125,
+          "underestimateRate20": 0.125
+        }
+      }
+    }
+  }
+}
