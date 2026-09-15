@@ -1,0 +1,106 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://local.yihuan/benchmark/production-proposal-contract-v1.schema.json",
+  "title": "Production Proposal Contract v1",
+  "description": "Replayable production observations without benchmark identity, parent, truth, or queue authority.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "source", "sceneProposal", "roiProposal", "itemProposals"],
+  "properties": {
+    "schemaVersion": {"const": "production-proposal-contract-v1"},
+    "source": {"$ref": "#/$defs/source"},
+    "sceneProposal": {"$ref": "#/$defs/sceneProposal"},
+    "roiProposal": {"$ref": "#/$defs/roiProposal"},
+    "itemProposals": {
+      "type": "array",
+      "minItems": 1,
+      "items": {"$ref": "#/$defs/itemProposal"}
+    }
+  },
+  "$defs": {
+    "sourcePixelBbox": {
+      "type": "array",
+      "minItems": 4,
+      "maxItems": 4,
+      "items": {"type": "integer", "minimum": 0}
+    },
+    "primitive": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "version", "implementationPath", "implementationSha256", "invocationVersion", "runtimeDependencies"],
+      "properties": {
+        "name": {"type": "string", "minLength": 1},
+        "version": {"type": "string", "minLength": 1},
+        "implementationPath": {"type": "string", "minLength": 1},
+        "implementationSha256": {"type": "string", "minLength": 1},
+        "invocationVersion": {"type": "string", "minLength": 1},
+        "runtimeDependencies": {"type": "object"}
+      }
+    },
+    "source": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["sourcePath", "sha256", "width", "height", "coordinateSpace"],
+      "properties": {
+        "sourcePath": {"type": "string", "minLength": 1},
+        "sha256": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+        "width": {"type": "integer", "minimum": 1},
+        "height": {"type": "integer", "minimum": 1},
+        "coordinateSpace": {"const": "source_pixel"}
+      }
+    },
+    "sceneProposal": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["proposedSceneType", "confidence", "primitive", "rawProposalEvidence"],
+      "properties": {
+        "proposedSceneType": {"type": "string", "minLength": 1},
+        "confidence": {"type": ["number", "null"]},
+        "primitive": {"$ref": "#/$defs/primitive"},
+        "rawProposalEvidence": {"type": "object"}
+      }
+    },
+    "roiProposal": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["bbox", "coordinateSpace", "primitive", "rawProposalEvidence"],
+      "properties": {
+        "bbox": {"$ref": "#/$defs/sourcePixelBbox"},
+        "coordinateSpace": {"const": "source_pixel"},
+        "primitive": {"$ref": "#/$defs/primitive"},
+        "rawProposalEvidence": {"type": "object"}
+      }
+    },
+    "itemProposal": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["proposalId", "bbox", "coordinateSpace", "occupiedCells", "footprintCandidate", "trackId", "primitive", "rawProposalEvidence"],
+      "properties": {
+        "proposalId": {"type": "string", "pattern": "^proposal-[A-Za-z0-9._:-]+$"},
+        "bbox": {"$ref": "#/$defs/sourcePixelBbox"},
+        "coordinateSpace": {"const": "source_pixel"},
+        "occupiedCells": {
+          "type": "array",
+          "items": {
+            "type": "array",
+            "minItems": 2,
+            "maxItems": 2,
+            "items": {"type": "integer", "minimum": 0}
+          }
+        },
+        "footprintCandidate": {
+          "type": ["object", "null"],
+          "additionalProperties": false,
+          "required": ["widthCells", "heightCells"],
+          "properties": {
+            "widthCells": {"type": "integer", "minimum": 1},
+            "heightCells": {"type": "integer", "minimum": 1}
+          }
+        },
+        "trackId": {"type": ["integer", "string", "null"]},
+        "primitive": {"$ref": "#/$defs/primitive"},
+        "rawProposalEvidence": {"type": "object"}
+      }
+    }
+  }
+}

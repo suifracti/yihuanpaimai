@@ -1,0 +1,13 @@
+# V2人工确认样本导出
+
+业务提交d77ebc9。原导出器拒绝全部V2审阅；现在支持V2，并要求逐件HUMAN_REVIEWED_CATALOG_ID来源、对应人工决定、图鉴ID/名称/品质一致。混合摘要中的AUTO项不进入人工训练标签。源图记录归属、SHA256与裁图坐标继续核验；非法/越界/布尔/非有限坐标拒绝，不钳制或制造小图。
+
+V2导出使用warehouse-reviewed-label-dataset.v2及独立JSON Schema；保留reviewUnitId、人工来源和splitGroupId。混合导出以对局分组，禁止同局物品/多帧分散到训练与评估。V1格式保持兼容。仍然只导出当前审阅结果，不把修改前已撤销身份当成新标签；不训练或修改Solver。
+
+验证：build/codex_other_video_20260912/label-export-tests.json共7项通过0.446秒；labels-v2-verification/report.json真实隔离样本2件模拟人工标签导出、21件AUTO排除、2张裁图与源图逐像素一致、单一对局分组；篡改名字即使重算摘要指纹仍被拒绝。正常/篡改名称两份manifest通过V2 JSON Schema校验。源历史不变，readiness=INSUFFICIENT_EVIDENCE。
+
+校验环境原本没有jsonschema，安装到build下独立schema-validation-deps进行格式检查，未修改运行时依赖或产品打包。实际导出路径仍为现有命令行工具tools/export_warehouse_reviewed_labels.py；尚未提供普通用户界面入口，不能称整套用户导出流程已交付。
+
+本轮未跑Main/HUD，上一轮真实历史修改/重启结果仍见对应报告。正式历史SHA256仍19100479bbb2dfd8e09faa2adbaf5117919126df4b4bcf92e377ad88c4da3431。P3仍PARTIAL，自动识别优化暂停，v13未覆盖，实机70秒输入未执行。
+
+下一步接入用户可操作的样本导出入口并验证，继续历史正向身份确认、跨记录迟到回执及采集恢复/其余UI参数同步/隔离试用包验收。完整目标保持进行。

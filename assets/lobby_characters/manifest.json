@@ -1,0 +1,41 @@
+{
+  "version": 1,
+  "source": "拍卖角色头像",
+  "roi": "lobby_character_search",
+  "minScore": 0.55,
+  "minMargin": 0.04,
+  "characters": [
+    {
+      "id": "埃德嘉",
+      "file": "埃德嘉.png"
+    },
+    {
+      "id": "浔",
+      "file": "浔.png"
+    },
+    {
+      "id": "哈尼亚",
+      "file": "哈尼亚.png"
+    },
+    {
+      "id": "达芙蒂尔",
+      "file": "达芙蒂尔.png"
+    },
+    {
+      "id": "九原",
+      "file": "九原.png"
+    },
+    {
+      "id": "阿德勒",
+      "file": "阿德勒.png"
+    },
+    {
+      "id": "小吱",
+      "file": "小吱.png"
+    },
+    {
+      "id": "哈索尔",
+      "file": "哈索尔.png"
+    }
+  ]
+}

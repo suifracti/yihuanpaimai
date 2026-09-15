@@ -1,0 +1,870 @@
+{
+  "metadata": {
+    "title": "47条缺失参考裁图接通验证报告",
+    "scope": "从用户原始图鉴目录 assets/items/catalog_screenshots 接通47项参考裁图",
+    "totalRecords": 213,
+    "preConnectionRecoveredCount": 166,
+    "postConnectionRecoveredCount": 212,
+    "netConnectedCount": 46,
+    "remainingUnresolvedCount": 1,
+    "deduplicationSummary": {
+      "existingRegistryCardsReused": 15,
+      "newCardsRegistered": 31,
+      "registryCardsTotalBefore": 216,
+      "registryCardsTotalAfter": 247
+    }
+  },
+  "connectedItems": [
+    {
+      "catalogId": "image1-0-1",
+      "name": "起司",
+      "quality": "灰",
+      "shape": "2x2",
+      "value": 366,
+      "sourceScreenshot": "assets/items/catalog_screenshots/2X2/{DFB6F983-7A0D-41C6-AB47-6C150B5F7770}.png",
+      "sourceScreenshotSha256": "c06571615098094064711d59881537eca676fc07420d0153c1f787afcb77ea69",
+      "bbox": [
+        774,
+        259,
+        387,
+        259
+      ],
+      "cropRelativePath": "assets/items/reference_crops_v1/image1-0-1.png",
+      "cropSha256": "5de5d976442733970cbb519af8658f37b9c8bc897a1b0ff47c601e99a5ae7287",
+      "evidence": "USER_SCREENSHOT_VERIFIED:'起司'"
+    },
+    {
+      "catalogId": "image1-1-2",
+      "name": "艺术画「花原」",
+      "quality": "灰",
+      "shape": "1x2",
+      "value": 241,
+      "sourceScreenshot": "assets/items/catalog_screenshots/1X2/{39EB6D1F-C312-4C1E-A622-BFADD00F264F}.png",
+      "sourceScreenshotSha256": "0024658bc1d009e357b95cd25681f5fb1ff804faabccabe85e12a12924fd7138",
+      "bbox": [
+        776,
+        279,
+        366,
+        236
+      ],
+      "cropRelativePath": "assets/items/reference_crops_v1/image1-1-2.png",
+      "cropSha256": "a21c0613a0e09bf9375be012383ae54c9bbb2c67e194be822d34c248ed7dfdb4",
+      "evidence": "USER_SCREENSHOT_VERIFIED:'艺术画「花原」'"
+    },
+    {
+      "catalogId": "image10-0-1",
+      "name": "「方盒科技」手机",
+      "quality": "蓝",
+      "shape": "2x2",
+      "value": 8848,
+      "sourceScreenshot": "assets/items/catalog_screenshots/2X2/{DFB6F983-7A0D-41C6-AB47-6C150B5F7770}.png",
+      "sourceScreenshotSha256": "c06571615098094064711d59881537eca676fc07420d0153c1f787afcb77ea69",
+      "bbox": [
+        17,
+        18,
+        366,
+        236
+      ],
+      "cropRelativePath": "assets/items/reference_crops_v1/image10-0-1.png",
+      "cropSha256": "e759d26788cf7b8cf81554231ecc34e27b2b2f098193549f256006e0058073ff",
+      "evidence": "USER_SCREENSHOT_VERIFIED:'「方盒科技」手机'"
+    },
+    {
+      "catalogId": "image10-1-0",
+      "name": "艺术画「深林」",
+      "quality": "蓝",
+      "shape": "3x3",
+      "value": 6069,
+      "sourceScreenshot": "assets/items/catalog_screenshots/3X3/{AF7A8555-2180-49BC-9395-F0DD5444F0EE}.png",
+      "sourceScreenshotSha256": "52c13ad0ec367c44ca512749fe03cfb1106c7f9c814a468d588249c1235dbdaf",
+      "bbox": [
+        795,
+        298,
+        366,
+        236
+      ],
+      "cropRelativePath": "assets/items/reference_crops_v1/image10-1-0.png",
+      "cropSha256": "8e7817a5dd47b806797c0c094b68bae2cfdef268fe2c9e9d8595008066ec311d",
+      "evidence": "USER_SCREENSHOT_VERIFIED:'艺术画「深林」'"
+    },
+    {
+      "catalogId": "image10-1-1",
+      "name": "清晨的痛击",
+      "quality": "蓝",
+      "shape": "2x3",
+      "value": 4843,
+      "sourceScreenshot": "assets/items/catalog_screenshots/2X3/{5432C3CC-00E0-43D0-8461-DD6A7E64552D}.png",
+      "sourceScreenshotSha256": "b7c9219049c3f10b1452cd3b196515759373fc72ca2203b358a6f1ac2a0d160c",
+      "bbox": [
+        783,
+        272,
+        366,
+        252
+      ],
+      "cropRelativePath": "assets/items/reference_crops_v1/image10-1-1.png",
+      "cropSha256": "34e1e40ebca39007632102f6ebfa680825e7d8dc0709551a67e5d65810730fe5",
+      "evidence": "USER_SCREENSHOT_VERIFIED:'清晨的痛击'"
+    },
+    {
+      "catalogId": "image11-1-1",
+      "name": "失落的甲胄",
+      "quality": "蓝",
+      "shape": "3x3",
+      "value": 3626,
+      "sourceScreenshot": "assets/items/catalog_screenshots/3X3/{E16EEBF5-DDE4-48DC-B4B5-A7862E8D5FA5}.png",
+      "sourceScreenshotSha256": "9e182266888e3966da22a4d7b0ef4f25797205006379d2caa1334c5ddf8a2a2f",
+      "bbox": [
+        0,
+        0,
+        382,
+        258
+      ],
+      "cropRelativePath": "assets/items/reference_crops_v1/image11-1-1.png",
+      "cropSha256": "8f7b122e06a2efe4819ec92bb638f11f0e300ed51f06813781a6bad35635e4c6",
+      "evidence": "USER_SCREENSHOT_VERIFIED:'失落的甲胄'"
+    },
+    {
+      "catalogId": "image11-1-2",
+      "name": "觊觎钱币",
+      "quality": "蓝",
+      "shape": "3x2",
+      "value": 3618,
+      "sourceScreenshot": "assets/items/catalog_screenshots/2X2/{DFB6F983-7A0D-41C6-AB47-6C150B5F7770}.png",
+      "sourceScreenshotSha256": "c06571615098094064711d59881537eca676fc07420d0153c1f787afcb77ea69",
+      "bbox": [
+        774,
+        0,
+        387,
+        259
+      ],
+      "cropRelativePath": "assets/items/reference_crops_v1/image11-1-2.png",
+      "cropSha256": "e0c43b5c6467a950394450c1db7145744bab6b55bbdd711abd1c4c786c03d82e",
+      "evidence": "USER_SCREENSHOT_VERIFIED:'觊觎钱币'"
+    },
+    {
+      "catalogId": "image12-0-0",
+      "name": "销魂挠挠爪",
+      "quality": "蓝",
+      "shape": "2x3",
+      "value": 3598,
+      "sourceScreenshot": "assets/items/catalog_screenshots/2X3/{E2B97A18-0919-4B0C-9C04-6D8C2BF9F692}.png",
+      "sourceScreenshotSha256": "8db9eab490ec8ace9a753b78d232ee8c861e6461f492232f7920d154215ae8dc",
+      "bbox": [
+        20,
+        22,
+        366,
+        236
+      ],
+      "cropRelativePath": "assets/items/reference_crops_v1/image12-0-0.png",
+      "cropSha256": "5c2909ff0eef6639ff8cc8a85d8477fa6c2ea514165fb07c269a2721f815d636",
+      "evidence": "USER_SCREENSHOT_VERIFIED:'销魂挠挠爪'"
+    },
+    {
+      "catalogId": "image13-0-1",
+      "name": "柠檬气泡水",
+      "quality": "蓝",
+      "shape": "1x3",
+      "value": 2224,
+      "sourceScreenshot": "assets/items/catalog_screenshots/1X3/{4B4BA98A-9DF4-4399-8B1B-754510B27C7A}.png",
+      "sourceScreenshotSha256": "b76f26da9abcbb2f7cb3cb040bc0de2eb2b9cf6f2a053eae678203cf93295885",
+      "bbox": [
+        774,
+        259,
+        387,
+        259
+      ],
+      "cropRelativePath": "assets/items/reference_crops_v1/image13-0-1.png",
+      "cropSha256": "af67e2c1451dbd280ded2fdd2ffba14a29b0d55448847d3e8b09dd7783d68c96",
+      "evidence": "USER_SCREENSHOT_VERIFIED:'柠檬气泡水'"
+    },
+    {
+      "catalogId": "image13-0-2",
+      "name": "断落的剑柄",
+      "quality": "蓝",
+      "shape": "1x2",
+      "value": 2139,
+      "sourceScreenshot": "assets/items/catalog_screenshots/1X2/{C8C0E0D0-AD0B-43F9-A2E8-6453DE902C79}.png",
+      "sourceScreenshotSha256": "70480994d882de0565f400f2be0f40d69787ab139e9611d1dc066b29c580642d",
+      "bbox": [
+        769,
+        258,
+        384,
+        258
+      ],
+      "cropRelativePath": "assets/items/reference_crops_v1/image13-0-2.png",
+      "cropSha256": "61dbacabb2fbcc679c84da12adb9196bfb1181e11e85b8c80b2bf92f4076543b",
+      "evidence": "USER_SCREENSHOT_VERIFIED:'断落的剑柄'"
+    },
+    {
+      "catalogId": "image16-0-0",
+      "name": "（未来的）大师飞镖",
+      "quality": "蓝",
+      "shape": "1x1",
+      "value": 996,
+      "sourceScreenshot": "assets/items/catalog_screenshots/1x1/{92DEEC27-CED4-4688-95EC-5A01A337AF9D}.png",
+      "sourceScreenshotSha256": "5846d029ee2213c1f19321b6baac89c770ec6cd5ba731efd34a961b403b40fad",
+      "bbox": [
+        787,
+        0,
+        394,
+        266
+      ],
+      "cropRelativePath": "assets/items/reference_crops_v1/image16-0-0.png",
+      "cropSha256": "8301210f969552a92459a894558c0e03b8dd3e400c61eb3c8d3e8e930651c445",
+      "evidence": "USER_SCREENSHOT_VERIFIED:'（未来的）大师飞镖'"
+    },
+    {
+      "catalogId": "image17-1-0",
+      "name": "拈花小像",
+      "quality": "紫",
+      "shape": "3x2",
+      "value": 18075,
+      "sourceScreenshot": "assets/items/catalog_screenshots/3X2/{08AEF60D-14B8-4F18-93F5-0EF794BF950E}.png",
+      "sourceScreenshotSha256": "8f34a7b84cfa7abfdffa800f71834cfaea58a1c8665c536b9e63e57dae405018",
+      "bbox": [
+        779,
+        283,
+        366,
+        236
+      ],
+      "cropRelativePath": "assets/items/reference_crops_v1/image17-1-0.png",
+      "cropSha256": "49572a410dfd4a22db3659f99ad6f0f0e22730dc85dc2e388efb9c4f166021a3",
+      "evidence": "USER_SCREENSHOT_VERIFIED:'拈花小像'"
+    },
+    {
+      "catalogId": "image18-0-0",
+      "name": "囿于窠巢",
+      "quality": "紫",
+      "shape": "2x3",
+      "value": 14934,
+      "sourceScreenshot": "assets/items/catalog_screenshots/2X3/{5432C3CC-00E0-43D0-8461-DD6A7E64552D}.png",
+      "sourceScreenshotSha256": "b7c9219049c3f10b1452cd3b196515759373fc72ca2203b358a6f1ac2a0d160c",
+      "bbox": [
+        30,
+        272,
+        361,
+        236
+      ],
+      "cropRelativePath": "assets/items/reference_crops_v1/image18-0-0.png",
+      "cropSha256": "607998552958fc2afa653b3eaf483527139d1316759dcb9c274694ad92bad1ed",
+      "evidence": "USER_SCREENSHOT_VERIFIED:'囿于窠巢'"
+    },
+    {
+      "catalogId": "image18-0-1",
+      "name": "「方盒科技」平板",
+      "quality": "紫",
+      "shape": "2x3",
+      "value": 11038,
+      "sourceScreenshot": "assets/items/catalog_screenshots/2X3/{5432C3CC-00E0-43D0-8461-DD6A7E64552D}.png",
+      "sourceScreenshotSha256": "b7c9219049c3f10b1452cd3b196515759373fc72ca2203b358a6f1ac2a0d160c",
+      "bbox": [
+        392,
+        264,
+        391,
+        263
+      ],
+      "cropRelativePath": "assets/items/reference_crops_v1/image18-0-1.png",
+      "cropSha256": "afc86067cbc15ed9d767dde8163615ca36b45d5a1e1650b4152e422952398935",
+      "evidence": "USER_SCREENSHOT_VERIFIED:'「方盒科技」平板'"
+    },
+    {
+      "catalogId": "image18-1-1",
+      "name": "留声机",
+      "quality": "紫",
+      "shape": "2x2",
+      "value": 9946,
+      "sourceScreenshot": "assets/items/catalog_screenshots/2X2/{9D299A9A-2D8E-417A-A566-BC92C203B40B}.png",
+      "sourceScreenshotSha256": "98d67b8ebfb1136178cb7b3897abc3cdd14c6c9cd6607f44d01124e6c8f77fe1",
+      "bbox": [
+        773,
+        272,
+        366,
+        236
+      ],
+      "cropRelativePath": "assets/items/reference_crops_v1/image18-1-1.png",
+      "cropSha256": "6c142aa6add180301a976adfa1bac5acc4e801f6c6dbca1df639b3b1e88fc4f0",
+      "evidence": "USER_SCREENSHOT_VERIFIED:'留声机'"
+    },
+    {
+      "catalogId": "image19-0-2",
+      "name": "角斗士之歌",
+      "quality": "紫",
+      "shape": "1x3",
+      "value": 8019,
+      "sourceScreenshot": "assets/items/catalog_screenshots/1X3/{8443FC6A-7C86-4902-BAB8-454E077003BF}.png",
+      "sourceScreenshotSha256": "6f824c36d49ed95947cd348d392dfeb3cf9c32fc283f2827ac107850f83bca64",
+      "bbox": [
+        769,
+        262,
+        385,
+        263
+      ],
+      "cropRelativePath": "assets/items/reference_crops_v1/image19-0-2.png",
+      "cropSha256": "e97dec153c669d07d0222206e2fe4060b52185ba7cb9ee1e0d299b90eba5e008",
+      "evidence": "USER_SCREENSHOT_VERIFIED:'角斗士之歌'"
+    },
+    {
+      "catalogId": "image2-0-0",
+      "name": "艺术画「解构」",
+      "quality": "灰",
+      "shape": "1x2",
+      "value": 240,
+      "sourceScreenshot": "assets/items/catalog_screenshots/1X2/9487de4e0574c0180b07aa40c03fb752.png",
+      "sourceScreenshotSha256": "89296d05eca3a83673d7d818b784043d18809306955405970829e5154f76221f",
+      "bbox": [
+        15,
+        0,
+        460,
+        278
+      ],
+      "cropRelativePath": "assets/items/reference_crops_v1/image2-0-0.png",
+      "cropSha256": "1db472363619f71cd322f85ae8fadfcb532a44cee9583e7ba0a944514ee9b870",
+      "evidence": "USER_SCREENSHOT_VERIFIED:'艺术画「解构」'"
+    },
+    {
+      "catalogId": "image2-0-2",
+      "name": "纸牌",
+      "quality": "灰",
+      "shape": "1x2",
+      "value": 183,
+      "sourceScreenshot": "assets/items/catalog_screenshots/1X2/9487de4e0574c0180b07aa40c03fb752.png",
+      "sourceScreenshotSha256": "89296d05eca3a83673d7d818b784043d18809306955405970829e5154f76221f",
+      "bbox": [
+        475,
+        0,
+        460,
+        278
+      ],
+      "cropRelativePath": "assets/items/reference_crops_v1/image2-0-2.png",
+      "cropSha256": "b036ce95f8b68d6708ce8c68e83d9ba3fc7b3676dad2118c18284c36922b77ae",
+      "evidence": "USER_SCREENSHOT_VERIFIED:'纸牌'"
+    },
+    {
+      "catalogId": "image2-1-0",
+      "name": "生鸡蛋",
+      "quality": "灰",
+      "shape": "1x2",
+      "value": 178,
+      "sourceScreenshot": "assets/items/catalog_screenshots/1X2/9487de4e0574c0180b07aa40c03fb752.png",
+      "sourceScreenshotSha256": "89296d05eca3a83673d7d818b784043d18809306955405970829e5154f76221f",
+      "bbox": [
+        935,
+        0,
+        455,
+        278
+      ],
+      "cropRelativePath": "assets/items/reference_crops_v1/image2-1-0.png",
+      "cropSha256": "ba5031ae51ae4ce9b2ef14d5e985a903913eb797a948e77b258d68493a7d2da3",
+      "evidence": "USER_SCREENSHOT_VERIFIED:'生鸡蛋'"
+    },
+    {
+      "catalogId": "image20-0-2",
+      "name": "「切玉」",
+      "quality": "紫",
+      "shape": "2x1",
+      "value": 6011,
+      "sourceScreenshot": "assets/items/catalog_screenshots/2X1/{82CFB2D0-B389-4430-B693-85C796393974}.png",
+      "sourceScreenshotSha256": "f20d22e344b30ff3d790da9f8309254e835add8920c2afbe7e3eb0f440fc3089",
+      "bbox": [
+        13,
+        285,
+        366,
+        236
+      ],
+      "cropRelativePath": "assets/items/reference_crops_v1/image20-0-2.png",
+      "cropSha256": "474e71b33da1506c52270e9852b4d203ab6d645da07f9b726190b77b68822504",
+      "evidence": "USER_SCREENSHOT_VERIFIED:'「切玉」'"
+    },
+    {
+      "catalogId": "image20-1-2",
+      "name": "「方盒科技」耳机",
+      "quality": "紫",
+      "shape": "2x2",
+      "value": 5997,
+      "sourceScreenshot": "assets/items/catalog_screenshots/2X2/{E979E688-0FB8-4D82-BED5-C0FA4B86B848}.png",
+      "sourceScreenshotSha256": "dc9ce35eaf9fe92425a27cf64d387838a4ae0a199c5333841dbaa8b2d36a1d6c",
+      "bbox": [
+        398,
+        275,
+        366,
+        236
+      ],
+      "cropRelativePath": "assets/items/reference_crops_v1/image20-1-2.png",
+      "cropSha256": "0b8039bd9c67f7de4c85d1fd1cfb1bb435c0295c50b4334ee106cb11d9e59271",
+      "evidence": "USER_SCREENSHOT_VERIFIED:'「方盒科技」耳机'"
+    },
+    {
+      "catalogId": "image21-0-1",
+      "name": "四角魔方",
+      "quality": "紫",
+      "shape": "2x2",
+      "value": 5955,
+      "sourceScreenshot": "assets/items/catalog_screenshots/2X2/{E979E688-0FB8-4D82-BED5-C0FA4B86B848}.png",
+      "sourceScreenshotSha256": "dc9ce35eaf9fe92425a27cf64d387838a4ae0a199c5333841dbaa8b2d36a1d6c",
+      "bbox": [
+        779,
+        275,
+        366,
+        236
+      ],
+      "cropRelativePath": "assets/items/reference_crops_v1/image21-0-1.png",
+      "cropSha256": "bd68908f8ac45cdc61c54c179b46792685ab9fbe88afcacc0c5df96529c0da40",
+      "evidence": "USER_SCREENSHOT_VERIFIED:'四角魔方'"
+    },
+    {
+      "catalogId": "image22-0-0",
+      "name": "圣铃晶石",
+      "quality": "紫",
+      "shape": "1x2",
+      "value": 4481,
+      "sourceScreenshot": "assets/items/catalog_screenshots/1X2/{DC23CF1B-F79F-40AF-BB9F-5CB790598626}.png",
+      "sourceScreenshotSha256": "5b7af849aff4c329714ff001e03c3d1e25bc669e624d36f8239fdf2d8567bba4",
+      "bbox": [
+        390,
+        272,
+        364,
+        236
+      ],
+      "cropRelativePath": "assets/items/reference_crops_v1/image22-0-0.png",
+      "cropSha256": "e7c9ca55c4a9471272e284ff742f9194ee77f629d50aa56a74a8e49a050b7af4",
+      "evidence": "USER_SCREENSHOT_VERIFIED:'圣铃晶石'"
+    },
+    {
+      "catalogId": "image23-0-1",
+      "name": "饕目",
+      "quality": "紫",
+      "shape": "1x1",
+      "value": 3060,
+      "sourceScreenshot": "assets/items/catalog_screenshots/1x1/{16B07C02-E13A-4195-8F67-C8A4041C7B87}.png",
+      "sourceScreenshotSha256": "9f98e96a63192b44e90e4c530f754d268605fe8283da2b013cde608ac615ccc4",
+      "bbox": [
+        0,
+        0,
+        390,
+        271
+      ],
+      "cropRelativePath": "assets/items/reference_crops_v1/image23-0-1.png",
+      "cropSha256": "4dc1e2cf78b63c1c61a1049a48971a7bfb91eb8f608be076c92ea49c2d6d98b0",
+      "evidence": "USER_SCREENSHOT_VERIFIED:'饕目'"
+    },
+    {
+      "catalogId": "image25-0-0",
+      "name": "弹性球",
+      "quality": "紫",
+      "shape": "1x1",
+      "value": 1992,
+      "sourceScreenshot": "assets/items/catalog_screenshots/1x1/{46C9F0D7-4495-419F-9A04-544A2E375631}.png",
+      "sourceScreenshotSha256": "e0df940f362f4583c644144ab611bd8ff0aff5682eb2d14609324f6cdc430470",
+      "bbox": [
+        771,
+        260,
+        385,
+        261
+      ],
+      "cropRelativePath": "assets/items/reference_crops_v1/image25-0-0.png",
+      "cropSha256": "64d757b3c49beb30d44d7de9796f59bfc652de4b798e5b0f6f4ade01d85e1543",
+      "evidence": "USER_SCREENSHOT_VERIFIED:'弹性球'"
+    },
+    {
+      "catalogId": "image26-1-1",
+      "name": "条纹鲷",
+      "quality": "金",
+      "shape": "4x3",
+      "value": 101537,
+      "sourceScreenshot": "assets/items/catalog_screenshots/4X3/{3B7415AC-3F8D-4DEE-B5F6-C48D50626046}.png",
+      "sourceScreenshotSha256": "b010fadbdf849fe0d585d2f7120495efd92ab2a2ba63f7b8a2116127fbc7c67e",
+      "bbox": [
+        398,
+        23,
+        366,
+        236
+      ],
+      "cropRelativePath": "assets/items/reference_crops_v1/image26-1-1.png",
+      "cropSha256": "2c5e4c52605e3eec7256f6a07172ffd48d8b276d7750aeeb653126866d7a5445",
+      "evidence": "USER_SCREENSHOT_VERIFIED:'条纹鲷'"
+    },
+    {
+      "catalogId": "image27-1-0",
+      "name": "浅维祈手办",
+      "quality": "金",
+      "shape": "3x3",
+      "value": 30264,
+      "sourceScreenshot": "assets/items/catalog_screenshots/3X3/{AF7A8555-2180-49BC-9395-F0DD5444F0EE}.png",
+      "sourceScreenshotSha256": "52c13ad0ec367c44ca512749fe03cfb1106c7f9c814a468d588249c1235dbdaf",
+      "bbox": [
+        28,
+        298,
+        366,
+        236
+      ],
+      "cropRelativePath": "assets/items/reference_crops_v1/image27-1-0.png",
+      "cropSha256": "22b7bf7449597f19327d0d70ea6d0eb3f6665d421054ae1716eeeb5282c9e70f",
+      "evidence": "USER_SCREENSHOT_VERIFIED:'浅维祈手办'"
+    },
+    {
+      "catalogId": "image28-1-1",
+      "name": "心猎铁骑L3——以当千",
+      "quality": "金",
+      "shape": "2x3",
+      "value": 22297,
+      "sourceScreenshot": "assets/items/catalog_screenshots/2X3/{5432C3CC-00E0-43D0-8461-DD6A7E64552D}.png",
+      "sourceScreenshotSha256": "b7c9219049c3f10b1452cd3b196515759373fc72ca2203b358a6f1ac2a0d160c",
+      "bbox": [
+        400,
+        24,
+        366,
+        236
+      ],
+      "cropRelativePath": "assets/items/reference_crops_v1/image28-1-1.png",
+      "cropSha256": "a2dc25015593863a1f84039ed8c22a8764101afeba941fb14c3eda1c0b9bb6f2",
+      "evidence": "USER_SCREENSHOT_VERIFIED:'心猎铁骑L3——以当千'"
+    },
+    {
+      "catalogId": "image30-0-1",
+      "name": "盈雪点翠",
+      "quality": "金",
+      "shape": "2x2",
+      "value": 15037,
+      "sourceScreenshot": "assets/items/catalog_screenshots/2X2/{9D299A9A-2D8E-417A-A566-BC92C203B40B}.png",
+      "sourceScreenshotSha256": "98d67b8ebfb1136178cb7b3897abc3cdd14c6c9cd6607f44d01124e6c8f77fe1",
+      "bbox": [
+        773,
+        17,
+        366,
+        236
+      ],
+      "cropRelativePath": "assets/items/reference_crops_v1/image30-0-1.png",
+      "cropSha256": "1f0df6560a6bdb3937a5a493389d23e34d8792af06a000fbe4a9cd8e6adc163a",
+      "evidence": "USER_SCREENSHOT_VERIFIED:'盈雪点翠'"
+    },
+    {
+      "catalogId": "image30-1-1",
+      "name": "「方盒科技」电容笔",
+      "quality": "金",
+      "shape": "1x3",
+      "value": 12116,
+      "sourceScreenshot": "assets/items/catalog_screenshots/1X3/{8443FC6A-7C86-4902-BAB8-454E077003BF}.png",
+      "sourceScreenshotSha256": "6f824c36d49ed95947cd348d392dfeb3cf9c32fc283f2827ac107850f83bca64",
+      "bbox": [
+        12,
+        286,
+        366,
+        239
+      ],
+      "cropRelativePath": "assets/items/reference_crops_v1/image30-1-1.png",
+      "cropSha256": "d42369b8696330158476eb9de67e0588d208df2b70eac2bc4ea92f70cff12328",
+      "evidence": "USER_SCREENSHOT_VERIFIED:'「方盒科技」电容笔'"
+    },
+    {
+      "catalogId": "image30-1-2",
+      "name": "「方盒科技」充电宝",
+      "quality": "金",
+      "shape": "2x2",
+      "value": 11981,
+      "sourceScreenshot": "assets/items/catalog_screenshots/2X2/{9D299A9A-2D8E-417A-A566-BC92C203B40B}.png",
+      "sourceScreenshotSha256": "98d67b8ebfb1136178cb7b3897abc3cdd14c6c9cd6607f44d01124e6c8f77fe1",
+      "bbox": [
+        11,
+        272,
+        366,
+        236
+      ],
+      "cropRelativePath": "assets/items/reference_crops_v1/image30-1-2.png",
+      "cropSha256": "becff17b420804096934550a035a1f4cb0ae24b23860ccb624ef2948723a4161",
+      "evidence": "USER_SCREENSHOT_VERIFIED:'「方盒科技」充电宝'"
+    },
+    {
+      "catalogId": "image31-1-1",
+      "name": "绒默花瓣",
+      "quality": "金",
+      "shape": "2x1",
+      "value": 7547,
+      "sourceScreenshot": "assets/items/catalog_screenshots/2X1/{82CFB2D0-B389-4430-B693-85C796393974}.png",
+      "sourceScreenshotSha256": "f20d22e344b30ff3d790da9f8309254e835add8920c2afbe7e3eb0f440fc3089",
+      "bbox": [
+        394,
+        30,
+        366,
+        236
+      ],
+      "cropRelativePath": "assets/items/reference_crops_v1/image31-1-1.png",
+      "cropSha256": "c1373b0c45d1c1940ff43f4892cdd63c83d0ff1fd514eec5ac79ad53ae340ec0",
+      "evidence": "USER_SCREENSHOT_VERIFIED:'绒默花瓣'"
+    },
+    {
+      "catalogId": "image31-1-2",
+      "name": "「方盒科技」智能手表",
+      "quality": "金",
+      "shape": "1x2",
+      "value": 7500,
+      "sourceScreenshot": "assets/items/catalog_screenshots/1X2/{343D8F72-4689-4286-AFFD-80CEC2496DC7}.png",
+      "sourceScreenshotSha256": "f15baceac87e3e0ff496040f2184991f71a94eeb4b7818efeb8654255646db29",
+      "bbox": [
+        770,
+        278,
+        366,
+        236
+      ],
+      "cropRelativePath": "assets/items/reference_crops_v1/image31-1-2.png",
+      "cropSha256": "9fbcd4ef9ddd8f5a303c1eb3f7f4facf29fb04b702934332480b13c16fc7fdf6",
+      "evidence": "USER_SCREENSHOT_VERIFIED:'「方盒科技」智能手表'"
+    },
+    {
+      "catalogId": "image33-0-2",
+      "name": "「永恒之心」",
+      "quality": "红",
+      "shape": "1x1",
+      "value": 1314520,
+      "sourceScreenshot": "assets/items/catalog_screenshots/1x1/{9138F8CF-782A-4086-937D-FAF3CD4E810B}.png",
+      "sourceScreenshotSha256": "e843bdbfe7adb53ec5e8c73f13692e10c075548aa615932535b5bd50df19eda2",
+      "bbox": [
+        10,
+        22,
+        366,
+        236
+      ],
+      "cropRelativePath": "assets/items/reference_crops_v1/image33-0-2.png",
+      "cropSha256": "a2bb28af2cb0ec9c751a5077e0932158521243b60cd51946313f00978c432d5a",
+      "evidence": "USER_SCREENSHOT_VERIFIED:'「永恒之心」'"
+    },
+    {
+      "catalogId": "image35-0-1",
+      "name": "「几何」摆件",
+      "quality": "红",
+      "shape": "1x1",
+      "value": 61803,
+      "sourceScreenshot": "assets/items/catalog_screenshots/1x1/{9138F8CF-782A-4086-937D-FAF3CD4E810B}.png",
+      "sourceScreenshotSha256": "e843bdbfe7adb53ec5e8c73f13692e10c075548aa615932535b5bd50df19eda2",
+      "bbox": [
+        391,
+        22,
+        366,
+        236
+      ],
+      "cropRelativePath": "assets/items/reference_crops_v1/image35-0-1.png",
+      "cropSha256": "9013847c16792c3cba974b44918b6776ccb3ed17bae4c9cbbc26c45e33c9e29f",
+      "evidence": "USER_SCREENSHOT_VERIFIED:'「几何」摆件'"
+    },
+    {
+      "catalogId": "image35-1-2",
+      "name": "「泪滴」",
+      "quality": "红",
+      "shape": "1x1",
+      "value": 50000,
+      "sourceScreenshot": "assets/items/catalog_screenshots/1x1/{9138F8CF-782A-4086-937D-FAF3CD4E810B}.png",
+      "sourceScreenshotSha256": "e843bdbfe7adb53ec5e8c73f13692e10c075548aa615932535b5bd50df19eda2",
+      "bbox": [
+        10,
+        277,
+        366,
+        236
+      ],
+      "cropRelativePath": "assets/items/reference_crops_v1/image35-1-2.png",
+      "cropSha256": "e425ecad0375a70284028389ca5d1b9ca7f4b8dfd9f2b406243a8548c6fffdc3",
+      "evidence": "USER_SCREENSHOT_VERIFIED:'「泪滴」'"
+    },
+    {
+      "catalogId": "image36-0-0",
+      "name": "「摇星」",
+      "quality": "红",
+      "shape": "2x2",
+      "value": 31618,
+      "sourceScreenshot": "assets/items/catalog_screenshots/2X2/{3D2983C4-2C10-49CB-8E12-4E20E57E0F4C}.png",
+      "sourceScreenshotSha256": "d2dcded2e611ec8c196ddb345ebe89bf16b374c37b18eef3ccc723f4f81a4a7c",
+      "bbox": [
+        17,
+        281,
+        366,
+        236
+      ],
+      "cropRelativePath": "assets/items/reference_crops_v1/image36-0-0.png",
+      "cropSha256": "f85b95d23cc1084d0cc0873de8843a535d5dbaebaa9d455f7b8ae1ef88852f9c",
+      "evidence": "USER_SCREENSHOT_VERIFIED:'「摇星」'"
+    },
+    {
+      "catalogId": "image36-0-1",
+      "name": "酥酥酥天井",
+      "quality": "红",
+      "shape": "2x1",
+      "value": 29977,
+      "sourceScreenshot": "assets/items/catalog_screenshots/2X1/{C3E32ADB-9348-4FE5-B70F-C7B9F66B659A}.png",
+      "sourceScreenshotSha256": "ebe363d313d37deae24e1d9c372128d06fe2d9344e705412e891c291612cd4fc",
+      "bbox": [
+        20,
+        272,
+        366,
+        268
+      ],
+      "cropRelativePath": "assets/items/reference_crops_v1/image36-0-1.png",
+      "cropSha256": "9fd776cd0103397c34619b806cabf7b39f300e346c11f053ef5a5e86d63fa875",
+      "evidence": "USER_SCREENSHOT_VERIFIED:'酥酥酥天井'"
+    },
+    {
+      "catalogId": "image5-1-1",
+      "name": "「莲-C198」唱片机",
+      "quality": "绿",
+      "shape": "2x2",
+      "value": 1624,
+      "sourceScreenshot": "assets/items/catalog_screenshots/2X2/{DFB6F983-7A0D-41C6-AB47-6C150B5F7770}.png",
+      "sourceScreenshotSha256": "c06571615098094064711d59881537eca676fc07420d0153c1f787afcb77ea69",
+      "bbox": [
+        387,
+        259,
+        387,
+        259
+      ],
+      "cropRelativePath": "assets/items/reference_crops_v1/image5-1-1.png",
+      "cropSha256": "cee6f70d763253bf5a93cc096344b20668065ef5cf5448e365464339e9ab8fd7",
+      "evidence": "USER_SCREENSHOT_VERIFIED:'「莲-C198」唱片机'"
+    },
+    {
+      "catalogId": "image5-1-2",
+      "name": "「烘焙伴侣」抹茶粉",
+      "quality": "绿",
+      "shape": "1x2",
+      "value": 1353,
+      "sourceScreenshot": "assets/items/catalog_screenshots/1X2/{F1E0B7B4-D27E-4BF5-A471-40C0FDDDAFE6}.png",
+      "sourceScreenshotSha256": "e8f052691c008a5d2f107814eeab729818d0abbb2e3b2f9110467861046a6dcb",
+      "bbox": [
+        21,
+        275,
+        366,
+        236
+      ],
+      "cropRelativePath": "assets/items/reference_crops_v1/image5-1-2.png",
+      "cropSha256": "8c3561dfa63a56417b94d92e98a0311d78c7ff85900d968d84a661c03a40f316",
+      "evidence": "USER_SCREENSHOT_VERIFIED:'「烘焙伴侣」抹茶粉'"
+    },
+    {
+      "catalogId": "image6-0-2",
+      "name": "巡弋轮滑",
+      "quality": "绿",
+      "shape": "2x1",
+      "value": 1210,
+      "sourceScreenshot": "assets/items/catalog_screenshots/2X1/{E065324C-AC60-41CF-B56A-8043A3B76C53}.png",
+      "sourceScreenshotSha256": "cf0981c366d1f48083a3c7f2acd476edbd941eca32a1c1ab587224d2d26148e5",
+      "bbox": [
+        10,
+        275,
+        366,
+        236
+      ],
+      "cropRelativePath": "assets/items/reference_crops_v1/image6-0-2.png",
+      "cropSha256": "9058bd92f8f3cb044e2d110e2e2b23a31bd615db6abe51030afe9b885b773de7",
+      "evidence": "USER_SCREENSHOT_VERIFIED:'巡弋轮滑'"
+    },
+    {
+      "catalogId": "image6-1-1",
+      "name": "断线之筝",
+      "quality": "绿",
+      "shape": "1x2",
+      "value": 1072,
+      "sourceScreenshot": "assets/items/catalog_screenshots/1X2/{F1E0B7B4-D27E-4BF5-A471-40C0FDDDAFE6}.png",
+      "sourceScreenshotSha256": "e8f052691c008a5d2f107814eeab729818d0abbb2e3b2f9110467861046a6dcb",
+      "bbox": [
+        776,
+        262,
+        388,
+        261
+      ],
+      "cropRelativePath": "assets/items/reference_crops_v1/image6-1-1.png",
+      "cropSha256": "13fe10264f24571c146eddf4a2d9b01e01aa1b1d592bf0baf38960b3d5945762",
+      "evidence": "USER_SCREENSHOT_VERIFIED:'断线之筝'"
+    },
+    {
+      "catalogId": "image7-1-1",
+      "name": "吃薯片用洗指机",
+      "quality": "绿",
+      "shape": "2x1",
+      "value": 1040,
+      "sourceScreenshot": "assets/items/catalog_screenshots/2X1/{48710325-8642-4753-AAFD-302E079D2B93}.png",
+      "sourceScreenshotSha256": "24b1a803efaa5a13edc21494a4aa5d266026e5424327dca035b8cf63b3d08bba",
+      "bbox": [
+        778,
+        0,
+        388,
+        265
+      ],
+      "cropRelativePath": "assets/items/reference_crops_v1/image7-1-1.png",
+      "cropSha256": "1d3117e3248df8289061252e15fa5f7305be4c97883ec3372ad5147f1b2f18b5",
+      "evidence": "USER_SCREENSHOT_VERIFIED:'吃薯片用洗指机'"
+    },
+    {
+      "catalogId": "image7-1-2",
+      "name": "梦中茧",
+      "quality": "绿",
+      "shape": "2x2",
+      "value": 918,
+      "sourceScreenshot": "assets/items/catalog_screenshots/1X2/{39EB6D1F-C312-4C1E-A622-BFADD00F264F}.png",
+      "sourceScreenshotSha256": "0024658bc1d009e357b95cd25681f5fb1ff804faabccabe85e12a12924fd7138",
+      "bbox": [
+        776,
+        24,
+        366,
+        236
+      ],
+      "cropRelativePath": "assets/items/reference_crops_v1/image7-1-2.png",
+      "cropSha256": "c475755c9865967502ffdd0f58a23a7f856059d2540c209080e2773c10376316",
+      "evidence": "USER_SCREENSHOT_VERIFIED:'梦中茧'"
+    },
+    {
+      "catalogId": "image9-0-2",
+      "name": "拍拍球",
+      "quality": "绿",
+      "shape": "1x1",
+      "value": 548,
+      "sourceScreenshot": "assets/items/catalog_screenshots/1x1/{9A13C48F-EF9F-4E97-80BF-F2DF347E15DD}.png",
+      "sourceScreenshotSha256": "89d7bad3a71362066a37d6320ca33b3cec047a712298a081568448391a386b9a",
+      "bbox": [
+        783,
+        273,
+        366,
+        236
+      ],
+      "cropRelativePath": "assets/items/reference_crops_v1/image9-0-2.png",
+      "cropSha256": "89bca0519471b299ce7c9e9ba5b8ad0d91320bc9ddc0d0e904234022fd452860",
+      "evidence": "USER_SCREENSHOT_VERIFIED:'拍拍球'"
+    },
+    {
+      "catalogId": "image9-1-2",
+      "name": "鎏金盂",
+      "quality": "绿",
+      "shape": "1x1",
+      "value": 496,
+      "sourceScreenshot": "assets/items/catalog_screenshots/1x1/{47545E5E-FC05-4F45-857E-A459326990CC}.png",
+      "sourceScreenshotSha256": "bd6cb12df27f964ebfd3374ef9e16296057caa23f3fbed27b0fdf4f3f1cc7a7e",
+      "bbox": [
+        775,
+        0,
+        387,
+        265
+      ],
+      "cropRelativePath": "assets/items/reference_crops_v1/image9-1-2.png",
+      "cropSha256": "7c9604d8c4f2d178ff3a3fb05d79ed25fe23b57edec819e2a8677667e40ba2d7",
+      "evidence": "USER_SCREENSHOT_VERIFIED:'鎏金盂'"
+    }
+  ],
+  "remainingUnresolvedItems": [
+    {
+      "index": 20,
+      "catalogId": "image2-1-1",
+      "officialName": "磨刀石",
+      "quality": "灰",
+      "widthCells": 2,
+      "heightCells": 1,
+      "shape": "2x1",
+      "value": 167,
+      "manifestStatus": "MISSING_UNRESOLVED",
+      "sourceScreenshot": null,
+      "cropRelativePath": null,
+      "cropOnDisk": false,
+      "classification": "已有真实名称但缺程序裁图",
+      "unresolvedReason": "EMPTY_SLOT_TITLE_MISMATCH: Screenshot 2X1/{48710325-8642-4753-AAFD-302E079D2B93}.png contains card '锻刀石' (visual-65250f2f6c5a, value 167) in middle slot; candidate slot [781, 285, 366, 236] is empty. No genuine '磨刀石' card exists in screenshots."
+    }
+  ],
+  "benchmarkVisualUnitsSummary": {
+    "totalItems": 39,
+    "classification": "画面已裁切但身份尚未确认",
+    "canonicalNamePolicy": "严格为 null，仅作为几何分件基准，严禁无依据赋名"
+  }
+}

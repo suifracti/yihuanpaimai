@@ -1,0 +1,315 @@
+{
+  "packVersion": "1.0.0",
+  "description": "Pure Blind Evaluation Queue for GPT independent vision inference. Zero Gemini model predictions or quality hints included.",
+  "totalBlindSlots": 19,
+  "protocol": {
+    "instruction": "Read cropRelativePath + referenceGalleryDirectory/itemCatalogPath and output Top-3 candidate itemIds and predicted quality.",
+    "prohibited": "Do not read human_review_queue.json, pseudo_labels.json, or ground_truth.json."
+  },
+  "items": [
+    {
+      "queueId": "BLIND_REP-01_s01",
+      "representativeId": "REP-01",
+      "slotId": "s01",
+      "cropRelativePath": "experiments/vision_benchmark_v1/crops/crop_REP-01_s01.png",
+      "sourceImage": "assets/settlement_frames/sec_488.jpg",
+      "bbox": [
+        1408,
+        256,
+        1536,
+        384
+      ],
+      "referenceGalleryDirectory": "assets/items/catalog_screenshots",
+      "itemCatalogPath": "assets/catalog_065.json",
+      "priority": "P0"
+    },
+    {
+      "queueId": "BLIND_REP-01_s03",
+      "representativeId": "REP-01",
+      "slotId": "s03",
+      "cropRelativePath": "experiments/vision_benchmark_v1/crops/crop_REP-01_s03.png",
+      "sourceImage": "assets/settlement_frames/sec_488.jpg",
+      "bbox": [
+        1744,
+        480,
+        1872,
+        608
+      ],
+      "referenceGalleryDirectory": "assets/items/catalog_screenshots",
+      "itemCatalogPath": "assets/catalog_065.json",
+      "priority": "P0"
+    },
+    {
+      "queueId": "BLIND_REP-01_s06",
+      "representativeId": "REP-01",
+      "slotId": "s06",
+      "cropRelativePath": "experiments/vision_benchmark_v1/crops/crop_REP-01_s06.png",
+      "sourceImage": "assets/settlement_frames/sec_488.jpg",
+      "bbox": [
+        1664,
+        288,
+        1728,
+        416
+      ],
+      "referenceGalleryDirectory": "assets/items/catalog_screenshots",
+      "itemCatalogPath": "assets/catalog_065.json",
+      "priority": "P1"
+    },
+    {
+      "queueId": "BLIND_REP-01_s09",
+      "representativeId": "REP-01",
+      "slotId": "s09",
+      "cropRelativePath": "experiments/vision_benchmark_v1/crops/crop_REP-01_s09.png",
+      "sourceImage": "assets/settlement_frames/sec_488.jpg",
+      "bbox": [
+        1440,
+        528,
+        1504,
+        576
+      ],
+      "referenceGalleryDirectory": "assets/items/catalog_screenshots",
+      "itemCatalogPath": "assets/catalog_065.json",
+      "priority": "P1"
+    },
+    {
+      "queueId": "BLIND_REP-01_s11",
+      "representativeId": "REP-01",
+      "slotId": "s11",
+      "cropRelativePath": "experiments/vision_benchmark_v1/crops/crop_REP-01_s11.png",
+      "sourceImage": "assets/settlement_frames/sec_488.jpg",
+      "bbox": [
+        1728,
+        560,
+        1792,
+        624
+      ],
+      "referenceGalleryDirectory": "assets/items/catalog_screenshots",
+      "itemCatalogPath": "assets/catalog_065.json",
+      "priority": "P1"
+    },
+    {
+      "queueId": "BLIND_REP-01_s12",
+      "representativeId": "REP-01",
+      "slotId": "s12",
+      "cropRelativePath": "experiments/vision_benchmark_v1/crops/crop_REP-01_s12.png",
+      "sourceImage": "assets/settlement_frames/sec_488.jpg",
+      "bbox": [
+        1744,
+        608,
+        1808,
+        672
+      ],
+      "referenceGalleryDirectory": "assets/items/catalog_screenshots",
+      "itemCatalogPath": "assets/catalog_065.json",
+      "priority": "P1"
+    },
+    {
+      "queueId": "BLIND_REP-01_s13",
+      "representativeId": "REP-01",
+      "slotId": "s13",
+      "cropRelativePath": "experiments/vision_benchmark_v1/crops/crop_REP-01_s13.png",
+      "sourceImage": "assets/settlement_frames/sec_488.jpg",
+      "bbox": [
+        1680,
+        256,
+        1744,
+        320
+      ],
+      "referenceGalleryDirectory": "assets/items/catalog_screenshots",
+      "itemCatalogPath": "assets/catalog_065.json",
+      "priority": "P1"
+    },
+    {
+      "queueId": "BLIND_REP-01_s15",
+      "representativeId": "REP-01",
+      "slotId": "s15",
+      "cropRelativePath": "experiments/vision_benchmark_v1/crops/crop_REP-01_s15.png",
+      "sourceImage": "assets/settlement_frames/sec_488.jpg",
+      "bbox": [
+        1472,
+        480,
+        1536,
+        544
+      ],
+      "referenceGalleryDirectory": "assets/items/catalog_screenshots",
+      "itemCatalogPath": "assets/catalog_065.json",
+      "priority": "P1"
+    },
+    {
+      "queueId": "BLIND_REP-02_s01",
+      "representativeId": "REP-02",
+      "slotId": "s01",
+      "cropRelativePath": "experiments/vision_benchmark_v1/crops/crop_REP-02_s01.png",
+      "sourceImage": "core/settlement_items_crop.png",
+      "bbox": [
+        92,
+        100,
+        230,
+        230
+      ],
+      "referenceGalleryDirectory": "assets/items/catalog_screenshots",
+      "itemCatalogPath": "assets/catalog_065.json",
+      "priority": "P0"
+    },
+    {
+      "queueId": "BLIND_REP-02_s11",
+      "representativeId": "REP-02",
+      "slotId": "s11",
+      "cropRelativePath": "experiments/vision_benchmark_v1/crops/crop_REP-02_s11.png",
+      "sourceImage": "core/settlement_items_crop.png",
+      "bbox": [
+        65,
+        155,
+        90,
+        180
+      ],
+      "referenceGalleryDirectory": "assets/items/catalog_screenshots",
+      "itemCatalogPath": "assets/catalog_065.json",
+      "priority": "P0"
+    },
+    {
+      "queueId": "BLIND_REP-02_s18",
+      "representativeId": "REP-02",
+      "slotId": "s18",
+      "cropRelativePath": "experiments/vision_benchmark_v1/crops/crop_REP-02_s18.png",
+      "sourceImage": "core/settlement_items_crop.png",
+      "bbox": [
+        250,
+        265,
+        275,
+        295
+      ],
+      "referenceGalleryDirectory": "assets/items/catalog_screenshots",
+      "itemCatalogPath": "assets/catalog_065.json",
+      "priority": "P1"
+    },
+    {
+      "queueId": "BLIND_REP-04_s04",
+      "representativeId": "REP-04",
+      "slotId": "s04",
+      "cropRelativePath": "experiments/vision_benchmark_v1/crops/crop_REP-04_s04.png",
+      "sourceImage": "assets/video_frames/sec_210.jpg",
+      "bbox": [
+        790,
+        305,
+        830,
+        365
+      ],
+      "referenceGalleryDirectory": "assets/items/catalog_screenshots",
+      "itemCatalogPath": "assets/catalog_065.json",
+      "priority": "P0"
+    },
+    {
+      "queueId": "BLIND_REP-04_s05",
+      "representativeId": "REP-04",
+      "slotId": "s05",
+      "cropRelativePath": "experiments/vision_benchmark_v1/crops/crop_REP-04_s05.png",
+      "sourceImage": "assets/video_frames/sec_210.jpg",
+      "bbox": [
+        875,
+        255,
+        895,
+        295
+      ],
+      "referenceGalleryDirectory": "assets/items/catalog_screenshots",
+      "itemCatalogPath": "assets/catalog_065.json",
+      "priority": "P0"
+    },
+    {
+      "queueId": "BLIND_REP-04_s08",
+      "representativeId": "REP-04",
+      "slotId": "s08",
+      "cropRelativePath": "experiments/vision_benchmark_v1/crops/crop_REP-04_s08.png",
+      "sourceImage": "assets/video_frames/sec_210.jpg",
+      "bbox": [
+        875,
+        365,
+        900,
+        410
+      ],
+      "referenceGalleryDirectory": "assets/items/catalog_screenshots",
+      "itemCatalogPath": "assets/catalog_065.json",
+      "priority": "P1"
+    },
+    {
+      "queueId": "BLIND_REP-04_s09",
+      "representativeId": "REP-04",
+      "slotId": "s09",
+      "cropRelativePath": "experiments/vision_benchmark_v1/crops/crop_REP-04_s09.png",
+      "sourceImage": "assets/video_frames/sec_210.jpg",
+      "bbox": [
+        875,
+        410,
+        900,
+        450
+      ],
+      "referenceGalleryDirectory": "assets/items/catalog_screenshots",
+      "itemCatalogPath": "assets/catalog_065.json",
+      "priority": "P1"
+    },
+    {
+      "queueId": "BLIND_REP-05_s01",
+      "representativeId": "REP-05",
+      "slotId": "s01",
+      "cropRelativePath": "experiments/vision_benchmark_v1/crops/crop_REP-05_s01.png",
+      "sourceImage": "build/live_fail/t004.jpg",
+      "bbox": [
+        1400,
+        300,
+        1550,
+        450
+      ],
+      "referenceGalleryDirectory": "assets/items/catalog_screenshots",
+      "itemCatalogPath": "assets/catalog_065.json",
+      "priority": "P1"
+    },
+    {
+      "queueId": "BLIND_REP-05_s02",
+      "representativeId": "REP-05",
+      "slotId": "s02",
+      "cropRelativePath": "experiments/vision_benchmark_v1/crops/crop_REP-05_s02.png",
+      "sourceImage": "build/live_fail/t004.jpg",
+      "bbox": [
+        1550,
+        300,
+        1700,
+        450
+      ],
+      "referenceGalleryDirectory": "assets/items/catalog_screenshots",
+      "itemCatalogPath": "assets/catalog_065.json",
+      "priority": "P1"
+    },
+    {
+      "queueId": "BLIND_REP-05_s03",
+      "representativeId": "REP-05",
+      "slotId": "s03",
+      "cropRelativePath": "experiments/vision_benchmark_v1/crops/crop_REP-05_s03.png",
+      "sourceImage": "build/live_fail/t004.jpg",
+      "bbox": [
+        1400,
+        450,
+        1480,
+        530
+      ],
+      "referenceGalleryDirectory": "assets/items/catalog_screenshots",
+      "itemCatalogPath": "assets/catalog_065.json",
+      "priority": "P1"
+    },
+    {
+      "queueId": "BLIND_REP-05_s04",
+      "representativeId": "REP-05",
+      "slotId": "s04",
+      "cropRelativePath": "experiments/vision_benchmark_v1/crops/crop_REP-05_s04.png",
+      "sourceImage": "build/live_fail/t004.jpg",
+      "bbox": [
+        1480,
+        450,
+        1560,
+        530
+      ],
+      "referenceGalleryDirectory": "assets/items/catalog_screenshots",
+      "itemCatalogPath": "assets/catalog_065.json",
+      "priority": "P1"
+    }
+  ]
+}

@@ -1,0 +1,92 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://yihuanpaimai.local/schemas/settlement-truth-review-v1.schema.json",
+  "title": "Settlement Truth Review v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "reviewId",
+    "matchId",
+    "action",
+    "originalActualTotal",
+    "reviewedActualTotal",
+    "sourceTruthPayloadSha256",
+    "evidenceUri",
+    "evidenceSha256",
+    "reviewer",
+    "reviewedAt",
+    "reviewMethod",
+    "reviewVersion",
+    "codeRevision",
+    "reviewPayloadSha256"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "const": "settlement-truth-review.v1"
+    },
+    "reviewId": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "matchId": {
+      "type": "string",
+      "minLength": 1
+    },
+    "action": {
+      "enum": ["confirmed", "corrected", "rejected"]
+    },
+    "originalActualTotal": {
+      "type": "number",
+      "exclusiveMinimum": 0
+    },
+    "reviewedActualTotal": {
+      "type": ["number", "null"]
+    },
+    "sourceTruthPayloadSha256": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "evidenceUri": {
+      "type": "string",
+      "minLength": 1
+    },
+    "evidenceSha256": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "reviewer": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["type", "id"],
+      "properties": {
+        "type": {
+          "const": "reviewer"
+        },
+        "id": {
+          "type": "string",
+          "minLength": 1
+        }
+      }
+    },
+    "reviewedAt": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "reviewMethod": {
+      "const": "human_screenshot_audit_v1"
+    },
+    "reviewVersion": {
+      "type": "string",
+      "minLength": 1
+    },
+    "codeRevision": {
+      "type": "string",
+      "minLength": 1
+    },
+    "reviewPayloadSha256": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    }
+  }
+}

@@ -1,0 +1,29 @@
+{
+  "auditVersion": "venue-box-legacy-history-classification.v1",
+  "sourcePath": "异环拍卖数据.json",
+  "sourceSha256": "6a9695f8ef44058f2c369ac1bd1407a6306a327b63d1c0a160631d5348ed699a",
+  "recordCount": 290,
+  "approvedCatalogAvailable": false,
+  "counts": {
+    "CATALOG_VALID_CURRENT": 0,
+    "LEGACY_ALIAS": 286,
+    "UNVERIFIED": 0,
+    "CONFLICT": 0,
+    "UNKNOWN": 4
+  },
+  "reasonCounts": {
+    "LEGACY_BOX_NAMESPACE": 225,
+    "LEGACY_TIER_NAMESPACE": 40,
+    "LEGACY_VENUE_NAMESPACE": 223,
+    "NO_APPROVED_CURRENT_CATALOG": 286,
+    "NO_USABLE_VENUE_TIER_OR_BOX": 4
+  },
+  "interpretation": {
+    "CATALOG_VALID_CURRENT": "Validated against an approved current-game catalog; impossible until such a catalog exists.",
+    "LEGACY_ALIAS": "Matches a historical repository namespace only; this does not assert game truth or a canonical alias.",
+    "UNVERIFIED": "Contains a value with no current approved catalog interpretation.",
+    "CONFLICT": "The same record contains contradictory duplicate representations.",
+    "UNKNOWN": "No usable venue, tier, or box observation is present."
+  },
+  "historyMutated": false
+}

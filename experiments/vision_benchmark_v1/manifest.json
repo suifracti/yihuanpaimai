@@ -1,0 +1,262 @@
+{
+  "benchmarkVersion": "1.0.0",
+  "createdAt": "2026-08-20T13:52:00+08:00",
+  "description": "Formal Vision Benchmark v1 for historical settlement & warehouse item recognition across Gemini, GPT, and local OCR/CV.",
+  "dataset": [
+    {
+      "benchmarkId": "BM1-01",
+      "imagePath": "assets/settlement_frames/sec_488.jpg",
+      "difficulty": "clear",
+      "imageType": "settlement_screen_1080p",
+      "warehouseRegion": {
+        "x": 1400,
+        "y": 240,
+        "w": 460,
+        "h": 460
+      },
+      "declaredQ": 10,
+      "actualTotal": 972970,
+      "totalVisibleItems": 15,
+      "verifiedSlotsCount": 15,
+      "hasIndependentGroundTruth": true
+    },
+    {
+      "benchmarkId": "BM1-02",
+      "imagePath": "assets/settlement_frames/sec_478.jpg",
+      "difficulty": "clear",
+      "imageType": "settlement_popup_1080p",
+      "warehouseRegion": {
+        "x": 1400,
+        "y": 240,
+        "w": 460,
+        "h": 460
+      },
+      "declaredQ": 10,
+      "actualTotal": 972970,
+      "totalVisibleItems": 15,
+      "verifiedSlotsCount": 15,
+      "hasIndependentGroundTruth": true
+    },
+    {
+      "benchmarkId": "BM1-03",
+      "imagePath": "assets/settlement_frames/sec_473.jpg",
+      "difficulty": "clear",
+      "imageType": "settlement_screen_1080p",
+      "warehouseRegion": {
+        "x": 1400,
+        "y": 240,
+        "w": 460,
+        "h": 460
+      },
+      "declaredQ": 10,
+      "actualTotal": 972970,
+      "totalVisibleItems": 15,
+      "verifiedSlotsCount": 15,
+      "hasIndependentGroundTruth": true
+    },
+    {
+      "benchmarkId": "BM1-04",
+      "imagePath": "core/settlement_items_crop.png",
+      "difficulty": "clear",
+      "imageType": "warehouse_grid_crop",
+      "warehouseRegion": {
+        "x": 0,
+        "y": 0,
+        "w": 286,
+        "h": 329
+      },
+      "declaredQ": 10,
+      "actualTotal": null,
+      "totalVisibleItems": 20,
+      "verifiedSlotsCount": 20,
+      "hasIndependentGroundTruth": true
+    },
+    {
+      "benchmarkId": "BM1-05",
+      "imagePath": "build/live_auc/t078_grid.png",
+      "difficulty": "clear",
+      "imageType": "warehouse_grid_crop",
+      "warehouseRegion": {
+        "x": 0,
+        "y": 0,
+        "w": 580,
+        "h": 374
+      },
+      "declaredQ": 4,
+      "actualTotal": null,
+      "totalVisibleItems": 8,
+      "verifiedSlotsCount": 8,
+      "hasIndependentGroundTruth": true
+    },
+    {
+      "benchmarkId": "BM1-06",
+      "imagePath": "assets/settlement_frames/sec_468.jpg",
+      "difficulty": "medium",
+      "imageType": "round_5_auction_1080p",
+      "warehouseRegion": {
+        "x": 1400,
+        "y": 240,
+        "w": 460,
+        "h": 460
+      },
+      "declaredQ": 15,
+      "actualTotal": null,
+      "totalVisibleItems": 4,
+      "verifiedSlotsCount": 4,
+      "hasIndependentGroundTruth": true
+    },
+    {
+      "benchmarkId": "BM1-07",
+      "imagePath": "assets/video_frames/sec_480.jpg",
+      "difficulty": "medium",
+      "imageType": "settlement_animated_transition",
+      "warehouseRegion": {
+        "x": 1400,
+        "y": 240,
+        "w": 460,
+        "h": 460
+      },
+      "declaredQ": 10,
+      "actualTotal": 972970,
+      "totalVisibleItems": 15,
+      "verifiedSlotsCount": 15,
+      "hasIndependentGroundTruth": true
+    },
+    {
+      "benchmarkId": "BM1-08",
+      "imagePath": "assets/video_frames/sec_210.jpg",
+      "difficulty": "medium",
+      "imageType": "auction_warehouse_grid_1080p",
+      "warehouseRegion": {
+        "x": 740,
+        "y": 200,
+        "w": 260,
+        "h": 450
+      },
+      "declaredQ": 9,
+      "actualTotal": null,
+      "totalVisibleItems": 18,
+      "verifiedSlotsCount": 18,
+      "hasIndependentGroundTruth": true
+    },
+    {
+      "benchmarkId": "BM1-09",
+      "imagePath": "build/live_auc/t078.jpg",
+      "difficulty": "medium",
+      "imageType": "full_auction_frame_1080p",
+      "warehouseRegion": {
+        "x": 1300,
+        "y": 200,
+        "w": 500,
+        "h": 500
+      },
+      "declaredQ": 4,
+      "actualTotal": null,
+      "totalVisibleItems": 8,
+      "verifiedSlotsCount": 8,
+      "hasIndependentGroundTruth": true
+    },
+    {
+      "benchmarkId": "BM1-10",
+      "imagePath": "assets/video_frames/sec_270.jpg",
+      "difficulty": "medium",
+      "imageType": "auction_warehouse_grid_1080p",
+      "warehouseRegion": {
+        "x": 740,
+        "y": 200,
+        "w": 260,
+        "h": 450
+      },
+      "declaredQ": 9,
+      "actualTotal": null,
+      "totalVisibleItems": 16,
+      "verifiedSlotsCount": 14,
+      "hasIndependentGroundTruth": true
+    },
+    {
+      "benchmarkId": "BM1-11",
+      "imagePath": "build/live_fail/t004.jpg",
+      "difficulty": "hard",
+      "imageType": "low_contrast_live_frame",
+      "warehouseRegion": {
+        "x": 1300,
+        "y": 200,
+        "w": 500,
+        "h": 500
+      },
+      "declaredQ": 6,
+      "actualTotal": null,
+      "totalVisibleItems": 6,
+      "verifiedSlotsCount": 4,
+      "hasIndependentGroundTruth": false
+    },
+    {
+      "benchmarkId": "BM1-12",
+      "imagePath": "assets/video_frames/sec_150.jpg",
+      "difficulty": "hard",
+      "imageType": "partial_card_occlusion_1080p",
+      "warehouseRegion": {
+        "x": 740,
+        "y": 200,
+        "w": 260,
+        "h": 450
+      },
+      "declaredQ": 9,
+      "actualTotal": null,
+      "totalVisibleItems": 10,
+      "verifiedSlotsCount": 8,
+      "hasIndependentGroundTruth": true
+    },
+    {
+      "benchmarkId": "BM1-13",
+      "imagePath": "assets/video_frames/sec_060.jpg",
+      "difficulty": "hard",
+      "imageType": "early_round_sparse_grid",
+      "warehouseRegion": {
+        "x": 740,
+        "y": 200,
+        "w": 260,
+        "h": 450
+      },
+      "declaredQ": 9,
+      "actualTotal": null,
+      "totalVisibleItems": 5,
+      "verifiedSlotsCount": 5,
+      "hasIndependentGroundTruth": true
+    },
+    {
+      "benchmarkId": "BM1-14",
+      "imagePath": "assets/video_frames/sec_030.jpg",
+      "difficulty": "hard",
+      "imageType": "empty_sparse_placement_grid",
+      "warehouseRegion": {
+        "x": 740,
+        "y": 200,
+        "w": 260,
+        "h": 450
+      },
+      "declaredQ": 9,
+      "actualTotal": null,
+      "totalVisibleItems": 3,
+      "verifiedSlotsCount": 3,
+      "hasIndependentGroundTruth": true
+    },
+    {
+      "benchmarkId": "BM1-15",
+      "imagePath": "assets/video_frames/sec_090.jpg",
+      "difficulty": "hard",
+      "imageType": "dynamic_lighting_grid",
+      "warehouseRegion": {
+        "x": 740,
+        "y": 200,
+        "w": 260,
+        "h": 450
+      },
+      "declaredQ": 9,
+      "actualTotal": null,
+      "totalVisibleItems": 7,
+      "verifiedSlotsCount": 6,
+      "hasIndependentGroundTruth": true
+    }
+  ]
+}

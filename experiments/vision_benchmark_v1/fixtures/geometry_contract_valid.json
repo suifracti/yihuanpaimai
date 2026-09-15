@@ -1,0 +1,52 @@
+{
+  "contractVersion": "geometry-contract-v1",
+  "pathBase": "repository_root",
+  "description": "Minimal valid source-pixel geometry fixture. Content review covers crop-to-instance binding only, not canonical item truth.",
+  "sources": [
+    {
+      "sourceId": "src-fixture-rep02",
+      "sourcePath": "core/settlement_items_crop.png",
+      "width": 307,
+      "height": 329,
+      "sceneType": "inventory_crop",
+      "inventoryEligible": true,
+      "inventoryRoi": {
+        "x": 0,
+        "y": 0,
+        "width": 307,
+        "height": 329,
+        "coordinateSpace": "source_pixel"
+      },
+      "coordinateSpace": "source_pixel"
+    }
+  ],
+  "instances": [
+    {
+      "instanceId": "inst-fixture-rep02-teardrop",
+      "sourceId": "src-fixture-rep02",
+      "bbox": [65, 155, 90, 180],
+      "bboxCoordinateSpace": "source_pixel",
+      "footprint": {
+        "widthCells": 1,
+        "heightCells": 1
+      },
+      "canonicalItemId": null,
+      "observationLabel": "pale blue teardrop observation",
+      "contentVerification": {
+        "contentVerified": true,
+        "reviewStatus": "reviewed_consistent",
+        "evidenceType": "manual_review",
+        "scope": "crop_instance_binding_only",
+        "note": "Fixture review confirms only that the crop and bbox refer to one visible physical instance; item identity remains unverified."
+      }
+    }
+  ],
+  "queueSlots": [
+    {
+      "queueId": "queue-fixture-valid-01",
+      "instanceId": "inst-fixture-rep02-teardrop",
+      "cropPath": "experiments/vision_benchmark_v1/crops/crop_REP-02_s11.png",
+      "legacyLocalOrdinal": "REP-02/s11"
+    }
+  ]
+}

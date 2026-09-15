@@ -1,0 +1,19 @@
+{
+  "contractVersion": "geometry-contract-v1",
+  "pathBase": "repository_root",
+  "description": "REP-05 regression: the stored frame is a confirmation/modal scene and is rejected before bbox or crop validation.",
+  "sources": [
+    {
+      "sourceId": "src-regression-rep05",
+      "sourcePath": "build/live_fail/t004.jpg",
+      "width": 1920,
+      "height": 1080,
+      "sceneType": "non_inventory_confirmation_modal",
+      "inventoryEligible": false,
+      "inventoryRoi": null,
+      "coordinateSpace": "source_pixel"
+    }
+  ],
+  "instances": [],
+  "queueSlots": []
+}

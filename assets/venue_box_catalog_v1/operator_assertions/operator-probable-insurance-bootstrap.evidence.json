@@ -1,0 +1,21 @@
+{
+  "schemaVersion": "venue-box-catalog-evidence.v1",
+  "evidenceId": "operator-probable-insurance-bootstrap-2026-08-22",
+  "gameBuild": "live-build-observed-2026-08-22",
+  "capturedAt": "2026-08-22T18:00:00+08:00",
+  "evidenceType": "OPERATOR_ASSERTION",
+  "sourcePath": "assets/venue_box_catalog_v1/operator_assertions/2026-08-22-box-bootstrap-source.json",
+  "sourceSha256": "6644d62d68dc1b564ba331fa3a4f33df2bb750ec0b46191d003638c389441951",
+  "reviewer": "project-owner",
+  "reviewStatus": "APPROVED",
+  "classification": "OPERATOR_ASSERTED_CURRENT",
+  "operatorConfidence": "PROBABLE",
+  "claims": [
+    {"claimType":"VENUE_BOX_MEMBERSHIP","rawGameText":"真珠场 / 完整的保险箱","venueDisplayName":"真珠场","boxDisplayName":"完整的保险箱"},
+    {"claimType":"VENUE_BOX_MEMBERSHIP","rawGameText":"真珠场 / 璀璨的保险箱","venueDisplayName":"真珠场","boxDisplayName":"璀璨的保险箱"},
+    {"claimType":"VENUE_BOX_MEMBERSHIP","rawGameText":"真珠场 / 古典的保险箱","venueDisplayName":"真珠场","boxDisplayName":"古典的保险箱"},
+    {"claimType":"VENUE_BOX_MEMBERSHIP","rawGameText":"真珠场 / 精工的保险箱","venueDisplayName":"真珠场","boxDisplayName":"精工的保险箱"},
+    {"claimType":"VENUE_BOX_MEMBERSHIP","rawGameText":"真珠场 / 奇趣的保险箱","venueDisplayName":"真珠场","boxDisplayName":"奇趣的保险箱"},
+    {"claimType":"VENUE_BOX_MEMBERSHIP","rawGameText":"真珠场 / 锈蚀的保险箱","venueDisplayName":"真珠场","boxDisplayName":"锈蚀的保险箱"}
+  ]
+}

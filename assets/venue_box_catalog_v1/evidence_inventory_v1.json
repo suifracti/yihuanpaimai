@@ -1,0 +1,154 @@
+{
+  "inventoryVersion": 1,
+  "generatedAt": "2026-08-22T14:30:00+08:00",
+  "catalogFreezeStatus": "VENUE_TRUTH_FROZEN_BOX_EVIDENCE_PENDING",
+  "policy": {
+    "currentGameTruthRequires": [
+      "current game build or patch identifier",
+      "timezone-aware capture time",
+      "complete game UI context",
+      "source SHA-256",
+      "approved human review"
+    ],
+    "excludedAsAuthority": [
+      "design documentation",
+      "adapter enums",
+      "current UI hardcodes",
+      "Solver constants",
+      "history frequency",
+      "external calculator naming"
+    ]
+  },
+  "items": [
+    {
+      "inventoryId": "current-game-2026-08-22-venue-selection-full",
+      "sourcePath": "assets/venue_box_catalog_v1/current_game_evidence/2026-08-22/venue-selection-full.png",
+      "sourceSha256": "b397a7bd921aeba6ed165f8ba972641d864672dd9b43c5d04d39179bb1d3d8da",
+      "trackedAtAudit": true,
+      "classification": "CURRENT_GAME_VALID",
+      "observedClaims": [
+        "selectable venue screen shows exactly 海贝场, 珊瑚场, 真珠场",
+        "asset requirements: 0, 1000000, 5000000",
+        "entry costs: 0, 5000, 20000"
+      ],
+      "gaps": ["box option sets", "box effect text", "venue-box membership"]
+    },
+    {
+      "inventoryId": "legacy-session-haibei-t0022",
+      "sourcePath": "assets/ocr_study_frames/live_lobby2/t0022.jpg",
+      "sourceSha256": "0dd68d0dca576402c0e49f18d7ace80b6f8469efe82cb5ee975d6cbcfcafe081",
+      "trackedAtAudit": false,
+      "classification": "LEGACY_GAME_EVIDENCE",
+      "observedClaims": ["exact venue display text: 当前：海贝场"],
+      "gaps": ["gameBuild", "capturedAt", "reviewer", "complete venue option set"]
+    },
+    {
+      "inventoryId": "legacy-session-shanhu-t0048",
+      "sourcePath": "assets/ocr_study_frames/live_lobby2/t0048.jpg",
+      "sourceSha256": "0ba60e71bad24c92b3a629836af3c5a1cec1138f260cad18a581528258d96ffb",
+      "trackedAtAudit": false,
+      "classification": "LEGACY_GAME_EVIDENCE",
+      "observedClaims": ["exact venue display text: 当前：珊瑚场"],
+      "gaps": ["gameBuild", "capturedAt", "reviewer", "complete venue option set"]
+    },
+    {
+      "inventoryId": "derived-template-haibei",
+      "sourcePath": "assets/lobby_venues/海贝场.png",
+      "sourceSha256": "b934a342d705060bc781fc88d709a3143180574905df322e52fa2bcf567a0921",
+      "trackedAtAudit": true,
+      "classification": "DERIVED_ONLY",
+      "observedClaims": ["derived template label: 初级场 · 海贝场"],
+      "gaps": ["full source context", "gameBuild", "capturedAt", "reviewer"]
+    },
+    {
+      "inventoryId": "derived-template-shanhu",
+      "sourcePath": "assets/lobby_venues/珊瑚场.png",
+      "sourceSha256": "f45beaf4a0893ac383ee2745c7bf148bf917c46bee0d6beb36f645ec7ebe2a1c",
+      "trackedAtAudit": true,
+      "classification": "DERIVED_ONLY",
+      "observedClaims": ["derived template label: 中级场 · 珊瑚场"],
+      "gaps": ["full source context", "gameBuild", "capturedAt", "reviewer"]
+    },
+    {
+      "inventoryId": "legacy-stream-insurance-box-033",
+      "sourcePath": "我自己截图的一些资料/高级场箱子/033da4b176d1ca45156c2ef2f9f34cd2_720.png",
+      "sourceSha256": "1f7a30c61405e1146f033a29f532ce713879287cfd728ef64e1e52427b0f2461",
+      "trackedAtAudit": false,
+      "classification": "LEGACY_GAME_EVIDENCE",
+      "observedClaims": ["insurance-box display/effect text visible in game-like UI"],
+      "gaps": ["gameBuild", "capturedAt", "reviewer", "exact venue membership", "complete box option set"]
+    },
+    {
+      "inventoryId": "legacy-stream-insurance-box-23a",
+      "sourcePath": "我自己截图的一些资料/高级场箱子/23a760512d3262a48a9b8087c26ed821_720.png",
+      "sourceSha256": "09e96ddd9d85e447be9de74ca10712a0e68134104030c3a29c800bc868c7e020",
+      "trackedAtAudit": false,
+      "classification": "LEGACY_GAME_EVIDENCE",
+      "observedClaims": ["insurance-box display/effect text visible in game-like UI"],
+      "gaps": ["gameBuild", "capturedAt", "reviewer", "exact venue membership", "complete box option set"]
+    },
+    {
+      "inventoryId": "legacy-stream-insurance-box-464",
+      "sourcePath": "我自己截图的一些资料/高级场箱子/464f0019643a62b6c6b4733370161c20_720.png",
+      "sourceSha256": "8e03802a23e65cbf813eaf485eb4cc4358112669cad57f4c9394d69f2293e18d",
+      "trackedAtAudit": false,
+      "classification": "LEGACY_GAME_EVIDENCE",
+      "observedClaims": ["insurance-box display/effect text visible in game-like UI"],
+      "gaps": ["gameBuild", "capturedAt", "reviewer", "exact venue membership", "complete box option set"]
+    },
+    {
+      "inventoryId": "legacy-stream-insurance-box-f0c",
+      "sourcePath": "我自己截图的一些资料/高级场箱子/f0cb8418d5e56132715a30c696f43630_720.png",
+      "sourceSha256": "ed7e570870e8abb22d174f3b094ea188af2e646ca65e8aec2df468b3c3bd8bdf",
+      "trackedAtAudit": false,
+      "classification": "LEGACY_GAME_EVIDENCE",
+      "observedClaims": ["insurance-box display/effect text visible in game-like UI"],
+      "gaps": ["gameBuild", "capturedAt", "reviewer", "exact venue membership", "complete box option set"]
+    },
+    {
+      "inventoryId": "derived-business-sot-v06",
+      "sourcePath": "assets/business_sot_v06.json",
+      "sourceSha256": "a0a580e01c050d88070cb206c64d395b3b0c1afbdbb3e2703e3b5642af4c8e0b",
+      "trackedAtAudit": true,
+      "classification": "DERIVED_ONLY",
+      "observedClaims": ["three venue family", "package/treasure/insurance box families", "entry-cost table"],
+      "gaps": ["direct current-game evidence", "evidence references for individual claims"]
+    },
+    {
+      "inventoryId": "design-canonical-match-record-v7",
+      "sourcePath": "docs/contracts/canonical-match-record-v7.md",
+      "sourceSha256": "844814fae649e6afe4211e4f846349a9bdb1d4d3dad9ce061aca54a98c510dc5",
+      "trackedAtAudit": true,
+      "classification": "DESIGN_ONLY",
+      "observedClaims": ["venueTier enum includes chuji/zhongji/gaoji/dingji"],
+      "gaps": ["game authority", "current-game evidence"]
+    },
+    {
+      "inventoryId": "derived-project-session-review",
+      "sourcePath": "craft/异环拍卖助手｜项目总文档.md",
+      "sourceSha256": "92016262281fe8bff7555809f950aafe5ed6085df96f583f3a59509448f0d675",
+      "trackedAtAudit": false,
+      "classification": "DERIVED_ONLY",
+      "observedClaims": ["review text describes 海贝场 + 浸水的包裹 and low-tier probability wording"],
+      "gaps": ["referenced source media", "gameBuild", "capturedAt", "formal reviewer identity"]
+    },
+    {
+      "inventoryId": "hardcode-native-manual-options",
+      "sourcePath": "app/main.py",
+      "sourceSha256": "fe83acf5a9f3c2178d7fd44e82c93900bc53e05d6b482f916570268fcc34ec9d",
+      "trackedAtAudit": true,
+      "classification": "DERIVED_ONLY",
+      "observedClaims": ["Manual tier and box option hardcodes"],
+      "gaps": ["game authority", "evidence references"]
+    },
+    {
+      "inventoryId": "hardcode-overlay-manual-options",
+      "sourcePath": "core/overlay_alpha.html",
+      "sourceSha256": "b66ad39c2c9eabcb1ebd22bab26857b29eaf0a5b45177e6d28a55e4210fc455b",
+      "trackedAtAudit": true,
+      "classification": "DERIVED_ONLY",
+      "observedClaims": ["VENUE_TIERS and BOXES_BY_TIER hardcodes"],
+      "gaps": ["game authority", "evidence references"]
+    }
+  ]
+}

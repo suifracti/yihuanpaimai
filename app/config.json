@@ -1,0 +1,34 @@
+{
+  "app": {
+    "name": "异环拍卖战术助手",
+    "version": "0.65",
+    "mode": "live",
+    "comment_mode": "可选值: 'live' (真机实时捕获) 或 'replay' (实战录像回放演示)"
+  },
+  "window": {
+    "targetTitles": ["异环", "NevernessToEverness", "NTE"],
+    "autoSnap": true,
+    "hudWidth": 560,
+    "hudHeight": 78,
+    "snapPaddingRight": 20,
+    "snapPaddingTop": 40,
+    "onTop": true,
+    "transparent": false,
+    "excludeFromCapture": true
+  },
+  "vision": {
+    "captureFps": 8,
+    "ocrElapseThresholdMs": 50,
+    "enableConnectedBlobs": true,
+    "debug": false
+  },
+  "network": {
+    "httpPort": 8765,
+    "wsPort": 8766,
+    "wsHost": "127.0.0.1"
+  },
+  "archiver": {
+    "autoSave": true,
+    "dedupIntervalSeconds": 60
+  }
+}

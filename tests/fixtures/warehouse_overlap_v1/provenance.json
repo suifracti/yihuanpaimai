@@ -1,0 +1,140 @@
+{
+  "schema": "warehouse-overlap-fixture-v1",
+  "createdAt": "2026-08-25T14:16:30Z",
+  "sourcePath": "C:\\Users\\Administrator\\Videos\\2026-08-25 21-58-33.mkv",
+  "sourceSha256": "792d82a772a985831f8cf054a32be4d84bf9da3484396c8ec647b5f24f19c637",
+  "note": "Adjacent warehouse ROI crops from the 2026-08-25 settlement scroll.",
+  "pairs": [
+    {
+      "prev": "pair_a_prev",
+      "next": "pair_a_next",
+      "expect": "DOWN"
+    },
+    {
+      "prev": "pair_b_prev",
+      "next": "pair_b_next",
+      "expect": "DOWN"
+    }
+  ],
+  "frames": [
+    {
+      "role": "pair_a_prev",
+      "file": "pair_a_prev.png",
+      "timecodeSec": 8.0,
+      "sourceSize": {
+        "width": 1920,
+        "height": 1080
+      },
+      "cropRect": [
+        1315,
+        216,
+        1915,
+        847
+      ],
+      "scaled": false,
+      "sha256": "0bbce6ab83d7ca636c6c1df8bfd1819c49efbbdf0473805bbd59cab6e62cab8b"
+    },
+    {
+      "role": "pair_a_next",
+      "file": "pair_a_next.png",
+      "timecodeSec": 12.0,
+      "sourceSize": {
+        "width": 1920,
+        "height": 1080
+      },
+      "cropRect": [
+        1315,
+        216,
+        1915,
+        847
+      ],
+      "scaled": false,
+      "sha256": "0c38eb0cabf4766749c480849848d1476c58ad32f2fda437230a5f360c204641"
+    },
+    {
+      "role": "pair_b_prev",
+      "file": "pair_b_prev.png",
+      "timecodeSec": 12.0,
+      "sourceSize": {
+        "width": 1920,
+        "height": 1080
+      },
+      "cropRect": [
+        1315,
+        216,
+        1915,
+        847
+      ],
+      "scaled": false,
+      "sha256": "0c38eb0cabf4766749c480849848d1476c58ad32f2fda437230a5f360c204641"
+    },
+    {
+      "role": "pair_b_next",
+      "file": "pair_b_next.png",
+      "timecodeSec": 16.0,
+      "sourceSize": {
+        "width": 1920,
+        "height": 1080
+      },
+      "cropRect": [
+        1315,
+        216,
+        1915,
+        847
+      ],
+      "scaled": false,
+      "sha256": "3656bf42b8fbc0bf058785be01c2f982c85e0a483d6ca5f3f3431bef6119b2a9"
+    },
+    {
+      "role": "step10",
+      "file": "step10.png",
+      "timecodeSec": 10.0,
+      "sourceSize": {
+        "width": 1920,
+        "height": 1080
+      },
+      "cropRect": [
+        1315,
+        216,
+        1915,
+        847
+      ],
+      "scaled": false,
+      "sha256": "d8e370e2794a815242c02015af62e2c90cfbcdaf09db5a539bdf1d408040a190"
+    },
+    {
+      "role": "step20",
+      "file": "step20.png",
+      "timecodeSec": 20.0,
+      "sourceSize": {
+        "width": 1920,
+        "height": 1080
+      },
+      "cropRect": [
+        1315,
+        216,
+        1915,
+        847
+      ],
+      "scaled": false,
+      "sha256": "e75675bf61df50d7f77bac78dadc40fe91c0d7f0b26064a7c930a30be5b7b201"
+    },
+    {
+      "role": "bottom",
+      "file": "bottom.png",
+      "timecodeSec": 40.0,
+      "sourceSize": {
+        "width": 1920,
+        "height": 1080
+      },
+      "cropRect": [
+        1315,
+        216,
+        1915,
+        847
+      ],
+      "scaled": false,
+      "sha256": "54287a4d99ec411974a64abceeff49481dc1099a92b3c77f3740f03b5d7bd865"
+    }
+  ]
+}

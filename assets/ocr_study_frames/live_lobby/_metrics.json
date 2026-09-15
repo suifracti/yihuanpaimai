@@ -1,0 +1,622 @@
+{
+  "t0010.jpg": {
+    "fast": {
+      "scene": "CITY_TYCOON_HUB",
+      "auctionEntryVisible": false,
+      "whiteCity": true
+    },
+    "metrics": {
+      "match_btn": {
+        "mean_v": 230.877,
+        "std_v": 12.599,
+        "mean_s": 40.801,
+        "btn_bright": 0.987,
+        "btn_low_sat": 0.833
+      },
+      "venue_card": {
+        "mean_v": 186.909,
+        "std_v": 80.647,
+        "mean_s": 31.733,
+        "venue_orange": 0.0
+      },
+      "hall": {
+        "mean_v": 224.841,
+        "std_v": 29.778,
+        "mean_s": 19.953,
+        "hall_mid": 0.987
+      },
+      "left_ide": {
+        "mean_v": 205.888,
+        "std_v": 27.649,
+        "mean_s": 18.826,
+        "left_dark": 0.016
+      },
+      "menu_chip": {
+        "mean_v": 210.284,
+        "std_v": 61.556,
+        "mean_s": 10.841,
+        "yellow": 0.0
+      },
+      "panel": {
+        "mean_v": 217.327,
+        "std_v": 42.377,
+        "mean_s": 21.362,
+        "panel_light": 0.953
+      },
+      "left_bar": {
+        "mean_v": 203.078,
+        "std_v": 14.461,
+        "mean_s": 22.711,
+        "side_dark": 0.001
+      },
+      "right_bar": {
+        "mean_v": 158.241,
+        "std_v": 90.776,
+        "mean_s": 42.728,
+        "side_dark": 0.384
+      },
+      "city": {
+        "mean_v": 223.002,
+        "std_v": 28.331,
+        "mean_s": 19.095,
+        "city_bright": 0.983,
+        "city_low_sat": 0.995,
+        "gold": 0.0
+      },
+      "upgrade": {
+        "mean_v": 231.204,
+        "std_v": 11.295,
+        "mean_s": 23.902,
+        "orange": 0.081
+      },
+      "mini": {
+        "mean_v": 185.529,
+        "std_v": 82.299,
+        "mean_s": 13.757,
+        "mini_mean_v": 185.529
+      },
+      "hp": {
+        "mean_v": 211.289,
+        "std_v": 20.214,
+        "mean_s": 35.108,
+        "hp_bright": 0.998
+      }
+    },
+    "shape": [
+      1080,
+      1920,
+      3
+    ]
+  },
+  "t0012.jpg": {
+    "fast": {
+      "scene": "AUCTION_LOBBY",
+      "auctionEntryVisible": true
+    },
+    "metrics": {
+      "match_btn": {
+        "mean_v": 229.589,
+        "std_v": 11.757,
+        "mean_s": 24.226,
+        "btn_bright": 1.0,
+        "btn_low_sat": 0.919
+      },
+      "venue_card": {
+        "mean_v": 180.979,
+        "std_v": 77.405,
+        "mean_s": 44.425,
+        "venue_orange": 0.07
+      },
+      "hall": {
+        "mean_v": 217.668,
+        "std_v": 38.68,
+        "mean_s": 37.796,
+        "hall_mid": 0.971
+      },
+      "left_ide": {
+        "mean_v": 205.638,
+        "std_v": 26.764,
+        "mean_s": 20.602,
+        "left_dark": 0.013
+      },
+      "menu_chip": {
+        "mean_v": 198.506,
+        "std_v": 75.873,
+        "mean_s": 17.277,
+        "yellow": 0.0
+      },
+      "panel": {
+        "mean_v": 213.42,
+        "std_v": 42.246,
+        "mean_s": 39.41,
+        "panel_light": 0.95
+      },
+      "left_bar": {
+        "mean_v": 202.581,
+        "std_v": 15.081,
+        "mean_s": 23.58,
+        "side_dark": 0.002
+      },
+      "right_bar": {
+        "mean_v": 157.055,
+        "std_v": 89.859,
+        "mean_s": 42.485,
+        "side_dark": 0.384
+      },
+      "city": {
+        "mean_v": 216.146,
+        "std_v": 37.395,
+        "mean_s": 34.064,
+        "city_bright": 0.965,
+        "city_low_sat": 0.912,
+        "gold": 0.085
+      },
+      "upgrade": {
+        "mean_v": 231.01,
+        "std_v": 12.239,
+        "mean_s": 52.656,
+        "orange": 0.218
+      },
+      "mini": {
+        "mean_v": 184.631,
+        "std_v": 82.998,
+        "mean_s": 15.62,
+        "mini_mean_v": 184.631
+      },
+      "hp": {
+        "mean_v": 207.879,
+        "std_v": 20.465,
+        "mean_s": 26.842,
+        "hp_bright": 0.999
+      }
+    },
+    "shape": [
+      1080,
+      1920,
+      3
+    ]
+  },
+  "t0014.jpg": {
+    "fast": {
+      "scene": "UNKNOWN",
+      "auctionEntryVisible": false,
+      "whiteCity": false
+    },
+    "metrics": {
+      "match_btn": {
+        "mean_v": 57.429,
+        "std_v": 40.685,
+        "mean_s": 17.645,
+        "btn_bright": 0.0,
+        "btn_low_sat": 0.922
+      },
+      "venue_card": {
+        "mean_v": 58.294,
+        "std_v": 37.143,
+        "mean_s": 29.835,
+        "venue_orange": 0.003
+      },
+      "hall": {
+        "mean_v": 82.513,
+        "std_v": 31.974,
+        "mean_s": 28.913,
+        "hall_mid": 0.773
+      },
+      "left_ide": {
+        "mean_v": 15.93,
+        "std_v": 10.831,
+        "mean_s": 8.598,
+        "left_dark": 0.997
+      },
+      "menu_chip": {
+        "mean_v": 28.698,
+        "std_v": 18.991,
+        "mean_s": 55.903,
+        "yellow": 0.0
+      },
+      "panel": {
+        "mean_v": 75.792,
+        "std_v": 36.48,
+        "mean_s": 24.792,
+        "panel_light": 0.003
+      },
+      "left_bar": {
+        "mean_v": 18.706,
+        "std_v": 35.999,
+        "mean_s": 6.365,
+        "side_dark": 0.969
+      },
+      "right_bar": {
+        "mean_v": 25.409,
+        "std_v": 22.9,
+        "mean_s": 37.976,
+        "side_dark": 0.989
+      },
+      "city": {
+        "mean_v": 71.004,
+        "std_v": 37.463,
+        "mean_s": 27.929,
+        "city_bright": 0.001,
+        "city_low_sat": 0.924,
+        "gold": 0.001
+      },
+      "upgrade": {
+        "mean_v": 42.533,
+        "std_v": 39.016,
+        "mean_s": 16.611,
+        "orange": 0.0
+      },
+      "mini": {
+        "mean_v": 14.105,
+        "std_v": 11.819,
+        "mean_s": 13.914,
+        "mini_mean_v": 14.105
+      },
+      "hp": {
+        "mean_v": 73.298,
+        "std_v": 27.636,
+        "mean_s": 18.983,
+        "hp_bright": 0.0
+      }
+    },
+    "shape": [
+      1080,
+      1920,
+      3
+    ]
+  },
+  "t0016.jpg": {
+    "fast": {
+      "scene": "CITY_LEISURE_MENU",
+      "auctionEntryVisible": false
+    },
+    "metrics": {
+      "match_btn": {
+        "mean_v": 85.837,
+        "std_v": 82.285,
+        "mean_s": 20.653,
+        "btn_bright": 0.263,
+        "btn_low_sat": 0.91
+      },
+      "venue_card": {
+        "mean_v": 131.2,
+        "std_v": 85.028,
+        "mean_s": 46.164,
+        "venue_orange": 0.037
+      },
+      "hall": {
+        "mean_v": 161.193,
+        "std_v": 77.897,
+        "mean_s": 40.903,
+        "hall_mid": 0.76
+      },
+      "left_ide": {
+        "mean_v": 47.749,
+        "std_v": 68.189,
+        "mean_s": 19.061,
+        "left_dark": 0.804
+      },
+      "menu_chip": {
+        "mean_v": 66.58,
+        "std_v": 73.5,
+        "mean_s": 68.254,
+        "yellow": 0.12
+      },
+      "panel": {
+        "mean_v": 167.038,
+        "std_v": 74.046,
+        "mean_s": 35.899,
+        "panel_light": 0.686
+      },
+      "left_bar": {
+        "mean_v": 19.557,
+        "std_v": 38.334,
+        "mean_s": 6.842,
+        "side_dark": 0.965
+      },
+      "right_bar": {
+        "mean_v": 25.491,
+        "std_v": 22.836,
+        "mean_s": 38.557,
+        "side_dark": 0.989
+      },
+      "city": {
+        "mean_v": 148.686,
+        "std_v": 83.719,
+        "mean_s": 39.775,
+        "city_bright": 0.56,
+        "city_low_sat": 0.829,
+        "gold": 0.016
+      },
+      "upgrade": {
+        "mean_v": 99.857,
+        "std_v": 91.123,
+        "mean_s": 17.662,
+        "orange": 0.0
+      },
+      "mini": {
+        "mean_v": 33.504,
+        "std_v": 55.043,
+        "mean_s": 23.139,
+        "mini_mean_v": 33.504
+      },
+      "hp": {
+        "mean_v": 47.623,
+        "std_v": 39.715,
+        "mean_s": 27.993,
+        "hp_bright": 0.034
+      }
+    },
+    "shape": [
+      1080,
+      1920,
+      3
+    ]
+  },
+  "t0018.jpg": {
+    "fast": {
+      "scene": "OPEN_WORLD",
+      "auctionEntryVisible": false,
+      "whiteCity": false
+    },
+    "metrics": {
+      "match_btn": {
+        "mean_v": 112.794,
+        "std_v": 59.334,
+        "mean_s": 37.678,
+        "btn_bright": 0.14,
+        "btn_low_sat": 0.739
+      },
+      "venue_card": {
+        "mean_v": 93.773,
+        "std_v": 57.273,
+        "mean_s": 69.949,
+        "venue_orange": 0.086
+      },
+      "hall": {
+        "mean_v": 67.638,
+        "std_v": 50.881,
+        "mean_s": 64.184,
+        "hall_mid": 0.338
+      },
+      "left_ide": {
+        "mean_v": 42.398,
+        "std_v": 26.088,
+        "mean_s": 54.731,
+        "left_dark": 0.808
+      },
+      "menu_chip": {
+        "mean_v": 39.437,
+        "std_v": 19.467,
+        "mean_s": 62.042,
+        "yellow": 0.0
+      },
+      "panel": {
+        "mean_v": 81.476,
+        "std_v": 54.541,
+        "mean_s": 67.546,
+        "panel_light": 0.169
+      },
+      "left_bar": {
+        "mean_v": 43.083,
+        "std_v": 38.806,
+        "mean_s": 58.973,
+        "side_dark": 0.942
+      },
+      "right_bar": {
+        "mean_v": 90.4,
+        "std_v": 58.996,
+        "mean_s": 78.768,
+        "side_dark": 0.644
+      },
+      "city": {
+        "mean_v": 70.767,
+        "std_v": 53.194,
+        "mean_s": 59.715,
+        "city_bright": 0.098,
+        "city_low_sat": 0.788,
+        "gold": 0.001
+      },
+      "upgrade": {
+        "mean_v": 127.27,
+        "std_v": 58.363,
+        "mean_s": 63.752,
+        "orange": 0.116
+      },
+      "mini": {
+        "mean_v": 34.008,
+        "std_v": 19.807,
+        "mean_s": 67.639,
+        "mini_mean_v": 34.008
+      },
+      "hp": {
+        "mean_v": 82.245,
+        "std_v": 45.295,
+        "mean_s": 82.512,
+        "hp_bright": 0.053
+      }
+    },
+    "shape": [
+      1080,
+      1920,
+      3
+    ]
+  },
+  "t0020.jpg": {
+    "fast": {
+      "scene": "UNKNOWN",
+      "auctionEntryVisible": false,
+      "whiteCity": false
+    },
+    "metrics": {
+      "match_btn": {
+        "mean_v": 80.355,
+        "std_v": 42.26,
+        "mean_s": 24.095,
+        "btn_bright": 0.0,
+        "btn_low_sat": 0.844
+      },
+      "venue_card": {
+        "mean_v": 46.477,
+        "std_v": 41.279,
+        "mean_s": 81.064,
+        "venue_orange": 0.033
+      },
+      "hall": {
+        "mean_v": 98.842,
+        "std_v": 85.15,
+        "mean_s": 104.565,
+        "hall_mid": 0.473
+      },
+      "left_ide": {
+        "mean_v": 38.215,
+        "std_v": 57.404,
+        "mean_s": 48.658,
+        "left_dark": 0.902
+      },
+      "menu_chip": {
+        "mean_v": 27.054,
+        "std_v": 15.628,
+        "mean_s": 67.875,
+        "yellow": 0.0
+      },
+      "panel": {
+        "mean_v": 78.063,
+        "std_v": 75.558,
+        "mean_s": 89.852,
+        "panel_light": 0.206
+      },
+      "left_bar": {
+        "mean_v": 23.123,
+        "std_v": 38.173,
+        "mean_s": 39.037,
+        "side_dark": 0.965
+      },
+      "right_bar": {
+        "mean_v": 39.173,
+        "std_v": 17.774,
+        "mean_s": 91.123,
+        "side_dark": 0.985
+      },
+      "city": {
+        "mean_v": 94.136,
+        "std_v": 84.556,
+        "mean_s": 99.339,
+        "city_bright": 0.274,
+        "city_low_sat": 0.49,
+        "gold": 0.069
+      },
+      "upgrade": {
+        "mean_v": 60.72,
+        "std_v": 42.353,
+        "mean_s": 37.724,
+        "orange": 0.0
+      },
+      "mini": {
+        "mean_v": 20.482,
+        "std_v": 13.002,
+        "mean_s": 39.873,
+        "mini_mean_v": 20.482
+      },
+      "hp": {
+        "mean_v": 78.817,
+        "std_v": 32.747,
+        "mean_s": 69.014,
+        "hp_bright": 0.0
+      }
+    },
+    "shape": [
+      1080,
+      1920,
+      3
+    ]
+  },
+  "t0000.jpg": {
+    "fast": {
+      "scene": "CITY_LEISURE_MENU",
+      "auctionEntryVisible": false
+    },
+    "metrics": {
+      "match_btn": {
+        "mean_v": 43.098,
+        "std_v": 47.769,
+        "mean_s": 30.27,
+        "btn_bright": 0.0,
+        "btn_low_sat": 0.914
+      },
+      "venue_card": {
+        "mean_v": 66.393,
+        "std_v": 42.816,
+        "mean_s": 82.086,
+        "venue_orange": 0.0
+      },
+      "hall": {
+        "mean_v": 106.438,
+        "std_v": 56.447,
+        "mean_s": 66.755,
+        "hall_mid": 0.628
+      },
+      "left_ide": {
+        "mean_v": 72.929,
+        "std_v": 43.114,
+        "mean_s": 66.051,
+        "left_dark": 0.656
+      },
+      "menu_chip": {
+        "mean_v": 82.806,
+        "std_v": 44.754,
+        "mean_s": 48.713,
+        "yellow": 0.231
+      },
+      "panel": {
+        "mean_v": 94.567,
+        "std_v": 57.189,
+        "mean_s": 66.556,
+        "panel_light": 0.245
+      },
+      "left_bar": {
+        "mean_v": 79.73,
+        "std_v": 55.591,
+        "mean_s": 65.717,
+        "side_dark": 0.721
+      },
+      "right_bar": {
+        "mean_v": 66.631,
+        "std_v": 52.446,
+        "mean_s": 56.637,
+        "side_dark": 0.715
+      },
+      "city": {
+        "mean_v": 100.585,
+        "std_v": 54.701,
+        "mean_s": 66.179,
+        "city_bright": 0.177,
+        "city_low_sat": 0.913,
+        "gold": 0.0
+      },
+      "upgrade": {
+        "mean_v": 62.297,
+        "std_v": 54.393,
+        "mean_s": 34.241,
+        "orange": 0.0
+      },
+      "mini": {
+        "mean_v": 52.907,
+        "std_v": 39.628,
+        "mean_s": 45.379,
+        "mini_mean_v": 52.907
+      },
+      "hp": {
+        "mean_v": 102.727,
+        "std_v": 80.854,
+        "mean_s": 53.982,
+        "hp_bright": 0.396
+      }
+    },
+    "shape": [
+      1080,
+      1920,
+      3
+    ]
+  }
+}

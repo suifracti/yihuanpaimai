@@ -1,0 +1,222 @@
+{
+  "video": "D:/video/2026-09-08 13-40-43.mkv",
+  "sourcePacket": "build/codex_other_video_20260912/134043-bounded-replay-v2/review_packet.json",
+  "frames": [
+    {
+      "file": "image3-0-0-obs-3-9-seq0.png",
+      "sha256": "7de0c9fe15db710b390ff44dc6e177f401cd7f7de4259cc01e643c35c5f81a70",
+      "sourceSha256": "c5417e63f22f51313dd51ce6983ffd7350899cf5cef04b2cd9937663ad07861a",
+      "sourceBbox": [
+        1820.0,
+        381.0,
+        1876.0,
+        437.0
+      ],
+      "observationId": "obs-3-9-seq0",
+      "catalogId": "image3-0-0",
+      "name": "扫晴微尘",
+      "widthCells": 1,
+      "heightCells": 1,
+      "sourceCard": "assets/items/catalog_screenshots/1x1/{47545E5E-FC05-4F45-857E-A459326990CC}.png",
+      "sourceCardSha256": "bd6cb12df27f964ebfd3374ef9e16296057caa23f3fbed27b0fdf4f3f1cc7a7e",
+      "cardBbox": [
+        398,
+        276,
+        366,
+        236
+      ]
+    },
+    {
+      "file": "image3-0-0-obs-3-9-seq1.png",
+      "sha256": "6dad9b7992720005ea6682c5c4adbc21c22c347127d75ffb43974c8ad02f24db",
+      "sourceSha256": "2940c6a6092504f25d0c2ce62a71ba4135433cde2da3fe7d68da982d2426d7df",
+      "sourceBbox": [
+        1820.0,
+        381.0,
+        1876.0,
+        437.0
+      ],
+      "observationId": "obs-3-9-seq1",
+      "catalogId": "image3-0-0",
+      "name": "扫晴微尘",
+      "widthCells": 1,
+      "heightCells": 1,
+      "sourceCard": "assets/items/catalog_screenshots/1x1/{47545E5E-FC05-4F45-857E-A459326990CC}.png",
+      "sourceCardSha256": "bd6cb12df27f964ebfd3374ef9e16296057caa23f3fbed27b0fdf4f3f1cc7a7e",
+      "cardBbox": [
+        398,
+        276,
+        366,
+        236
+      ]
+    },
+    {
+      "file": "image3-0-0-obs-3-9-seq2.png",
+      "sha256": "bfe0d503a2a5b99c27bd5777adff2211c67c26a820b9e1a741d969e6dd70314d",
+      "sourceSha256": "e215188351145ed65a5b15c2a7cca21a3926c7e60e4197ae2856a5a0356e14ef",
+      "sourceBbox": [
+        1820.0,
+        381.0,
+        1876.0,
+        437.0
+      ],
+      "observationId": "obs-3-9-seq2",
+      "catalogId": "image3-0-0",
+      "name": "扫晴微尘",
+      "widthCells": 1,
+      "heightCells": 1,
+      "sourceCard": "assets/items/catalog_screenshots/1x1/{47545E5E-FC05-4F45-857E-A459326990CC}.png",
+      "sourceCardSha256": "bd6cb12df27f964ebfd3374ef9e16296057caa23f3fbed27b0fdf4f3f1cc7a7e",
+      "cardBbox": [
+        398,
+        276,
+        366,
+        236
+      ]
+    },
+    {
+      "file": "image12-1-0-obs-1-6-seq0.png",
+      "sha256": "aea22a730bb0bac01cfdc04161be2966d9960c4976e51beb8a4daf359c98d66e",
+      "sourceSha256": "c5417e63f22f51313dd51ce6983ffd7350899cf5cef04b2cd9937663ad07861a",
+      "sourceBbox": [
+        1652.0,
+        269.0,
+        1708.0,
+        381.0
+      ],
+      "observationId": "obs-1-6-seq0",
+      "catalogId": "image12-1-0",
+      "name": "心猎铁骑L1-星影狩猎",
+      "widthCells": 1,
+      "heightCells": 2,
+      "sourceCard": "assets/items/catalog_screenshots/1X2/{C8C0E0D0-AD0B-43F9-A2E8-6453DE902C79}.png",
+      "sourceCardSha256": "70480994d882de0565f400f2be0f40d69787ab139e9611d1dc066b29c580642d",
+      "cardBbox": [
+        773,
+        16,
+        366,
+        236
+      ]
+    },
+    {
+      "file": "image12-1-0-obs-1-6-seq1.png",
+      "sha256": "251079b2ed74cea65027f254c8f4088703d30f458f1649ee6a40d583d284c9c8",
+      "sourceSha256": "2940c6a6092504f25d0c2ce62a71ba4135433cde2da3fe7d68da982d2426d7df",
+      "sourceBbox": [
+        1652.0,
+        269.0,
+        1708.0,
+        381.0
+      ],
+      "observationId": "obs-1-6-seq1",
+      "catalogId": "image12-1-0",
+      "name": "心猎铁骑L1-星影狩猎",
+      "widthCells": 1,
+      "heightCells": 2,
+      "sourceCard": "assets/items/catalog_screenshots/1X2/{C8C0E0D0-AD0B-43F9-A2E8-6453DE902C79}.png",
+      "sourceCardSha256": "70480994d882de0565f400f2be0f40d69787ab139e9611d1dc066b29c580642d",
+      "cardBbox": [
+        773,
+        16,
+        366,
+        236
+      ]
+    },
+    {
+      "file": "image12-1-0-obs-1-6-seq2.png",
+      "sha256": "c5c1fae9ec2831849ed59b8588c20a1adbdd574f01810aa6d85e21da3d7d4045",
+      "sourceSha256": "e215188351145ed65a5b15c2a7cca21a3926c7e60e4197ae2856a5a0356e14ef",
+      "sourceBbox": [
+        1652.0,
+        269.0,
+        1708.0,
+        381.0
+      ],
+      "observationId": "obs-1-6-seq2",
+      "catalogId": "image12-1-0",
+      "name": "心猎铁骑L1-星影狩猎",
+      "widthCells": 1,
+      "heightCells": 2,
+      "sourceCard": "assets/items/catalog_screenshots/1X2/{C8C0E0D0-AD0B-43F9-A2E8-6453DE902C79}.png",
+      "sourceCardSha256": "70480994d882de0565f400f2be0f40d69787ab139e9611d1dc066b29c580642d",
+      "cardBbox": [
+        773,
+        16,
+        366,
+        236
+      ]
+    },
+    {
+      "file": "image2-1-2-obs-1-2-seq0.png",
+      "sha256": "3a67e0756334348c73ecb7609aa6c2870bf0850cfc592ef14ab14ac70bbdd1ca",
+      "sourceSha256": "c5417e63f22f51313dd51ce6983ffd7350899cf5cef04b2cd9937663ad07861a",
+      "sourceBbox": [
+        1428.0,
+        269.0,
+        1484.0,
+        325.0
+      ],
+      "observationId": "obs-1-2-seq0",
+      "catalogId": "image2-1-2",
+      "name": "花雕碗",
+      "widthCells": 1,
+      "heightCells": 1,
+      "sourceCard": "assets/items/catalog_screenshots/1x1/{47545E5E-FC05-4F45-857E-A459326990CC}.png",
+      "sourceCardSha256": "bd6cb12df27f964ebfd3374ef9e16296057caa23f3fbed27b0fdf4f3f1cc7a7e",
+      "cardBbox": [
+        17,
+        276,
+        366,
+        236
+      ]
+    },
+    {
+      "file": "image2-1-2-obs-1-2-seq1.png",
+      "sha256": "abf54268d5fad2218d442125012938c83442475aa453e11edd0bcbcb1026a573",
+      "sourceSha256": "2940c6a6092504f25d0c2ce62a71ba4135433cde2da3fe7d68da982d2426d7df",
+      "sourceBbox": [
+        1428.0,
+        269.0,
+        1484.0,
+        325.0
+      ],
+      "observationId": "obs-1-2-seq1",
+      "catalogId": "image2-1-2",
+      "name": "花雕碗",
+      "widthCells": 1,
+      "heightCells": 1,
+      "sourceCard": "assets/items/catalog_screenshots/1x1/{47545E5E-FC05-4F45-857E-A459326990CC}.png",
+      "sourceCardSha256": "bd6cb12df27f964ebfd3374ef9e16296057caa23f3fbed27b0fdf4f3f1cc7a7e",
+      "cardBbox": [
+        17,
+        276,
+        366,
+        236
+      ]
+    },
+    {
+      "file": "image2-1-2-obs-1-2-seq2.png",
+      "sha256": "b0f5c1695d63708c3df1a60a7f2db3312ee70c3a381392f40b2fccda66373466",
+      "sourceSha256": "e215188351145ed65a5b15c2a7cca21a3926c7e60e4197ae2856a5a0356e14ef",
+      "sourceBbox": [
+        1428.0,
+        269.0,
+        1484.0,
+        325.0
+      ],
+      "observationId": "obs-1-2-seq2",
+      "catalogId": "image2-1-2",
+      "name": "花雕碗",
+      "widthCells": 1,
+      "heightCells": 1,
+      "sourceCard": "assets/items/catalog_screenshots/1x1/{47545E5E-FC05-4F45-857E-A459326990CC}.png",
+      "sourceCardSha256": "bd6cb12df27f964ebfd3374ef9e16296057caa23f3fbed27b0fdf4f3f1cc7a7e",
+      "cardBbox": [
+        17,
+        276,
+        366,
+        236
+      ]
+    }
+  ]
+}

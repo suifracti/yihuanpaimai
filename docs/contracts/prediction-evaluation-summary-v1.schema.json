@@ -1,0 +1,163 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://yihuanpaimai.local/schemas/prediction-evaluation-summary-v1.schema.json",
+  "title": "Prediction Evaluation Summary Artifact v1",
+  "type": "object",
+  "required": [
+    "schemaVersion",
+    "artifactMetadata",
+    "source",
+    "admission",
+    "formalEvaluation",
+    "legacyExploratoryEvaluation",
+    "artifactPayloadSha256"
+  ],
+  "properties": {
+    "schemaVersion": { "const": "prediction-evaluation-summary.v1" },
+    "artifactMetadata": {
+      "type": "object",
+      "required": [
+        "artifactId",
+        "generatedAt",
+        "generator",
+        "eligibilityContractVersion",
+        "historyAdmissionPolicyVersion",
+        "publicationPolicy"
+      ],
+      "properties": {
+        "artifactId": { "type": "string" },
+        "generatedAt": { "type": "string" },
+        "generator": {
+          "type": "object",
+          "required": ["name", "version", "codeRevision", "runtime"],
+          "properties": {
+            "name": { "type": "string" },
+            "version": { "type": "string" },
+            "codeRevision": { "type": "string" },
+            "runtime": { "type": "string" }
+          },
+          "additionalProperties": false
+        },
+        "eligibilityContractVersion": { "type": "integer" },
+        "historyAdmissionPolicyVersion": { "type": "integer" },
+        "publicationPolicy": {
+          "type": "object",
+          "required": ["policyStatus", "minimumForPreliminary", "minimumForOfficial"],
+          "properties": {
+            "policyStatus": { "type": "string", "enum": ["PROVISIONAL", "FROZEN"] },
+            "minimumForPreliminary": { "type": "integer" },
+            "minimumForOfficial": { "type": "integer" }
+          },
+          "additionalProperties": false
+        }
+      },
+      "additionalProperties": false
+    },
+    "source": {
+      "type": "object",
+      "required": ["sourceId", "datasetSchemaVersion", "sha256", "recordCount", "recordSchemaComposition"],
+      "properties": {
+        "sourceId": { "type": "string" },
+        "datasetSchemaVersion": { "type": ["integer", "string", "null"] },
+        "sha256": { "type": "string" },
+        "recordCount": { "type": "integer" },
+        "recordSchemaComposition": { "type": "object" }
+      },
+      "additionalProperties": false
+    },
+    "admission": {
+      "type": "object",
+      "required": ["admittedCount", "excludedCount", "exclusionReasonCounts"],
+      "properties": {
+        "admittedCount": { "type": "integer" },
+        "excludedCount": { "type": "integer" },
+        "exclusionReasonCounts": { "type": "object" }
+      },
+      "additionalProperties": false
+    },
+    "formalEvaluation": {
+      "type": "object",
+      "required": ["eligibility", "availability", "cohorts", "overallMetrics"],
+      "properties": {
+        "eligibility": {
+          "type": "object",
+          "required": ["formallyEligibleCount", "primaryRejectionReasonCounts"],
+          "properties": {
+            "formallyEligibleCount": { "type": "integer" },
+            "primaryRejectionReasonCounts": { "type": "object" }
+          },
+          "additionalProperties": false
+        },
+        "availability": {
+          "type": "object",
+          "required": ["status", "reason"],
+          "properties": {
+            "status": { "type": "string", "enum": ["NOT_AVAILABLE_YET", "INSUFFICIENT_SAMPLE", "PRELIMINARY", "AVAILABLE"] },
+            "reason": { "type": "string" }
+          },
+          "additionalProperties": false
+        },
+        "cohorts": { "type": "array" },
+        "overallMetrics": {
+          "type": ["object", "null"],
+          "properties": {
+            "status": { "type": "string" },
+            "sampleCount": { "type": "integer" },
+            "metrics": { "type": ["object", "null"] }
+          }
+        }
+      },
+      "additionalProperties": false
+    },
+    "legacyExploratoryEvaluation": {
+      "type": "object",
+      "required": [
+        "policyVersion",
+        "publicationStatus",
+        "formalComparable",
+        "provenanceLevel",
+        "sampleInventory",
+        "qualityFlagCounts",
+        "cohorts",
+        "overallMetrics"
+      ],
+      "properties": {
+        "policyVersion": { "type": "integer" },
+        "publicationStatus": { "const": "EXPLORATORY_ONLY" },
+        "formalComparable": { "const": false },
+        "provenanceLevel": { "const": "LEGACY_INCOMPLETE" },
+        "sampleInventory": {
+          "type": "object",
+          "required": [
+            "admittedCount",
+            "pointMetricCandidateCount",
+            "quantileMetricCandidateCount",
+            "distributionOnlyCount",
+            "unusableCount"
+          ],
+          "properties": {
+            "admittedCount": { "type": "integer" },
+            "pointMetricCandidateCount": { "type": "integer" },
+            "quantileMetricCandidateCount": { "type": "integer" },
+            "distributionOnlyCount": { "type": "integer" },
+            "unusableCount": { "type": "integer" }
+          },
+          "additionalProperties": false
+        },
+        "qualityFlagCounts": { "type": "object" },
+        "cohorts": { "type": "array" },
+        "overallMetrics": {
+          "type": ["object", "null"],
+          "properties": {
+            "status": { "type": "string" },
+            "sampleCount": { "type": "integer" },
+            "metrics": { "type": ["object", "null"] }
+          }
+        }
+      },
+      "additionalProperties": false
+    },
+    "artifactPayloadSha256": { "type": "string" }
+  },
+  "additionalProperties": false
+}

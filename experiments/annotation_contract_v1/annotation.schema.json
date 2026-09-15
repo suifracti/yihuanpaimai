@@ -1,0 +1,229 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "AIVisionAnnotationExchangeFormatV1",
+  "description": "Schema for AI vision annotation runs and slot-level warehouse recognition exchange.",
+  "type": "object",
+  "required": [
+    "schemaVersion",
+    "runId",
+    "model",
+    "createdAt",
+    "taskType",
+    "screenshotRef",
+    "usedConstraints",
+    "annotations"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "type": "string",
+      "enum": [
+        "1.0.0"
+      ]
+    },
+    "runId": {
+      "type": "string"
+    },
+    "model": {
+      "type": "string"
+    },
+    "modelVersion": {
+      "type": "string"
+    },
+    "createdAt": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "taskType": {
+      "type": "string",
+      "enum": [
+        "warehouse_slot_annotation",
+        "settlement_card_annotation",
+        "full_inventory_recovery"
+      ]
+    },
+    "recordId": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "screenshotRef": {
+      "type": "string"
+    },
+    "imageMetadata": {
+      "type": "object",
+      "properties": {
+        "width": {
+          "type": "integer"
+        },
+        "height": {
+          "type": "integer"
+        },
+        "warehouseBbox": {
+          "type": "array",
+          "items": {
+            "type": "integer"
+          },
+          "minItems": 4,
+          "maxItems": 4
+        }
+      }
+    },
+    "usedConstraints": {
+      "type": "object",
+      "required": [
+        "actualTotal",
+        "q",
+        "count",
+        "grid",
+        "knownItems"
+      ],
+      "properties": {
+        "actualTotal": {
+          "type": "boolean"
+        },
+        "q": {
+          "type": "boolean"
+        },
+        "count": {
+          "type": "boolean"
+        },
+        "grid": {
+          "type": "boolean"
+        },
+        "knownItems": {
+          "type": "boolean"
+        }
+      }
+    },
+    "annotations": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "slotId",
+          "bbox",
+          "topK",
+          "predictedQuality",
+          "source",
+          "status"
+        ],
+        "properties": {
+          "slotId": {
+            "type": "string"
+          },
+          "bbox": {
+            "type": "array",
+            "items": {
+              "type": "integer"
+            },
+            "minItems": 4,
+            "maxItems": 4
+          },
+          "gridLocation": {
+            "type": "object",
+            "properties": {
+              "row": {
+                "type": "integer"
+              },
+              "col": {
+                "type": "integer"
+              },
+              "width": {
+                "type": "integer"
+              },
+              "height": {
+                "type": "integer"
+              }
+            }
+          },
+          "topK": {
+            "type": "array",
+            "minItems": 1,
+            "items": {
+              "type": "object",
+              "required": [
+                "itemId",
+                "name",
+                "quality",
+                "confidence"
+              ],
+              "properties": {
+                "itemId": {
+                  "type": "string"
+                },
+                "name": {
+                  "type": "string"
+                },
+                "quality": {
+                  "type": "string",
+                  "enum": [
+                    "red",
+                    "gold",
+                    "purple",
+                    "blue",
+                    "green",
+                    "white",
+                    "unknown"
+                  ]
+                },
+                "price": {
+                  "type": [
+                    "integer",
+                    "null"
+                  ]
+                },
+                "grid": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "confidence": {
+                  "type": "number",
+                  "minimum": 0.0,
+                  "maximum": 1.0
+                }
+              }
+            }
+          },
+          "predictedQuality": {
+            "type": "string",
+            "enum": [
+              "red",
+              "gold",
+              "purple",
+              "blue",
+              "green",
+              "white",
+              "unknown"
+            ]
+          },
+          "source": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "pseudo",
+              "strong_pseudo",
+              "review_required",
+              "verified",
+              "rejected",
+              "unknown"
+            ]
+          },
+          "provenance": {
+            "type": "string"
+          },
+          "failureReason": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        }
+      }
+    }
+  }
+}

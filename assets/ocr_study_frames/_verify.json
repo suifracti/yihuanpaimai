@@ -1,0 +1,173 @@
+{
+  "clean_180": {
+    "scene": "IN_AUCTION",
+    "round": 3,
+    "timer": 14,
+    "avg": 67571,
+    "q": null,
+    "totalGrids": null,
+    "boxType": "machine",
+    "fieldCondition": "standard",
+    "currentEstimate": 215123,
+    "myBid": 300000,
+    "lobbyVenue": null,
+    "lobbyToolGroup": null,
+    "lobbyCharacter": null,
+    "isSettlement": false,
+    "isLoading": false,
+    "settlement": null,
+    "shape": [
+      540,
+      960,
+      3
+    ]
+  },
+  "clean_420": {
+    "scene": "IN_AUCTION",
+    "round": 4,
+    "timer": 44,
+    "avg": null,
+    "q": 15,
+    "totalGrids": 122,
+    "boxType": "glass",
+    "fieldCondition": "dark",
+    "currentEstimate": 13445,
+    "myBid": 0,
+    "lobbyVenue": null,
+    "lobbyToolGroup": null,
+    "lobbyCharacter": null,
+    "isSettlement": false,
+    "isLoading": false,
+    "settlement": null,
+    "shape": [
+      540,
+      960,
+      3
+    ]
+  },
+  "clean_480": {
+    "scene": "SETTLEMENT",
+    "round": 0,
+    "timer": null,
+    "avg": null,
+    "q": null,
+    "totalGrids": null,
+    "boxType": "standard",
+    "fieldCondition": "standard",
+    "currentEstimate": null,
+    "myBid": 0,
+    "lobbyVenue": null,
+    "lobbyToolGroup": null,
+    "lobbyCharacter": null,
+    "isSettlement": true,
+    "isLoading": false,
+    "settlement": {
+      "isSettlement": true,
+      "clearingPrice": 454444,
+      "actualTotal": 972970,
+      "profit": 518526
+    },
+    "shape": [
+      540,
+      960,
+      3
+    ]
+  },
+  "desk_180": {
+    "scene": "IN_AUCTION",
+    "round": 3,
+    "timer": 14,
+    "avg": 67571,
+    "q": null,
+    "totalGrids": null,
+    "boxType": "machine",
+    "fieldCondition": "standard",
+    "currentEstimate": null,
+    "myBid": 300000,
+    "lobbyVenue": null,
+    "lobbyToolGroup": null,
+    "lobbyCharacter": null,
+    "isSettlement": false,
+    "isLoading": false,
+    "settlement": null,
+    "shape": [
+      1080,
+      1920,
+      3
+    ]
+  },
+  "desk_270": {
+    "scene": "AUCTION_LOBBY",
+    "round": 0,
+    "timer": null,
+    "avg": null,
+    "q": null,
+    "totalGrids": null,
+    "boxType": "standard",
+    "fieldCondition": "standard",
+    "currentEstimate": null,
+    "myBid": 0,
+    "lobbyVenue": "中级场 · 珊瑚场",
+    "lobbyToolGroup": "高级品鉴仪器组",
+    "lobbyCharacter": "达芙蒂尔",
+    "isSettlement": false,
+    "isLoading": false,
+    "settlement": null,
+    "shape": [
+      1080,
+      1920,
+      3
+    ]
+  },
+  "desk_420": {
+    "scene": "IN_AUCTION",
+    "round": 4,
+    "timer": 44,
+    "avg": null,
+    "q": 15,
+    "totalGrids": 122,
+    "boxType": "glass",
+    "fieldCondition": "dark",
+    "currentEstimate": 13445,
+    "myBid": 0,
+    "lobbyVenue": null,
+    "lobbyToolGroup": null,
+    "lobbyCharacter": null,
+    "isSettlement": false,
+    "isLoading": false,
+    "settlement": null,
+    "shape": [
+      1080,
+      1920,
+      3
+    ]
+  },
+  "desk_480": {
+    "scene": "SETTLEMENT",
+    "round": 0,
+    "timer": null,
+    "avg": null,
+    "q": null,
+    "totalGrids": null,
+    "boxType": "standard",
+    "fieldCondition": "standard",
+    "currentEstimate": null,
+    "myBid": 0,
+    "lobbyVenue": null,
+    "lobbyToolGroup": null,
+    "lobbyCharacter": null,
+    "isSettlement": true,
+    "isLoading": false,
+    "settlement": {
+      "isSettlement": true,
+      "clearingPrice": 454444,
+      "actualTotal": 972970,
+      "profit": 518526
+    },
+    "shape": [
+      1080,
+      1920,
+      3
+    ]
+  }
+}

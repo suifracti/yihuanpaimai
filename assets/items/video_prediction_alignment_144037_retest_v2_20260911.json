@@ -1,0 +1,1345 @@
+{
+  "metadata": {
+    "title": "39件基准录像物品机器预测与独立看图真值对齐报告",
+    "videoPath": "D:\\video\\2026-09-08 14-40-37.mkv",
+    "provenanceNote": "Machine predictions extracted from dense warehouse reconstruction (audit_review_packet.json) aligned against independent visual inspection ground truth (video_ground_truth_reference_144037.json). Machine candidates are strictly separated from ground truth to prevent identity bias. No identities were guessed using total price.",
+    "inputPacketPath": "build/diagnosis_20260911/p3-warehouse/video_audit_retest_v2/audit_review_packet.json",
+    "inputPacketSha256": "60c65d7bffccb2ba83f330db8ff8418939503399cd0aa786fc89049d298180f6",
+    "inputPacketCreationCommit": "bbce9e4921c4ed10692a7fdc91433c49be3cf3b4",
+    "reportGenerationCommit": "bbce9e4921c4ed10692a7fdc91433c49be3cf3b4",
+    "catalogManifestSha256": "f5844e5e6c3277a8187c5d228eeead50df36f025a5c6fab11fbe385c658f79e5",
+    "groundTruthSha256": "5a315978e1e51f17a7a271dba16272b47d5c5a61c4ec856929f830ef9500844b",
+    "totalItems": 39,
+    "statistics": {
+      "candidatePlausibleCount": 36,
+      "shapeConsistentCount": 36,
+      "identityMatchedCount": 34,
+      "noMachineCandidateCount": 3,
+      "geometryContradictionCount": 0,
+      "confirmedExactCount": 0,
+      "groundTruthConfirmedCount": 39
+    }
+  },
+  "items": [
+    {
+      "referenceId": "ref_144037_01",
+      "gridBoundingBox": {
+        "row": 0,
+        "col": 0,
+        "width": 2,
+        "height": 3,
+        "shape": "2x3"
+      },
+      "quality": "blue",
+      "visualDescription": "蓝色品质 2x3 纵向矩形单元",
+      "observationBasis": "Distinct blue border, 2 cols by 3 rows, visible at top position",
+      "localCropPath": "assets/items/ground_truth_reference_144037/ref_144037_01.png",
+      "cropExists": true,
+      "machineReviewUnitId": "unit-world-0-0-2x3",
+      "machineCandidates": [
+        {
+          "catalogId": "image12-0-0",
+          "name": "销魂挠挠爪",
+          "candidateShape": "2x3",
+          "shapeConsistent": true,
+          "identityMatchesGroundTruth": true,
+          "matchReasons": [
+            "WHOLE_CARD_MATCH",
+            "SIFT_INLIERS_12"
+          ],
+          "inManifestV2": true,
+          "inCatalog065": true,
+          "identityStatus": "CANDIDATE_ONLY"
+        }
+      ],
+      "alignmentCategory": "CANDIDATE_PLAUSIBLE",
+      "identityStatus": "CANDIDATE_ONLY",
+      "notes": "Machine proposed 1 shape-consistent candidate(s). Shape matching does NOT equal confirmed identity."
+    },
+    {
+      "referenceId": "ref_144037_02",
+      "gridBoundingBox": {
+        "row": 0,
+        "col": 2,
+        "width": 1,
+        "height": 3,
+        "shape": "1x3"
+      },
+      "quality": "blue",
+      "visualDescription": "蓝色品质 1x3 纵向条形单元",
+      "observationBasis": "Vertical crystal spanning 1 col by 3 rows, blue border",
+      "localCropPath": "assets/items/ground_truth_reference_144037/ref_144037_02.png",
+      "cropExists": true,
+      "machineReviewUnitId": "unit-world-0-2-1x3",
+      "machineCandidates": [
+        {
+          "catalogId": "image11-0-1",
+          "name": "烟紫水晶",
+          "candidateShape": "1x3",
+          "shapeConsistent": true,
+          "identityMatchesGroundTruth": true,
+          "matchReasons": [
+            "WHOLE_CARD_MATCH",
+            "SIFT_INLIERS_11"
+          ],
+          "inManifestV2": true,
+          "inCatalog065": true,
+          "identityStatus": "CANDIDATE_ONLY"
+        }
+      ],
+      "alignmentCategory": "CANDIDATE_PLAUSIBLE",
+      "identityStatus": "CANDIDATE_ONLY",
+      "notes": "Machine proposed 1 shape-consistent candidate(s). Shape matching does NOT equal confirmed identity."
+    },
+    {
+      "referenceId": "ref_144037_03",
+      "gridBoundingBox": {
+        "row": 0,
+        "col": 3,
+        "width": 1,
+        "height": 1,
+        "shape": "1x1"
+      },
+      "quality": "green",
+      "visualDescription": "绿色品质 1x1 单格单元",
+      "observationBasis": "Single cell 1x1 green background",
+      "localCropPath": "assets/items/ground_truth_reference_144037/ref_144037_03.png",
+      "cropExists": true,
+      "machineReviewUnitId": "unit-world-0-3-1x1",
+      "machineCandidates": [
+        {
+          "catalogId": "image9-0-2",
+          "name": "拍拍球",
+          "candidateShape": "1x1",
+          "shapeConsistent": true,
+          "identityMatchesGroundTruth": true,
+          "matchReasons": [
+            "FOREGROUND_SHAPE_AND_COLOR",
+            "SCORE_0.9925"
+          ],
+          "inManifestV2": true,
+          "inCatalog065": true,
+          "identityStatus": "CANDIDATE_ONLY"
+        }
+      ],
+      "alignmentCategory": "CANDIDATE_PLAUSIBLE",
+      "identityStatus": "CANDIDATE_ONLY",
+      "notes": "Machine proposed 1 shape-consistent candidate(s). Shape matching does NOT equal confirmed identity."
+    },
+    {
+      "referenceId": "ref_144037_04",
+      "gridBoundingBox": {
+        "row": 0,
+        "col": 4,
+        "width": 1,
+        "height": 1,
+        "shape": "1x1"
+      },
+      "quality": "green",
+      "visualDescription": "绿色品质 1x1 单格单元",
+      "observationBasis": "Single cell 1x1 green background",
+      "localCropPath": "assets/items/ground_truth_reference_144037/ref_144037_04.png",
+      "cropExists": true,
+      "machineReviewUnitId": "unit-world-0-4-1x1",
+      "machineCandidates": [
+        {
+          "catalogId": "image8-1-1",
+          "name": "金月",
+          "candidateShape": "1x1",
+          "shapeConsistent": true,
+          "identityMatchesGroundTruth": true,
+          "matchReasons": [
+            "FOREGROUND_SHAPE_AND_COLOR",
+            "SCORE_0.9871"
+          ],
+          "inManifestV2": true,
+          "inCatalog065": true,
+          "identityStatus": "CANDIDATE_ONLY"
+        }
+      ],
+      "alignmentCategory": "CANDIDATE_PLAUSIBLE",
+      "identityStatus": "CANDIDATE_ONLY",
+      "notes": "Machine proposed 1 shape-consistent candidate(s). Shape matching does NOT equal confirmed identity."
+    },
+    {
+      "referenceId": "ref_144037_05",
+      "gridBoundingBox": {
+        "row": 0,
+        "col": 5,
+        "width": 2,
+        "height": 1,
+        "shape": "2x1"
+      },
+      "quality": "blue",
+      "visualDescription": "蓝色品质 2x1 横向双格单元",
+      "observationBasis": "Horizontal 2x1 cell blue background",
+      "localCropPath": "assets/items/ground_truth_reference_144037/ref_144037_05.png",
+      "cropExists": true,
+      "machineReviewUnitId": "unit-world-0-5-2x1",
+      "machineCandidates": [],
+      "alignmentCategory": "NO_MACHINE_CANDIDATE",
+      "identityStatus": "UNCONFIRMED",
+      "notes": "No candidate proposal generated by machine resolver."
+    },
+    {
+      "referenceId": "ref_144037_06",
+      "gridBoundingBox": {
+        "row": 0,
+        "col": 7,
+        "width": 1,
+        "height": 1,
+        "shape": "1x1"
+      },
+      "quality": "blue",
+      "visualDescription": "蓝色品质 1x1 单格单元",
+      "observationBasis": "Single cell 1x1 blue background",
+      "localCropPath": "assets/items/ground_truth_reference_144037/ref_144037_06.png",
+      "cropExists": true,
+      "machineReviewUnitId": "unit-world-0-7-1x1",
+      "machineCandidates": [
+        {
+          "catalogId": "image16-0-0",
+          "name": "（未来的）大师飞镖",
+          "candidateShape": "1x1",
+          "shapeConsistent": true,
+          "identityMatchesGroundTruth": true,
+          "matchReasons": [
+            "FOREGROUND_SHAPE_AND_COLOR",
+            "SCORE_0.9818"
+          ],
+          "inManifestV2": true,
+          "inCatalog065": true,
+          "identityStatus": "CANDIDATE_ONLY"
+        }
+      ],
+      "alignmentCategory": "CANDIDATE_PLAUSIBLE",
+      "identityStatus": "CANDIDATE_ONLY",
+      "notes": "Machine proposed 1 shape-consistent candidate(s). Shape matching does NOT equal confirmed identity."
+    },
+    {
+      "referenceId": "ref_144037_07",
+      "gridBoundingBox": {
+        "row": 0,
+        "col": 8,
+        "width": 2,
+        "height": 1,
+        "shape": "2x1"
+      },
+      "quality": "green",
+      "visualDescription": "绿色品质 2x1 横向双格单元",
+      "observationBasis": "Horizontal 2x1 cell green background",
+      "localCropPath": "assets/items/ground_truth_reference_144037/ref_144037_07.png",
+      "cropExists": true,
+      "machineReviewUnitId": "unit-world-0-8-2x1",
+      "machineCandidates": [
+        {
+          "catalogId": "image7-0-0",
+          "name": "惠比寿宫廷小塔",
+          "candidateShape": "2x1",
+          "shapeConsistent": true,
+          "identityMatchesGroundTruth": true,
+          "matchReasons": [
+            "WHOLE_CARD_MATCH",
+            "SIFT_INLIERS_22"
+          ],
+          "inManifestV2": true,
+          "inCatalog065": true,
+          "identityStatus": "CANDIDATE_ONLY"
+        }
+      ],
+      "alignmentCategory": "CANDIDATE_PLAUSIBLE",
+      "identityStatus": "CANDIDATE_ONLY",
+      "notes": "Machine proposed 1 shape-consistent candidate(s). Shape matching does NOT equal confirmed identity."
+    },
+    {
+      "referenceId": "ref_144037_08",
+      "gridBoundingBox": {
+        "row": 1,
+        "col": 3,
+        "width": 3,
+        "height": 3,
+        "shape": "3x3"
+      },
+      "quality": "blue",
+      "visualDescription": "蓝色品质 3x3 方形单元",
+      "observationBasis": "Large 3x3 square framed object with blue border",
+      "localCropPath": "assets/items/ground_truth_reference_144037/ref_144037_08.png",
+      "cropExists": true,
+      "machineReviewUnitId": "unit-world-1-3-3x3",
+      "machineCandidates": [
+        {
+          "catalogId": "image10-1-0",
+          "name": "艺术画「深林」",
+          "candidateShape": "3x3",
+          "shapeConsistent": true,
+          "identityMatchesGroundTruth": true,
+          "matchReasons": [
+            "WHOLE_CARD_MATCH",
+            "SIFT_INLIERS_54"
+          ],
+          "inManifestV2": true,
+          "inCatalog065": true,
+          "identityStatus": "CANDIDATE_ONLY"
+        }
+      ],
+      "alignmentCategory": "CANDIDATE_PLAUSIBLE",
+      "identityStatus": "CANDIDATE_ONLY",
+      "notes": "Machine proposed 1 shape-consistent candidate(s). Shape matching does NOT equal confirmed identity."
+    },
+    {
+      "referenceId": "ref_144037_09",
+      "gridBoundingBox": {
+        "row": 1,
+        "col": 6,
+        "width": 3,
+        "height": 3,
+        "shape": "3x3"
+      },
+      "quality": "red",
+      "visualDescription": "红色品质 3x3 方形复合单元",
+      "observationBasis": "3x3 square structure with internal compartments, red border",
+      "localCropPath": "assets/items/ground_truth_reference_144037/ref_144037_09.png",
+      "cropExists": true,
+      "machineReviewUnitId": "unit-world-1-6-3x3",
+      "machineCandidates": [
+        {
+          "catalogId": "image34-0-1",
+          "name": "九格小食",
+          "candidateShape": "3x3",
+          "shapeConsistent": true,
+          "identityMatchesGroundTruth": true,
+          "matchReasons": [
+            "WHOLE_CARD_MATCH",
+            "SIFT_INLIERS_42"
+          ],
+          "inManifestV2": true,
+          "inCatalog065": true,
+          "identityStatus": "CANDIDATE_ONLY"
+        }
+      ],
+      "alignmentCategory": "CANDIDATE_PLAUSIBLE",
+      "identityStatus": "CANDIDATE_ONLY",
+      "notes": "Machine proposed 1 shape-consistent candidate(s). Shape matching does NOT equal confirmed identity."
+    },
+    {
+      "referenceId": "ref_144037_10",
+      "gridBoundingBox": {
+        "row": 1,
+        "col": 9,
+        "width": 1,
+        "height": 1,
+        "shape": "1x1"
+      },
+      "quality": "purple",
+      "visualDescription": "紫色品质 1x1 单格单元",
+      "observationBasis": "Single cell 1x1 purple border",
+      "localCropPath": "assets/items/ground_truth_reference_144037/ref_144037_10.png",
+      "cropExists": true,
+      "machineReviewUnitId": "unit-world-1-9-1x1",
+      "machineCandidates": [
+        {
+          "catalogId": "image24-1-2",
+          "name": "鎏金坠",
+          "candidateShape": "1x1",
+          "shapeConsistent": true,
+          "identityMatchesGroundTruth": true,
+          "matchReasons": [
+            "WHOLE_CARD_MATCH",
+            "SIFT_INLIERS_20"
+          ],
+          "inManifestV2": true,
+          "inCatalog065": true,
+          "identityStatus": "CANDIDATE_ONLY"
+        }
+      ],
+      "alignmentCategory": "CANDIDATE_PLAUSIBLE",
+      "identityStatus": "CANDIDATE_ONLY",
+      "notes": "Machine proposed 1 shape-consistent candidate(s). Shape matching does NOT equal confirmed identity."
+    },
+    {
+      "referenceId": "ref_144037_11",
+      "gridBoundingBox": {
+        "row": 2,
+        "col": 9,
+        "width": 1,
+        "height": 2,
+        "shape": "1x2"
+      },
+      "quality": "red",
+      "visualDescription": "红色品质 1x2 纵向双格单元",
+      "observationBasis": "Vertical 1x2 package with red border",
+      "localCropPath": "assets/items/ground_truth_reference_144037/ref_144037_11.png",
+      "cropExists": true,
+      "machineReviewUnitId": "unit-world-2-9-1x2",
+      "machineCandidates": [
+        {
+          "catalogId": "visual-latiao-1x2",
+          "name": "酷辣辣辣条",
+          "candidateShape": "1x2",
+          "shapeConsistent": true,
+          "identityMatchesGroundTruth": true,
+          "matchReasons": [
+            "WHOLE_CARD_MATCH",
+            "SIFT_INLIERS_22"
+          ],
+          "inManifestV2": true,
+          "inCatalog065": false,
+          "identityStatus": "CANDIDATE_ONLY"
+        }
+      ],
+      "alignmentCategory": "CANDIDATE_PLAUSIBLE",
+      "identityStatus": "CANDIDATE_ONLY",
+      "notes": "Machine proposed 1 shape-consistent candidate(s). Shape matching does NOT equal confirmed identity."
+    },
+    {
+      "referenceId": "ref_144037_12",
+      "gridBoundingBox": {
+        "row": 3,
+        "col": 0,
+        "width": 2,
+        "height": 2,
+        "shape": "2x2"
+      },
+      "quality": "purple",
+      "visualDescription": "紫色品质 2x2 方形单元",
+      "observationBasis": "2x2 purple border unit",
+      "localCropPath": "assets/items/ground_truth_reference_144037/ref_144037_12.png",
+      "cropExists": true,
+      "machineReviewUnitId": "unit-world-3-0-2x2",
+      "machineCandidates": [
+        {
+          "catalogId": "image20-0-1",
+          "name": "跳跳兔盒",
+          "candidateShape": "2x2",
+          "shapeConsistent": true,
+          "identityMatchesGroundTruth": true,
+          "matchReasons": [
+            "WHOLE_CARD_MATCH",
+            "SIFT_INLIERS_21"
+          ],
+          "inManifestV2": true,
+          "inCatalog065": true,
+          "identityStatus": "CANDIDATE_ONLY"
+        }
+      ],
+      "alignmentCategory": "CANDIDATE_PLAUSIBLE",
+      "identityStatus": "CANDIDATE_ONLY",
+      "notes": "Machine proposed 1 shape-consistent candidate(s). Shape matching does NOT equal confirmed identity."
+    },
+    {
+      "referenceId": "ref_144037_13",
+      "gridBoundingBox": {
+        "row": 3,
+        "col": 2,
+        "width": 1,
+        "height": 1,
+        "shape": "1x1"
+      },
+      "quality": "green",
+      "visualDescription": "绿色品质 1x1 单格单元",
+      "observationBasis": "Single cell 1x1 green border",
+      "localCropPath": "assets/items/ground_truth_reference_144037/ref_144037_13.png",
+      "cropExists": true,
+      "machineReviewUnitId": "unit-world-3-2-1x1",
+      "machineCandidates": [
+        {
+          "catalogId": "image9-0-1",
+          "name": "炭火脆皮烤肉",
+          "candidateShape": "1x1",
+          "shapeConsistent": true,
+          "identityMatchesGroundTruth": true,
+          "matchReasons": [
+            "WHOLE_CARD_MATCH",
+            "SIFT_INLIERS_9"
+          ],
+          "inManifestV2": true,
+          "inCatalog065": true,
+          "identityStatus": "CANDIDATE_ONLY"
+        }
+      ],
+      "alignmentCategory": "CANDIDATE_PLAUSIBLE",
+      "identityStatus": "CANDIDATE_ONLY",
+      "notes": "Machine proposed 1 shape-consistent candidate(s). Shape matching does NOT equal confirmed identity."
+    },
+    {
+      "referenceId": "ref_144037_14",
+      "gridBoundingBox": {
+        "row": 4,
+        "col": 2,
+        "width": 2,
+        "height": 2,
+        "shape": "2x2"
+      },
+      "quality": "gold",
+      "visualDescription": "金色品质 2x2 方形单元",
+      "observationBasis": "2x2 gold border unit",
+      "localCropPath": "assets/items/ground_truth_reference_144037/ref_144037_14.png",
+      "cropExists": true,
+      "machineReviewUnitId": "unit-world-4-2-2x2",
+      "machineCandidates": [
+        {
+          "catalogId": "image30-0-0",
+          "name": "蓝焰火花塞",
+          "candidateShape": "2x2",
+          "shapeConsistent": true,
+          "identityMatchesGroundTruth": true,
+          "matchReasons": [
+            "WHOLE_CARD_MATCH",
+            "SIFT_INLIERS_45"
+          ],
+          "inManifestV2": true,
+          "inCatalog065": true,
+          "identityStatus": "CANDIDATE_ONLY"
+        }
+      ],
+      "alignmentCategory": "CANDIDATE_PLAUSIBLE",
+      "identityStatus": "CANDIDATE_ONLY",
+      "notes": "Machine proposed 1 shape-consistent candidate(s). Shape matching does NOT equal confirmed identity."
+    },
+    {
+      "referenceId": "ref_144037_15",
+      "gridBoundingBox": {
+        "row": 4,
+        "col": 4,
+        "width": 3,
+        "height": 1,
+        "shape": "3x1"
+      },
+      "quality": "green",
+      "visualDescription": "绿色品质 3x1 横向三格单元",
+      "observationBasis": "Horizontal 3x1 green border",
+      "localCropPath": "assets/items/ground_truth_reference_144037/ref_144037_15.png",
+      "cropExists": true,
+      "machineReviewUnitId": null,
+      "machineCandidates": [],
+      "alignmentCategory": "NO_MACHINE_CANDIDATE",
+      "identityStatus": "UNCONFIRMED",
+      "notes": "No candidate proposal generated by machine resolver."
+    },
+    {
+      "referenceId": "ref_144037_16",
+      "gridBoundingBox": {
+        "row": 4,
+        "col": 7,
+        "width": 2,
+        "height": 1,
+        "shape": "2x1"
+      },
+      "quality": "gold",
+      "visualDescription": "金色品质 2x1 横向双格单元",
+      "observationBasis": "Horizontal 2x1 gold border",
+      "localCropPath": "assets/items/ground_truth_reference_144037/ref_144037_16.png",
+      "cropExists": true,
+      "machineReviewUnitId": "unit-world-4-7-2x1",
+      "machineCandidates": [
+        {
+          "catalogId": "visual-922c073c366d",
+          "name": "巡哨-干练精英",
+          "candidateShape": "2x1",
+          "shapeConsistent": true,
+          "identityMatchesGroundTruth": true,
+          "matchReasons": [
+            "WHOLE_CARD_MATCH",
+            "SIFT_INLIERS_25"
+          ],
+          "inManifestV2": true,
+          "inCatalog065": false,
+          "identityStatus": "CANDIDATE_ONLY"
+        }
+      ],
+      "alignmentCategory": "CANDIDATE_PLAUSIBLE",
+      "identityStatus": "CANDIDATE_ONLY",
+      "notes": "Machine proposed 1 shape-consistent candidate(s). Shape matching does NOT equal confirmed identity."
+    },
+    {
+      "referenceId": "ref_144037_17",
+      "gridBoundingBox": {
+        "row": 4,
+        "col": 9,
+        "width": 1,
+        "height": 1,
+        "shape": "1x1"
+      },
+      "quality": "blue",
+      "visualDescription": "蓝色品质 1x1 单格单元",
+      "observationBasis": "Single cell 1x1 blue border",
+      "localCropPath": "assets/items/ground_truth_reference_144037/ref_144037_17.png",
+      "cropExists": true,
+      "machineReviewUnitId": "unit-world-4-9-1x1",
+      "machineCandidates": [
+        {
+          "catalogId": "image15-0-1",
+          "name": "银铃",
+          "candidateShape": "1x1",
+          "shapeConsistent": true,
+          "identityMatchesGroundTruth": true,
+          "matchReasons": [
+            "WHOLE_CARD_MATCH",
+            "SIFT_INLIERS_21"
+          ],
+          "inManifestV2": true,
+          "inCatalog065": true,
+          "identityStatus": "CANDIDATE_ONLY"
+        }
+      ],
+      "alignmentCategory": "CANDIDATE_PLAUSIBLE",
+      "identityStatus": "CANDIDATE_ONLY",
+      "notes": "Machine proposed 1 shape-consistent candidate(s). Shape matching does NOT equal confirmed identity."
+    },
+    {
+      "referenceId": "ref_144037_18",
+      "gridBoundingBox": {
+        "row": 5,
+        "col": 0,
+        "width": 2,
+        "height": 1,
+        "shape": "2x1"
+      },
+      "quality": "purple",
+      "visualDescription": "紫色品质 2x1 横向双格单元",
+      "observationBasis": "Horizontal 2x1 purple border",
+      "localCropPath": "assets/items/ground_truth_reference_144037/ref_144037_18.png",
+      "cropExists": true,
+      "machineReviewUnitId": "unit-world-5-0-2x1",
+      "machineCandidates": [
+        {
+          "catalogId": "image22-0-2",
+          "name": "大将军章鱼烧",
+          "candidateShape": "2x1",
+          "shapeConsistent": true,
+          "identityMatchesGroundTruth": true,
+          "matchReasons": [
+            "WHOLE_CARD_MATCH",
+            "SIFT_INLIERS_22"
+          ],
+          "inManifestV2": true,
+          "inCatalog065": true,
+          "identityStatus": "CANDIDATE_ONLY"
+        }
+      ],
+      "alignmentCategory": "CANDIDATE_PLAUSIBLE",
+      "identityStatus": "CANDIDATE_ONLY",
+      "notes": "Machine proposed 1 shape-consistent candidate(s). Shape matching does NOT equal confirmed identity."
+    },
+    {
+      "referenceId": "ref_144037_19",
+      "gridBoundingBox": {
+        "row": 5,
+        "col": 4,
+        "width": 2,
+        "height": 2,
+        "shape": "2x2"
+      },
+      "quality": "gold",
+      "visualDescription": "金色品质 2x2 方形单元",
+      "observationBasis": "2x2 gold border unit",
+      "localCropPath": "assets/items/ground_truth_reference_144037/ref_144037_19.png",
+      "cropExists": true,
+      "machineReviewUnitId": "unit-world-5-4-2x2",
+      "machineCandidates": [
+        {
+          "catalogId": "image30-0-1",
+          "name": "盈雪点翠",
+          "candidateShape": "2x2",
+          "shapeConsistent": true,
+          "identityMatchesGroundTruth": true,
+          "matchReasons": [
+            "WHOLE_CARD_MATCH",
+            "SIFT_INLIERS_30"
+          ],
+          "inManifestV2": true,
+          "inCatalog065": true,
+          "identityStatus": "CANDIDATE_ONLY"
+        }
+      ],
+      "alignmentCategory": "CANDIDATE_PLAUSIBLE",
+      "identityStatus": "CANDIDATE_ONLY",
+      "notes": "Machine proposed 1 shape-consistent candidate(s). Shape matching does NOT equal confirmed identity."
+    },
+    {
+      "referenceId": "ref_144037_20",
+      "gridBoundingBox": {
+        "row": 5,
+        "col": 6,
+        "width": 1,
+        "height": 1,
+        "shape": "1x1"
+      },
+      "quality": "grey",
+      "visualDescription": "灰色品质 1x1 单格单元",
+      "observationBasis": "Single cell 1x1 grey border",
+      "localCropPath": "assets/items/ground_truth_reference_144037/ref_144037_20.png",
+      "cropExists": true,
+      "machineReviewUnitId": "unit-world-5-6-1x1",
+      "machineCandidates": [
+        {
+          "catalogId": "image24-0-0",
+          "name": "霞红钻",
+          "candidateShape": "1x1",
+          "shapeConsistent": true,
+          "identityMatchesGroundTruth": false,
+          "matchReasons": [
+            "WHOLE_CARD_MATCH",
+            "SIFT_INLIERS_14"
+          ],
+          "inManifestV2": true,
+          "inCatalog065": true,
+          "identityStatus": "CANDIDATE_ONLY"
+        }
+      ],
+      "alignmentCategory": "CANDIDATE_PLAUSIBLE",
+      "identityStatus": "CANDIDATE_ONLY",
+      "notes": "Machine proposed 1 shape-consistent candidate(s). Shape matching does NOT equal confirmed identity."
+    },
+    {
+      "referenceId": "ref_144037_21",
+      "gridBoundingBox": {
+        "row": 5,
+        "col": 7,
+        "width": 1,
+        "height": 1,
+        "shape": "1x1"
+      },
+      "quality": "gold",
+      "visualDescription": "金色品质 1x1 单格单元",
+      "observationBasis": "Single cell 1x1 gold border",
+      "localCropPath": "assets/items/ground_truth_reference_144037/ref_144037_21.png",
+      "cropExists": true,
+      "machineReviewUnitId": "unit-world-5-7-1x1",
+      "machineCandidates": [
+        {
+          "catalogId": "visual-9607b248bbf4",
+          "name": "猫丸秘制豚骨拉面",
+          "candidateShape": "1x1",
+          "shapeConsistent": true,
+          "identityMatchesGroundTruth": true,
+          "matchReasons": [
+            "WHOLE_CARD_MATCH",
+            "SIFT_INLIERS_14"
+          ],
+          "inManifestV2": true,
+          "inCatalog065": false,
+          "identityStatus": "CANDIDATE_ONLY"
+        }
+      ],
+      "alignmentCategory": "CANDIDATE_PLAUSIBLE",
+      "identityStatus": "CANDIDATE_ONLY",
+      "notes": "Machine proposed 1 shape-consistent candidate(s). Shape matching does NOT equal confirmed identity."
+    },
+    {
+      "referenceId": "ref_144037_22",
+      "gridBoundingBox": {
+        "row": 5,
+        "col": 8,
+        "width": 2,
+        "height": 3,
+        "shape": "2x3"
+      },
+      "quality": "grey",
+      "visualDescription": "灰色品质 2x3 纵向矩形单元",
+      "observationBasis": "2x3 grey border unit",
+      "localCropPath": "assets/items/ground_truth_reference_144037/ref_144037_22.png",
+      "cropExists": true,
+      "machineReviewUnitId": "unit-world-5-8-2x3",
+      "machineCandidates": [
+        {
+          "catalogId": "image1-0-0",
+          "name": "方盒随身听",
+          "candidateShape": "2x3",
+          "shapeConsistent": true,
+          "identityMatchesGroundTruth": true,
+          "matchReasons": [
+            "WHOLE_CARD_MATCH",
+            "SIFT_INLIERS_44"
+          ],
+          "inManifestV2": true,
+          "inCatalog065": true,
+          "identityStatus": "CANDIDATE_ONLY"
+        }
+      ],
+      "alignmentCategory": "CANDIDATE_PLAUSIBLE",
+      "identityStatus": "CANDIDATE_ONLY",
+      "notes": "Machine proposed 1 shape-consistent candidate(s). Shape matching does NOT equal confirmed identity."
+    },
+    {
+      "referenceId": "ref_144037_23",
+      "gridBoundingBox": {
+        "row": 6,
+        "col": 0,
+        "width": 4,
+        "height": 4,
+        "shape": "4x4"
+      },
+      "quality": "green",
+      "visualDescription": "绿色品质 4x4 大型方形单元",
+      "observationBasis": "Large 4x4 green border occupying cols 0-3, rows 6-9",
+      "localCropPath": "assets/items/ground_truth_reference_144037/ref_144037_23.png",
+      "cropExists": true,
+      "machineReviewUnitId": "unit-world-6-0-4x4",
+      "machineCandidates": [
+        {
+          "catalogId": "image5-0-0",
+          "name": "M1000模型",
+          "candidateShape": "4x4",
+          "shapeConsistent": true,
+          "identityMatchesGroundTruth": true,
+          "matchReasons": [
+            "WHOLE_CARD_MATCH",
+            "SIFT_INLIERS_26"
+          ],
+          "inManifestV2": true,
+          "inCatalog065": true,
+          "identityStatus": "CANDIDATE_ONLY"
+        }
+      ],
+      "alignmentCategory": "CANDIDATE_PLAUSIBLE",
+      "identityStatus": "CANDIDATE_ONLY",
+      "notes": "Machine proposed 1 shape-consistent candidate(s). Shape matching does NOT equal confirmed identity."
+    },
+    {
+      "referenceId": "ref_144037_24",
+      "gridBoundingBox": {
+        "row": 6,
+        "col": 6,
+        "width": 1,
+        "height": 1,
+        "shape": "1x1"
+      },
+      "quality": "purple",
+      "visualDescription": "紫色品质 1x1 单格单元",
+      "observationBasis": "Single cell 1x1 purple border",
+      "localCropPath": "assets/items/ground_truth_reference_144037/ref_144037_24.png",
+      "cropExists": true,
+      "machineReviewUnitId": "unit-world-6-6-1x1",
+      "machineCandidates": [
+        {
+          "catalogId": "image23-1-1",
+          "name": "幽灵态",
+          "candidateShape": "1x1",
+          "shapeConsistent": true,
+          "identityMatchesGroundTruth": true,
+          "matchReasons": [
+            "WHOLE_CARD_MATCH",
+            "SIFT_INLIERS_20"
+          ],
+          "inManifestV2": true,
+          "inCatalog065": true,
+          "identityStatus": "CANDIDATE_ONLY"
+        }
+      ],
+      "alignmentCategory": "CANDIDATE_PLAUSIBLE",
+      "identityStatus": "CANDIDATE_ONLY",
+      "notes": "Machine proposed 1 shape-consistent candidate(s). Shape matching does NOT equal confirmed identity."
+    },
+    {
+      "referenceId": "ref_144037_25",
+      "gridBoundingBox": {
+        "row": 6,
+        "col": 7,
+        "width": 1,
+        "height": 2,
+        "shape": "1x2"
+      },
+      "quality": "gold",
+      "visualDescription": "金色品质 1x2 纵向双格单元",
+      "observationBasis": "Vertical 1x2 gold border unit",
+      "localCropPath": "assets/items/ground_truth_reference_144037/ref_144037_25.png",
+      "cropExists": true,
+      "machineReviewUnitId": "unit-world-6-7-1x2",
+      "machineCandidates": [
+        {
+          "catalogId": "image2-1-0",
+          "name": "生鸡蛋",
+          "candidateShape": "1x2",
+          "shapeConsistent": true,
+          "identityMatchesGroundTruth": false,
+          "matchReasons": [
+            "WHOLE_CARD_MATCH",
+            "SIFT_INLIERS_19"
+          ],
+          "inManifestV2": true,
+          "inCatalog065": true,
+          "identityStatus": "CANDIDATE_ONLY"
+        }
+      ],
+      "alignmentCategory": "CANDIDATE_PLAUSIBLE",
+      "identityStatus": "CANDIDATE_ONLY",
+      "notes": "Machine proposed 1 shape-consistent candidate(s). Shape matching does NOT equal confirmed identity."
+    },
+    {
+      "referenceId": "ref_144037_26",
+      "gridBoundingBox": {
+        "row": 7,
+        "col": 4,
+        "width": 2,
+        "height": 1,
+        "shape": "2x1"
+      },
+      "quality": "gold",
+      "visualDescription": "金色品质 2x1 横向双格单元",
+      "observationBasis": "Horizontal 2x1 gold border",
+      "localCropPath": "assets/items/ground_truth_reference_144037/ref_144037_26.png",
+      "cropExists": true,
+      "machineReviewUnitId": "unit-world-7-4-2x1",
+      "machineCandidates": [
+        {
+          "catalogId": "visual-922c073c366d",
+          "name": "巡哨-干练精英",
+          "candidateShape": "2x1",
+          "shapeConsistent": true,
+          "identityMatchesGroundTruth": true,
+          "matchReasons": [
+            "WHOLE_CARD_MATCH",
+            "SIFT_INLIERS_30"
+          ],
+          "inManifestV2": true,
+          "inCatalog065": false,
+          "identityStatus": "CANDIDATE_ONLY"
+        }
+      ],
+      "alignmentCategory": "CANDIDATE_PLAUSIBLE",
+      "identityStatus": "CANDIDATE_ONLY",
+      "notes": "Machine proposed 1 shape-consistent candidate(s). Shape matching does NOT equal confirmed identity."
+    },
+    {
+      "referenceId": "ref_144037_27",
+      "gridBoundingBox": {
+        "row": 7,
+        "col": 6,
+        "width": 1,
+        "height": 1,
+        "shape": "1x1"
+      },
+      "quality": "blue",
+      "visualDescription": "蓝色品质 1x1 单格单元",
+      "observationBasis": "Single cell 1x1 blue border",
+      "localCropPath": "assets/items/ground_truth_reference_144037/ref_144037_27.png",
+      "cropExists": true,
+      "machineReviewUnitId": "unit-world-7-6-1x1",
+      "machineCandidates": [
+        {
+          "catalogId": "image16-0-0",
+          "name": "（未来的）大师飞镖",
+          "candidateShape": "1x1",
+          "shapeConsistent": true,
+          "identityMatchesGroundTruth": true,
+          "matchReasons": [
+            "FOREGROUND_SHAPE_AND_COLOR",
+            "SCORE_0.9832"
+          ],
+          "inManifestV2": true,
+          "inCatalog065": true,
+          "identityStatus": "CANDIDATE_ONLY"
+        }
+      ],
+      "alignmentCategory": "CANDIDATE_PLAUSIBLE",
+      "identityStatus": "CANDIDATE_ONLY",
+      "notes": "Machine proposed 1 shape-consistent candidate(s). Shape matching does NOT equal confirmed identity."
+    },
+    {
+      "referenceId": "ref_144037_28",
+      "gridBoundingBox": {
+        "row": 8,
+        "col": 4,
+        "width": 5,
+        "height": 5,
+        "shape": "5x5"
+      },
+      "quality": "red",
+      "visualDescription": "红色品质 5x5 巨型方形单元",
+      "observationBasis": "Massive 5x5 red border unit spanning cols 4-8, rows 8-12",
+      "localCropPath": "assets/items/ground_truth_reference_144037/ref_144037_28.png",
+      "cropExists": true,
+      "machineReviewUnitId": "unit-world-8-4-5x5",
+      "machineCandidates": [
+        {
+          "catalogId": "visual-xiaoheng-5x5",
+          "name": "储钱小哼",
+          "candidateShape": "5x5",
+          "shapeConsistent": true,
+          "identityMatchesGroundTruth": true,
+          "matchReasons": [
+            "WHOLE_CARD_MATCH",
+            "SIFT_INLIERS_18"
+          ],
+          "inManifestV2": true,
+          "inCatalog065": false,
+          "identityStatus": "CANDIDATE_ONLY"
+        }
+      ],
+      "alignmentCategory": "CANDIDATE_PLAUSIBLE",
+      "identityStatus": "CANDIDATE_ONLY",
+      "notes": "Machine proposed 1 shape-consistent candidate(s). Shape matching does NOT equal confirmed identity."
+    },
+    {
+      "referenceId": "ref_144037_29",
+      "gridBoundingBox": {
+        "row": 8,
+        "col": 9,
+        "width": 1,
+        "height": 3,
+        "shape": "1x3"
+      },
+      "quality": "blue",
+      "visualDescription": "蓝色品质 1x3 纵向条形单元",
+      "observationBasis": "Vertical 1x3 blue border unit spanning col 9, rows 8-10",
+      "localCropPath": "assets/items/ground_truth_reference_144037/ref_144037_29.png",
+      "cropExists": true,
+      "machineReviewUnitId": "unit-world-8-9-1x3",
+      "machineCandidates": [
+        {
+          "catalogId": "image11-0-0",
+          "name": "灯塔",
+          "candidateShape": "1x3",
+          "shapeConsistent": true,
+          "identityMatchesGroundTruth": true,
+          "matchReasons": [
+            "WHOLE_CARD_MATCH",
+            "SIFT_INLIERS_34"
+          ],
+          "inManifestV2": true,
+          "inCatalog065": true,
+          "identityStatus": "CANDIDATE_ONLY"
+        }
+      ],
+      "alignmentCategory": "CANDIDATE_PLAUSIBLE",
+      "identityStatus": "CANDIDATE_ONLY",
+      "notes": "Machine proposed 1 shape-consistent candidate(s). Shape matching does NOT equal confirmed identity."
+    },
+    {
+      "referenceId": "ref_144037_30",
+      "gridBoundingBox": {
+        "row": 10,
+        "col": 0,
+        "width": 4,
+        "height": 3,
+        "shape": "4x3"
+      },
+      "quality": "gold",
+      "visualDescription": "金色品质 4x3 横向矩形单元",
+      "observationBasis": "Wide 4x3 gold border unit spanning cols 0-3, rows 10-12",
+      "localCropPath": "assets/items/ground_truth_reference_144037/ref_144037_30.png",
+      "cropExists": true,
+      "machineReviewUnitId": "unit-world-10-0-4x3",
+      "machineCandidates": [
+        {
+          "catalogId": "image26-0-2",
+          "name": "罐装随心泥",
+          "candidateShape": "4x3",
+          "shapeConsistent": true,
+          "identityMatchesGroundTruth": true,
+          "matchReasons": [
+            "WHOLE_CARD_MATCH",
+            "SIFT_INLIERS_17"
+          ],
+          "inManifestV2": true,
+          "inCatalog065": true,
+          "identityStatus": "CANDIDATE_ONLY"
+        }
+      ],
+      "alignmentCategory": "CANDIDATE_PLAUSIBLE",
+      "identityStatus": "CANDIDATE_ONLY",
+      "notes": "Machine proposed 1 shape-consistent candidate(s). Shape matching does NOT equal confirmed identity."
+    },
+    {
+      "referenceId": "ref_144037_31",
+      "gridBoundingBox": {
+        "row": 11,
+        "col": 9,
+        "width": 1,
+        "height": 5,
+        "shape": "1x5"
+      },
+      "quality": "gold",
+      "visualDescription": "金色品质 1x5 纵向长条单元",
+      "observationBasis": "Vertical 1x5 gold border unit spanning col 9, rows 11-15",
+      "localCropPath": "assets/items/ground_truth_reference_144037/ref_144037_31.png",
+      "cropExists": true,
+      "machineReviewUnitId": "unit-world-11-9-1x5",
+      "machineCandidates": [
+        {
+          "catalogId": "image27-1-2",
+          "name": "「强身好伙伴！」",
+          "candidateShape": "1x5",
+          "shapeConsistent": true,
+          "identityMatchesGroundTruth": true,
+          "matchReasons": [
+            "WHOLE_CARD_MATCH",
+            "SIFT_INLIERS_20"
+          ],
+          "inManifestV2": true,
+          "inCatalog065": true,
+          "identityStatus": "CANDIDATE_ONLY"
+        }
+      ],
+      "alignmentCategory": "CANDIDATE_PLAUSIBLE",
+      "identityStatus": "CANDIDATE_ONLY",
+      "notes": "Machine proposed 1 shape-consistent candidate(s). Shape matching does NOT equal confirmed identity."
+    },
+    {
+      "referenceId": "ref_144037_32",
+      "gridBoundingBox": {
+        "row": 13,
+        "col": 0,
+        "width": 4,
+        "height": 1,
+        "shape": "4x1"
+      },
+      "quality": "gold",
+      "visualDescription": "金色品质 4x1 横向长条单元",
+      "observationBasis": "Long horizontal 4x1 gold border spanning cols 0-3, row 13",
+      "localCropPath": "assets/items/ground_truth_reference_144037/ref_144037_32.png",
+      "cropExists": true,
+      "machineReviewUnitId": null,
+      "machineCandidates": [],
+      "alignmentCategory": "NO_MACHINE_CANDIDATE",
+      "identityStatus": "UNCONFIRMED",
+      "notes": "No candidate proposal generated by machine resolver."
+    },
+    {
+      "referenceId": "ref_144037_33",
+      "gridBoundingBox": {
+        "row": 13,
+        "col": 4,
+        "width": 2,
+        "height": 2,
+        "shape": "2x2"
+      },
+      "quality": "blue",
+      "visualDescription": "蓝色品质 2x2 方形单元",
+      "observationBasis": "2x2 blue border spanning cols 4-5, rows 13-14",
+      "localCropPath": "assets/items/ground_truth_reference_144037/ref_144037_33.png",
+      "cropExists": true,
+      "machineReviewUnitId": "unit-world-13-4-2x2",
+      "machineCandidates": [
+        {
+          "catalogId": "image12-1-1",
+          "name": "番茄百分百果冻",
+          "candidateShape": "2x2",
+          "shapeConsistent": true,
+          "identityMatchesGroundTruth": true,
+          "matchReasons": [
+            "WHOLE_CARD_MATCH",
+            "SIFT_INLIERS_36"
+          ],
+          "inManifestV2": true,
+          "inCatalog065": true,
+          "identityStatus": "CANDIDATE_ONLY"
+        }
+      ],
+      "alignmentCategory": "CANDIDATE_PLAUSIBLE",
+      "identityStatus": "CANDIDATE_ONLY",
+      "notes": "Machine proposed 1 shape-consistent candidate(s). Shape matching does NOT equal confirmed identity."
+    },
+    {
+      "referenceId": "ref_144037_34",
+      "gridBoundingBox": {
+        "row": 13,
+        "col": 6,
+        "width": 3,
+        "height": 2,
+        "shape": "3x2"
+      },
+      "quality": "blue",
+      "visualDescription": "蓝色品质 3x2 横向矩形单元",
+      "observationBasis": "3x2 blue border spanning cols 6-8, rows 13-14",
+      "localCropPath": "assets/items/ground_truth_reference_144037/ref_144037_34.png",
+      "cropExists": true,
+      "machineReviewUnitId": "unit-world-13-6-3x2",
+      "machineCandidates": [
+        {
+          "catalogId": "image10-1-2",
+          "name": "引航者望远镜",
+          "candidateShape": "3x2",
+          "shapeConsistent": true,
+          "identityMatchesGroundTruth": true,
+          "matchReasons": [
+            "WHOLE_CARD_MATCH",
+            "SIFT_INLIERS_20"
+          ],
+          "inManifestV2": true,
+          "inCatalog065": true,
+          "identityStatus": "CANDIDATE_ONLY"
+        }
+      ],
+      "alignmentCategory": "CANDIDATE_PLAUSIBLE",
+      "identityStatus": "CANDIDATE_ONLY",
+      "notes": "Machine proposed 1 shape-consistent candidate(s). Shape matching does NOT equal confirmed identity."
+    },
+    {
+      "referenceId": "ref_144037_35",
+      "gridBoundingBox": {
+        "row": 14,
+        "col": 0,
+        "width": 2,
+        "height": 2,
+        "shape": "2x2"
+      },
+      "quality": "grey",
+      "visualDescription": "灰色品质 2x2 方形单元",
+      "observationBasis": "2x2 grey border unit spanning cols 0-1, rows 14-15",
+      "localCropPath": "assets/items/ground_truth_reference_144037/ref_144037_35.png",
+      "cropExists": true,
+      "machineReviewUnitId": "unit-world-14-0-2x2",
+      "machineCandidates": [
+        {
+          "catalogId": "image1-1-0",
+          "name": "蟑螂！蟑螂！",
+          "candidateShape": "2x2",
+          "shapeConsistent": true,
+          "identityMatchesGroundTruth": true,
+          "matchReasons": [
+            "WHOLE_CARD_MATCH",
+            "SIFT_INLIERS_35"
+          ],
+          "inManifestV2": true,
+          "inCatalog065": true,
+          "identityStatus": "CANDIDATE_ONLY"
+        }
+      ],
+      "alignmentCategory": "CANDIDATE_PLAUSIBLE",
+      "identityStatus": "CANDIDATE_ONLY",
+      "notes": "Machine proposed 1 shape-consistent candidate(s). Shape matching does NOT equal confirmed identity."
+    },
+    {
+      "referenceId": "ref_144037_36",
+      "gridBoundingBox": {
+        "row": 14,
+        "col": 2,
+        "width": 2,
+        "height": 1,
+        "shape": "2x1"
+      },
+      "quality": "blue",
+      "visualDescription": "蓝色品质 2x1 横向双格单元",
+      "observationBasis": "Horizontal 2x1 blue border spanning cols 2-3, row 14",
+      "localCropPath": "assets/items/ground_truth_reference_144037/ref_144037_36.png",
+      "cropExists": true,
+      "machineReviewUnitId": "unit-world-14-2-2x1",
+      "machineCandidates": [
+        {
+          "catalogId": "image13-1-0",
+          "name": "断落的剑格",
+          "candidateShape": "2x1",
+          "shapeConsistent": true,
+          "identityMatchesGroundTruth": true,
+          "matchReasons": [
+            "WHOLE_CARD_MATCH",
+            "SIFT_INLIERS_23"
+          ],
+          "inManifestV2": true,
+          "inCatalog065": true,
+          "identityStatus": "CANDIDATE_ONLY"
+        }
+      ],
+      "alignmentCategory": "CANDIDATE_PLAUSIBLE",
+      "identityStatus": "CANDIDATE_ONLY",
+      "notes": "Machine proposed 1 shape-consistent candidate(s). Shape matching does NOT equal confirmed identity."
+    },
+    {
+      "referenceId": "ref_144037_37",
+      "gridBoundingBox": {
+        "row": 15,
+        "col": 2,
+        "width": 3,
+        "height": 3,
+        "shape": "3x3"
+      },
+      "quality": "red",
+      "visualDescription": "红色品质 3x3 方形复合单元",
+      "observationBasis": "3x3 red border spanning cols 2-4, rows 15-17",
+      "localCropPath": "assets/items/ground_truth_reference_144037/ref_144037_37.png",
+      "cropExists": true,
+      "machineReviewUnitId": "unit-world-15-2-3x3",
+      "machineCandidates": [
+        {
+          "catalogId": "visual-4cc72b207cb6",
+          "name": "吨吨锤",
+          "candidateShape": "3x3",
+          "shapeConsistent": true,
+          "identityMatchesGroundTruth": true,
+          "matchReasons": [
+            "WHOLE_CARD_MATCH",
+            "SIFT_INLIERS_21"
+          ],
+          "inManifestV2": true,
+          "inCatalog065": false,
+          "identityStatus": "CANDIDATE_ONLY"
+        }
+      ],
+      "alignmentCategory": "CANDIDATE_PLAUSIBLE",
+      "identityStatus": "CANDIDATE_ONLY",
+      "notes": "Machine proposed 1 shape-consistent candidate(s). Shape matching does NOT equal confirmed identity."
+    },
+    {
+      "referenceId": "ref_144037_38",
+      "gridBoundingBox": {
+        "row": 15,
+        "col": 5,
+        "width": 2,
+        "height": 2,
+        "shape": "2x2"
+      },
+      "quality": "green",
+      "visualDescription": "绿色品质 2x2 方形单元",
+      "observationBasis": "2x2 green border spanning cols 5-6, rows 15-16",
+      "localCropPath": "assets/items/ground_truth_reference_144037/ref_144037_38.png",
+      "cropExists": true,
+      "machineReviewUnitId": "unit-world-15-5-2x2",
+      "machineCandidates": [
+        {
+          "catalogId": "image5-1-1",
+          "name": "「莲-C198」唱片机",
+          "candidateShape": "2x2",
+          "shapeConsistent": true,
+          "identityMatchesGroundTruth": true,
+          "matchReasons": [
+            "FOREGROUND_SHAPE_AND_COLOR",
+            "SCORE_0.9961"
+          ],
+          "inManifestV2": true,
+          "inCatalog065": true,
+          "identityStatus": "CANDIDATE_ONLY"
+        }
+      ],
+      "alignmentCategory": "CANDIDATE_PLAUSIBLE",
+      "identityStatus": "CANDIDATE_ONLY",
+      "notes": "Machine proposed 1 shape-consistent candidate(s). Shape matching does NOT equal confirmed identity."
+    },
+    {
+      "referenceId": "ref_144037_39",
+      "gridBoundingBox": {
+        "row": 15,
+        "col": 7,
+        "width": 2,
+        "height": 1,
+        "shape": "2x1"
+      },
+      "quality": "blue",
+      "visualDescription": "蓝色品质 2x1 横向双格单元",
+      "observationBasis": "Horizontal 2x1 blue border ticket card spanning cols 7-8, row 15",
+      "localCropPath": "assets/items/ground_truth_reference_144037/ref_144037_39.png",
+      "cropExists": true,
+      "machineReviewUnitId": "unit-world-15-7-2x1",
+      "machineCandidates": [
+        {
+          "catalogId": "image14-0-0",
+          "name": "清凉凉止痛药",
+          "candidateShape": "2x1",
+          "shapeConsistent": true,
+          "identityMatchesGroundTruth": true,
+          "matchReasons": [
+            "WHOLE_CARD_MATCH",
+            "SIFT_INLIERS_15"
+          ],
+          "inManifestV2": true,
+          "inCatalog065": true,
+          "identityStatus": "CANDIDATE_ONLY"
+        }
+      ],
+      "alignmentCategory": "CANDIDATE_PLAUSIBLE",
+      "identityStatus": "CANDIDATE_ONLY",
+      "notes": "Machine proposed 1 shape-consistent candidate(s). Shape matching does NOT equal confirmed identity."
+    }
+  ]
+}

@@ -1,0 +1,97 @@
+{
+  "video": "D:/video/2026-09-08 14-40-37.mkv",
+  "kind": "real-source-region-crops",
+  "frames": [
+    {
+      "file": "liuliwei-frame-0.png",
+      "sha256": "bb7bd44055303cf526adbbc560a6c25410eac91b02464d7badc5c9f4e745a740",
+      "sourceSha256": "61e5448a2400f1ba11d612aa777dfb5cced77e4a9f3f9e680dbe0c74952ed34c",
+      "sourceBbox": [
+        1753.0,
+        956.0,
+        2053.0,
+        1031.0
+      ],
+      "catalogId": "visual-liuliwei-4x1",
+      "sourcePacket": "build/codex_support_20260912/dense-audit/audit_review_packet.json"
+    },
+    {
+      "file": "liuliwei-frame-1.png",
+      "sha256": "ae27629ce82c9a91ccb5e4194142675d644644a32edd76f9be1aec94ed96250c",
+      "sourceSha256": "063f2a5744eed2b1e04a2d4ca7f8ec5c18ca54ba05f48659b1b0987db60a22b9",
+      "sourceBbox": [
+        1753.0,
+        849.0,
+        2053.0,
+        924.0
+      ],
+      "catalogId": "visual-liuliwei-4x1",
+      "sourcePacket": "build/codex_support_20260912/dense-audit/audit_review_packet.json"
+    },
+    {
+      "file": "liuliwei-frame-2.png",
+      "sha256": "421b390cd3091e28e315f084563216f6c82e61edfcca94d2b7d24016c4c0803f",
+      "sourceSha256": "41c4996ea7400ff88e59d7d9e72a420a32c144b16797838c24f8fcfe2de43763",
+      "sourceBbox": [
+        1753.0,
+        749.0,
+        2053.0,
+        824.0
+      ],
+      "catalogId": "visual-liuliwei-4x1",
+      "sourcePacket": "build/codex_support_20260912/dense-audit/audit_review_packet.json"
+    },
+    {
+      "file": "liuliwei-frame-3.png",
+      "sha256": "ba19f316c523c018342adaa722f5e80ad62d538eecf425d1d2bb5099c898a131",
+      "sourceSha256": "498303abf10f42f435826b3b32ed2f4b073f68018814d4820a161e4a46b1d468",
+      "sourceBbox": [
+        1753.0,
+        642.0,
+        2053.0,
+        717.0
+      ],
+      "catalogId": "visual-liuliwei-4x1",
+      "sourcePacket": "build/codex_support_20260912/dense-audit/audit_review_packet.json"
+    },
+    {
+      "file": "liuliwei-frame-4.png",
+      "sha256": "438877b5a1d136adac4dbd1f1ac9f882854e5c3c3e44f2e445150620253561d2",
+      "sourceSha256": "50e661898815c6541c91bf7d35f8fa28fd598070134ac9f88f225dffd154f65a",
+      "sourceBbox": [
+        1753.0,
+        535.0,
+        2053.0,
+        610.0
+      ],
+      "catalogId": "visual-liuliwei-4x1",
+      "sourcePacket": "build/codex_support_20260912/dense-audit/audit_review_packet.json"
+    },
+    {
+      "file": "liuliwei-frame-5.png",
+      "sha256": "401e77db519708c3b284a784b864b9f5706fa1c78cacaaba98e91b404a05742b",
+      "sourceSha256": "eef4e86f0f774fde013bfa1fff6f14093a25497a0f91e496f965cb1e155b74ad",
+      "sourceBbox": [
+        1753.0,
+        428.0,
+        2053.0,
+        503.0
+      ],
+      "catalogId": "visual-liuliwei-4x1",
+      "sourcePacket": "build/codex_support_20260912/dense-audit/audit_review_packet.json"
+    },
+    {
+      "file": "liuliwei-frame-6.png",
+      "sha256": "4cdc597505ff0de9a86620339626deaefbbb9659af932f8fb479bc126819e28b",
+      "sourceSha256": "74cc154e64f83e492edfac9033edd11062d7adda3c5e591a70edaf9d9e5215ea",
+      "sourceBbox": [
+        1753.0,
+        331.0,
+        2053.0,
+        406.0
+      ],
+      "catalogId": "visual-liuliwei-4x1",
+      "sourcePacket": "build/codex_support_20260912/dense-audit/audit_review_packet.json"
+    }
+  ]
+}

@@ -1,0 +1,1278 @@
+{
+  "metadata": {
+    "title": "47件未接通程序裁图藏品核对清单及画面基准区分",
+    "description": "严格从 catalog_065.json 及 catalog_reference_manifest_v2.json 自动提取，杜绝伪名、绰号与手写补齐",
+    "baselineStage": "P3-HISTORICAL-BASELINE-PRE-CONNECTION",
+    "note": "此文件为接通前的历史基线审计记录，保留供防回归测试与历史追溯；当前最新已接通状态见 catalog_47_connection_report.json",
+    "totalUnresolvedItems": 47,
+    "totalBenchmarkVisualUnits": 39
+  },
+  "unresolvedCatalogItems": [
+    {
+      "index": 1,
+      "catalogId": "image1-0-1",
+      "officialName": "起司",
+      "quality": "灰",
+      "widthCells": 2,
+      "heightCells": 2,
+      "shape": "2x2",
+      "value": 366,
+      "manifestStatus": "MISSING_UNRESOLVED",
+      "sourceScreenshot": null,
+      "cropRelativePath": null,
+      "cropOnDisk": false,
+      "classification": "已有真实名称但缺程序裁图",
+      "unresolvedReason": "官方图鉴数据存在，但在48张用户截图中未完成卡片坐标定位与切片提取"
+    },
+    {
+      "index": 2,
+      "catalogId": "image1-1-2",
+      "officialName": "艺术画「花原」",
+      "quality": "灰",
+      "widthCells": 1,
+      "heightCells": 2,
+      "shape": "1x2",
+      "value": 241,
+      "manifestStatus": "MISSING_UNRESOLVED",
+      "sourceScreenshot": null,
+      "cropRelativePath": null,
+      "cropOnDisk": false,
+      "classification": "已有真实名称但缺程序裁图",
+      "unresolvedReason": "官方图鉴数据存在，但在48张用户截图中未完成卡片坐标定位与切片提取"
+    },
+    {
+      "index": 3,
+      "catalogId": "image10-0-1",
+      "officialName": "「方盒科技」手机",
+      "quality": "蓝",
+      "widthCells": 2,
+      "heightCells": 2,
+      "shape": "2x2",
+      "value": 8848,
+      "manifestStatus": "MISSING_UNRESOLVED",
+      "sourceScreenshot": null,
+      "cropRelativePath": null,
+      "cropOnDisk": false,
+      "classification": "已有真实名称但缺程序裁图",
+      "unresolvedReason": "官方图鉴数据存在，但在48张用户截图中未完成卡片坐标定位与切片提取"
+    },
+    {
+      "index": 4,
+      "catalogId": "image10-1-0",
+      "officialName": "艺术画「深林」",
+      "quality": "蓝",
+      "widthCells": 3,
+      "heightCells": 3,
+      "shape": "3x3",
+      "value": 6069,
+      "manifestStatus": "MISSING_UNRESOLVED",
+      "sourceScreenshot": null,
+      "cropRelativePath": null,
+      "cropOnDisk": false,
+      "classification": "已有真实名称但缺程序裁图",
+      "unresolvedReason": "官方图鉴数据存在，但在48张用户截图中未完成卡片坐标定位与切片提取"
+    },
+    {
+      "index": 5,
+      "catalogId": "image10-1-1",
+      "officialName": "清晨的痛击",
+      "quality": "蓝",
+      "widthCells": 2,
+      "heightCells": 3,
+      "shape": "2x3",
+      "value": 4843,
+      "manifestStatus": "MISSING_UNRESOLVED",
+      "sourceScreenshot": null,
+      "cropRelativePath": null,
+      "cropOnDisk": false,
+      "classification": "已有真实名称但缺程序裁图",
+      "unresolvedReason": "官方图鉴数据存在，但在48张用户截图中未完成卡片坐标定位与切片提取"
+    },
+    {
+      "index": 6,
+      "catalogId": "image11-1-1",
+      "officialName": "失落的甲胄",
+      "quality": "蓝",
+      "widthCells": 3,
+      "heightCells": 3,
+      "shape": "3x3",
+      "value": 3626,
+      "manifestStatus": "MISSING_UNRESOLVED",
+      "sourceScreenshot": null,
+      "cropRelativePath": null,
+      "cropOnDisk": false,
+      "classification": "已有真实名称但缺程序裁图",
+      "unresolvedReason": "官方图鉴数据存在，但在48张用户截图中未完成卡片坐标定位与切片提取"
+    },
+    {
+      "index": 7,
+      "catalogId": "image11-1-2",
+      "officialName": "觊觎钱币",
+      "quality": "蓝",
+      "widthCells": 3,
+      "heightCells": 2,
+      "shape": "3x2",
+      "value": 3618,
+      "manifestStatus": "MISSING_UNRESOLVED",
+      "sourceScreenshot": null,
+      "cropRelativePath": null,
+      "cropOnDisk": false,
+      "classification": "已有真实名称但缺程序裁图",
+      "unresolvedReason": "官方图鉴数据存在，但在48张用户截图中未完成卡片坐标定位与切片提取"
+    },
+    {
+      "index": 8,
+      "catalogId": "image12-0-0",
+      "officialName": "销魂挠挠爪",
+      "quality": "蓝",
+      "widthCells": 2,
+      "heightCells": 3,
+      "shape": "2x3",
+      "value": 3598,
+      "manifestStatus": "MISSING_UNRESOLVED",
+      "sourceScreenshot": null,
+      "cropRelativePath": null,
+      "cropOnDisk": false,
+      "classification": "已有真实名称但缺程序裁图",
+      "unresolvedReason": "官方图鉴数据存在，但在48张用户截图中未完成卡片坐标定位与切片提取"
+    },
+    {
+      "index": 9,
+      "catalogId": "image13-0-1",
+      "officialName": "柠檬气泡水",
+      "quality": "蓝",
+      "widthCells": 1,
+      "heightCells": 3,
+      "shape": "1x3",
+      "value": 2224,
+      "manifestStatus": "MISSING_UNRESOLVED",
+      "sourceScreenshot": null,
+      "cropRelativePath": null,
+      "cropOnDisk": false,
+      "classification": "已有真实名称但缺程序裁图",
+      "unresolvedReason": "官方图鉴数据存在，但在48张用户截图中未完成卡片坐标定位与切片提取"
+    },
+    {
+      "index": 10,
+      "catalogId": "image13-0-2",
+      "officialName": "断落的剑柄",
+      "quality": "蓝",
+      "widthCells": 1,
+      "heightCells": 2,
+      "shape": "1x2",
+      "value": 2139,
+      "manifestStatus": "MISSING_UNRESOLVED",
+      "sourceScreenshot": null,
+      "cropRelativePath": null,
+      "cropOnDisk": false,
+      "classification": "已有真实名称但缺程序裁图",
+      "unresolvedReason": "官方图鉴数据存在，但在48张用户截图中未完成卡片坐标定位与切片提取"
+    },
+    {
+      "index": 11,
+      "catalogId": "image16-0-0",
+      "officialName": "（未来的）大师飞镖",
+      "quality": "蓝",
+      "widthCells": 1,
+      "heightCells": 1,
+      "shape": "1x1",
+      "value": 996,
+      "manifestStatus": "MISSING_UNRESOLVED",
+      "sourceScreenshot": null,
+      "cropRelativePath": null,
+      "cropOnDisk": false,
+      "classification": "已有真实名称但缺程序裁图",
+      "unresolvedReason": "官方图鉴数据存在，但在48张用户截图中未完成卡片坐标定位与切片提取"
+    },
+    {
+      "index": 12,
+      "catalogId": "image17-1-0",
+      "officialName": "拈花小像",
+      "quality": "紫",
+      "widthCells": 3,
+      "heightCells": 2,
+      "shape": "3x2",
+      "value": 18075,
+      "manifestStatus": "MISSING_UNRESOLVED",
+      "sourceScreenshot": null,
+      "cropRelativePath": null,
+      "cropOnDisk": false,
+      "classification": "已有真实名称但缺程序裁图",
+      "unresolvedReason": "官方图鉴数据存在，但在48张用户截图中未完成卡片坐标定位与切片提取"
+    },
+    {
+      "index": 13,
+      "catalogId": "image18-0-0",
+      "officialName": "囿于窠巢",
+      "quality": "紫",
+      "widthCells": 2,
+      "heightCells": 3,
+      "shape": "2x3",
+      "value": 14934,
+      "manifestStatus": "MISSING_UNRESOLVED",
+      "sourceScreenshot": null,
+      "cropRelativePath": null,
+      "cropOnDisk": false,
+      "classification": "已有真实名称但缺程序裁图",
+      "unresolvedReason": "官方图鉴数据存在，但在48张用户截图中未完成卡片坐标定位与切片提取"
+    },
+    {
+      "index": 14,
+      "catalogId": "image18-0-1",
+      "officialName": "「方盒科技」平板",
+      "quality": "紫",
+      "widthCells": 2,
+      "heightCells": 3,
+      "shape": "2x3",
+      "value": 11038,
+      "manifestStatus": "MISSING_UNRESOLVED",
+      "sourceScreenshot": null,
+      "cropRelativePath": null,
+      "cropOnDisk": false,
+      "classification": "已有真实名称但缺程序裁图",
+      "unresolvedReason": "官方图鉴数据存在，但在48张用户截图中未完成卡片坐标定位与切片提取"
+    },
+    {
+      "index": 15,
+      "catalogId": "image18-1-1",
+      "officialName": "留声机",
+      "quality": "紫",
+      "widthCells": 2,
+      "heightCells": 2,
+      "shape": "2x2",
+      "value": 9946,
+      "manifestStatus": "MISSING_UNRESOLVED",
+      "sourceScreenshot": null,
+      "cropRelativePath": null,
+      "cropOnDisk": false,
+      "classification": "已有真实名称但缺程序裁图",
+      "unresolvedReason": "官方图鉴数据存在，但在48张用户截图中未完成卡片坐标定位与切片提取"
+    },
+    {
+      "index": 16,
+      "catalogId": "image19-0-2",
+      "officialName": "角斗士之歌",
+      "quality": "紫",
+      "widthCells": 1,
+      "heightCells": 3,
+      "shape": "1x3",
+      "value": 8019,
+      "manifestStatus": "MISSING_UNRESOLVED",
+      "sourceScreenshot": null,
+      "cropRelativePath": null,
+      "cropOnDisk": false,
+      "classification": "已有真实名称但缺程序裁图",
+      "unresolvedReason": "官方图鉴数据存在，但在48张用户截图中未完成卡片坐标定位与切片提取"
+    },
+    {
+      "index": 17,
+      "catalogId": "image2-0-0",
+      "officialName": "艺术画「解构」",
+      "quality": "灰",
+      "widthCells": 1,
+      "heightCells": 2,
+      "shape": "1x2",
+      "value": 240,
+      "manifestStatus": "MISSING_UNRESOLVED",
+      "sourceScreenshot": null,
+      "cropRelativePath": null,
+      "cropOnDisk": false,
+      "classification": "已有真实名称但缺程序裁图",
+      "unresolvedReason": "官方图鉴数据存在，但在48张用户截图中未完成卡片坐标定位与切片提取"
+    },
+    {
+      "index": 18,
+      "catalogId": "image2-0-2",
+      "officialName": "纸牌",
+      "quality": "灰",
+      "widthCells": 1,
+      "heightCells": 2,
+      "shape": "1x2",
+      "value": 183,
+      "manifestStatus": "MISSING_UNRESOLVED",
+      "sourceScreenshot": null,
+      "cropRelativePath": null,
+      "cropOnDisk": false,
+      "classification": "已有真实名称但缺程序裁图",
+      "unresolvedReason": "官方图鉴数据存在，但在48张用户截图中未完成卡片坐标定位与切片提取"
+    },
+    {
+      "index": 19,
+      "catalogId": "image2-1-0",
+      "officialName": "生鸡蛋",
+      "quality": "灰",
+      "widthCells": 1,
+      "heightCells": 2,
+      "shape": "1x2",
+      "value": 178,
+      "manifestStatus": "MISSING_UNRESOLVED",
+      "sourceScreenshot": null,
+      "cropRelativePath": null,
+      "cropOnDisk": false,
+      "classification": "已有真实名称但缺程序裁图",
+      "unresolvedReason": "官方图鉴数据存在，但在48张用户截图中未完成卡片坐标定位与切片提取"
+    },
+    {
+      "index": 20,
+      "catalogId": "image2-1-1",
+      "officialName": "磨刀石",
+      "quality": "灰",
+      "widthCells": 2,
+      "heightCells": 1,
+      "shape": "2x1",
+      "value": 167,
+      "manifestStatus": "MISSING_UNRESOLVED",
+      "sourceScreenshot": null,
+      "cropRelativePath": null,
+      "cropOnDisk": false,
+      "classification": "已有真实名称但缺程序裁图",
+      "unresolvedReason": "官方图鉴数据存在，但在48张用户截图中未完成卡片坐标定位与切片提取"
+    },
+    {
+      "index": 21,
+      "catalogId": "image20-0-2",
+      "officialName": "「切玉」",
+      "quality": "紫",
+      "widthCells": 2,
+      "heightCells": 1,
+      "shape": "2x1",
+      "value": 6011,
+      "manifestStatus": "MISSING_UNRESOLVED",
+      "sourceScreenshot": null,
+      "cropRelativePath": null,
+      "cropOnDisk": false,
+      "classification": "已有真实名称但缺程序裁图",
+      "unresolvedReason": "官方图鉴数据存在，但在48张用户截图中未完成卡片坐标定位与切片提取"
+    },
+    {
+      "index": 22,
+      "catalogId": "image20-1-2",
+      "officialName": "「方盒科技」耳机",
+      "quality": "紫",
+      "widthCells": 2,
+      "heightCells": 2,
+      "shape": "2x2",
+      "value": 5997,
+      "manifestStatus": "MISSING_UNRESOLVED",
+      "sourceScreenshot": null,
+      "cropRelativePath": null,
+      "cropOnDisk": false,
+      "classification": "已有真实名称但缺程序裁图",
+      "unresolvedReason": "官方图鉴数据存在，但在48张用户截图中未完成卡片坐标定位与切片提取"
+    },
+    {
+      "index": 23,
+      "catalogId": "image21-0-1",
+      "officialName": "四角魔方",
+      "quality": "紫",
+      "widthCells": 2,
+      "heightCells": 2,
+      "shape": "2x2",
+      "value": 5955,
+      "manifestStatus": "MISSING_UNRESOLVED",
+      "sourceScreenshot": null,
+      "cropRelativePath": null,
+      "cropOnDisk": false,
+      "classification": "已有真实名称但缺程序裁图",
+      "unresolvedReason": "官方图鉴数据存在，但在48张用户截图中未完成卡片坐标定位与切片提取"
+    },
+    {
+      "index": 24,
+      "catalogId": "image22-0-0",
+      "officialName": "圣铃晶石",
+      "quality": "紫",
+      "widthCells": 1,
+      "heightCells": 2,
+      "shape": "1x2",
+      "value": 4481,
+      "manifestStatus": "MISSING_UNRESOLVED",
+      "sourceScreenshot": null,
+      "cropRelativePath": null,
+      "cropOnDisk": false,
+      "classification": "已有真实名称但缺程序裁图",
+      "unresolvedReason": "官方图鉴数据存在，但在48张用户截图中未完成卡片坐标定位与切片提取"
+    },
+    {
+      "index": 25,
+      "catalogId": "image23-0-1",
+      "officialName": "饕目",
+      "quality": "紫",
+      "widthCells": 1,
+      "heightCells": 1,
+      "shape": "1x1",
+      "value": 3060,
+      "manifestStatus": "MISSING_UNRESOLVED",
+      "sourceScreenshot": null,
+      "cropRelativePath": null,
+      "cropOnDisk": false,
+      "classification": "已有真实名称但缺程序裁图",
+      "unresolvedReason": "官方图鉴数据存在，但在48张用户截图中未完成卡片坐标定位与切片提取"
+    },
+    {
+      "index": 26,
+      "catalogId": "image25-0-0",
+      "officialName": "弹性球",
+      "quality": "紫",
+      "widthCells": 1,
+      "heightCells": 1,
+      "shape": "1x1",
+      "value": 1992,
+      "manifestStatus": "MISSING_UNRESOLVED",
+      "sourceScreenshot": null,
+      "cropRelativePath": null,
+      "cropOnDisk": false,
+      "classification": "已有真实名称但缺程序裁图",
+      "unresolvedReason": "官方图鉴数据存在，但在48张用户截图中未完成卡片坐标定位与切片提取"
+    },
+    {
+      "index": 27,
+      "catalogId": "image26-1-1",
+      "officialName": "条纹鲷",
+      "quality": "金",
+      "widthCells": 4,
+      "heightCells": 3,
+      "shape": "4x3",
+      "value": 101537,
+      "manifestStatus": "MISSING_UNRESOLVED",
+      "sourceScreenshot": null,
+      "cropRelativePath": null,
+      "cropOnDisk": false,
+      "classification": "已有真实名称但缺程序裁图",
+      "unresolvedReason": "官方图鉴数据存在，但在48张用户截图中未完成卡片坐标定位与切片提取"
+    },
+    {
+      "index": 28,
+      "catalogId": "image27-1-0",
+      "officialName": "浅维祈手办",
+      "quality": "金",
+      "widthCells": 3,
+      "heightCells": 3,
+      "shape": "3x3",
+      "value": 30264,
+      "manifestStatus": "MISSING_UNRESOLVED",
+      "sourceScreenshot": null,
+      "cropRelativePath": null,
+      "cropOnDisk": false,
+      "classification": "已有真实名称但缺程序裁图",
+      "unresolvedReason": "官方图鉴数据存在，但在48张用户截图中未完成卡片坐标定位与切片提取"
+    },
+    {
+      "index": 29,
+      "catalogId": "image28-1-1",
+      "officialName": "心猎铁骑L3——以当千",
+      "quality": "金",
+      "widthCells": 2,
+      "heightCells": 3,
+      "shape": "2x3",
+      "value": 22297,
+      "manifestStatus": "MISSING_UNRESOLVED",
+      "sourceScreenshot": null,
+      "cropRelativePath": null,
+      "cropOnDisk": false,
+      "classification": "已有真实名称但缺程序裁图",
+      "unresolvedReason": "官方图鉴数据存在，但在48张用户截图中未完成卡片坐标定位与切片提取"
+    },
+    {
+      "index": 30,
+      "catalogId": "image30-0-1",
+      "officialName": "盈雪点翠",
+      "quality": "金",
+      "widthCells": 2,
+      "heightCells": 2,
+      "shape": "2x2",
+      "value": 15037,
+      "manifestStatus": "MISSING_UNRESOLVED",
+      "sourceScreenshot": null,
+      "cropRelativePath": null,
+      "cropOnDisk": false,
+      "classification": "已有真实名称但缺程序裁图",
+      "unresolvedReason": "官方图鉴数据存在，但在48张用户截图中未完成卡片坐标定位与切片提取"
+    },
+    {
+      "index": 31,
+      "catalogId": "image30-1-1",
+      "officialName": "「方盒科技」电容笔",
+      "quality": "金",
+      "widthCells": 1,
+      "heightCells": 3,
+      "shape": "1x3",
+      "value": 12116,
+      "manifestStatus": "MISSING_UNRESOLVED",
+      "sourceScreenshot": null,
+      "cropRelativePath": null,
+      "cropOnDisk": false,
+      "classification": "已有真实名称但缺程序裁图",
+      "unresolvedReason": "官方图鉴数据存在，但在48张用户截图中未完成卡片坐标定位与切片提取"
+    },
+    {
+      "index": 32,
+      "catalogId": "image30-1-2",
+      "officialName": "「方盒科技」充电宝",
+      "quality": "金",
+      "widthCells": 2,
+      "heightCells": 2,
+      "shape": "2x2",
+      "value": 11981,
+      "manifestStatus": "MISSING_UNRESOLVED",
+      "sourceScreenshot": null,
+      "cropRelativePath": null,
+      "cropOnDisk": false,
+      "classification": "已有真实名称但缺程序裁图",
+      "unresolvedReason": "官方图鉴数据存在，但在48张用户截图中未完成卡片坐标定位与切片提取"
+    },
+    {
+      "index": 33,
+      "catalogId": "image31-1-1",
+      "officialName": "绒默花瓣",
+      "quality": "金",
+      "widthCells": 2,
+      "heightCells": 1,
+      "shape": "2x1",
+      "value": 7547,
+      "manifestStatus": "MISSING_UNRESOLVED",
+      "sourceScreenshot": null,
+      "cropRelativePath": null,
+      "cropOnDisk": false,
+      "classification": "已有真实名称但缺程序裁图",
+      "unresolvedReason": "官方图鉴数据存在，但在48张用户截图中未完成卡片坐标定位与切片提取"
+    },
+    {
+      "index": 34,
+      "catalogId": "image31-1-2",
+      "officialName": "「方盒科技」智能手表",
+      "quality": "金",
+      "widthCells": 1,
+      "heightCells": 2,
+      "shape": "1x2",
+      "value": 7500,
+      "manifestStatus": "MISSING_UNRESOLVED",
+      "sourceScreenshot": null,
+      "cropRelativePath": null,
+      "cropOnDisk": false,
+      "classification": "已有真实名称但缺程序裁图",
+      "unresolvedReason": "官方图鉴数据存在，但在48张用户截图中未完成卡片坐标定位与切片提取"
+    },
+    {
+      "index": 35,
+      "catalogId": "image33-0-2",
+      "officialName": "「永恒之心」",
+      "quality": "红",
+      "widthCells": 1,
+      "heightCells": 1,
+      "shape": "1x1",
+      "value": 1314520,
+      "manifestStatus": "MISSING_UNRESOLVED",
+      "sourceScreenshot": null,
+      "cropRelativePath": null,
+      "cropOnDisk": false,
+      "classification": "已有真实名称但缺程序裁图",
+      "unresolvedReason": "官方图鉴数据存在，但在48张用户截图中未完成卡片坐标定位与切片提取"
+    },
+    {
+      "index": 36,
+      "catalogId": "image35-0-1",
+      "officialName": "「几何」摆件",
+      "quality": "红",
+      "widthCells": 1,
+      "heightCells": 1,
+      "shape": "1x1",
+      "value": 61803,
+      "manifestStatus": "MISSING_UNRESOLVED",
+      "sourceScreenshot": null,
+      "cropRelativePath": null,
+      "cropOnDisk": false,
+      "classification": "已有真实名称但缺程序裁图",
+      "unresolvedReason": "官方图鉴数据存在，但在48张用户截图中未完成卡片坐标定位与切片提取"
+    },
+    {
+      "index": 37,
+      "catalogId": "image35-1-2",
+      "officialName": "「泪滴」",
+      "quality": "红",
+      "widthCells": 1,
+      "heightCells": 1,
+      "shape": "1x1",
+      "value": 50000,
+      "manifestStatus": "MISSING_UNRESOLVED",
+      "sourceScreenshot": null,
+      "cropRelativePath": null,
+      "cropOnDisk": false,
+      "classification": "已有真实名称但缺程序裁图",
+      "unresolvedReason": "官方图鉴数据存在，但在48张用户截图中未完成卡片坐标定位与切片提取"
+    },
+    {
+      "index": 38,
+      "catalogId": "image36-0-0",
+      "officialName": "「摇星」",
+      "quality": "红",
+      "widthCells": 2,
+      "heightCells": 2,
+      "shape": "2x2",
+      "value": 31618,
+      "manifestStatus": "MISSING_UNRESOLVED",
+      "sourceScreenshot": null,
+      "cropRelativePath": null,
+      "cropOnDisk": false,
+      "classification": "已有真实名称但缺程序裁图",
+      "unresolvedReason": "官方图鉴数据存在，但在48张用户截图中未完成卡片坐标定位与切片提取"
+    },
+    {
+      "index": 39,
+      "catalogId": "image36-0-1",
+      "officialName": "酥酥酥天井",
+      "quality": "红",
+      "widthCells": 2,
+      "heightCells": 1,
+      "shape": "2x1",
+      "value": 29977,
+      "manifestStatus": "MISSING_UNRESOLVED",
+      "sourceScreenshot": null,
+      "cropRelativePath": null,
+      "cropOnDisk": false,
+      "classification": "已有真实名称但缺程序裁图",
+      "unresolvedReason": "官方图鉴数据存在，但在48张用户截图中未完成卡片坐标定位与切片提取"
+    },
+    {
+      "index": 40,
+      "catalogId": "image5-1-1",
+      "officialName": "「莲-C198」唱片机",
+      "quality": "绿",
+      "widthCells": 2,
+      "heightCells": 2,
+      "shape": "2x2",
+      "value": 1624,
+      "manifestStatus": "MISSING_UNRESOLVED",
+      "sourceScreenshot": null,
+      "cropRelativePath": null,
+      "cropOnDisk": false,
+      "classification": "已有真实名称但缺程序裁图",
+      "unresolvedReason": "官方图鉴数据存在，但在48张用户截图中未完成卡片坐标定位与切片提取"
+    },
+    {
+      "index": 41,
+      "catalogId": "image5-1-2",
+      "officialName": "「烘焙伴侣」抹茶粉",
+      "quality": "绿",
+      "widthCells": 1,
+      "heightCells": 2,
+      "shape": "1x2",
+      "value": 1353,
+      "manifestStatus": "MISSING_UNRESOLVED",
+      "sourceScreenshot": null,
+      "cropRelativePath": null,
+      "cropOnDisk": false,
+      "classification": "已有真实名称但缺程序裁图",
+      "unresolvedReason": "官方图鉴数据存在，但在48张用户截图中未完成卡片坐标定位与切片提取"
+    },
+    {
+      "index": 42,
+      "catalogId": "image6-0-2",
+      "officialName": "巡弋轮滑",
+      "quality": "绿",
+      "widthCells": 2,
+      "heightCells": 1,
+      "shape": "2x1",
+      "value": 1210,
+      "manifestStatus": "MISSING_UNRESOLVED",
+      "sourceScreenshot": null,
+      "cropRelativePath": null,
+      "cropOnDisk": false,
+      "classification": "已有真实名称但缺程序裁图",
+      "unresolvedReason": "官方图鉴数据存在，但在48张用户截图中未完成卡片坐标定位与切片提取"
+    },
+    {
+      "index": 43,
+      "catalogId": "image6-1-1",
+      "officialName": "断线之筝",
+      "quality": "绿",
+      "widthCells": 1,
+      "heightCells": 2,
+      "shape": "1x2",
+      "value": 1072,
+      "manifestStatus": "MISSING_UNRESOLVED",
+      "sourceScreenshot": null,
+      "cropRelativePath": null,
+      "cropOnDisk": false,
+      "classification": "已有真实名称但缺程序裁图",
+      "unresolvedReason": "官方图鉴数据存在，但在48张用户截图中未完成卡片坐标定位与切片提取"
+    },
+    {
+      "index": 44,
+      "catalogId": "image7-1-1",
+      "officialName": "吃薯片用洗指机",
+      "quality": "绿",
+      "widthCells": 2,
+      "heightCells": 1,
+      "shape": "2x1",
+      "value": 1040,
+      "manifestStatus": "MISSING_UNRESOLVED",
+      "sourceScreenshot": null,
+      "cropRelativePath": null,
+      "cropOnDisk": false,
+      "classification": "已有真实名称但缺程序裁图",
+      "unresolvedReason": "官方图鉴数据存在，但在48张用户截图中未完成卡片坐标定位与切片提取"
+    },
+    {
+      "index": 45,
+      "catalogId": "image7-1-2",
+      "officialName": "梦中茧",
+      "quality": "绿",
+      "widthCells": 2,
+      "heightCells": 2,
+      "shape": "2x2",
+      "value": 918,
+      "manifestStatus": "MISSING_UNRESOLVED",
+      "sourceScreenshot": null,
+      "cropRelativePath": null,
+      "cropOnDisk": false,
+      "classification": "已有真实名称但缺程序裁图",
+      "unresolvedReason": "官方图鉴数据存在，但在48张用户截图中未完成卡片坐标定位与切片提取"
+    },
+    {
+      "index": 46,
+      "catalogId": "image9-0-2",
+      "officialName": "拍拍球",
+      "quality": "绿",
+      "widthCells": 1,
+      "heightCells": 1,
+      "shape": "1x1",
+      "value": 548,
+      "manifestStatus": "MISSING_UNRESOLVED",
+      "sourceScreenshot": null,
+      "cropRelativePath": null,
+      "cropOnDisk": false,
+      "classification": "已有真实名称但缺程序裁图",
+      "unresolvedReason": "官方图鉴数据存在，但在48张用户截图中未完成卡片坐标定位与切片提取"
+    },
+    {
+      "index": 47,
+      "catalogId": "image9-1-2",
+      "officialName": "鎏金盂",
+      "quality": "绿",
+      "widthCells": 1,
+      "heightCells": 1,
+      "shape": "1x1",
+      "value": 496,
+      "manifestStatus": "MISSING_UNRESOLVED",
+      "sourceScreenshot": null,
+      "cropRelativePath": null,
+      "cropOnDisk": false,
+      "classification": "已有真实名称但缺程序裁图",
+      "unresolvedReason": "官方图鉴数据存在，但在48张用户截图中未完成卡片坐标定位与切片提取"
+    }
+  ],
+  "benchmarkVisualUnitsSummary": {
+    "totalItems": 39,
+    "classification": "画面已裁切但身份尚未确认",
+    "canonicalNamePolicy": "严格为 null，仅作为几何分件基准，严禁无依据赋名",
+    "items": [
+      {
+        "referenceId": "ref_144037_01",
+        "gridBoundingBox": {
+          "row": 0,
+          "col": 0,
+          "width": 2,
+          "height": 3,
+          "shape": "2x3"
+        },
+        "quality": "blue",
+        "canonicalName": null,
+        "identityStatus": "UNKNOWN_OR_CANDIDATE_UNCONFIRMED"
+      },
+      {
+        "referenceId": "ref_144037_02",
+        "gridBoundingBox": {
+          "row": 0,
+          "col": 2,
+          "width": 1,
+          "height": 3,
+          "shape": "1x3"
+        },
+        "quality": "blue",
+        "canonicalName": null,
+        "identityStatus": "UNKNOWN_OR_CANDIDATE_UNCONFIRMED"
+      },
+      {
+        "referenceId": "ref_144037_03",
+        "gridBoundingBox": {
+          "row": 0,
+          "col": 3,
+          "width": 1,
+          "height": 1,
+          "shape": "1x1"
+        },
+        "quality": "green",
+        "canonicalName": null,
+        "identityStatus": "UNKNOWN_OR_CANDIDATE_UNCONFIRMED"
+      },
+      {
+        "referenceId": "ref_144037_04",
+        "gridBoundingBox": {
+          "row": 0,
+          "col": 4,
+          "width": 1,
+          "height": 1,
+          "shape": "1x1"
+        },
+        "quality": "green",
+        "canonicalName": null,
+        "identityStatus": "UNKNOWN_OR_CANDIDATE_UNCONFIRMED"
+      },
+      {
+        "referenceId": "ref_144037_05",
+        "gridBoundingBox": {
+          "row": 0,
+          "col": 5,
+          "width": 2,
+          "height": 1,
+          "shape": "2x1"
+        },
+        "quality": "blue",
+        "canonicalName": null,
+        "identityStatus": "UNKNOWN_OR_CANDIDATE_UNCONFIRMED"
+      },
+      {
+        "referenceId": "ref_144037_06",
+        "gridBoundingBox": {
+          "row": 0,
+          "col": 7,
+          "width": 1,
+          "height": 1,
+          "shape": "1x1"
+        },
+        "quality": "blue",
+        "canonicalName": null,
+        "identityStatus": "UNKNOWN_OR_CANDIDATE_UNCONFIRMED"
+      },
+      {
+        "referenceId": "ref_144037_07",
+        "gridBoundingBox": {
+          "row": 0,
+          "col": 8,
+          "width": 2,
+          "height": 1,
+          "shape": "2x1"
+        },
+        "quality": "green",
+        "canonicalName": null,
+        "identityStatus": "UNKNOWN_OR_CANDIDATE_UNCONFIRMED"
+      },
+      {
+        "referenceId": "ref_144037_08",
+        "gridBoundingBox": {
+          "row": 1,
+          "col": 3,
+          "width": 3,
+          "height": 3,
+          "shape": "3x3"
+        },
+        "quality": "blue",
+        "canonicalName": null,
+        "identityStatus": "UNKNOWN_OR_CANDIDATE_UNCONFIRMED"
+      },
+      {
+        "referenceId": "ref_144037_09",
+        "gridBoundingBox": {
+          "row": 1,
+          "col": 6,
+          "width": 3,
+          "height": 3,
+          "shape": "3x3"
+        },
+        "quality": "red",
+        "canonicalName": null,
+        "identityStatus": "UNKNOWN_OR_CANDIDATE_UNCONFIRMED"
+      },
+      {
+        "referenceId": "ref_144037_10",
+        "gridBoundingBox": {
+          "row": 1,
+          "col": 9,
+          "width": 1,
+          "height": 1,
+          "shape": "1x1"
+        },
+        "quality": "purple",
+        "canonicalName": null,
+        "identityStatus": "UNKNOWN_OR_CANDIDATE_UNCONFIRMED"
+      },
+      {
+        "referenceId": "ref_144037_11",
+        "gridBoundingBox": {
+          "row": 2,
+          "col": 9,
+          "width": 1,
+          "height": 2,
+          "shape": "1x2"
+        },
+        "quality": "red",
+        "canonicalName": null,
+        "identityStatus": "UNKNOWN_OR_CANDIDATE_UNCONFIRMED"
+      },
+      {
+        "referenceId": "ref_144037_12",
+        "gridBoundingBox": {
+          "row": 3,
+          "col": 0,
+          "width": 2,
+          "height": 2,
+          "shape": "2x2"
+        },
+        "quality": "purple",
+        "canonicalName": null,
+        "identityStatus": "UNKNOWN_OR_CANDIDATE_UNCONFIRMED"
+      },
+      {
+        "referenceId": "ref_144037_13",
+        "gridBoundingBox": {
+          "row": 3,
+          "col": 2,
+          "width": 1,
+          "height": 1,
+          "shape": "1x1"
+        },
+        "quality": "green",
+        "canonicalName": null,
+        "identityStatus": "UNKNOWN_OR_CANDIDATE_UNCONFIRMED"
+      },
+      {
+        "referenceId": "ref_144037_14",
+        "gridBoundingBox": {
+          "row": 4,
+          "col": 2,
+          "width": 2,
+          "height": 2,
+          "shape": "2x2"
+        },
+        "quality": "gold",
+        "canonicalName": null,
+        "identityStatus": "UNKNOWN_OR_CANDIDATE_UNCONFIRMED"
+      },
+      {
+        "referenceId": "ref_144037_15",
+        "gridBoundingBox": {
+          "row": 4,
+          "col": 4,
+          "width": 3,
+          "height": 1,
+          "shape": "3x1"
+        },
+        "quality": "green",
+        "canonicalName": null,
+        "identityStatus": "UNKNOWN_OR_CANDIDATE_UNCONFIRMED"
+      },
+      {
+        "referenceId": "ref_144037_16",
+        "gridBoundingBox": {
+          "row": 4,
+          "col": 7,
+          "width": 2,
+          "height": 1,
+          "shape": "2x1"
+        },
+        "quality": "gold",
+        "canonicalName": null,
+        "identityStatus": "UNKNOWN_OR_CANDIDATE_UNCONFIRMED"
+      },
+      {
+        "referenceId": "ref_144037_17",
+        "gridBoundingBox": {
+          "row": 4,
+          "col": 9,
+          "width": 1,
+          "height": 1,
+          "shape": "1x1"
+        },
+        "quality": "blue",
+        "canonicalName": null,
+        "identityStatus": "UNKNOWN_OR_CANDIDATE_UNCONFIRMED"
+      },
+      {
+        "referenceId": "ref_144037_18",
+        "gridBoundingBox": {
+          "row": 5,
+          "col": 0,
+          "width": 2,
+          "height": 1,
+          "shape": "2x1"
+        },
+        "quality": "purple",
+        "canonicalName": null,
+        "identityStatus": "UNKNOWN_OR_CANDIDATE_UNCONFIRMED"
+      },
+      {
+        "referenceId": "ref_144037_19",
+        "gridBoundingBox": {
+          "row": 5,
+          "col": 4,
+          "width": 2,
+          "height": 2,
+          "shape": "2x2"
+        },
+        "quality": "gold",
+        "canonicalName": null,
+        "identityStatus": "UNKNOWN_OR_CANDIDATE_UNCONFIRMED"
+      },
+      {
+        "referenceId": "ref_144037_20",
+        "gridBoundingBox": {
+          "row": 5,
+          "col": 6,
+          "width": 1,
+          "height": 1,
+          "shape": "1x1"
+        },
+        "quality": "grey",
+        "canonicalName": null,
+        "identityStatus": "UNKNOWN_OR_CANDIDATE_UNCONFIRMED"
+      },
+      {
+        "referenceId": "ref_144037_21",
+        "gridBoundingBox": {
+          "row": 5,
+          "col": 7,
+          "width": 1,
+          "height": 1,
+          "shape": "1x1"
+        },
+        "quality": "gold",
+        "canonicalName": null,
+        "identityStatus": "UNKNOWN_OR_CANDIDATE_UNCONFIRMED"
+      },
+      {
+        "referenceId": "ref_144037_22",
+        "gridBoundingBox": {
+          "row": 5,
+          "col": 8,
+          "width": 2,
+          "height": 3,
+          "shape": "2x3"
+        },
+        "quality": "grey",
+        "canonicalName": null,
+        "identityStatus": "UNKNOWN_OR_CANDIDATE_UNCONFIRMED"
+      },
+      {
+        "referenceId": "ref_144037_23",
+        "gridBoundingBox": {
+          "row": 6,
+          "col": 0,
+          "width": 4,
+          "height": 4,
+          "shape": "4x4"
+        },
+        "quality": "green",
+        "canonicalName": null,
+        "identityStatus": "UNKNOWN_OR_CANDIDATE_UNCONFIRMED"
+      },
+      {
+        "referenceId": "ref_144037_24",
+        "gridBoundingBox": {
+          "row": 6,
+          "col": 6,
+          "width": 1,
+          "height": 1,
+          "shape": "1x1"
+        },
+        "quality": "purple",
+        "canonicalName": null,
+        "identityStatus": "UNKNOWN_OR_CANDIDATE_UNCONFIRMED"
+      },
+      {
+        "referenceId": "ref_144037_25",
+        "gridBoundingBox": {
+          "row": 6,
+          "col": 7,
+          "width": 1,
+          "height": 2,
+          "shape": "1x2"
+        },
+        "quality": "gold",
+        "canonicalName": null,
+        "identityStatus": "UNKNOWN_OR_CANDIDATE_UNCONFIRMED"
+      },
+      {
+        "referenceId": "ref_144037_26",
+        "gridBoundingBox": {
+          "row": 7,
+          "col": 4,
+          "width": 2,
+          "height": 1,
+          "shape": "2x1"
+        },
+        "quality": "gold",
+        "canonicalName": null,
+        "identityStatus": "UNKNOWN_OR_CANDIDATE_UNCONFIRMED"
+      },
+      {
+        "referenceId": "ref_144037_27",
+        "gridBoundingBox": {
+          "row": 7,
+          "col": 6,
+          "width": 1,
+          "height": 1,
+          "shape": "1x1"
+        },
+        "quality": "blue",
+        "canonicalName": null,
+        "identityStatus": "UNKNOWN_OR_CANDIDATE_UNCONFIRMED"
+      },
+      {
+        "referenceId": "ref_144037_28",
+        "gridBoundingBox": {
+          "row": 8,
+          "col": 4,
+          "width": 5,
+          "height": 5,
+          "shape": "5x5"
+        },
+        "quality": "red",
+        "canonicalName": null,
+        "identityStatus": "UNKNOWN_OR_CANDIDATE_UNCONFIRMED"
+      },
+      {
+        "referenceId": "ref_144037_29",
+        "gridBoundingBox": {
+          "row": 8,
+          "col": 9,
+          "width": 1,
+          "height": 3,
+          "shape": "1x3"
+        },
+        "quality": "blue",
+        "canonicalName": null,
+        "identityStatus": "UNKNOWN_OR_CANDIDATE_UNCONFIRMED"
+      },
+      {
+        "referenceId": "ref_144037_30",
+        "gridBoundingBox": {
+          "row": 10,
+          "col": 0,
+          "width": 4,
+          "height": 3,
+          "shape": "4x3"
+        },
+        "quality": "gold",
+        "canonicalName": null,
+        "identityStatus": "UNKNOWN_OR_CANDIDATE_UNCONFIRMED"
+      },
+      {
+        "referenceId": "ref_144037_31",
+        "gridBoundingBox": {
+          "row": 11,
+          "col": 9,
+          "width": 1,
+          "height": 5,
+          "shape": "1x5"
+        },
+        "quality": "gold",
+        "canonicalName": null,
+        "identityStatus": "UNKNOWN_OR_CANDIDATE_UNCONFIRMED"
+      },
+      {
+        "referenceId": "ref_144037_32",
+        "gridBoundingBox": {
+          "row": 13,
+          "col": 0,
+          "width": 4,
+          "height": 1,
+          "shape": "4x1"
+        },
+        "quality": "gold",
+        "canonicalName": null,
+        "identityStatus": "UNKNOWN_OR_CANDIDATE_UNCONFIRMED"
+      },
+      {
+        "referenceId": "ref_144037_33",
+        "gridBoundingBox": {
+          "row": 13,
+          "col": 4,
+          "width": 2,
+          "height": 2,
+          "shape": "2x2"
+        },
+        "quality": "blue",
+        "canonicalName": null,
+        "identityStatus": "UNKNOWN_OR_CANDIDATE_UNCONFIRMED"
+      },
+      {
+        "referenceId": "ref_144037_34",
+        "gridBoundingBox": {
+          "row": 13,
+          "col": 6,
+          "width": 3,
+          "height": 2,
+          "shape": "3x2"
+        },
+        "quality": "blue",
+        "canonicalName": null,
+        "identityStatus": "UNKNOWN_OR_CANDIDATE_UNCONFIRMED"
+      },
+      {
+        "referenceId": "ref_144037_35",
+        "gridBoundingBox": {
+          "row": 14,
+          "col": 0,
+          "width": 2,
+          "height": 2,
+          "shape": "2x2"
+        },
+        "quality": "grey",
+        "canonicalName": null,
+        "identityStatus": "UNKNOWN_OR_CANDIDATE_UNCONFIRMED"
+      },
+      {
+        "referenceId": "ref_144037_36",
+        "gridBoundingBox": {
+          "row": 14,
+          "col": 2,
+          "width": 2,
+          "height": 1,
+          "shape": "2x1"
+        },
+        "quality": "blue",
+        "canonicalName": null,
+        "identityStatus": "UNKNOWN_OR_CANDIDATE_UNCONFIRMED"
+      },
+      {
+        "referenceId": "ref_144037_37",
+        "gridBoundingBox": {
+          "row": 15,
+          "col": 2,
+          "width": 3,
+          "height": 3,
+          "shape": "3x3"
+        },
+        "quality": "red",
+        "canonicalName": null,
+        "identityStatus": "UNKNOWN_OR_CANDIDATE_UNCONFIRMED"
+      },
+      {
+        "referenceId": "ref_144037_38",
+        "gridBoundingBox": {
+          "row": 15,
+          "col": 5,
+          "width": 2,
+          "height": 2,
+          "shape": "2x2"
+        },
+        "quality": "green",
+        "canonicalName": null,
+        "identityStatus": "UNKNOWN_OR_CANDIDATE_UNCONFIRMED"
+      },
+      {
+        "referenceId": "ref_144037_39",
+        "gridBoundingBox": {
+          "row": 15,
+          "col": 7,
+          "width": 2,
+          "height": 1,
+          "shape": "2x1"
+        },
+        "quality": "blue",
+        "canonicalName": null,
+        "identityStatus": "UNKNOWN_OR_CANDIDATE_UNCONFIRMED"
+      }
+    ]
+  }
+}

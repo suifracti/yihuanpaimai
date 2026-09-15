@@ -1,0 +1,31 @@
+[
+  {
+    "parent": 0,
+    "hwnd": 1189850,
+    "cls": "WindowsForms10.Window.8.app.0.aec740_r21_ad1",
+    "title": "⚡ 异环拍卖战术助手 HUD",
+    "box": [
+      70,
+      70,
+      630,
+      430,
+      560,
+      360
+    ],
+    "visible": true
+  },
+  {
+    "parent": 1189850,
+    "hwnd": 12658216,
+    "cls": "Chrome_WidgetWin_0",
+    "title": "",
+    "box": [
+      70,
+      70,
+      70,
+      70,
+      0,
+      0
+    ]
+  }
+]

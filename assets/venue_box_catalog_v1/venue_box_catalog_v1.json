@@ -1,0 +1,61 @@
+{
+  "schemaVersion": "venue-box-catalog.v1",
+  "catalogVersion": "venue-box-catalog.alpha.2026-08-22.v1",
+  "catalogStatus": "APPROVED_FOR_ALPHA",
+  "gameBuild": "live-build-observed-2026-08-22",
+  "generatedAt": "2026-08-22T18:00:00+08:00",
+  "evidenceBundleSha256": "a78817ddce9b6c674917fd7de7cb0ba7c7a791ee310f3b3aebd4154c4a407a70",
+  "venues": [
+    {
+      "venueId": "venue-haibei", "displayName": "海贝场", "selectable": true,
+      "tier": {"status":"NOT_GAME_AUTHORITY","value":null,"evidenceRefs":["current-game-2026-08-22-venue-selection-full"]},
+      "assetRequirement": {"status":"VERIFIED","value":0,"evidenceRefs":["current-game-2026-08-22-venue-selection-full"]},
+      "entryCost": {"status":"VERIFIED","value":0,"evidenceRefs":["current-game-2026-08-22-venue-selection-full"]},
+      "evidenceRefs": ["current-game-2026-08-22-venue-selection-full"],
+      "observationAliases": ["haibei"],
+      "boxes": [
+        {"boxId":"box-haibei-damaged-package","displayName":"破损的包裹","effect":{"rawGameText":"低级提升","normalizedSemantic":null,"normalizationEvidenceRefs":[]},"evidenceRefs":["operator-confirmed-box-bootstrap-2026-08-22"],"observationAliases":["破损","破损的包裹 · 低级提升","破损的包裹 · 紫色提升"],"membershipEvidenceClass":"OPERATOR_ASSERTED_CURRENT","textEvidenceClass":"DERIVED_ONLY","operatorConfidence":"CONFIRMED"},
+        {"boxId":"box-haibei-complete-package","displayName":"完整的包裹","effect":{"rawGameText":"中级提升","normalizedSemantic":null,"normalizationEvidenceRefs":[]},"evidenceRefs":["operator-confirmed-box-bootstrap-2026-08-22"],"observationAliases":["完整","完整（中级藏品提升）","完整的包裹 · 中级提升","完整的包裹 · 金色提升"],"membershipEvidenceClass":"OPERATOR_ASSERTED_CURRENT","textEvidenceClass":"DERIVED_ONLY","operatorConfidence":"CONFIRMED"},
+        {"boxId":"box-haibei-waterlogged-package","displayName":"浸水的包裹","effect":{"rawGameText":"低级藏品概率提升","normalizedSemantic":null,"normalizationEvidenceRefs":[]},"evidenceRefs":["operator-confirmed-box-bootstrap-2026-08-22"],"observationAliases":["浸水","浸水的包裹 · 低级提升","浸水的包裹 · 紫色提升"],"membershipEvidenceClass":"OPERATOR_ASSERTED_CURRENT","textEvidenceClass":"DERIVED_ONLY","operatorConfidence":"CONFIRMED"},
+        {"boxId":"box-haibei-unnamed-package","displayName":"无名包裹","effect":{"rawGameText":"高级提升","normalizedSemantic":null,"normalizationEvidenceRefs":[]},"evidenceRefs":["operator-confirmed-box-bootstrap-2026-08-22"],"observationAliases":["无名","无名包裹 · 高级提升","无名包裹 · 红色提升"],"membershipEvidenceClass":"OPERATOR_ASSERTED_CURRENT","textEvidenceClass":"DERIVED_ONLY","operatorConfidence":"CONFIRMED"}
+      ]
+    },
+    {
+      "venueId": "venue-shanhu", "displayName": "珊瑚场", "selectable": true,
+      "tier": {"status":"NOT_GAME_AUTHORITY","value":null,"evidenceRefs":["current-game-2026-08-22-venue-selection-full"]},
+      "assetRequirement": {"status":"VERIFIED","value":1000000,"evidenceRefs":["current-game-2026-08-22-venue-selection-full"]},
+      "entryCost": {"status":"VERIFIED","value":5000,"evidenceRefs":["current-game-2026-08-22-venue-selection-full"]},
+      "evidenceRefs": ["current-game-2026-08-22-venue-selection-full"],
+      "observationAliases": ["shanhu"],
+      "boxes": [
+        {"boxId":"box-shanhu-mechanical","displayName":"机械宝箱","effect":{"rawGameText":"科技类概率提升","normalizedSemantic":null,"normalizationEvidenceRefs":[]},"evidenceRefs":["operator-confirmed-box-bootstrap-2026-08-22"],"observationAliases":["机械宝箱 · 科技类概率提升"],"membershipEvidenceClass":"OPERATOR_ASSERTED_CURRENT","textEvidenceClass":"OPERATOR_ASSERTED_CURRENT","operatorConfidence":"CONFIRMED"},
+        {"boxId":"box-shanhu-food","displayName":"美食宝箱","effect":{"rawGameText":"食品类概率提升","normalizedSemantic":null,"normalizationEvidenceRefs":[]},"evidenceRefs":["operator-confirmed-box-bootstrap-2026-08-22"],"observationAliases":["美食宝箱 · 食品类概率提升"],"membershipEvidenceClass":"OPERATOR_ASSERTED_CURRENT","textEvidenceClass":"OPERATOR_ASSERTED_CURRENT","operatorConfidence":"CONFIRMED"},
+        {"boxId":"box-shanhu-wood","displayName":"实木宝箱","effect":{"rawGameText":"中级藏品概率提升","normalizedSemantic":null,"normalizationEvidenceRefs":[]},"evidenceRefs":["operator-confirmed-box-bootstrap-2026-08-22"],"observationAliases":["实木宝箱 · 中级藏品概率提升"],"membershipEvidenceClass":"OPERATOR_ASSERTED_CURRENT","textEvidenceClass":"OPERATOR_ASSERTED_CURRENT","operatorConfidence":"CONFIRMED"},
+        {"boxId":"box-shanhu-glass","displayName":"琉璃宝箱","effect":{"rawGameText":"宝石类概率提升","normalizedSemantic":null,"normalizationEvidenceRefs":[]},"evidenceRefs":["operator-confirmed-box-bootstrap-2026-08-22"],"observationAliases":["琉璃宝箱 · 宝石类概率提升"],"membershipEvidenceClass":"OPERATOR_ASSERTED_CURRENT","textEvidenceClass":"OPERATOR_ASSERTED_CURRENT","operatorConfidence":"CONFIRMED"},
+        {"boxId":"box-shanhu-leather","displayName":"皮制宝箱","effect":{"rawGameText":"高级藏品概率提升","normalizedSemantic":null,"normalizationEvidenceRefs":[]},"evidenceRefs":["operator-confirmed-box-bootstrap-2026-08-22"],"observationAliases":["皮制宝箱 · 高级藏品概率提升"],"membershipEvidenceClass":"OPERATOR_ASSERTED_CURRENT","textEvidenceClass":"OPERATOR_ASSERTED_CURRENT","operatorConfidence":"CONFIRMED"},
+        {"boxId":"box-shanhu-mother-of-pearl","displayName":"螺钿宝箱","effect":{"rawGameText":"古董类概率提升","normalizedSemantic":null,"normalizationEvidenceRefs":[]},"evidenceRefs":["operator-confirmed-box-bootstrap-2026-08-22"],"observationAliases":["螺钿宝箱 · 古董类概率提升"],"membershipEvidenceClass":"OPERATOR_ASSERTED_CURRENT","textEvidenceClass":"OPERATOR_ASSERTED_CURRENT","operatorConfidence":"CONFIRMED"}
+      ]
+    },
+    {
+      "venueId": "venue-zhenzhu", "displayName": "真珠场", "selectable": true,
+      "tier": {"status":"NOT_GAME_AUTHORITY","value":null,"evidenceRefs":["current-game-2026-08-22-venue-selection-full"]},
+      "assetRequirement": {"status":"VERIFIED","value":5000000,"evidenceRefs":["current-game-2026-08-22-venue-selection-full"]},
+      "entryCost": {"status":"VERIFIED","value":20000,"evidenceRefs":["current-game-2026-08-22-venue-selection-full"]},
+      "evidenceRefs": ["current-game-2026-08-22-venue-selection-full"],
+      "observationAliases": ["zhenzhu", "珍珠场"],
+      "boxes": [
+        {"boxId":"box-zhenzhu-complete-safe","displayName":"完整的保险箱","effect":{"rawGameText":"高级藏品概率提升","normalizedSemantic":null,"normalizationEvidenceRefs":[]},"evidenceRefs":["operator-probable-insurance-bootstrap-2026-08-22"],"observationAliases":["完整的保险箱（高级藏品概率提升）"],"membershipEvidenceClass":"OPERATOR_ASSERTED_CURRENT","textEvidenceClass":"LEGACY_GAME_EVIDENCE","operatorConfidence":"PROBABLE"},
+        {"boxId":"box-zhenzhu-brilliant-safe","displayName":"璀璨的保险箱","effect":{"rawGameText":"宝石类概率提升","normalizedSemantic":null,"normalizationEvidenceRefs":[]},"evidenceRefs":["operator-probable-insurance-bootstrap-2026-08-22"],"observationAliases":["璀璨的保险箱（宝石类概率提升）"],"membershipEvidenceClass":"OPERATOR_ASSERTED_CURRENT","textEvidenceClass":"LEGACY_GAME_EVIDENCE","operatorConfidence":"PROBABLE"},
+        {"boxId":"box-zhenzhu-classical-safe","displayName":"古典的保险箱","effect":{"rawGameText":"古董类概率提升","normalizedSemantic":null,"normalizationEvidenceRefs":[]},"evidenceRefs":["operator-probable-insurance-bootstrap-2026-08-22"],"observationAliases":["古典的保险箱（古董类概率提升）"],"membershipEvidenceClass":"OPERATOR_ASSERTED_CURRENT","textEvidenceClass":"LEGACY_GAME_EVIDENCE","operatorConfidence":"PROBABLE"},
+        {"boxId":"box-zhenzhu-precision-safe","displayName":"精工的保险箱","effect":{"rawGameText":"科技类概率提升","normalizedSemantic":null,"normalizationEvidenceRefs":[]},"evidenceRefs":["operator-probable-insurance-bootstrap-2026-08-22"],"observationAliases":["精工的保险箱（科技类概率提升）"],"membershipEvidenceClass":"OPERATOR_ASSERTED_CURRENT","textEvidenceClass":"LEGACY_GAME_EVIDENCE","operatorConfidence":"PROBABLE"},
+        {"boxId":"box-zhenzhu-whimsical-safe","displayName":"奇趣的保险箱","effect":{"rawGameText":"食品类概率提升","normalizedSemantic":null,"normalizationEvidenceRefs":[]},"evidenceRefs":["operator-probable-insurance-bootstrap-2026-08-22"],"observationAliases":["奇趣的保险箱（食品类概率提升）"],"membershipEvidenceClass":"OPERATOR_ASSERTED_CURRENT","textEvidenceClass":"LEGACY_GAME_EVIDENCE","operatorConfidence":"PROBABLE"},
+        {"boxId":"box-zhenzhu-rusted-safe","displayName":"锈蚀的保险箱","effect":{"rawGameText":"中级藏品概率提升","normalizedSemantic":null,"normalizationEvidenceRefs":[]},"evidenceRefs":["operator-probable-insurance-bootstrap-2026-08-22"],"observationAliases":["锈蚀的保险箱（中级藏品概率提升）"],"membershipEvidenceClass":"OPERATOR_ASSERTED_CURRENT","textEvidenceClass":"LEGACY_GAME_EVIDENCE","operatorConfidence":"PROBABLE"}
+      ]
+    }
+  ],
+  "compatibilityTranslations": [
+    {"consumer":"v06_solver","catalogVenueId":"venue-haibei","catalogVersion":"venue-box-catalog.alpha.2026-08-22.v1","currentId":"venue-haibei","status":"COMPATIBILITY_TRANSLATION","compatibilityValue":"初级场 · 海贝场","translationVersion":"v06-solver-compatibility.2026-08-22.v1","sourceAuthority":"V06_PRODUCTION_CODE","sourceReference":"lab/index.html:VENUE_ALIASES+LOW_TIER_PRIOR","translationRef":"v06_solver_compatibility_v1.json#venue-haibei"},
+    {"consumer":"v06_solver","catalogVenueId":"venue-shanhu","catalogVersion":"venue-box-catalog.alpha.2026-08-22.v1","currentId":"venue-shanhu","status":"COMPATIBILITY_TRANSLATION","compatibilityValue":"中级场 · 珊瑚场","translationVersion":"v06-solver-compatibility.2026-08-22.v1","sourceAuthority":"V06_PRODUCTION_CODE","sourceReference":"lab/index.html:VENUE_ALIASES+LOW_TIER_PRIOR","translationRef":"v06_solver_compatibility_v1.json#venue-shanhu"},
+    {"consumer":"v06_solver","catalogVenueId":"venue-zhenzhu","catalogVersion":"venue-box-catalog.alpha.2026-08-22.v1","currentId":"venue-zhenzhu","status":"COMPATIBILITY_TRANSLATION","compatibilityValue":"高级场 · 真珠场","translationVersion":"v06-solver-compatibility.2026-08-22.v1","sourceAuthority":"V06_PRODUCTION_CODE","sourceReference":"lab/index.html:VENUE_ALIASES+LOW_TIER_PRIOR","translationRef":"v06_solver_compatibility_v1.json#venue-zhenzhu"}
+  ]
+}

@@ -1,0 +1,299 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://yihuanpaimai.local/schemas/warehouse-reviewed-label-dataset-v2.schema.json",
+  "title": "Warehouse Reviewed Label Dataset v2",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "historySha256",
+    "splitPolicy",
+    "samples",
+    "rejected",
+    "readiness"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "const": "warehouse-reviewed-label-dataset.v2"
+    },
+    "historySha256": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "splitPolicy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "unit",
+        "rule"
+      ],
+      "properties": {
+        "unit": {
+          "const": "splitGroupId"
+        },
+        "rule": {
+          "const": "SPLIT_BY_MATCH_NEVER_SPLIT_MATCH_ITEMS_OR_FRAMES"
+        }
+      }
+    },
+    "samples": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/sample"
+      }
+    },
+    "rejected": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/rejected"
+      }
+    },
+    "readiness": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "status",
+        "minTracksPerQuality",
+        "minSources",
+        "byQuality",
+        "eligibleTrackCount",
+        "eligibleSourceCount",
+        "reasons"
+      ],
+      "properties": {
+        "status": {
+          "enum": [
+            "TRAINING_READY",
+            "INSUFFICIENT_EVIDENCE"
+          ]
+        },
+        "minTracksPerQuality": {
+          "const": 3
+        },
+        "minSources": {
+          "const": 2
+        },
+        "byQuality": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "白": {
+              "$ref": "#/$defs/qualityStats"
+            },
+            "绿": {
+              "$ref": "#/$defs/qualityStats"
+            },
+            "蓝": {
+              "$ref": "#/$defs/qualityStats"
+            },
+            "紫": {
+              "$ref": "#/$defs/qualityStats"
+            },
+            "金": {
+              "$ref": "#/$defs/qualityStats"
+            },
+            "红": {
+              "$ref": "#/$defs/qualityStats"
+            }
+          }
+        },
+        "eligibleTrackCount": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "eligibleSourceCount": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "reasons": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        }
+      }
+    }
+  },
+  "$defs": {
+    "qualityStats": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "trackCount",
+        "sourceCount"
+      ],
+      "properties": {
+        "trackCount": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "sourceCount": {
+          "type": "integer",
+          "minimum": 0
+        }
+      }
+    },
+    "sample": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "sampleId",
+        "groupId",
+        "recordStableKey",
+        "trackId",
+        "sequenceIndex",
+        "catalogId",
+        "name",
+        "quality",
+        "action",
+        "warehouseCoverage",
+        "solverEligible",
+        "trainingEligible",
+        "relativePath",
+        "cropSha256",
+        "artifactFingerprint",
+        "packetFingerprint",
+        "evidenceId",
+        "sourceSha256",
+        "kind",
+        "splitGroupId"
+      ],
+      "properties": {
+        "sampleId": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        "groupId": {
+          "type": "string",
+          "minLength": 1
+        },
+        "recordStableKey": {
+          "type": "string",
+          "minLength": 1
+        },
+        "trackId": {
+          "type": "string",
+          "minLength": 1
+        },
+        "sequenceIndex": {
+          "type": "integer"
+        },
+        "catalogId": {
+          "type": "string",
+          "minLength": 1
+        },
+        "name": {
+          "type": "string"
+        },
+        "quality": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "action": {
+          "enum": [
+            "CONFIRM_CANDIDATE",
+            "CONFIRM_CATALOG_OVERRIDE"
+          ]
+        },
+        "warehouseCoverage": {
+          "enum": [
+            "COVERAGE_UNPROVEN",
+            "PARTIAL",
+            "COMPLETE"
+          ]
+        },
+        "solverEligible": {
+          "const": false
+        },
+        "trainingEligible": {
+          "const": true
+        },
+        "relativePath": {
+          "type": "string",
+          "pattern": "^crops/[A-Za-z0-9._-]+/[A-Za-z0-9._-]+/[0-9]{4}_[A-Za-z0-9._-]+\\.png$"
+        },
+        "cropSha256": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        "artifactFingerprint": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        "packetFingerprint": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        "evidenceId": {
+          "type": "string",
+          "minLength": 1
+        },
+        "sourceSha256": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        "kind": {
+          "const": "warehouse-segment"
+        },
+        "reviewUnitId": {
+          "type": "string"
+        },
+        "provenanceType": {
+          "const": "HUMAN_REVIEWED_CATALOG_ID"
+        },
+        "splitGroupId": {
+          "type": "string",
+          "minLength": 1
+        }
+      }
+    },
+    "rejected": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "recordStableKey",
+        "trackId",
+        "reason"
+      ],
+      "properties": {
+        "recordStableKey": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "trackId": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "reason": {
+          "enum": [
+            "DEFER",
+            "MARK_OUT_OF_CATALOG",
+            "EXCLUDE_FALSE_COMPONENT",
+            "FLAG_GEOMETRY_ERROR",
+            "CONFLICT",
+            "MISSING_ORIGINAL",
+            "THUMBNAIL_ONLY",
+            "HASH_MISMATCH",
+            "INVALID_BBOX",
+            "LEGACY_89_GROUP",
+            "LEGACY_SOURCE",
+            "NOT_CONFIRMED",
+            "INVALID_DESCRIPTOR",
+            "INVALID_ARTIFACT",
+            "NOT_HUMAN_REVIEWED",
+            "EXCLUDE_FALSE_PLACEMENT",
+            "HUMAN_DECISION_MISMATCH",
+            "CATALOG_MISMATCH"
+          ]
+        }
+      }
+    }
+  }
+}

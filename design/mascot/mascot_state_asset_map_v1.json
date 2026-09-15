@@ -1,0 +1,21 @@
+{
+  "schemaVersion": "mascot.state-assets.v1",
+  "mappingId": "mascot-state-assets-v1",
+  "manifestPath": "design/mascot/mascot_final_asset_manifest_v1.json",
+  "presentationRole": "chibi_state",
+  "defaultPortraitAssetId": "mascot.portrait.default",
+  "fallbackState": "idle",
+  "states": {
+    "idle": "mascot.chibi.idle",
+    "thinking": "mascot.chibi.thinking",
+    "loading": "mascot.chibi.loading.v2",
+    "success": "mascot.chibi.success",
+    "warning": "mascot.chibi.warning",
+    "sleep": "mascot.chibi.sleep"
+  },
+  "authorityBoundary": {
+    "controlsPresentationAssetOnly": true,
+    "controlsSolverState": false,
+    "controlsCanonicalFacts": false
+  }
+}

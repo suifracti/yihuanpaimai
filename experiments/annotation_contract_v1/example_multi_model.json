@@ -1,0 +1,156 @@
+{
+  "schemaVersion": "1.0.0",
+  "runId": "run-20260820-multi-model-consensus",
+  "model": "multi-model-ensemble",
+  "modelVersion": "v1.0",
+  "createdAt": "2026-08-20T14:28:00Z",
+  "taskType": "warehouse_slot_annotation",
+  "recordId": "r-msvzlpww-1rqtl3",
+  "screenshotRef": "assets/settlement_frames/sec_488.jpg",
+  "usedConstraints": {
+    "actualTotal": false,
+    "q": false,
+    "count": false,
+    "grid": false,
+    "knownItems": false
+  },
+  "multiModelSummary": {
+    "modelsEvaluated": [
+      "gemini-2.5-flash",
+      "gpt-5-vision"
+    ],
+    "totalSlots": 3,
+    "strongPseudoCount": 2,
+    "reviewRequiredCount": 1
+  },
+  "annotations": [
+    {
+      "slotId": "slot_01",
+      "bbox": [
+        1408,
+        256,
+        1536,
+        384
+      ],
+      "multiModelObservations": [
+        {
+          "model": "gemini-2.5-flash",
+          "top1": {
+            "itemId": "red_jiugexiaoshi",
+            "name": "九格小食",
+            "quality": "red",
+            "confidence": 0.95
+          },
+          "candidateTop3": [
+            "red_jiugexiaoshi",
+            "red_yicuyouhuo",
+            "gold_dabing"
+          ]
+        },
+        {
+          "model": "gpt-5-vision",
+          "top1": {
+            "itemId": "red_jiugexiaoshi",
+            "name": "九格小食",
+            "quality": "red",
+            "confidence": 0.92
+          },
+          "candidateTop3": [
+            "red_jiugexiaoshi",
+            "red_yicuyouhuo",
+            "red_pendragon"
+          ]
+        }
+      ],
+      "consensusTop1": {
+        "itemId": "red_jiugexiaoshi",
+        "name": "九格小食",
+        "quality": "red"
+      },
+      "consensusType": "unanimous_agreement",
+      "status": "strong_pseudo",
+      "provenance": "gemini_gpt_consensus"
+    },
+    {
+      "slotId": "slot_06",
+      "bbox": [
+        1664,
+        288,
+        1728,
+        416
+      ],
+      "multiModelObservations": [
+        {
+          "model": "gemini-2.5-flash",
+          "top1": {
+            "itemId": "purple_hongyaoshui",
+            "name": "红药水",
+            "quality": "purple",
+            "confidence": 0.7
+          },
+          "candidateTop3": [
+            "purple_hongyaoshui",
+            "purple_chengjieweijiu",
+            "red_xiahongzuan"
+          ]
+        },
+        {
+          "model": "gpt-5-vision",
+          "top1": {
+            "itemId": "purple_chengjieweijiu",
+            "name": "橙色鸡尾酒",
+            "quality": "purple",
+            "confidence": 0.65
+          },
+          "candidateTop3": [
+            "purple_chengjieweijiu",
+            "purple_hongyaoshui",
+            "gold_jinjiweijiu"
+          ]
+        }
+      ],
+      "consensusTop1": null,
+      "consensusType": "disagreement",
+      "status": "review_required",
+      "provenance": "model_conflict_pending_human_arbitration",
+      "reviewReason": "Gemini predicted 红药水 vs GPT predicted 橙色鸡尾酒."
+    },
+    {
+      "slotId": "slot_03",
+      "bbox": [
+        1744,
+        480,
+        1872,
+        608
+      ],
+      "multiModelObservations": [
+        {
+          "model": "gemini-2.5-flash",
+          "top1": {
+            "itemId": "red_xinlietieqi_l3",
+            "name": "心猎铁骑L3",
+            "quality": "red",
+            "confidence": 0.96
+          }
+        },
+        {
+          "model": "gpt-5-vision",
+          "top1": {
+            "itemId": "red_xinlietieqi_l3",
+            "name": "心猎铁骑L3",
+            "quality": "red",
+            "confidence": 0.94
+          }
+        }
+      ],
+      "consensusTop1": {
+        "itemId": "red_xinlietieqi_l3",
+        "name": "心猎铁骑L3",
+        "quality": "red"
+      },
+      "consensusType": "unanimous_agreement",
+      "status": "strong_pseudo",
+      "provenance": "gemini_gpt_consensus"
+    }
+  ]
+}

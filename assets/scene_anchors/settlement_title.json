@@ -1,0 +1,13 @@
+{
+  "sourceVideo": "2026-08-17 12-42-40.mkv",
+  "seconds": 109,
+  "sourceImageSha256": "98ab5e63e3652e6123aacb158912294147773af4073fba192350c0400cec11b6",
+  "bbox": [
+    80,
+    146,
+    245,
+    57
+  ],
+  "text": "竞拍结束",
+  "purpose": "Route to settlement OCR, never infer item identity or money"
+}

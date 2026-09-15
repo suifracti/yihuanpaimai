@@ -1,0 +1,157 @@
+{
+  "capturedAt": "2026-08-22T10:00:00+08:00",
+  "predictionSnapshot": {
+    "schemaVersion": "prediction-snapshot.v1",
+    "predictionId": "pred_fixture_future_match_001",
+    "matchId": "fixture-future-match-001",
+    "solvedAt": "2026-08-22T09:59:30+08:00",
+    "informationCutoffAt": "2026-08-22T09:59:29+08:00",
+    "snapshotRole": "latest_valid_pre_settlement",
+    "producer": {
+      "runtime": "experiment_capture_fixture",
+      "solverName": "auction_engine_v06",
+      "solverVersion": "v0.6-reliability",
+      "modelVersion": "v0.6-shadow",
+      "catalogVersion": "catalog-0.65",
+      "codeRevision": "003e0693a05d7b2e5ba8ce1d40e3022e4dfb2888"
+    },
+    "input": {
+      "contractVersion": 1,
+      "normalizedFacts": {
+        "q": 15,
+        "goldCount": 4,
+        "purpleCount": 7,
+        "redCount": null,
+        "goldAvg": 36488.5,
+        "fieldCondition": "standard",
+        "round": 3
+      },
+      "hashAlgorithm": "sha256",
+      "inputHash": "23b38a11263fee091074457a14ba14c19be44db02449a7f8ed3ddad5f401c15a",
+      "datasetRevision": {
+        "sourceId": "canonical_match_history",
+        "sha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        "recordCount": 48,
+        "admissionPolicyVersion": 1,
+        "cutoffExclusive": "2026-08-22T09:59:29+08:00",
+        "eligibleRecordIdsSha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+      }
+    },
+    "mode": {
+      "informationMode": "full_shadow",
+      "coverageRatio": 1.0,
+      "supportedStateCount": 2,
+      "totalStateCount": 2
+    },
+    "status": {
+      "solverStatus": "valid",
+      "provisional": false,
+      "diagnosticOnly": false
+    },
+    "forecast": {
+      "target": "full_inventory_actual_total",
+      "scope": "full_inventory",
+      "quantiles": {
+        "p20": 679616.8,
+        "p50": 723990.8,
+        "p80": 787517.8
+      }
+    },
+    "frozen": true
+  },
+  "candidateSpace": {
+    "fullStateCount": 2,
+    "valuationStateCount": 2,
+    "compressionApplied": false,
+    "resolverVersion": "state-resolution.v1",
+    "fullCandidateStates": [
+      {
+        "stateId": "full-g4-p7-r4",
+        "g": 4,
+        "p": 7,
+        "r": 4,
+        "provenance": {
+          "source": "production_candidate_state",
+          "solverStateOrdinal": 0
+        }
+      },
+      {
+        "stateId": "full-g5-p7-r3",
+        "g": 5,
+        "p": 7,
+        "r": 3,
+        "provenance": {
+          "source": "production_candidate_state",
+          "solverStateOrdinal": 1
+        }
+      }
+    ],
+    "valuationStates": [
+      {
+        "stateId": "value-g4-p7-r4",
+        "sourceFullStateIds": ["full-g4-p7-r4"],
+        "g": 4,
+        "p": 7,
+        "r": 4,
+        "normalizedWeight": 0.2695784034256209,
+        "valuationBreakdown": {
+          "components": [
+            {"category": "gold", "lower": 145952, "mid": 145954, "upper": 145955, "provenance": {"method": "catalog_combination", "version": "v4"}},
+            {"category": "purple", "lower": 27910, "mid": 97547.8, "upper": 279590, "provenance": {"method": "catalog_range", "version": "v1"}},
+            {"category": "red", "lower": 280000, "mid": 363483.68, "upper": 845767.72, "provenance": {"method": "red_state_distribution", "version": "v1"}},
+            {"category": "lowTier", "lower": 0, "mid": 12000, "upper": 21600, "provenance": {"method": "venue_prior", "version": "v1"}}
+          ],
+          "total": {"lower": 453862, "mid": 618985.48, "upper": 1292912.72}
+        },
+        "tailContribution": {
+          "supportStatus": "SUPPORTED",
+          "distribution": {"p20": 715509.8, "p50": 763509.8, "p80": 817170.8, "p95": 885552.8, "max": 935603.8},
+          "provenance": {
+            "mode": "bootstrap",
+            "method": "shadow_state_mixture",
+            "version": "v1",
+            "directGameCount": 0,
+            "bootstrapSampleCount": 768,
+            "evidenceReferences": [{"uri": "artifact://tail-source/g4-p7-r4", "sha256": "1111111111111111111111111111111111111111111111111111111111111111"}]
+          }
+        }
+      },
+      {
+        "stateId": "value-g5-p7-r3",
+        "sourceFullStateIds": ["full-g5-p7-r3"],
+        "g": 5,
+        "p": 7,
+        "r": 3,
+        "normalizedWeight": 0.7304215965743791,
+        "valuationBreakdown": {
+          "components": [
+            {"category": "gold", "lower": 182440, "mid": 182442, "upper": 182445, "provenance": {"method": "catalog_combination", "version": "v4"}},
+            {"category": "purple", "lower": 27910, "mid": 97547.8, "upper": 279590, "provenance": {"method": "catalog_range", "version": "v1"}},
+            {"category": "red", "lower": 210000, "mid": 280000, "upper": 650000, "provenance": {"method": "red_state_distribution", "version": "v1"}},
+            {"category": "lowTier", "lower": 0, "mid": 12000, "upper": 21600, "provenance": {"method": "venue_prior", "version": "v1"}}
+          ],
+          "total": {"lower": 420350, "mid": 571989.8, "upper": 1133635}
+        },
+        "tailContribution": {
+          "supportStatus": "SUPPORTED",
+          "distribution": {"p20": 655608.8, "p50": 703608.8, "p80": 774041.8, "p95": 822041.8, "max": 872092.8},
+          "provenance": {
+            "mode": "mixed",
+            "method": "shadow_state_mixture",
+            "version": "v1",
+            "directGameCount": 1,
+            "bootstrapSampleCount": 768,
+            "evidenceReferences": [{"uri": "artifact://tail-source/g5-p7-r3", "sha256": "2222222222222222222222222222222222222222222222222222222222222222"}]
+          }
+        }
+      }
+    ]
+  },
+  "aggregateDistribution": {
+    "quantiles": {"p20": 679616.8, "p50": 723990.8, "p80": 787517.8},
+    "quantileProvenance": {
+      "method": "weighted_empirical_mixture",
+      "version": "shadow-mixture.v1"
+    }
+  }
+}

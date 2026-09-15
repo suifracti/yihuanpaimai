@@ -1,0 +1,3019 @@
+{
+  "catalogCoverageStatus": "UNVERIFIED",
+  "recordStableKey": "video_audit_20260908_134436_match2",
+  "reviewStatus": "REVIEW_REQUIRED",
+  "reviewUnits": [
+    {
+      "bestObservationId": "obs-5-1-seq0",
+      "candidateStatus": "UNIQUE_IN_CATALOG",
+      "candidates": [
+        {
+          "catalogId": "image34-0-0",
+          "geometry": {
+            "cells": 9,
+            "height": 3,
+            "shape": "3x3",
+            "width": 3
+          },
+          "identityStatus": "CANDIDATE_ONLY",
+          "inliers": 35,
+          "margin": 35,
+          "matchReasons": [
+            "WHOLE_CARD_MATCH",
+            "SIFT_INLIERS_35"
+          ],
+          "name": "一簇幽火",
+          "score": 1.0
+        }
+      ],
+      "footprint": {
+        "heightCells": 3,
+        "widthCells": 3
+      },
+      "geometryEvidenceStatus": "EXACT",
+      "heightCandidates": [
+        3
+      ],
+      "identityStatus": "REVIEW_REQUIRED",
+      "observations": [
+        {
+          "bbox": [
+            1029.0,
+            370.0,
+            1155.0,
+            496.0
+          ],
+          "bestFgScore": null,
+          "evidenceId": "sev2_video_audit_20260908_134436_match2_e83a070bb08f1974_warehouse-segment",
+          "fgMargin": null,
+          "inliers": 36,
+          "localGridBbox": [
+            5,
+            1,
+            3,
+            3
+          ],
+          "margin": 36,
+          "matchedCandidateId": "image34-0-0",
+          "matchedCandidateName": "一簇幽火",
+          "observationId": "obs-5-1-seq0",
+          "sequenceIndex": 0,
+          "sha256": "e83a070bb08f1974aa28e3b478af6e6084391810eafcabbec5d0d12b904059ad",
+          "status": "FULL"
+        },
+        {
+          "bbox": [
+            1029.0,
+            370.0,
+            1155.0,
+            496.0
+          ],
+          "bestFgScore": null,
+          "evidenceId": "sev2_video_audit_20260908_134436_match2_176cfef978c95849_warehouse-segment",
+          "fgMargin": null,
+          "inliers": 35,
+          "localGridBbox": [
+            5,
+            1,
+            3,
+            3
+          ],
+          "margin": 35,
+          "matchedCandidateId": "image34-0-0",
+          "matchedCandidateName": "一簇幽火",
+          "observationId": "obs-5-1-seq1",
+          "sequenceIndex": 1,
+          "sha256": "176cfef978c9584945a188a9f3fb5b5149629353670d4bcb882dced380c00f72",
+          "status": "FULL"
+        },
+        {
+          "bbox": [
+            1029.0,
+            370.0,
+            1155.0,
+            496.0
+          ],
+          "bestFgScore": null,
+          "evidenceId": "sev2_video_audit_20260908_134436_match2_11a06aa02bb82a29_warehouse-segment",
+          "fgMargin": null,
+          "inliers": 33,
+          "localGridBbox": [
+            5,
+            1,
+            3,
+            3
+          ],
+          "margin": 33,
+          "matchedCandidateId": "image34-0-0",
+          "matchedCandidateName": "一簇幽火",
+          "observationId": "obs-5-1-seq2",
+          "sequenceIndex": 2,
+          "sha256": "11a06aa02bb82a29a9981282a8e67f3ffcb1481f58e6cafa42c21a0e1dfb5074",
+          "status": "FULL"
+        }
+      ],
+      "physicalGroupId": "group-world-5-1",
+      "placementStatus": "RESOLVED",
+      "reviewUnitId": "unit-world-5-1-3x3",
+      "selectedCatalogId": null,
+      "spanCandidates": [
+        9
+      ],
+      "supportingTrackIds": [
+        "raw-track-5-1"
+      ],
+      "visibility": "FULL",
+      "widthCandidates": [
+        3
+      ],
+      "worldAnchor": {
+        "col": 1,
+        "row": 5
+      }
+    },
+    {
+      "bestObservationId": "obs-0-0-seq0",
+      "candidateStatus": "UNIQUE_IN_CATALOG",
+      "candidates": [
+        {
+          "bestFgScore": 0.9969,
+          "catalogId": "image18-0-1",
+          "fgMargin": 0.9969,
+          "geometry": {
+            "cells": 6,
+            "height": 3,
+            "shape": "2x3",
+            "width": 2
+          },
+          "identityStatus": "CANDIDATE_ONLY",
+          "inliers": 6,
+          "margin": 6,
+          "matchReasons": [
+            "WHOLE_CARD_MATCH",
+            "SIFT_INLIERS_6",
+            "FOREGROUND_SHAPE_AND_COLOR",
+            "SCORE_0.9969"
+          ],
+          "name": "「方盒科技」平板",
+          "score": 0.8
+        }
+      ],
+      "footprint": {
+        "heightCells": 3,
+        "widthCells": 2
+      },
+      "geometryEvidenceStatus": "EXACT",
+      "heightCandidates": [
+        3
+      ],
+      "identityStatus": "REVIEW_REQUIRED",
+      "observations": [
+        {
+          "bbox": [
+            987.0,
+            160.0,
+            1071.0,
+            286.0
+          ],
+          "bestFgScore": null,
+          "evidenceId": "sev2_video_audit_20260908_134436_match2_e83a070bb08f1974_warehouse-segment",
+          "fgMargin": null,
+          "inliers": 7,
+          "localGridBbox": [
+            0,
+            0,
+            2,
+            3
+          ],
+          "margin": 7,
+          "matchedCandidateId": "image18-0-1",
+          "matchedCandidateName": "「方盒科技」平板",
+          "observationId": "obs-0-0-seq0",
+          "sequenceIndex": 0,
+          "sha256": "e83a070bb08f1974aa28e3b478af6e6084391810eafcabbec5d0d12b904059ad",
+          "status": "FULL"
+        },
+        {
+          "bbox": [
+            987.0,
+            160.0,
+            1071.0,
+            286.0
+          ],
+          "bestFgScore": 0.9969,
+          "evidenceId": "sev2_video_audit_20260908_134436_match2_176cfef978c95849_warehouse-segment",
+          "fgMargin": 0.9969,
+          "inliers": 6,
+          "localGridBbox": [
+            0,
+            0,
+            2,
+            3
+          ],
+          "margin": 6,
+          "matchedCandidateId": "image18-0-1",
+          "matchedCandidateName": "「方盒科技」平板",
+          "observationId": "obs-0-0-seq1",
+          "sequenceIndex": 1,
+          "sha256": "176cfef978c9584945a188a9f3fb5b5149629353670d4bcb882dced380c00f72",
+          "status": "FULL"
+        },
+        {
+          "bbox": [
+            987.0,
+            160.0,
+            1071.0,
+            286.0
+          ],
+          "bestFgScore": null,
+          "evidenceId": "sev2_video_audit_20260908_134436_match2_11a06aa02bb82a29_warehouse-segment",
+          "fgMargin": null,
+          "inliers": 8,
+          "localGridBbox": [
+            0,
+            0,
+            2,
+            3
+          ],
+          "margin": 8,
+          "matchedCandidateId": "image18-0-1",
+          "matchedCandidateName": "「方盒科技」平板",
+          "observationId": "obs-0-0-seq2",
+          "sequenceIndex": 2,
+          "sha256": "11a06aa02bb82a29a9981282a8e67f3ffcb1481f58e6cafa42c21a0e1dfb5074",
+          "status": "FULL"
+        }
+      ],
+      "physicalGroupId": "group-world-0-0",
+      "placementStatus": "RESOLVED",
+      "reviewUnitId": "unit-world-0-0-2x3",
+      "selectedCatalogId": null,
+      "spanCandidates": [
+        6
+      ],
+      "supportingTrackIds": [
+        "raw-track-0-0"
+      ],
+      "visibility": "FULL",
+      "widthCandidates": [
+        2
+      ],
+      "worldAnchor": {
+        "col": 0,
+        "row": 0
+      }
+    },
+    {
+      "bestObservationId": "obs-3-6-seq0",
+      "candidateStatus": "UNIQUE_IN_CATALOG",
+      "candidates": [
+        {
+          "catalogId": "image2-0-0",
+          "geometry": {
+            "cells": 2,
+            "height": 2,
+            "shape": "1x2",
+            "width": 1
+          },
+          "identityStatus": "CANDIDATE_ONLY",
+          "inliers": 28,
+          "margin": 24,
+          "matchReasons": [
+            "SMALL_ICON_NATIVE_SIFT",
+            "REGISTERED_ICON_COLOR",
+            "SIFT_INLIERS_28"
+          ],
+          "name": "艺术画「解构」",
+          "registration": {
+            "correlation": 0.9277943968772888,
+            "error": 20.751548767089844,
+            "supportPixels": 915
+          },
+          "score": 1.0
+        }
+      ],
+      "footprint": {
+        "heightCells": 2,
+        "widthCells": 1
+      },
+      "geometryEvidenceStatus": "EXACT",
+      "heightCandidates": [
+        2
+      ],
+      "identityStatus": "REVIEW_REQUIRED",
+      "observations": [
+        {
+          "bbox": [
+            1239.0,
+            286.0,
+            1281.0,
+            370.0
+          ],
+          "bestFgScore": null,
+          "evidenceId": "sev2_video_audit_20260908_134436_match2_e83a070bb08f1974_warehouse-segment",
+          "fgMargin": null,
+          "inliers": 8,
+          "localGridBbox": [
+            3,
+            6,
+            1,
+            2
+          ],
+          "margin": 8,
+          "matchedCandidateId": "image2-0-0",
+          "matchedCandidateName": "艺术画「解构」",
+          "observationId": "obs-3-6-seq0",
+          "sequenceIndex": 0,
+          "sha256": "e83a070bb08f1974aa28e3b478af6e6084391810eafcabbec5d0d12b904059ad",
+          "status": "FULL"
+        },
+        {
+          "bbox": [
+            1239.0,
+            286.0,
+            1281.0,
+            370.0
+          ],
+          "bestFgScore": null,
+          "evidenceId": "sev2_video_audit_20260908_134436_match2_176cfef978c95849_warehouse-segment",
+          "fgMargin": null,
+          "inliers": 7,
+          "localGridBbox": [
+            3,
+            6,
+            1,
+            2
+          ],
+          "margin": 7,
+          "matchedCandidateId": "image2-0-0",
+          "matchedCandidateName": "艺术画「解构」",
+          "observationId": "obs-3-6-seq1",
+          "sequenceIndex": 1,
+          "sha256": "176cfef978c9584945a188a9f3fb5b5149629353670d4bcb882dced380c00f72",
+          "status": "FULL"
+        },
+        {
+          "bbox": [
+            1239.0,
+            286.0,
+            1281.0,
+            370.0
+          ],
+          "bestFgScore": null,
+          "evidenceId": "sev2_video_audit_20260908_134436_match2_11a06aa02bb82a29_warehouse-segment",
+          "fgMargin": null,
+          "inliers": 28,
+          "localGridBbox": [
+            3,
+            6,
+            1,
+            2
+          ],
+          "margin": 24,
+          "matchedCandidateId": "image2-0-0",
+          "matchedCandidateName": "艺术画「解构」",
+          "observationId": "obs-3-6-seq2",
+          "sequenceIndex": 2,
+          "sha256": "11a06aa02bb82a29a9981282a8e67f3ffcb1481f58e6cafa42c21a0e1dfb5074",
+          "status": "FULL"
+        }
+      ],
+      "physicalGroupId": "group-world-3-6",
+      "placementStatus": "RESOLVED",
+      "reviewUnitId": "unit-world-3-6-1x2",
+      "selectedCatalogId": null,
+      "spanCandidates": [
+        2
+      ],
+      "supportingTrackIds": [
+        "raw-track-3-6"
+      ],
+      "visibility": "FULL",
+      "widthCandidates": [
+        1
+      ],
+      "worldAnchor": {
+        "col": 6,
+        "row": 3
+      }
+    },
+    {
+      "bestObservationId": "obs-0-8-seq0",
+      "candidateStatus": "UNIQUE_IN_CATALOG",
+      "candidates": [
+        {
+          "catalogId": "image6-1-0",
+          "geometry": {
+            "cells": 2,
+            "height": 1,
+            "shape": "2x1",
+            "width": 2
+          },
+          "identityStatus": "CANDIDATE_ONLY",
+          "inliers": 20,
+          "margin": 14,
+          "matchReasons": [
+            "SMALL_ICON_NATIVE_SIFT",
+            "REGISTERED_ICON_COLOR",
+            "SIFT_INLIERS_20"
+          ],
+          "name": "多彩暴龙",
+          "registration": {
+            "correlation": 0.9342623949050903,
+            "error": 12.89713191986084,
+            "hueError": 4.382585525512695,
+            "nativeCorrelation": 0.8519394993782043,
+            "nativeError": 22.077646255493164,
+            "samplingModel": "SYMMETRIC_NATIVE_3X3",
+            "supportPixels": 674
+          },
+          "score": 1.0
+        }
+      ],
+      "footprint": {
+        "heightCells": 1,
+        "widthCells": 2
+      },
+      "geometryEvidenceStatus": "EXACT",
+      "heightCandidates": [
+        1
+      ],
+      "identityStatus": "REVIEW_REQUIRED",
+      "observations": [
+        {
+          "bbox": [
+            1323.0,
+            160.0,
+            1407.0,
+            202.0
+          ],
+          "bestFgScore": null,
+          "evidenceId": "sev2_video_audit_20260908_134436_match2_e83a070bb08f1974_warehouse-segment",
+          "fgMargin": null,
+          "inliers": 20,
+          "localGridBbox": [
+            0,
+            8,
+            2,
+            1
+          ],
+          "margin": 14,
+          "matchedCandidateId": "image6-1-0",
+          "matchedCandidateName": "多彩暴龙",
+          "observationId": "obs-0-8-seq0",
+          "sequenceIndex": 0,
+          "sha256": "e83a070bb08f1974aa28e3b478af6e6084391810eafcabbec5d0d12b904059ad",
+          "status": "FULL"
+        },
+        {
+          "bbox": [
+            1323.0,
+            160.0,
+            1407.0,
+            202.0
+          ],
+          "bestFgScore": null,
+          "evidenceId": "sev2_video_audit_20260908_134436_match2_176cfef978c95849_warehouse-segment",
+          "fgMargin": null,
+          "inliers": 20,
+          "localGridBbox": [
+            0,
+            8,
+            2,
+            1
+          ],
+          "margin": 14,
+          "matchedCandidateId": "image6-1-0",
+          "matchedCandidateName": "多彩暴龙",
+          "observationId": "obs-0-8-seq1",
+          "sequenceIndex": 1,
+          "sha256": "176cfef978c9584945a188a9f3fb5b5149629353670d4bcb882dced380c00f72",
+          "status": "FULL"
+        },
+        {
+          "bbox": [
+            1323.0,
+            160.0,
+            1407.0,
+            202.0
+          ],
+          "bestFgScore": null,
+          "evidenceId": "sev2_video_audit_20260908_134436_match2_11a06aa02bb82a29_warehouse-segment",
+          "fgMargin": null,
+          "inliers": 21,
+          "localGridBbox": [
+            0,
+            8,
+            2,
+            1
+          ],
+          "margin": 16,
+          "matchedCandidateId": "image6-1-0",
+          "matchedCandidateName": "多彩暴龙",
+          "observationId": "obs-0-8-seq2",
+          "sequenceIndex": 2,
+          "sha256": "11a06aa02bb82a29a9981282a8e67f3ffcb1481f58e6cafa42c21a0e1dfb5074",
+          "status": "FULL"
+        }
+      ],
+      "physicalGroupId": "group-world-0-8",
+      "placementStatus": "RESOLVED",
+      "reviewUnitId": "unit-world-0-8-2x1",
+      "selectedCatalogId": null,
+      "spanCandidates": [
+        2
+      ],
+      "supportingTrackIds": [
+        "raw-track-0-8"
+      ],
+      "visibility": "FULL",
+      "widthCandidates": [
+        2
+      ],
+      "worldAnchor": {
+        "col": 8,
+        "row": 0
+      }
+    },
+    {
+      "bestObservationId": "obs-1-9-seq0",
+      "candidateStatus": "UNIQUE_IN_CATALOG",
+      "candidates": [
+        {
+          "catalogId": "image2-0-0",
+          "geometry": {
+            "cells": 2,
+            "height": 2,
+            "shape": "1x2",
+            "width": 1
+          },
+          "identityStatus": "CANDIDATE_ONLY",
+          "inliers": 26,
+          "margin": 21,
+          "matchReasons": [
+            "SMALL_ICON_NATIVE_SIFT",
+            "REGISTERED_ICON_COLOR",
+            "SIFT_INLIERS_26"
+          ],
+          "name": "艺术画「解构」",
+          "registration": {
+            "correlation": 0.9273885488510132,
+            "error": 21.735960006713867,
+            "supportPixels": 914
+          },
+          "score": 1.0
+        }
+      ],
+      "footprint": {
+        "heightCells": 2,
+        "widthCells": 1
+      },
+      "geometryEvidenceStatus": "EXACT",
+      "heightCandidates": [
+        2
+      ],
+      "identityStatus": "REVIEW_REQUIRED",
+      "observations": [
+        {
+          "bbox": [
+            1365.0,
+            202.0,
+            1407.0,
+            286.0
+          ],
+          "bestFgScore": null,
+          "evidenceId": "sev2_video_audit_20260908_134436_match2_e83a070bb08f1974_warehouse-segment",
+          "fgMargin": null,
+          "inliers": 26,
+          "localGridBbox": [
+            1,
+            9,
+            1,
+            2
+          ],
+          "margin": 21,
+          "matchedCandidateId": "image2-0-0",
+          "matchedCandidateName": "艺术画「解构」",
+          "observationId": "obs-1-9-seq0",
+          "sequenceIndex": 0,
+          "sha256": "e83a070bb08f1974aa28e3b478af6e6084391810eafcabbec5d0d12b904059ad",
+          "status": "FULL"
+        },
+        {
+          "bbox": [
+            1365.0,
+            202.0,
+            1407.0,
+            286.0
+          ],
+          "bestFgScore": null,
+          "evidenceId": "sev2_video_audit_20260908_134436_match2_176cfef978c95849_warehouse-segment",
+          "fgMargin": null,
+          "inliers": 26,
+          "localGridBbox": [
+            1,
+            9,
+            1,
+            2
+          ],
+          "margin": 21,
+          "matchedCandidateId": "image2-0-0",
+          "matchedCandidateName": "艺术画「解构」",
+          "observationId": "obs-1-9-seq1",
+          "sequenceIndex": 1,
+          "sha256": "176cfef978c9584945a188a9f3fb5b5149629353670d4bcb882dced380c00f72",
+          "status": "FULL"
+        },
+        {
+          "bbox": [
+            1365.0,
+            202.0,
+            1407.0,
+            286.0
+          ],
+          "bestFgScore": null,
+          "evidenceId": "sev2_video_audit_20260908_134436_match2_11a06aa02bb82a29_warehouse-segment",
+          "fgMargin": null,
+          "inliers": 27,
+          "localGridBbox": [
+            1,
+            9,
+            1,
+            2
+          ],
+          "margin": 23,
+          "matchedCandidateId": "image2-0-0",
+          "matchedCandidateName": "艺术画「解构」",
+          "observationId": "obs-1-9-seq2",
+          "sequenceIndex": 2,
+          "sha256": "11a06aa02bb82a29a9981282a8e67f3ffcb1481f58e6cafa42c21a0e1dfb5074",
+          "status": "FULL"
+        }
+      ],
+      "physicalGroupId": "group-world-1-9",
+      "placementStatus": "RESOLVED",
+      "reviewUnitId": "unit-world-1-9-1x2",
+      "selectedCatalogId": null,
+      "spanCandidates": [
+        2
+      ],
+      "supportingTrackIds": [
+        "raw-track-1-9"
+      ],
+      "visibility": "FULL",
+      "widthCandidates": [
+        1
+      ],
+      "worldAnchor": {
+        "col": 9,
+        "row": 1
+      }
+    },
+    {
+      "bestObservationId": "obs-4-0-seq0",
+      "candidateStatus": "UNIQUE_IN_CATALOG",
+      "candidates": [
+        {
+          "catalogId": "image22-1-1",
+          "geometry": {
+            "cells": 2,
+            "height": 2,
+            "shape": "1x2",
+            "width": 1
+          },
+          "identityStatus": "CANDIDATE_ONLY",
+          "inliers": 26,
+          "margin": 22,
+          "matchReasons": [
+            "SMALL_ICON_NATIVE_SIFT",
+            "REGISTERED_ICON_COLOR",
+            "SIFT_INLIERS_26"
+          ],
+          "name": "结的艺术",
+          "registration": {
+            "correlation": 0.9293238520622253,
+            "error": 15.697983741760254,
+            "supportPixels": 777
+          },
+          "score": 1.0
+        }
+      ],
+      "footprint": {
+        "heightCells": 2,
+        "widthCells": 1
+      },
+      "geometryEvidenceStatus": "EXACT",
+      "heightCandidates": [
+        2
+      ],
+      "identityStatus": "REVIEW_REQUIRED",
+      "observations": [
+        {
+          "bbox": [
+            987.0,
+            328.0,
+            1029.0,
+            412.0
+          ],
+          "bestFgScore": null,
+          "evidenceId": "sev2_video_audit_20260908_134436_match2_e83a070bb08f1974_warehouse-segment",
+          "fgMargin": null,
+          "inliers": 25,
+          "localGridBbox": [
+            4,
+            0,
+            1,
+            2
+          ],
+          "margin": 21,
+          "matchedCandidateId": "image22-1-1",
+          "matchedCandidateName": "结的艺术",
+          "observationId": "obs-4-0-seq0",
+          "sequenceIndex": 0,
+          "sha256": "e83a070bb08f1974aa28e3b478af6e6084391810eafcabbec5d0d12b904059ad",
+          "status": "FULL"
+        },
+        {
+          "bbox": [
+            987.0,
+            328.0,
+            1029.0,
+            412.0
+          ],
+          "bestFgScore": null,
+          "evidenceId": "sev2_video_audit_20260908_134436_match2_176cfef978c95849_warehouse-segment",
+          "fgMargin": null,
+          "inliers": 26,
+          "localGridBbox": [
+            4,
+            0,
+            1,
+            2
+          ],
+          "margin": 22,
+          "matchedCandidateId": "image22-1-1",
+          "matchedCandidateName": "结的艺术",
+          "observationId": "obs-4-0-seq1",
+          "sequenceIndex": 1,
+          "sha256": "176cfef978c9584945a188a9f3fb5b5149629353670d4bcb882dced380c00f72",
+          "status": "FULL"
+        },
+        {
+          "bbox": [
+            987.0,
+            328.0,
+            1029.0,
+            412.0
+          ],
+          "bestFgScore": null,
+          "evidenceId": "sev2_video_audit_20260908_134436_match2_11a06aa02bb82a29_warehouse-segment",
+          "fgMargin": null,
+          "inliers": 27,
+          "localGridBbox": [
+            4,
+            0,
+            1,
+            2
+          ],
+          "margin": 23,
+          "matchedCandidateId": "image22-1-1",
+          "matchedCandidateName": "结的艺术",
+          "observationId": "obs-4-0-seq2",
+          "sequenceIndex": 2,
+          "sha256": "11a06aa02bb82a29a9981282a8e67f3ffcb1481f58e6cafa42c21a0e1dfb5074",
+          "status": "FULL"
+        }
+      ],
+      "physicalGroupId": "group-world-4-0",
+      "placementStatus": "RESOLVED",
+      "reviewUnitId": "unit-world-4-0-1x2",
+      "selectedCatalogId": null,
+      "spanCandidates": [
+        2
+      ],
+      "supportingTrackIds": [
+        "raw-track-4-0"
+      ],
+      "visibility": "FULL",
+      "widthCandidates": [
+        1
+      ],
+      "worldAnchor": {
+        "col": 0,
+        "row": 4
+      }
+    },
+    {
+      "bestObservationId": "obs-3-4-seq0",
+      "candidateStatus": "UNIQUE_IN_CATALOG",
+      "candidates": [
+        {
+          "catalogId": "image1-1-0",
+          "geometry": {
+            "cells": 4,
+            "height": 2,
+            "shape": "2x2",
+            "width": 2
+          },
+          "identityStatus": "CANDIDATE_ONLY",
+          "inliers": 14,
+          "margin": 14,
+          "matchReasons": [
+            "WHOLE_CARD_MATCH",
+            "SIFT_INLIERS_14"
+          ],
+          "name": "蟑螂！蟑螂！",
+          "score": 0.7
+        }
+      ],
+      "footprint": {
+        "heightCells": 2,
+        "widthCells": 2
+      },
+      "geometryEvidenceStatus": "EXACT",
+      "heightCandidates": [
+        2
+      ],
+      "identityStatus": "REVIEW_REQUIRED",
+      "observations": [
+        {
+          "bbox": [
+            1155.0,
+            286.0,
+            1239.0,
+            370.0
+          ],
+          "bestFgScore": null,
+          "evidenceId": "sev2_video_audit_20260908_134436_match2_e83a070bb08f1974_warehouse-segment",
+          "fgMargin": null,
+          "inliers": 14,
+          "localGridBbox": [
+            3,
+            4,
+            2,
+            2
+          ],
+          "margin": 14,
+          "matchedCandidateId": "image1-1-0",
+          "matchedCandidateName": "蟑螂！蟑螂！",
+          "observationId": "obs-3-4-seq0",
+          "sequenceIndex": 0,
+          "sha256": "e83a070bb08f1974aa28e3b478af6e6084391810eafcabbec5d0d12b904059ad",
+          "status": "FULL"
+        },
+        {
+          "bbox": [
+            1155.0,
+            286.0,
+            1239.0,
+            370.0
+          ],
+          "bestFgScore": null,
+          "evidenceId": "sev2_video_audit_20260908_134436_match2_176cfef978c95849_warehouse-segment",
+          "fgMargin": null,
+          "inliers": 14,
+          "localGridBbox": [
+            3,
+            4,
+            2,
+            2
+          ],
+          "margin": 14,
+          "matchedCandidateId": "image1-1-0",
+          "matchedCandidateName": "蟑螂！蟑螂！",
+          "observationId": "obs-3-4-seq1",
+          "sequenceIndex": 1,
+          "sha256": "176cfef978c9584945a188a9f3fb5b5149629353670d4bcb882dced380c00f72",
+          "status": "FULL"
+        },
+        {
+          "bbox": [
+            1155.0,
+            286.0,
+            1239.0,
+            370.0
+          ],
+          "bestFgScore": null,
+          "evidenceId": "sev2_video_audit_20260908_134436_match2_11a06aa02bb82a29_warehouse-segment",
+          "fgMargin": null,
+          "inliers": 13,
+          "localGridBbox": [
+            3,
+            4,
+            2,
+            2
+          ],
+          "margin": 13,
+          "matchedCandidateId": "image1-1-0",
+          "matchedCandidateName": "蟑螂！蟑螂！",
+          "observationId": "obs-3-4-seq2",
+          "sequenceIndex": 2,
+          "sha256": "11a06aa02bb82a29a9981282a8e67f3ffcb1481f58e6cafa42c21a0e1dfb5074",
+          "status": "FULL"
+        }
+      ],
+      "physicalGroupId": "group-world-3-4",
+      "placementStatus": "RESOLVED",
+      "reviewUnitId": "unit-world-3-4-2x2",
+      "selectedCatalogId": null,
+      "spanCandidates": [
+        4
+      ],
+      "supportingTrackIds": [
+        "raw-track-3-4"
+      ],
+      "visibility": "FULL",
+      "widthCandidates": [
+        2
+      ],
+      "worldAnchor": {
+        "col": 4,
+        "row": 3
+      }
+    },
+    {
+      "bestObservationId": "obs-1-5-seq0",
+      "candidateStatus": "UNIQUE_IN_CATALOG",
+      "candidates": [
+        {
+          "catalogId": "image30-1-2",
+          "geometry": {
+            "cells": 4,
+            "height": 2,
+            "shape": "2x2",
+            "width": 2
+          },
+          "identityStatus": "CANDIDATE_ONLY",
+          "inliers": 14,
+          "margin": 14,
+          "matchReasons": [
+            "WHOLE_CARD_MATCH",
+            "SIFT_INLIERS_14"
+          ],
+          "name": "「方盒科技」充电宝",
+          "score": 0.7
+        }
+      ],
+      "footprint": {
+        "heightCells": 2,
+        "widthCells": 2
+      },
+      "geometryEvidenceStatus": "EXACT",
+      "heightCandidates": [
+        2
+      ],
+      "identityStatus": "REVIEW_REQUIRED",
+      "observations": [
+        {
+          "bbox": [
+            1197.0,
+            202.0,
+            1281.0,
+            286.0
+          ],
+          "bestFgScore": null,
+          "evidenceId": "sev2_video_audit_20260908_134436_match2_e83a070bb08f1974_warehouse-segment",
+          "fgMargin": null,
+          "inliers": 12,
+          "localGridBbox": [
+            1,
+            5,
+            2,
+            2
+          ],
+          "margin": 12,
+          "matchedCandidateId": "image30-1-2",
+          "matchedCandidateName": "「方盒科技」充电宝",
+          "observationId": "obs-1-5-seq0",
+          "sequenceIndex": 0,
+          "sha256": "e83a070bb08f1974aa28e3b478af6e6084391810eafcabbec5d0d12b904059ad",
+          "status": "FULL"
+        },
+        {
+          "bbox": [
+            1197.0,
+            202.0,
+            1281.0,
+            286.0
+          ],
+          "bestFgScore": null,
+          "evidenceId": "sev2_video_audit_20260908_134436_match2_176cfef978c95849_warehouse-segment",
+          "fgMargin": null,
+          "inliers": 13,
+          "localGridBbox": [
+            1,
+            5,
+            2,
+            2
+          ],
+          "margin": 13,
+          "matchedCandidateId": "image30-1-2",
+          "matchedCandidateName": "「方盒科技」充电宝",
+          "observationId": "obs-1-5-seq1",
+          "sequenceIndex": 1,
+          "sha256": "176cfef978c9584945a188a9f3fb5b5149629353670d4bcb882dced380c00f72",
+          "status": "FULL"
+        },
+        {
+          "bbox": [
+            1197.0,
+            202.0,
+            1281.0,
+            286.0
+          ],
+          "bestFgScore": null,
+          "evidenceId": "sev2_video_audit_20260908_134436_match2_11a06aa02bb82a29_warehouse-segment",
+          "fgMargin": null,
+          "inliers": 14,
+          "localGridBbox": [
+            1,
+            5,
+            2,
+            2
+          ],
+          "margin": 14,
+          "matchedCandidateId": "image30-1-2",
+          "matchedCandidateName": "「方盒科技」充电宝",
+          "observationId": "obs-1-5-seq2",
+          "sequenceIndex": 2,
+          "sha256": "11a06aa02bb82a29a9981282a8e67f3ffcb1481f58e6cafa42c21a0e1dfb5074",
+          "status": "FULL"
+        }
+      ],
+      "physicalGroupId": "group-world-1-5",
+      "placementStatus": "RESOLVED",
+      "reviewUnitId": "unit-world-1-5-2x2",
+      "selectedCatalogId": null,
+      "spanCandidates": [
+        4
+      ],
+      "supportingTrackIds": [
+        "raw-track-1-5"
+      ],
+      "visibility": "FULL",
+      "widthCandidates": [
+        2
+      ],
+      "worldAnchor": {
+        "col": 5,
+        "row": 1
+      }
+    },
+    {
+      "bestObservationId": "obs-1-7-seq0",
+      "candidateStatus": "UNIQUE_IN_CATALOG",
+      "candidates": [
+        {
+          "catalogId": "image30-1-2",
+          "geometry": {
+            "cells": 4,
+            "height": 2,
+            "shape": "2x2",
+            "width": 2
+          },
+          "identityStatus": "CANDIDATE_ONLY",
+          "inliers": 14,
+          "margin": 14,
+          "matchReasons": [
+            "WHOLE_CARD_MATCH",
+            "SIFT_INLIERS_14"
+          ],
+          "name": "「方盒科技」充电宝",
+          "score": 0.7
+        }
+      ],
+      "footprint": {
+        "heightCells": 2,
+        "widthCells": 2
+      },
+      "geometryEvidenceStatus": "EXACT",
+      "heightCandidates": [
+        2
+      ],
+      "identityStatus": "REVIEW_REQUIRED",
+      "observations": [
+        {
+          "bbox": [
+            1281.0,
+            202.0,
+            1365.0,
+            286.0
+          ],
+          "bestFgScore": null,
+          "evidenceId": "sev2_video_audit_20260908_134436_match2_e83a070bb08f1974_warehouse-segment",
+          "fgMargin": null,
+          "inliers": 14,
+          "localGridBbox": [
+            1,
+            7,
+            2,
+            2
+          ],
+          "margin": 14,
+          "matchedCandidateId": "image30-1-2",
+          "matchedCandidateName": "「方盒科技」充电宝",
+          "observationId": "obs-1-7-seq0",
+          "sequenceIndex": 0,
+          "sha256": "e83a070bb08f1974aa28e3b478af6e6084391810eafcabbec5d0d12b904059ad",
+          "status": "FULL"
+        },
+        {
+          "bbox": [
+            1281.0,
+            202.0,
+            1365.0,
+            286.0
+          ],
+          "bestFgScore": null,
+          "evidenceId": "sev2_video_audit_20260908_134436_match2_176cfef978c95849_warehouse-segment",
+          "fgMargin": null,
+          "inliers": 14,
+          "localGridBbox": [
+            1,
+            7,
+            2,
+            2
+          ],
+          "margin": 14,
+          "matchedCandidateId": "image30-1-2",
+          "matchedCandidateName": "「方盒科技」充电宝",
+          "observationId": "obs-1-7-seq1",
+          "sequenceIndex": 1,
+          "sha256": "176cfef978c9584945a188a9f3fb5b5149629353670d4bcb882dced380c00f72",
+          "status": "FULL"
+        },
+        {
+          "bbox": [
+            1281.0,
+            202.0,
+            1365.0,
+            286.0
+          ],
+          "bestFgScore": null,
+          "evidenceId": "sev2_video_audit_20260908_134436_match2_11a06aa02bb82a29_warehouse-segment",
+          "fgMargin": null,
+          "inliers": 13,
+          "localGridBbox": [
+            1,
+            7,
+            2,
+            2
+          ],
+          "margin": 13,
+          "matchedCandidateId": "image30-1-2",
+          "matchedCandidateName": "「方盒科技」充电宝",
+          "observationId": "obs-1-7-seq2",
+          "sequenceIndex": 2,
+          "sha256": "11a06aa02bb82a29a9981282a8e67f3ffcb1481f58e6cafa42c21a0e1dfb5074",
+          "status": "FULL"
+        }
+      ],
+      "physicalGroupId": "group-world-1-7",
+      "placementStatus": "RESOLVED",
+      "reviewUnitId": "unit-world-1-7-2x2",
+      "selectedCatalogId": null,
+      "spanCandidates": [
+        4
+      ],
+      "supportingTrackIds": [
+        "raw-track-1-7"
+      ],
+      "visibility": "FULL",
+      "widthCandidates": [
+        2
+      ],
+      "worldAnchor": {
+        "col": 7,
+        "row": 1
+      }
+    },
+    {
+      "bestObservationId": "obs-3-0-seq0",
+      "candidateStatus": "UNIQUE_IN_CATALOG",
+      "candidates": [
+        {
+          "bestFgScore": 0.9929,
+          "catalogId": "image30-1-0",
+          "fgMargin": 0.9929,
+          "geometry": {
+            "cells": 3,
+            "height": 1,
+            "shape": "3x1",
+            "width": 3
+          },
+          "identityStatus": "CANDIDATE_ONLY",
+          "inliers": 5,
+          "margin": 5,
+          "matchReasons": [
+            "WHOLE_CARD_MATCH",
+            "SIFT_INLIERS_5",
+            "FOREGROUND_SHAPE_AND_COLOR",
+            "SCORE_0.9929"
+          ],
+          "name": "骑士车贴",
+          "score": 0.8
+        }
+      ],
+      "footprint": {
+        "heightCells": 1,
+        "widthCells": 3
+      },
+      "geometryEvidenceStatus": "EXACT",
+      "heightCandidates": [
+        1
+      ],
+      "identityStatus": "REVIEW_REQUIRED",
+      "observations": [
+        {
+          "bbox": [
+            987.0,
+            286.0,
+            1113.0,
+            328.0
+          ],
+          "bestFgScore": 0.9929,
+          "evidenceId": "sev2_video_audit_20260908_134436_match2_e83a070bb08f1974_warehouse-segment",
+          "fgMargin": 0.9929,
+          "inliers": 5,
+          "localGridBbox": [
+            3,
+            0,
+            3,
+            1
+          ],
+          "margin": 5,
+          "matchedCandidateId": "image30-1-0",
+          "matchedCandidateName": "骑士车贴",
+          "observationId": "obs-3-0-seq0",
+          "sequenceIndex": 0,
+          "sha256": "e83a070bb08f1974aa28e3b478af6e6084391810eafcabbec5d0d12b904059ad",
+          "status": "FULL"
+        },
+        {
+          "bbox": [
+            987.0,
+            286.0,
+            1113.0,
+            328.0
+          ],
+          "bestFgScore": 0.9927,
+          "evidenceId": "sev2_video_audit_20260908_134436_match2_176cfef978c95849_warehouse-segment",
+          "fgMargin": 0.9927,
+          "inliers": 6,
+          "localGridBbox": [
+            3,
+            0,
+            3,
+            1
+          ],
+          "margin": 6,
+          "matchedCandidateId": "image30-1-0",
+          "matchedCandidateName": "骑士车贴",
+          "observationId": "obs-3-0-seq1",
+          "sequenceIndex": 1,
+          "sha256": "176cfef978c9584945a188a9f3fb5b5149629353670d4bcb882dced380c00f72",
+          "status": "FULL"
+        },
+        {
+          "bbox": [
+            987.0,
+            286.0,
+            1113.0,
+            328.0
+          ],
+          "bestFgScore": null,
+          "evidenceId": "sev2_video_audit_20260908_134436_match2_11a06aa02bb82a29_warehouse-segment",
+          "fgMargin": null,
+          "inliers": 7,
+          "localGridBbox": [
+            3,
+            0,
+            3,
+            1
+          ],
+          "margin": 7,
+          "matchedCandidateId": "image30-1-0",
+          "matchedCandidateName": "骑士车贴",
+          "observationId": "obs-3-0-seq2",
+          "sequenceIndex": 2,
+          "sha256": "11a06aa02bb82a29a9981282a8e67f3ffcb1481f58e6cafa42c21a0e1dfb5074",
+          "status": "FULL"
+        }
+      ],
+      "physicalGroupId": "group-world-3-0",
+      "placementStatus": "RESOLVED",
+      "reviewUnitId": "unit-world-3-0-3x1",
+      "selectedCatalogId": null,
+      "spanCandidates": [
+        3
+      ],
+      "supportingTrackIds": [
+        "raw-track-3-0"
+      ],
+      "visibility": "FULL",
+      "widthCandidates": [
+        3
+      ],
+      "worldAnchor": {
+        "col": 0,
+        "row": 3
+      }
+    },
+    {
+      "bestObservationId": "obs-3-8-seq0",
+      "candidateStatus": "UNIQUE_IN_CATALOG",
+      "candidates": [
+        {
+          "bestFgScore": 0.9932,
+          "catalogId": "image2-1-0",
+          "fgMargin": 0.9932,
+          "geometry": {
+            "cells": 2,
+            "height": 2,
+            "shape": "1x2",
+            "width": 1
+          },
+          "identityStatus": "CANDIDATE_ONLY",
+          "matchReasons": [
+            "FOREGROUND_SHAPE_AND_COLOR",
+            "SCORE_0.9932"
+          ],
+          "name": "生鸡蛋",
+          "score": 0.8
+        }
+      ],
+      "footprint": {
+        "heightCells": 2,
+        "widthCells": 1
+      },
+      "geometryEvidenceStatus": "EXACT",
+      "heightCandidates": [
+        2
+      ],
+      "identityStatus": "REVIEW_REQUIRED",
+      "observations": [
+        {
+          "bbox": [
+            1323.0,
+            286.0,
+            1365.0,
+            370.0
+          ],
+          "bestFgScore": 0.9932,
+          "evidenceId": "sev2_video_audit_20260908_134436_match2_e83a070bb08f1974_warehouse-segment",
+          "fgMargin": 0.9932,
+          "inliers": 0,
+          "localGridBbox": [
+            3,
+            8,
+            1,
+            2
+          ],
+          "margin": null,
+          "matchedCandidateId": "image2-1-0",
+          "matchedCandidateName": "生鸡蛋",
+          "observationId": "obs-3-8-seq0",
+          "sequenceIndex": 0,
+          "sha256": "e83a070bb08f1974aa28e3b478af6e6084391810eafcabbec5d0d12b904059ad",
+          "status": "FULL"
+        },
+        {
+          "bbox": [
+            1323.0,
+            286.0,
+            1365.0,
+            370.0
+          ],
+          "bestFgScore": 0.9932,
+          "evidenceId": "sev2_video_audit_20260908_134436_match2_176cfef978c95849_warehouse-segment",
+          "fgMargin": 0.9932,
+          "inliers": 0,
+          "localGridBbox": [
+            3,
+            8,
+            1,
+            2
+          ],
+          "margin": null,
+          "matchedCandidateId": "image2-1-0",
+          "matchedCandidateName": "生鸡蛋",
+          "observationId": "obs-3-8-seq1",
+          "sequenceIndex": 1,
+          "sha256": "176cfef978c9584945a188a9f3fb5b5149629353670d4bcb882dced380c00f72",
+          "status": "FULL"
+        },
+        {
+          "bbox": [
+            1323.0,
+            286.0,
+            1365.0,
+            370.0
+          ],
+          "bestFgScore": 0.9924,
+          "evidenceId": "sev2_video_audit_20260908_134436_match2_11a06aa02bb82a29_warehouse-segment",
+          "fgMargin": 0.9924,
+          "inliers": 0,
+          "localGridBbox": [
+            3,
+            8,
+            1,
+            2
+          ],
+          "margin": null,
+          "matchedCandidateId": "image2-1-0",
+          "matchedCandidateName": "生鸡蛋",
+          "observationId": "obs-3-8-seq2",
+          "sequenceIndex": 2,
+          "sha256": "11a06aa02bb82a29a9981282a8e67f3ffcb1481f58e6cafa42c21a0e1dfb5074",
+          "status": "FULL"
+        }
+      ],
+      "physicalGroupId": "group-world-3-8",
+      "placementStatus": "RESOLVED",
+      "reviewUnitId": "unit-world-3-8-1x2",
+      "selectedCatalogId": null,
+      "spanCandidates": [
+        2
+      ],
+      "supportingTrackIds": [
+        "raw-track-3-8"
+      ],
+      "visibility": "FULL",
+      "widthCandidates": [
+        1
+      ],
+      "worldAnchor": {
+        "col": 8,
+        "row": 3
+      }
+    },
+    {
+      "bestObservationId": "obs-0-2-seq0",
+      "candidateStatus": "UNIQUE_IN_CATALOG",
+      "candidates": [
+        {
+          "bestFgScore": 0.9899,
+          "catalogId": "visual-65250f2f6c5a",
+          "fgMargin": 0.9899,
+          "geometry": {
+            "cells": 2,
+            "height": 1,
+            "shape": "2x1",
+            "width": 2
+          },
+          "identityStatus": "CANDIDATE_ONLY",
+          "matchReasons": [
+            "FOREGROUND_SHAPE_AND_COLOR",
+            "SCORE_0.9899"
+          ],
+          "name": "锻刀石",
+          "score": 0.8
+        }
+      ],
+      "footprint": {
+        "heightCells": 1,
+        "widthCells": 2
+      },
+      "geometryEvidenceStatus": "EXACT",
+      "heightCandidates": [
+        1
+      ],
+      "identityStatus": "REVIEW_REQUIRED",
+      "observations": [
+        {
+          "bbox": [
+            1071.0,
+            160.0,
+            1155.0,
+            202.0
+          ],
+          "bestFgScore": 0.9899,
+          "evidenceId": "sev2_video_audit_20260908_134436_match2_e83a070bb08f1974_warehouse-segment",
+          "fgMargin": 0.9899,
+          "inliers": 0,
+          "localGridBbox": [
+            0,
+            2,
+            2,
+            1
+          ],
+          "margin": null,
+          "matchedCandidateId": "visual-65250f2f6c5a",
+          "matchedCandidateName": "锻刀石",
+          "observationId": "obs-0-2-seq0",
+          "sequenceIndex": 0,
+          "sha256": "e83a070bb08f1974aa28e3b478af6e6084391810eafcabbec5d0d12b904059ad",
+          "status": "FULL"
+        },
+        {
+          "bbox": [
+            1071.0,
+            160.0,
+            1155.0,
+            202.0
+          ],
+          "bestFgScore": 0.9897,
+          "evidenceId": "sev2_video_audit_20260908_134436_match2_176cfef978c95849_warehouse-segment",
+          "fgMargin": 0.9897,
+          "inliers": 0,
+          "localGridBbox": [
+            0,
+            2,
+            2,
+            1
+          ],
+          "margin": null,
+          "matchedCandidateId": "visual-65250f2f6c5a",
+          "matchedCandidateName": "锻刀石",
+          "observationId": "obs-0-2-seq1",
+          "sequenceIndex": 1,
+          "sha256": "176cfef978c9584945a188a9f3fb5b5149629353670d4bcb882dced380c00f72",
+          "status": "FULL"
+        },
+        {
+          "bbox": [
+            1071.0,
+            160.0,
+            1155.0,
+            202.0
+          ],
+          "bestFgScore": 0.989,
+          "evidenceId": "sev2_video_audit_20260908_134436_match2_11a06aa02bb82a29_warehouse-segment",
+          "fgMargin": 0.989,
+          "inliers": 0,
+          "localGridBbox": [
+            0,
+            2,
+            2,
+            1
+          ],
+          "margin": null,
+          "matchedCandidateId": "visual-65250f2f6c5a",
+          "matchedCandidateName": "锻刀石",
+          "observationId": "obs-0-2-seq2",
+          "sequenceIndex": 2,
+          "sha256": "11a06aa02bb82a29a9981282a8e67f3ffcb1481f58e6cafa42c21a0e1dfb5074",
+          "status": "FULL"
+        }
+      ],
+      "physicalGroupId": "group-world-0-2",
+      "placementStatus": "RESOLVED",
+      "reviewUnitId": "unit-world-0-2-2x1",
+      "selectedCatalogId": null,
+      "spanCandidates": [
+        2
+      ],
+      "supportingTrackIds": [
+        "raw-track-0-2"
+      ],
+      "visibility": "FULL",
+      "widthCandidates": [
+        2
+      ],
+      "worldAnchor": {
+        "col": 2,
+        "row": 0
+      }
+    },
+    {
+      "bestObservationId": "obs-0-4-seq0",
+      "candidateStatus": "UNIQUE_IN_CATALOG",
+      "candidates": [
+        {
+          "catalogId": "image22-1-2",
+          "geometry": {
+            "cells": 2,
+            "height": 2,
+            "shape": "1x2",
+            "width": 1
+          },
+          "identityStatus": "CANDIDATE_ONLY",
+          "inliers": 16,
+          "margin": 12,
+          "matchReasons": [
+            "SMALL_ICON_NATIVE_SIFT",
+            "REGISTERED_ICON_COLOR",
+            "SIFT_INLIERS_16"
+          ],
+          "name": "环的冥思",
+          "registration": {
+            "correlation": 0.9053550958633423,
+            "error": 13.837241172790527,
+            "supportPixels": 725
+          },
+          "score": 0.8
+        }
+      ],
+      "footprint": {
+        "heightCells": 2,
+        "widthCells": 1
+      },
+      "geometryEvidenceStatus": "EXACT",
+      "heightCandidates": [
+        2
+      ],
+      "identityStatus": "REVIEW_REQUIRED",
+      "observations": [
+        {
+          "bbox": [
+            1155.0,
+            160.0,
+            1197.0,
+            244.0
+          ],
+          "bestFgScore": null,
+          "evidenceId": "sev2_video_audit_20260908_134436_match2_e83a070bb08f1974_warehouse-segment",
+          "fgMargin": null,
+          "inliers": 16,
+          "localGridBbox": [
+            0,
+            4,
+            1,
+            2
+          ],
+          "margin": 12,
+          "matchedCandidateId": "image22-1-2",
+          "matchedCandidateName": "环的冥思",
+          "observationId": "obs-0-4-seq0",
+          "sequenceIndex": 0,
+          "sha256": "e83a070bb08f1974aa28e3b478af6e6084391810eafcabbec5d0d12b904059ad",
+          "status": "FULL"
+        },
+        {
+          "bbox": [
+            1155.0,
+            160.0,
+            1197.0,
+            244.0
+          ],
+          "bestFgScore": null,
+          "evidenceId": "sev2_video_audit_20260908_134436_match2_176cfef978c95849_warehouse-segment",
+          "fgMargin": null,
+          "inliers": 15,
+          "localGridBbox": [
+            0,
+            4,
+            1,
+            2
+          ],
+          "margin": 11,
+          "matchedCandidateId": "image22-1-2",
+          "matchedCandidateName": "环的冥思",
+          "observationId": "obs-0-4-seq1",
+          "sequenceIndex": 1,
+          "sha256": "176cfef978c9584945a188a9f3fb5b5149629353670d4bcb882dced380c00f72",
+          "status": "FULL"
+        },
+        {
+          "bbox": [
+            1155.0,
+            160.0,
+            1197.0,
+            244.0
+          ],
+          "bestFgScore": null,
+          "evidenceId": "sev2_video_audit_20260908_134436_match2_11a06aa02bb82a29_warehouse-segment",
+          "fgMargin": null,
+          "inliers": 16,
+          "localGridBbox": [
+            0,
+            4,
+            1,
+            2
+          ],
+          "margin": 11,
+          "matchedCandidateId": "image22-1-2",
+          "matchedCandidateName": "环的冥思",
+          "observationId": "obs-0-4-seq2",
+          "sequenceIndex": 2,
+          "sha256": "11a06aa02bb82a29a9981282a8e67f3ffcb1481f58e6cafa42c21a0e1dfb5074",
+          "status": "FULL"
+        }
+      ],
+      "physicalGroupId": "group-world-0-4",
+      "placementStatus": "RESOLVED",
+      "reviewUnitId": "unit-world-0-4-1x2",
+      "selectedCatalogId": null,
+      "spanCandidates": [
+        2
+      ],
+      "supportingTrackIds": [
+        "raw-track-0-4"
+      ],
+      "visibility": "FULL",
+      "widthCandidates": [
+        1
+      ],
+      "worldAnchor": {
+        "col": 4,
+        "row": 0
+      }
+    },
+    {
+      "bestObservationId": "obs-4-9-seq0",
+      "candidateStatus": "UNIQUE_IN_CATALOG",
+      "candidates": [
+        {
+          "bestFgScore": 0.9893,
+          "catalogId": "image2-1-2",
+          "fgMargin": 0.9893,
+          "geometry": {
+            "cells": 1,
+            "height": 1,
+            "shape": "1x1",
+            "width": 1
+          },
+          "identityStatus": "CANDIDATE_ONLY",
+          "matchReasons": [
+            "FOREGROUND_SHAPE_AND_COLOR",
+            "SCORE_0.9893"
+          ],
+          "name": "花雕碗",
+          "score": 0.8
+        }
+      ],
+      "footprint": {
+        "heightCells": 1,
+        "widthCells": 1
+      },
+      "geometryEvidenceStatus": "EXACT",
+      "heightCandidates": [
+        1
+      ],
+      "identityStatus": "REVIEW_REQUIRED",
+      "observations": [
+        {
+          "bbox": [
+            1365.0,
+            328.0,
+            1407.0,
+            370.0
+          ],
+          "bestFgScore": 0.9893,
+          "evidenceId": "sev2_video_audit_20260908_134436_match2_e83a070bb08f1974_warehouse-segment",
+          "fgMargin": 0.9893,
+          "inliers": 0,
+          "localGridBbox": [
+            4,
+            9,
+            1,
+            1
+          ],
+          "margin": null,
+          "matchedCandidateId": "image2-1-2",
+          "matchedCandidateName": "花雕碗",
+          "observationId": "obs-4-9-seq0",
+          "sequenceIndex": 0,
+          "sha256": "e83a070bb08f1974aa28e3b478af6e6084391810eafcabbec5d0d12b904059ad",
+          "status": "FULL"
+        },
+        {
+          "bbox": [
+            1365.0,
+            328.0,
+            1407.0,
+            370.0
+          ],
+          "bestFgScore": 0.9893,
+          "evidenceId": "sev2_video_audit_20260908_134436_match2_176cfef978c95849_warehouse-segment",
+          "fgMargin": 0.9893,
+          "inliers": 0,
+          "localGridBbox": [
+            4,
+            9,
+            1,
+            1
+          ],
+          "margin": null,
+          "matchedCandidateId": "image2-1-2",
+          "matchedCandidateName": "花雕碗",
+          "observationId": "obs-4-9-seq1",
+          "sequenceIndex": 1,
+          "sha256": "176cfef978c9584945a188a9f3fb5b5149629353670d4bcb882dced380c00f72",
+          "status": "FULL"
+        },
+        {
+          "bbox": [
+            1365.0,
+            328.0,
+            1407.0,
+            370.0
+          ],
+          "bestFgScore": 0.9892,
+          "evidenceId": "sev2_video_audit_20260908_134436_match2_11a06aa02bb82a29_warehouse-segment",
+          "fgMargin": 0.9892,
+          "inliers": 0,
+          "localGridBbox": [
+            4,
+            9,
+            1,
+            1
+          ],
+          "margin": null,
+          "matchedCandidateId": "image2-1-2",
+          "matchedCandidateName": "花雕碗",
+          "observationId": "obs-4-9-seq2",
+          "sequenceIndex": 2,
+          "sha256": "11a06aa02bb82a29a9981282a8e67f3ffcb1481f58e6cafa42c21a0e1dfb5074",
+          "status": "FULL"
+        }
+      ],
+      "physicalGroupId": "group-world-4-9",
+      "placementStatus": "RESOLVED",
+      "reviewUnitId": "unit-world-4-9-1x1",
+      "selectedCatalogId": null,
+      "spanCandidates": [
+        1
+      ],
+      "supportingTrackIds": [
+        "raw-track-4-9"
+      ],
+      "visibility": "FULL",
+      "widthCandidates": [
+        1
+      ],
+      "worldAnchor": {
+        "col": 9,
+        "row": 4
+      }
+    },
+    {
+      "bestObservationId": "obs-1-2-seq0",
+      "candidateStatus": "UNIQUE_IN_CATALOG",
+      "candidates": [
+        {
+          "bestFgScore": 0.9915,
+          "catalogId": "image24-0-0",
+          "fgMargin": 0.9915,
+          "geometry": {
+            "cells": 1,
+            "height": 1,
+            "shape": "1x1",
+            "width": 1
+          },
+          "identityStatus": "CANDIDATE_ONLY",
+          "matchReasons": [
+            "FOREGROUND_SHAPE_AND_COLOR",
+            "SCORE_0.9915"
+          ],
+          "name": "霞红钻",
+          "score": 0.8
+        }
+      ],
+      "footprint": {
+        "heightCells": 1,
+        "widthCells": 1
+      },
+      "geometryEvidenceStatus": "EXACT",
+      "heightCandidates": [
+        1
+      ],
+      "identityStatus": "REVIEW_REQUIRED",
+      "observations": [
+        {
+          "bbox": [
+            1071.0,
+            202.0,
+            1113.0,
+            244.0
+          ],
+          "bestFgScore": 0.9915,
+          "evidenceId": "sev2_video_audit_20260908_134436_match2_e83a070bb08f1974_warehouse-segment",
+          "fgMargin": 0.9915,
+          "inliers": 0,
+          "localGridBbox": [
+            1,
+            2,
+            1,
+            1
+          ],
+          "margin": null,
+          "matchedCandidateId": "image24-0-0",
+          "matchedCandidateName": "霞红钻",
+          "observationId": "obs-1-2-seq0",
+          "sequenceIndex": 0,
+          "sha256": "e83a070bb08f1974aa28e3b478af6e6084391810eafcabbec5d0d12b904059ad",
+          "status": "FULL"
+        },
+        {
+          "bbox": [
+            1071.0,
+            202.0,
+            1113.0,
+            244.0
+          ],
+          "bestFgScore": 0.991,
+          "evidenceId": "sev2_video_audit_20260908_134436_match2_176cfef978c95849_warehouse-segment",
+          "fgMargin": 0.991,
+          "inliers": 0,
+          "localGridBbox": [
+            1,
+            2,
+            1,
+            1
+          ],
+          "margin": null,
+          "matchedCandidateId": "image24-0-0",
+          "matchedCandidateName": "霞红钻",
+          "observationId": "obs-1-2-seq1",
+          "sequenceIndex": 1,
+          "sha256": "176cfef978c9584945a188a9f3fb5b5149629353670d4bcb882dced380c00f72",
+          "status": "FULL"
+        },
+        {
+          "bbox": [
+            1071.0,
+            202.0,
+            1113.0,
+            244.0
+          ],
+          "bestFgScore": 0.9917,
+          "evidenceId": "sev2_video_audit_20260908_134436_match2_11a06aa02bb82a29_warehouse-segment",
+          "fgMargin": 0.9917,
+          "inliers": 0,
+          "localGridBbox": [
+            1,
+            2,
+            1,
+            1
+          ],
+          "margin": null,
+          "matchedCandidateId": "image24-0-0",
+          "matchedCandidateName": "霞红钻",
+          "observationId": "obs-1-2-seq2",
+          "sequenceIndex": 2,
+          "sha256": "11a06aa02bb82a29a9981282a8e67f3ffcb1481f58e6cafa42c21a0e1dfb5074",
+          "status": "FULL"
+        }
+      ],
+      "physicalGroupId": "group-world-1-2",
+      "placementStatus": "RESOLVED",
+      "reviewUnitId": "unit-world-1-2-1x1",
+      "selectedCatalogId": null,
+      "spanCandidates": [
+        1
+      ],
+      "supportingTrackIds": [
+        "raw-track-1-2"
+      ],
+      "visibility": "FULL",
+      "widthCandidates": [
+        1
+      ],
+      "worldAnchor": {
+        "col": 2,
+        "row": 1
+      }
+    },
+    {
+      "bestObservationId": "obs-3-3-seq0",
+      "candidateStatus": "UNIQUE_IN_CATALOG",
+      "candidates": [
+        {
+          "bestFgScore": 0.989,
+          "catalogId": "image2-1-2",
+          "fgMargin": 0.989,
+          "geometry": {
+            "cells": 1,
+            "height": 1,
+            "shape": "1x1",
+            "width": 1
+          },
+          "identityStatus": "CANDIDATE_ONLY",
+          "matchReasons": [
+            "FOREGROUND_SHAPE_AND_COLOR",
+            "SCORE_0.9890"
+          ],
+          "name": "花雕碗",
+          "score": 0.8
+        }
+      ],
+      "footprint": {
+        "heightCells": 1,
+        "widthCells": 1
+      },
+      "geometryEvidenceStatus": "EXACT",
+      "heightCandidates": [
+        1
+      ],
+      "identityStatus": "REVIEW_REQUIRED",
+      "observations": [
+        {
+          "bbox": [
+            1113.0,
+            286.0,
+            1155.0,
+            328.0
+          ],
+          "bestFgScore": 0.989,
+          "evidenceId": "sev2_video_audit_20260908_134436_match2_e83a070bb08f1974_warehouse-segment",
+          "fgMargin": 0.989,
+          "inliers": 0,
+          "localGridBbox": [
+            3,
+            3,
+            1,
+            1
+          ],
+          "margin": null,
+          "matchedCandidateId": "image2-1-2",
+          "matchedCandidateName": "花雕碗",
+          "observationId": "obs-3-3-seq0",
+          "sequenceIndex": 0,
+          "sha256": "e83a070bb08f1974aa28e3b478af6e6084391810eafcabbec5d0d12b904059ad",
+          "status": "FULL"
+        },
+        {
+          "bbox": [
+            1113.0,
+            286.0,
+            1155.0,
+            328.0
+          ],
+          "bestFgScore": 0.9887,
+          "evidenceId": "sev2_video_audit_20260908_134436_match2_176cfef978c95849_warehouse-segment",
+          "fgMargin": 0.9887,
+          "inliers": 0,
+          "localGridBbox": [
+            3,
+            3,
+            1,
+            1
+          ],
+          "margin": null,
+          "matchedCandidateId": "image2-1-2",
+          "matchedCandidateName": "花雕碗",
+          "observationId": "obs-3-3-seq1",
+          "sequenceIndex": 1,
+          "sha256": "176cfef978c9584945a188a9f3fb5b5149629353670d4bcb882dced380c00f72",
+          "status": "FULL"
+        },
+        {
+          "bbox": [
+            1113.0,
+            286.0,
+            1155.0,
+            328.0
+          ],
+          "bestFgScore": 0.989,
+          "evidenceId": "sev2_video_audit_20260908_134436_match2_11a06aa02bb82a29_warehouse-segment",
+          "fgMargin": 0.989,
+          "inliers": 0,
+          "localGridBbox": [
+            3,
+            3,
+            1,
+            1
+          ],
+          "margin": null,
+          "matchedCandidateId": "image2-1-2",
+          "matchedCandidateName": "花雕碗",
+          "observationId": "obs-3-3-seq2",
+          "sequenceIndex": 2,
+          "sha256": "11a06aa02bb82a29a9981282a8e67f3ffcb1481f58e6cafa42c21a0e1dfb5074",
+          "status": "FULL"
+        }
+      ],
+      "physicalGroupId": "group-world-3-3",
+      "placementStatus": "RESOLVED",
+      "reviewUnitId": "unit-world-3-3-1x1",
+      "selectedCatalogId": null,
+      "spanCandidates": [
+        1
+      ],
+      "supportingTrackIds": [
+        "raw-track-3-3"
+      ],
+      "visibility": "FULL",
+      "widthCandidates": [
+        1
+      ],
+      "worldAnchor": {
+        "col": 3,
+        "row": 3
+      }
+    },
+    {
+      "bestObservationId": "obs-3-9-seq0",
+      "candidateStatus": "UNIQUE_IN_CATALOG",
+      "candidates": [
+        {
+          "bestFgScore": 0.9948,
+          "catalogId": "image9-1-2",
+          "fgMargin": 0.9948,
+          "geometry": {
+            "cells": 1,
+            "height": 1,
+            "shape": "1x1",
+            "width": 1
+          },
+          "identityStatus": "CANDIDATE_ONLY",
+          "matchReasons": [
+            "FOREGROUND_SHAPE_AND_COLOR",
+            "SCORE_0.9948"
+          ],
+          "name": "鎏金盂",
+          "score": 0.8
+        }
+      ],
+      "footprint": {
+        "heightCells": 1,
+        "widthCells": 1
+      },
+      "geometryEvidenceStatus": "EXACT",
+      "heightCandidates": [
+        1
+      ],
+      "identityStatus": "REVIEW_REQUIRED",
+      "observations": [
+        {
+          "bbox": [
+            1365.0,
+            286.0,
+            1407.0,
+            328.0
+          ],
+          "bestFgScore": 0.9948,
+          "evidenceId": "sev2_video_audit_20260908_134436_match2_e83a070bb08f1974_warehouse-segment",
+          "fgMargin": 0.9948,
+          "inliers": 0,
+          "localGridBbox": [
+            3,
+            9,
+            1,
+            1
+          ],
+          "margin": null,
+          "matchedCandidateId": "image9-1-2",
+          "matchedCandidateName": "鎏金盂",
+          "observationId": "obs-3-9-seq0",
+          "sequenceIndex": 0,
+          "sha256": "e83a070bb08f1974aa28e3b478af6e6084391810eafcabbec5d0d12b904059ad",
+          "status": "FULL"
+        },
+        {
+          "bbox": [
+            1365.0,
+            286.0,
+            1407.0,
+            328.0
+          ],
+          "bestFgScore": 0.9949,
+          "evidenceId": "sev2_video_audit_20260908_134436_match2_176cfef978c95849_warehouse-segment",
+          "fgMargin": 0.9949,
+          "inliers": 0,
+          "localGridBbox": [
+            3,
+            9,
+            1,
+            1
+          ],
+          "margin": null,
+          "matchedCandidateId": "image9-1-2",
+          "matchedCandidateName": "鎏金盂",
+          "observationId": "obs-3-9-seq1",
+          "sequenceIndex": 1,
+          "sha256": "176cfef978c9584945a188a9f3fb5b5149629353670d4bcb882dced380c00f72",
+          "status": "FULL"
+        },
+        {
+          "bbox": [
+            1365.0,
+            286.0,
+            1407.0,
+            328.0
+          ],
+          "bestFgScore": 0.9947,
+          "evidenceId": "sev2_video_audit_20260908_134436_match2_11a06aa02bb82a29_warehouse-segment",
+          "fgMargin": 0.9947,
+          "inliers": 0,
+          "localGridBbox": [
+            3,
+            9,
+            1,
+            1
+          ],
+          "margin": null,
+          "matchedCandidateId": "image9-1-2",
+          "matchedCandidateName": "鎏金盂",
+          "observationId": "obs-3-9-seq2",
+          "sequenceIndex": 2,
+          "sha256": "11a06aa02bb82a29a9981282a8e67f3ffcb1481f58e6cafa42c21a0e1dfb5074",
+          "status": "FULL"
+        }
+      ],
+      "physicalGroupId": "group-world-3-9",
+      "placementStatus": "RESOLVED",
+      "reviewUnitId": "unit-world-3-9-1x1",
+      "selectedCatalogId": null,
+      "spanCandidates": [
+        1
+      ],
+      "supportingTrackIds": [
+        "raw-track-3-9"
+      ],
+      "visibility": "FULL",
+      "widthCandidates": [
+        1
+      ],
+      "worldAnchor": {
+        "col": 9,
+        "row": 3
+      }
+    },
+    {
+      "bestObservationId": "obs-4-1-seq0",
+      "candidateStatus": "UNIQUE_IN_CATALOG",
+      "candidates": [
+        {
+          "catalogId": "image29-0-0",
+          "geometry": {
+            "cells": 3,
+            "height": 1,
+            "shape": "3x1",
+            "width": 3
+          },
+          "identityStatus": "CANDIDATE_ONLY",
+          "inliers": 11,
+          "margin": 11,
+          "matchReasons": [
+            "SMALL_ICON_NATIVE_SIFT",
+            "REGISTERED_ICON_COLOR",
+            "SIFT_INLIERS_11"
+          ],
+          "name": "缠枝花纹筷",
+          "registration": {
+            "correlation": 0.9104568958282471,
+            "error": 18.747825622558594,
+            "hueError": 4.176100730895996,
+            "nativeCorrelation": 0.8524860143661499,
+            "nativeError": 31.537681579589844,
+            "samplingModel": "SYMMETRIC_NATIVE_3X3",
+            "supportPixels": 460
+          },
+          "score": 0.55
+        }
+      ],
+      "footprint": {
+        "heightCells": 1,
+        "widthCells": 3
+      },
+      "geometryEvidenceStatus": "EXACT",
+      "heightCandidates": [
+        1
+      ],
+      "identityStatus": "REVIEW_REQUIRED",
+      "observations": [
+        {
+          "bbox": [
+            1029.0,
+            328.0,
+            1155.0,
+            370.0
+          ],
+          "bestFgScore": null,
+          "evidenceId": "sev2_video_audit_20260908_134436_match2_e83a070bb08f1974_warehouse-segment",
+          "fgMargin": null,
+          "inliers": 9,
+          "localGridBbox": [
+            4,
+            1,
+            3,
+            1
+          ],
+          "margin": 9,
+          "matchedCandidateId": "image29-0-0",
+          "matchedCandidateName": "缠枝花纹筷",
+          "observationId": "obs-4-1-seq0",
+          "sequenceIndex": 0,
+          "sha256": "e83a070bb08f1974aa28e3b478af6e6084391810eafcabbec5d0d12b904059ad",
+          "status": "FULL"
+        },
+        {
+          "bbox": [
+            1029.0,
+            328.0,
+            1155.0,
+            370.0
+          ],
+          "bestFgScore": null,
+          "evidenceId": "sev2_video_audit_20260908_134436_match2_176cfef978c95849_warehouse-segment",
+          "fgMargin": null,
+          "inliers": 9,
+          "localGridBbox": [
+            4,
+            1,
+            3,
+            1
+          ],
+          "margin": 9,
+          "matchedCandidateId": "image29-0-0",
+          "matchedCandidateName": "缠枝花纹筷",
+          "observationId": "obs-4-1-seq1",
+          "sequenceIndex": 1,
+          "sha256": "176cfef978c9584945a188a9f3fb5b5149629353670d4bcb882dced380c00f72",
+          "status": "FULL"
+        },
+        {
+          "bbox": [
+            1029.0,
+            328.0,
+            1155.0,
+            370.0
+          ],
+          "bestFgScore": null,
+          "evidenceId": "sev2_video_audit_20260908_134436_match2_11a06aa02bb82a29_warehouse-segment",
+          "fgMargin": null,
+          "inliers": 11,
+          "localGridBbox": [
+            4,
+            1,
+            3,
+            1
+          ],
+          "margin": 11,
+          "matchedCandidateId": "image29-0-0",
+          "matchedCandidateName": "缠枝花纹筷",
+          "observationId": "obs-4-1-seq2",
+          "sequenceIndex": 2,
+          "sha256": "11a06aa02bb82a29a9981282a8e67f3ffcb1481f58e6cafa42c21a0e1dfb5074",
+          "status": "FULL"
+        }
+      ],
+      "physicalGroupId": "group-world-4-1",
+      "placementStatus": "RESOLVED",
+      "reviewUnitId": "unit-world-4-1-3x1",
+      "selectedCatalogId": null,
+      "spanCandidates": [
+        3
+      ],
+      "supportingTrackIds": [
+        "raw-track-4-1"
+      ],
+      "visibility": "FULL",
+      "widthCandidates": [
+        3
+      ],
+      "worldAnchor": {
+        "col": 1,
+        "row": 4
+      }
+    },
+    {
+      "bestObservationId": "obs-0-5-seq0",
+      "candidateStatus": "UNIQUE_IN_CATALOG",
+      "candidates": [
+        {
+          "catalogId": "image29-1-0",
+          "geometry": {
+            "cells": 3,
+            "height": 1,
+            "shape": "3x1",
+            "width": 3
+          },
+          "identityStatus": "CANDIDATE_ONLY",
+          "inliers": 9,
+          "margin": 9,
+          "matchReasons": [
+            "WHOLE_CARD_MATCH",
+            "SIFT_INLIERS_9"
+          ],
+          "name": "名为尊贵的冠冕",
+          "score": 0.45
+        }
+      ],
+      "footprint": {
+        "heightCells": 1,
+        "widthCells": 3
+      },
+      "geometryEvidenceStatus": "EXACT",
+      "heightCandidates": [
+        1
+      ],
+      "identityStatus": "REVIEW_REQUIRED",
+      "observations": [
+        {
+          "bbox": [
+            1197.0,
+            160.0,
+            1323.0,
+            202.0
+          ],
+          "bestFgScore": null,
+          "evidenceId": "sev2_video_audit_20260908_134436_match2_e83a070bb08f1974_warehouse-segment",
+          "fgMargin": null,
+          "inliers": 9,
+          "localGridBbox": [
+            0,
+            5,
+            3,
+            1
+          ],
+          "margin": 9,
+          "matchedCandidateId": "image29-1-0",
+          "matchedCandidateName": "名为尊贵的冠冕",
+          "observationId": "obs-0-5-seq0",
+          "sequenceIndex": 0,
+          "sha256": "e83a070bb08f1974aa28e3b478af6e6084391810eafcabbec5d0d12b904059ad",
+          "status": "FULL"
+        },
+        {
+          "bbox": [
+            1197.0,
+            160.0,
+            1323.0,
+            202.0
+          ],
+          "bestFgScore": null,
+          "evidenceId": "sev2_video_audit_20260908_134436_match2_176cfef978c95849_warehouse-segment",
+          "fgMargin": null,
+          "inliers": 9,
+          "localGridBbox": [
+            0,
+            5,
+            3,
+            1
+          ],
+          "margin": 9,
+          "matchedCandidateId": "image29-1-0",
+          "matchedCandidateName": "名为尊贵的冠冕",
+          "observationId": "obs-0-5-seq1",
+          "sequenceIndex": 1,
+          "sha256": "176cfef978c9584945a188a9f3fb5b5149629353670d4bcb882dced380c00f72",
+          "status": "FULL"
+        },
+        {
+          "bbox": [
+            1197.0,
+            160.0,
+            1323.0,
+            202.0
+          ],
+          "bestFgScore": null,
+          "evidenceId": "sev2_video_audit_20260908_134436_match2_11a06aa02bb82a29_warehouse-segment",
+          "fgMargin": null,
+          "inliers": 9,
+          "localGridBbox": [
+            0,
+            5,
+            3,
+            1
+          ],
+          "margin": 9,
+          "matchedCandidateId": "image29-1-0",
+          "matchedCandidateName": "名为尊贵的冠冕",
+          "observationId": "obs-0-5-seq2",
+          "sequenceIndex": 2,
+          "sha256": "11a06aa02bb82a29a9981282a8e67f3ffcb1481f58e6cafa42c21a0e1dfb5074",
+          "status": "FULL"
+        }
+      ],
+      "physicalGroupId": "group-world-0-5",
+      "placementStatus": "RESOLVED",
+      "reviewUnitId": "unit-world-0-5-3x1",
+      "selectedCatalogId": null,
+      "spanCandidates": [
+        3
+      ],
+      "supportingTrackIds": [
+        "raw-track-0-5"
+      ],
+      "visibility": "FULL",
+      "widthCandidates": [
+        3
+      ],
+      "worldAnchor": {
+        "col": 5,
+        "row": 0
+      }
+    },
+    {
+      "bestObservationId": "obs-2-4-seq0",
+      "candidateStatus": "UNIQUE_IN_CATALOG",
+      "candidates": [
+        {
+          "catalogId": "image3-1-1",
+          "geometry": {
+            "cells": 1,
+            "height": 1,
+            "shape": "1x1",
+            "width": 1
+          },
+          "identityStatus": "CANDIDATE_ONLY",
+          "inliers": 12,
+          "margin": 8,
+          "matchReasons": [
+            "SMALL_ICON_NATIVE_SIFT",
+            "REGISTERED_ICON_COLOR",
+            "SIFT_INLIERS_12"
+          ],
+          "name": "布妮果实",
+          "registration": {
+            "correlation": 0.8994401693344116,
+            "error": 17.2047176361084,
+            "supportPixels": 438
+          },
+          "score": 0.6
+        }
+      ],
+      "footprint": {
+        "heightCells": 1,
+        "widthCells": 1
+      },
+      "geometryEvidenceStatus": "EXACT",
+      "heightCandidates": [
+        1
+      ],
+      "identityStatus": "REVIEW_REQUIRED",
+      "observations": [
+        {
+          "bbox": [
+            1155.0,
+            244.0,
+            1197.0,
+            286.0
+          ],
+          "bestFgScore": null,
+          "evidenceId": "sev2_video_audit_20260908_134436_match2_e83a070bb08f1974_warehouse-segment",
+          "fgMargin": null,
+          "inliers": 7,
+          "localGridBbox": [
+            2,
+            4,
+            1,
+            1
+          ],
+          "margin": 7,
+          "matchedCandidateId": "image3-1-1",
+          "matchedCandidateName": "布妮果实",
+          "observationId": "obs-2-4-seq0",
+          "sequenceIndex": 0,
+          "sha256": "e83a070bb08f1974aa28e3b478af6e6084391810eafcabbec5d0d12b904059ad",
+          "status": "FULL"
+        },
+        {
+          "bbox": [
+            1155.0,
+            244.0,
+            1197.0,
+            286.0
+          ],
+          "bestFgScore": null,
+          "evidenceId": "sev2_video_audit_20260908_134436_match2_176cfef978c95849_warehouse-segment",
+          "fgMargin": null,
+          "inliers": 7,
+          "localGridBbox": [
+            2,
+            4,
+            1,
+            1
+          ],
+          "margin": 7,
+          "matchedCandidateId": "image3-1-1",
+          "matchedCandidateName": "布妮果实",
+          "observationId": "obs-2-4-seq1",
+          "sequenceIndex": 1,
+          "sha256": "176cfef978c9584945a188a9f3fb5b5149629353670d4bcb882dced380c00f72",
+          "status": "FULL"
+        },
+        {
+          "bbox": [
+            1155.0,
+            244.0,
+            1197.0,
+            286.0
+          ],
+          "bestFgScore": null,
+          "evidenceId": "sev2_video_audit_20260908_134436_match2_11a06aa02bb82a29_warehouse-segment",
+          "fgMargin": null,
+          "inliers": 12,
+          "localGridBbox": [
+            2,
+            4,
+            1,
+            1
+          ],
+          "margin": 8,
+          "matchedCandidateId": "image3-1-1",
+          "matchedCandidateName": "布妮果实",
+          "observationId": "obs-2-4-seq2",
+          "sequenceIndex": 2,
+          "sha256": "11a06aa02bb82a29a9981282a8e67f3ffcb1481f58e6cafa42c21a0e1dfb5074",
+          "status": "FULL"
+        }
+      ],
+      "physicalGroupId": "group-world-2-4",
+      "placementStatus": "RESOLVED",
+      "reviewUnitId": "unit-world-2-4-1x1",
+      "selectedCatalogId": null,
+      "spanCandidates": [
+        1
+      ],
+      "supportingTrackIds": [
+        "raw-track-2-4"
+      ],
+      "visibility": "FULL",
+      "widthCandidates": [
+        1
+      ],
+      "worldAnchor": {
+        "col": 4,
+        "row": 2
+      }
+    },
+    {
+      "bestObservationId": "obs-3-7-seq0",
+      "candidateStatus": "UNIQUE_IN_CATALOG",
+      "candidates": [
+        {
+          "catalogId": "image2-0-0",
+          "geometry": {
+            "cells": 2,
+            "height": 2,
+            "shape": "1x2",
+            "width": 1
+          },
+          "identityStatus": "CANDIDATE_ONLY",
+          "inliers": 8,
+          "margin": 8,
+          "matchReasons": [
+            "WHOLE_CARD_MATCH",
+            "SIFT_INLIERS_8"
+          ],
+          "name": "艺术画「解构」",
+          "score": 0.4
+        }
+      ],
+      "footprint": {
+        "heightCells": 2,
+        "widthCells": 1
+      },
+      "geometryEvidenceStatus": "EXACT",
+      "heightCandidates": [
+        2
+      ],
+      "identityStatus": "REVIEW_REQUIRED",
+      "observations": [
+        {
+          "bbox": [
+            1281.0,
+            286.0,
+            1323.0,
+            370.0
+          ],
+          "bestFgScore": null,
+          "evidenceId": "sev2_video_audit_20260908_134436_match2_e83a070bb08f1974_warehouse-segment",
+          "fgMargin": null,
+          "inliers": 8,
+          "localGridBbox": [
+            3,
+            7,
+            1,
+            2
+          ],
+          "margin": 8,
+          "matchedCandidateId": "image2-0-0",
+          "matchedCandidateName": "艺术画「解构」",
+          "observationId": "obs-3-7-seq0",
+          "sequenceIndex": 0,
+          "sha256": "e83a070bb08f1974aa28e3b478af6e6084391810eafcabbec5d0d12b904059ad",
+          "status": "FULL"
+        },
+        {
+          "bbox": [
+            1281.0,
+            286.0,
+            1323.0,
+            370.0
+          ],
+          "bestFgScore": null,
+          "evidenceId": "sev2_video_audit_20260908_134436_match2_176cfef978c95849_warehouse-segment",
+          "fgMargin": null,
+          "inliers": 8,
+          "localGridBbox": [
+            3,
+            7,
+            1,
+            2
+          ],
+          "margin": 8,
+          "matchedCandidateId": "image2-0-0",
+          "matchedCandidateName": "艺术画「解构」",
+          "observationId": "obs-3-7-seq1",
+          "sequenceIndex": 1,
+          "sha256": "176cfef978c9584945a188a9f3fb5b5149629353670d4bcb882dced380c00f72",
+          "status": "FULL"
+        },
+        {
+          "bbox": [
+            1281.0,
+            286.0,
+            1323.0,
+            370.0
+          ],
+          "bestFgScore": null,
+          "evidenceId": "sev2_video_audit_20260908_134436_match2_11a06aa02bb82a29_warehouse-segment",
+          "fgMargin": null,
+          "inliers": 8,
+          "localGridBbox": [
+            3,
+            7,
+            1,
+            2
+          ],
+          "margin": 8,
+          "matchedCandidateId": "image2-0-0",
+          "matchedCandidateName": "艺术画「解构」",
+          "observationId": "obs-3-7-seq2",
+          "sequenceIndex": 2,
+          "sha256": "11a06aa02bb82a29a9981282a8e67f3ffcb1481f58e6cafa42c21a0e1dfb5074",
+          "status": "FULL"
+        }
+      ],
+      "physicalGroupId": "group-world-3-7",
+      "placementStatus": "RESOLVED",
+      "reviewUnitId": "unit-world-3-7-1x2",
+      "selectedCatalogId": null,
+      "spanCandidates": [
+        2
+      ],
+      "supportingTrackIds": [
+        "raw-track-3-7"
+      ],
+      "visibility": "FULL",
+      "widthCandidates": [
+        1
+      ],
+      "worldAnchor": {
+        "col": 7,
+        "row": 3
+      }
+    },
+    {
+      "bestObservationId": "obs-2-2-seq0",
+      "candidateStatus": "AMBIGUOUS",
+      "candidates": [],
+      "footprint": {
+        "heightCells": 1,
+        "widthCells": 2
+      },
+      "geometryEvidenceStatus": "EXACT",
+      "heightCandidates": [
+        1
+      ],
+      "identityStatus": "REVIEW_REQUIRED",
+      "observations": [
+        {
+          "bbox": [
+            1071.0,
+            244.0,
+            1155.0,
+            286.0
+          ],
+          "bestFgScore": null,
+          "evidenceId": "sev2_video_audit_20260908_134436_match2_e83a070bb08f1974_warehouse-segment",
+          "fgMargin": null,
+          "inliers": 0,
+          "localGridBbox": [
+            2,
+            2,
+            2,
+            1
+          ],
+          "margin": null,
+          "matchedCandidateId": null,
+          "matchedCandidateName": null,
+          "observationId": "obs-2-2-seq0",
+          "sequenceIndex": 0,
+          "sha256": "e83a070bb08f1974aa28e3b478af6e6084391810eafcabbec5d0d12b904059ad",
+          "status": "FULL"
+        },
+        {
+          "bbox": [
+            1071.0,
+            244.0,
+            1155.0,
+            286.0
+          ],
+          "bestFgScore": null,
+          "evidenceId": "sev2_video_audit_20260908_134436_match2_176cfef978c95849_warehouse-segment",
+          "fgMargin": null,
+          "inliers": 0,
+          "localGridBbox": [
+            2,
+            2,
+            2,
+            1
+          ],
+          "margin": null,
+          "matchedCandidateId": null,
+          "matchedCandidateName": null,
+          "observationId": "obs-2-2-seq1",
+          "sequenceIndex": 1,
+          "sha256": "176cfef978c9584945a188a9f3fb5b5149629353670d4bcb882dced380c00f72",
+          "status": "FULL"
+        },
+        {
+          "bbox": [
+            1071.0,
+            244.0,
+            1155.0,
+            286.0
+          ],
+          "bestFgScore": null,
+          "evidenceId": "sev2_video_audit_20260908_134436_match2_11a06aa02bb82a29_warehouse-segment",
+          "fgMargin": null,
+          "inliers": 0,
+          "localGridBbox": [
+            2,
+            2,
+            2,
+            1
+          ],
+          "margin": null,
+          "matchedCandidateId": null,
+          "matchedCandidateName": null,
+          "observationId": "obs-2-2-seq2",
+          "sequenceIndex": 2,
+          "sha256": "11a06aa02bb82a29a9981282a8e67f3ffcb1481f58e6cafa42c21a0e1dfb5074",
+          "status": "FULL"
+        }
+      ],
+      "physicalGroupId": null,
+      "placementStatus": "AMBIGUOUS_REGION",
+      "reviewUnitId": "unit-world-2-2-2x1",
+      "selectedCatalogId": null,
+      "spanCandidates": [
+        2
+      ],
+      "supportingTrackIds": [
+        "raw-track-2-2"
+      ],
+      "visibility": "FULL",
+      "widthCandidates": [
+        2
+      ],
+      "worldAnchor": {
+        "col": 2,
+        "row": 2
+      }
+    },
+    {
+      "bestObservationId": "obs-1-3-seq0",
+      "candidateStatus": "UNKNOWN",
+      "candidates": [],
+      "footprint": {
+        "heightCells": 1,
+        "widthCells": 1
+      },
+      "geometryEvidenceStatus": "EXACT",
+      "heightCandidates": [
+        1
+      ],
+      "identityStatus": "REVIEW_REQUIRED",
+      "observations": [
+        {
+          "bbox": [
+            1113.0,
+            202.0,
+            1155.0,
+            244.0
+          ],
+          "bestFgScore": null,
+          "evidenceId": "sev2_video_audit_20260908_134436_match2_e83a070bb08f1974_warehouse-segment",
+          "fgMargin": null,
+          "inliers": 0,
+          "localGridBbox": [
+            1,
+            3,
+            1,
+            1
+          ],
+          "margin": null,
+          "matchedCandidateId": null,
+          "matchedCandidateName": null,
+          "observationId": "obs-1-3-seq0",
+          "sequenceIndex": 0,
+          "sha256": "e83a070bb08f1974aa28e3b478af6e6084391810eafcabbec5d0d12b904059ad",
+          "status": "FULL"
+        },
+        {
+          "bbox": [
+            1113.0,
+            202.0,
+            1155.0,
+            244.0
+          ],
+          "bestFgScore": null,
+          "evidenceId": "sev2_video_audit_20260908_134436_match2_176cfef978c95849_warehouse-segment",
+          "fgMargin": null,
+          "inliers": 0,
+          "localGridBbox": [
+            1,
+            3,
+            1,
+            1
+          ],
+          "margin": null,
+          "matchedCandidateId": null,
+          "matchedCandidateName": null,
+          "observationId": "obs-1-3-seq1",
+          "sequenceIndex": 1,
+          "sha256": "176cfef978c9584945a188a9f3fb5b5149629353670d4bcb882dced380c00f72",
+          "status": "FULL"
+        },
+        {
+          "bbox": [
+            1113.0,
+            202.0,
+            1155.0,
+            244.0
+          ],
+          "bestFgScore": null,
+          "evidenceId": "sev2_video_audit_20260908_134436_match2_11a06aa02bb82a29_warehouse-segment",
+          "fgMargin": null,
+          "inliers": 0,
+          "localGridBbox": [
+            1,
+            3,
+            1,
+            1
+          ],
+          "margin": null,
+          "matchedCandidateId": null,
+          "matchedCandidateName": null,
+          "observationId": "obs-1-3-seq2",
+          "sequenceIndex": 2,
+          "sha256": "11a06aa02bb82a29a9981282a8e67f3ffcb1481f58e6cafa42c21a0e1dfb5074",
+          "status": "FULL"
+        }
+      ],
+      "physicalGroupId": "group-world-1-3",
+      "placementStatus": "RESOLVED",
+      "reviewUnitId": "unit-world-1-3-1x1",
+      "selectedCatalogId": null,
+      "spanCandidates": [
+        1
+      ],
+      "supportingTrackIds": [
+        "raw-track-1-3"
+      ],
+      "visibility": "FULL",
+      "widthCandidates": [
+        1
+      ],
+      "worldAnchor": {
+        "col": 3,
+        "row": 1
+      }
+    }
+  ],
+  "schemaVersion": "warehouse-review-packet.v2",
+  "segments": [
+    {
+      "bottomEndpointTrusted": false,
+      "coverageStatus": "COVERAGE_UNPROVEN",
+      "evidenceId": "sev2_video_audit_20260908_134436_match2_e83a070bb08f1974_warehouse-segment",
+      "height": 810,
+      "kind": "warehouse-segment",
+      "sequenceIndex": 0,
+      "sha256": "e83a070bb08f1974aa28e3b478af6e6084391810eafcabbec5d0d12b904059ad",
+      "topEndpointTrusted": true,
+      "width": 1440
+    },
+    {
+      "bottomEndpointTrusted": false,
+      "coverageStatus": "COVERAGE_UNPROVEN",
+      "evidenceId": "sev2_video_audit_20260908_134436_match2_176cfef978c95849_warehouse-segment",
+      "height": 810,
+      "kind": "warehouse-segment",
+      "sequenceIndex": 1,
+      "sha256": "176cfef978c9584945a188a9f3fb5b5149629353670d4bcb882dced380c00f72",
+      "topEndpointTrusted": true,
+      "width": 1440
+    },
+    {
+      "bottomEndpointTrusted": false,
+      "coverageStatus": "COVERAGE_UNPROVEN",
+      "evidenceId": "sev2_video_audit_20260908_134436_match2_11a06aa02bb82a29_warehouse-segment",
+      "height": 810,
+      "kind": "warehouse-segment",
+      "sequenceIndex": 2,
+      "sha256": "11a06aa02bb82a29a9981282a8e67f3ffcb1481f58e6cafa42c21a0e1dfb5074",
+      "topEndpointTrusted": true,
+      "width": 1440
+    }
+  ],
+  "sourceFingerprint": "c7b36dcbf635938212e8717702fedaa5a67c46eb450487d6cb3e9cab1b267ded",
+  "summary": {
+    "ambiguousCount": 1,
+    "candidateReadyCount": 21,
+    "reviewedIdentityCount": 0,
+    "visibleReviewUnitCount": 23
+  },
+  "warehouseCoverage": {
+    "segmentCount": 3,
+    "status": "PARTIAL",
+    "terminationReason": "MISSING_BOTTOM"
+  }
+}

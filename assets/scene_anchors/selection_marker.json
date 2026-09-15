@@ -1,0 +1,12 @@
+{
+  "sourceImageSha256": "5750d31431a280079b15d88c53b35f926e65177933940854998a09ee4d684531",
+  "sourceVideo": "2026-08-18 11-19-25.mkv",
+  "sourceSeconds": 454,
+  "bounds": [
+    1383,
+    225,
+    33,
+    33
+  ],
+  "purpose": "UI selection marker only; no item identity"
+}

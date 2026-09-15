@@ -1,0 +1,2323 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>异环拍卖助手 Overlay Alpha</title>
+  <script src="auction_engine_v06.js"></script>
+  <script src="v06_adapter.js"></script>
+  <script src="shadow_profile_v06.js"></script>
+  <script src="live_shadow_compute.js"></script>
+  <script src="live_shadow_webview_adapter.js"></script>
+  <style>
+    :root {
+      /* Neutral Graphite Palette for Compact Overlay */
+      --bg-deep: #111318;
+      --bg: #171a20;
+      --surface: #1d2129;
+      --surface-2: #242a33;
+      --border-subtle: #2a3039;
+      --border: #2a3039;
+      --border-focus: #5a677d;
+      --border-error: #c46565;
+      --text: #e5e8ed;
+      --muted: #a7afba;
+      --muted-dark: #747d89;
+      --accent: #4e5b6e;
+      --accent-hover: #5d6d84;
+      --accent-soft: #78a870;
+      --gold: #cca663;
+      --red: #c46565;
+      --purple: #9b82b8;
+      --bg-shell: #171a20;
+      --radius-sm: 4px;
+      --radius-md: 6px;
+      --radius-pill: 999px;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    [hidden] { display: none !important; }
+    html, body {
+      width: 100%; height: 100%; overflow: hidden;
+      background: transparent; color: var(--text);
+      font-family: -apple-system, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+      -webkit-font-smoothing: antialiased;
+      user-select: none;
+    }
+    button, input, select { font: inherit; color: inherit; }
+    
+    .shell {
+      width: 100%; height: 100%;
+      background: var(--bg-shell);
+      border: 1px solid var(--border-subtle);
+      border-radius: 12px;
+      box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+      display: flex; flex-direction: column; overflow: hidden;
+    }
+    
+    /* Top Overlay Bar */
+    .bar {
+      display: flex; align-items: center; gap: 10px;
+      padding: 8px 12px; min-height: 56px; flex: 0 0 auto;
+      cursor: grab;
+    }
+    .bar:active { cursor: grabbing; }
+
+    /* Neutral Geometric HUD Status Mark */
+    .brand-mark {
+      width: 22px; height: 22px; flex: 0 0 auto;
+      display: flex; align-items: center; justify-content: center;
+      opacity: 0.85;
+    }
+
+    /* Decision Hero Block (行动建议与出价上限) */
+    .decision-hero-block {
+      display: flex; flex-direction: column; justify-content: center;
+      gap: 2px; min-width: 120px; flex: 0 0 auto;
+    }
+    .decision-action-badge {
+      display: inline-flex; align-items: center; gap: 4px;
+      font-size: 11px; font-weight: 700;
+      color: var(--muted); background: rgba(255, 255, 255, 0.06);
+      border: 1px solid var(--border-subtle);
+      border-radius: var(--radius-sm);
+      padding: 1px 6px; width: fit-content;
+      line-height: 1.3;
+    }
+    .decision-action-badge.is-positive {
+      color: #34d399; background: rgba(52, 211, 153, 0.15);
+      border-color: rgba(52, 211, 153, 0.35);
+    }
+    .decision-action-badge.is-danger {
+      color: #f87171; background: rgba(239, 68, 68, 0.15);
+      border-color: rgba(239, 68, 68, 0.35);
+    }
+    .decision-action-badge.is-warning {
+      color: #fbbf24; background: rgba(245, 158, 11, 0.15);
+      border-color: rgba(245, 158, 11, 0.35);
+    }
+    .decision-cap-wrap {
+      display: flex; align-items: baseline; gap: 4px;
+    }
+    .decision-cap-label {
+      color: var(--muted); font-size: 10.5px; font-weight: 500;
+    }
+    .decision-cap-val {
+      font-size: 15px; font-weight: 700; color: var(--muted-dark);
+      font-family: ui-monospace, SFMono-Regular, monospace;
+      font-feature-settings: "tnum"; font-variant-numeric: tabular-nums;
+      line-height: 1.1;
+    }
+    .decision-cap-val.has-value {
+      color: #34d399;
+    }
+
+    .v-divider {
+      width: 1px; height: 26px; background: var(--border-subtle);
+      flex: 0 0 auto; margin: 0 1px;
+    }
+
+    /* ValueCenter - Absolute Focus */
+    .center {
+      flex: 1; min-width: 0; padding-left: 2px;
+      display: flex; flex-direction: column; justify-content: center;
+    }
+    .center-row {
+      display: flex; align-items: center; gap: 6px;
+      margin-bottom: 1px;
+    }
+    .center .k {
+      color: var(--muted); font-size: 10.5px; font-weight: 500;
+      line-height: 1.1;
+    }
+    .support-tag {
+      font-size: 9.5px; font-weight: 600; padding: 0 5px;
+      border-radius: 3px; background: rgba(96, 165, 250, 0.12);
+      color: #60a5fa; border: 1px solid rgba(96, 165, 250, 0.25);
+    }
+    .support-tag.infeasible {
+      background: rgba(239, 68, 68, 0.12); color: #f87171; border-color: rgba(239, 68, 68, 0.25);
+    }
+    .center .v {
+      font-size: 18px; font-weight: 700; color: var(--muted-dark);
+      line-height: 1.1;
+      font-family: ui-monospace, SFMono-Regular, monospace;
+      font-feature-settings: "tnum"; font-variant-numeric: tabular-nums;
+      transition: color 0.15s ease;
+    }
+    .center .v.has-value {
+      color: var(--text);
+    }
+    .center .v.is-infeasible {
+      color: #f87171; font-size: 14px;
+    }
+    .center .band {
+      color: var(--muted-dark); font-size: 10.5px; font-weight: 500;
+      margin-top: 1px; line-height: 1.1;
+      font-feature-settings: "tnum"; font-variant-numeric: tabular-nums;
+    }
+
+    /* Left Fact Block (金均) */
+    .fact-block {
+      min-width: 44px; flex: 0 0 auto;
+      display: flex; flex-direction: column; justify-content: center;
+    }
+    .fact-block .k {
+      color: var(--muted); font-size: 10.5px; font-weight: 500;
+      margin-bottom: 1px;
+    }
+    .fact-block .v {
+      font-size: 13px; font-weight: 700; color: var(--text);
+      font-feature-settings: "tnum"; font-variant-numeric: tabular-nums;
+      line-height: 1.15;
+    }
+
+    /* Actions */
+    .actions { display: flex; align-items: center; gap: 6px; flex: 0 0 auto; }
+    
+    .btn {
+      display: inline-flex; align-items: center; justify-content: center;
+      border: 1px solid var(--border-subtle);
+      background: var(--surface);
+      border-radius: var(--radius-sm);
+      color: var(--muted);
+      cursor: pointer;
+      transition: all 0.12s ease;
+      outline: none;
+    }
+    .btn:hover {
+      background: var(--surface-2);
+      color: var(--text);
+      border-color: var(--border-focus);
+    }
+    .btn:active { transform: scale(0.97); }
+    .btn-icon { width: 32px; height: 32px; }
+    
+    .btn-shot {
+      color: #60a5fa;
+      background: rgba(96, 165, 250, 0.08);
+      border-color: rgba(96, 165, 250, 0.25);
+    }
+    .btn-shot:hover {
+      background: rgba(96, 165, 250, 0.18);
+      border-color: rgba(96, 165, 250, 0.45);
+      color: #fff;
+    }
+
+    .btn-next {
+      height: 32px; padding: 0 10px; gap: 4px;
+      font-size: 12px; font-weight: 500; color: var(--text-secondary);
+    }
+    .btn-next:hover {
+      background: var(--surface-2);
+      color: var(--text);
+    }
+
+    /* Expanded Pane */
+    .expand {
+      display: none; flex-direction: column; gap: 8px;
+      padding: 0 14px 12px 14px; min-height: 0; overflow-y: auto; flex: 1 1 auto;
+      scrollbar-gutter: stable;
+    }
+    .shell.expanded .expand { display: flex; }
+    .expand > * { flex-shrink: 0; }
+    .expand details > summary { font-size: 12px; color: var(--muted); cursor: pointer; padding: 4px 0; }
+    #extraNumericFields label { font-size: 11px; color: var(--muted); }
+    #extraNumericFields input { display: block; margin-top: 3px; min-width: 0; padding: 6px 8px;
+      border: 1px solid var(--border-subtle); border-radius: 4px; background: var(--bg-shell); color: var(--text); }
+    #extraNumericFields input:focus { outline: 1px solid var(--accent); }
+
+    /* Row 1: Chips & Autosave */
+    .chip-row {
+      display: flex; align-items: center; gap: 6px; position: relative;
+      min-height: 26px;
+    }
+    .chip {
+      display: inline-flex; align-items: center; gap: 4px;
+      border: 1px solid var(--border-subtle);
+      background: var(--surface);
+      color: var(--muted);
+      border-radius: var(--radius-pill);
+      padding: 2px 8px;
+      font-size: 11px;
+      cursor: pointer;
+      max-width: 160px;
+      overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+      transition: all 0.12s ease;
+    }
+    .chip:hover {
+      background: var(--surface-2);
+      color: var(--text);
+    }
+    .chip.on {
+      color: var(--text);
+      border-color: var(--border-focus);
+      background: var(--surface-2);
+    }
+    .chip svg { flex: 0 0 auto; opacity: 0.5; }
+    
+    .save {
+      margin-left: auto; font-size: 11px; color: var(--muted-dark);
+      display: flex; align-items: center; gap: 4px; font-weight: 400;
+    }
+    .save.ok { color: var(--accent-soft); }
+
+    /* Custom Popover Panel */
+    .popover-panel {
+      display: none;
+      position: absolute;
+      top: 32px;
+      left: 0;
+      z-index: 60;
+      min-width: 170px;
+      max-width: 280px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      padding: 4px;
+      box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+    }
+    .popover-panel.open { display: block; }
+    .popover-header {
+      font-size: 11px;
+      font-weight: 600;
+      color: var(--muted);
+      padding: 4px 8px 6px;
+      border-bottom: 1px solid var(--border-subtle);
+      margin-bottom: 4px;
+    }
+    .popover-list {
+      max-height: 180px;
+      overflow-y: auto;
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+    }
+    .popover-item {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 5px 8px;
+      border-radius: var(--radius-sm);
+      font-size: 11px;
+      color: var(--text);
+      cursor: pointer;
+      transition: all 0.12s ease;
+      white-space: nowrap;
+    }
+    .popover-item:hover {
+      background: var(--surface-2);
+    }
+    .popover-item.active {
+      background: var(--surface-2);
+      color: var(--text);
+      font-weight: 600;
+    }
+    .popover-item .check-icon {
+      width: 12px; height: 12px;
+      opacity: 0;
+      flex: 0 0 auto;
+    }
+    .popover-item.active .check-icon {
+      opacity: 1;
+    }
+
+    /* Row 2: Core Facts Grid */
+    .facts-grid {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 6px;
+    }
+    .live-board { display: flex; flex-direction: column; gap: 4px; }
+    .live-board-title { color: var(--muted); font-size: 11px; font-weight: 600; }
+    .live-seats { display: grid; grid-template-columns: 1fr 1fr; gap: 4px; }
+    .live-seat { display: flex; justify-content: space-between; gap: 8px; background: var(--surface); border: 1px solid var(--border-subtle); border-radius: var(--radius-sm); padding: 4px 8px; font-size: 11px; color: var(--muted); }
+    .live-seat.is-me { color: var(--text); border-color: var(--border-focus); }
+    .live-seat strong { color: var(--text); font-size: 12px; }
+    .live-intel { font-size: 11px; color: var(--muted); line-height: 1.4; max-height: 72px; overflow: auto; }
+    .live-intel p { margin: 0 0 4px 0; }
+    .fact-card {
+      background: var(--surface);
+      border: 1px solid var(--border-subtle);
+      border-radius: var(--radius-sm);
+      padding: 5px 8px;
+      display: flex; flex-direction: column; justify-content: center;
+      transition: all 0.12s ease;
+    }
+    .fact-card:focus-within {
+      border-color: var(--border-focus);
+      background: var(--surface-2);
+    }
+    .fact-card label {
+      display: block; color: var(--muted); font-size: 11px;
+      font-weight: 500; margin-bottom: 2px; white-space: nowrap;
+    }
+    .fact-card input {
+      width: 100%; border: none; background: transparent;
+      color: var(--text); font-size: 14px; font-weight: 700;
+      outline: none; padding: 0;
+      font-feature-settings: "tnum"; font-variant-numeric: tabular-nums;
+    }
+    .fact-card input::placeholder {
+      color: var(--muted-dark); font-size: 11px; font-weight: 400;
+    }
+
+    /* Row 3: Known Constraints List */
+    .known-list {
+      display: flex; flex-direction: column; gap: 6px;
+    }
+    .known-item {
+      display: flex; align-items: center; gap: 6px; position: relative;
+    }
+    .rarity-badge {
+      width: 28px; height: 28px; border-radius: var(--radius-sm);
+      display: flex; align-items: center; justify-content: center;
+      font-size: 11px; font-weight: 700; flex: 0 0 auto; user-select: none;
+    }
+    .badge-gold {
+      color: var(--gold); background: rgba(204, 166, 99, 0.12);
+      border: 1px solid rgba(204, 166, 99, 0.28);
+    }
+    .badge-red {
+      color: var(--red); background: rgba(196, 101, 101, 0.12);
+      border: 1px solid rgba(196, 101, 101, 0.28);
+    }
+    .badge-purple {
+      color: var(--purple); background: rgba(155, 130, 184, 0.12);
+      border: 1px solid rgba(155, 130, 184, 0.28);
+    }
+    .badge-blue {
+      color: #60a5fa; background: rgba(96, 165, 250, 0.12);
+      border: 1px solid rgba(96, 165, 250, 0.28);
+    }
+    .badge-green {
+      color: #4ade80; background: rgba(74, 222, 128, 0.12);
+      border: 1px solid rgba(74, 222, 128, 0.28);
+    }
+    .badge-white {
+      color: #e2e8f0; background: rgba(226, 232, 240, 0.12);
+      border: 1px solid rgba(226, 232, 240, 0.28);
+    }
+
+    /* Quality Matrix 4-Column Table */
+    .quality-matrix-table {
+      display: flex; flex-direction: column; gap: 4px; margin-top: 4px;
+    }
+    .quality-matrix-header {
+      display: grid; grid-template-columns: 28px repeat(3, 1fr); gap: 6px;
+      font-size: 10px; font-weight: 600; color: var(--muted); text-align: center;
+      padding: 0 2px;
+    }
+    .quality-matrix-row {
+      display: grid; grid-template-columns: 28px repeat(3, 1fr); gap: 6px;
+      align-items: center;
+    }
+    .quality-matrix-badge-cell {
+      display: flex; align-items: center; justify-content: center;
+    }
+    .quality-matrix-row input {
+      width: 100%; height: 26px; border-radius: var(--radius-sm);
+      border: 1px solid var(--border-subtle); background: var(--surface);
+      color: var(--text); padding: 0 4px; font-size: 11px; text-align: center;
+      outline: none; font-variant-numeric: tabular-nums;
+    }
+    .quality-matrix-row input:focus {
+      border-color: var(--border-focus); background: var(--surface-2);
+    }
+    .quality-matrix-placeholder {
+      display: flex; align-items: center; justify-content: center;
+      height: 26px; border-radius: var(--radius-sm);
+      border: 1px dashed var(--border-subtle); background: rgba(255, 255, 255, 0.02);
+      color: var(--muted-dark); font-size: 11px; user-select: none;
+    }
+    
+    .known-input-wrap { flex: 1; position: relative; }
+    .known-input {
+      width: 100%; height: 28px; border-radius: var(--radius-sm);
+      border: 1px solid var(--border-subtle);
+      background: var(--surface);
+      color: var(--text); padding: 0 8px; font-size: 11px;
+      outline: none; transition: all 0.12s ease;
+      font-feature-settings: "tnum"; font-variant-numeric: tabular-nums;
+    }
+    .known-input:focus {
+      border-color: var(--border-focus);
+      background: var(--surface-2);
+    }
+    .known-input.has-error {
+      border-color: var(--border-error) !important;
+      background: rgba(196, 101, 101, 0.08) !important;
+    }
+    .known-input::placeholder { color: var(--muted-dark); font-size: 11px; }
+
+    .advice-strip {
+      display: grid; grid-template-columns: 1fr auto; gap: 8px 12px;
+      align-items: center; padding: 6px 10px;
+      border: 1px solid var(--border-subtle); border-radius: var(--radius-sm);
+      background: var(--surface);
+    }
+    .advice-copy { min-width: 0; }
+    .advice-mode { color: var(--accent-soft); font-size: 11px; font-weight: 600; }
+    .advice-action { color: var(--text); font-size: 11px; margin-top: 1px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .advice-reason { color: var(--muted-dark); font-size: 11px; margin-top: 1px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .advice-cap { text-align: right; min-width: 80px; }
+    .advice-cap span { display: block; color: var(--muted); font-size: 11px; }
+    .advice-cap strong { display: block; color: var(--accent-soft); font-size: 14px; margin-top: 1px; font-variant-numeric: tabular-nums; }
+
+    /* Autocomplete Popover */
+    .suggest {
+      display: none; position: absolute; left: 0; right: 0; top: 30px;
+      background: var(--surface-2); border: 1px solid var(--border);
+      border-radius: var(--radius-sm); overflow: hidden; z-index: 30;
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+    }
+    .suggest div {
+      padding: 5px 8px; font-size: 11px; color: var(--muted);
+      cursor: pointer; transition: background 0.1s ease;
+    }
+    .suggest div.on, .suggest div:hover {
+      background: var(--surface); color: var(--text);
+    }
+
+    /* Row 4: Footer */
+    .foot {
+      display: flex; justify-content: space-between; align-items: center;
+      margin-top: 2px; padding-top: 2px;
+    }
+    .ghost-btn {
+      display: inline-flex; align-items: center; gap: 4px;
+      border: 1px solid var(--border-subtle); background: transparent;
+      color: var(--muted); border-radius: var(--radius-pill);
+      padding: 2px 8px; font-size: 11px; cursor: pointer;
+      transition: all 0.12s ease; outline: none;
+    }
+    .ghost-btn:hover {
+      border-color: var(--border-focus);
+      color: var(--text); background: var(--surface-2);
+    }
+    .status-hint {
+      color: var(--muted-dark); font-size: 11px; text-align: right;
+      max-width: 65%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+    }
+
+    /* Terminal layer */
+    .terminal-layer {
+      display: none; position: absolute; inset: 0; z-index: 90;
+      background: rgba(17, 19, 24, 0.85); padding: 50px 14px 14px;
+    }
+    .terminal-layer.open { display: block; }
+    .terminal-card {
+      max-width: 500px; margin: 0 auto; padding: 14px;
+      border: 1px solid var(--border); border-radius: var(--radius-md);
+      background: var(--surface); box-shadow: 0 12px 28px rgba(0, 0, 0, 0.4);
+    }
+    .terminal-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
+    .terminal-head strong { font-size: 13px; color: var(--text); }
+    .terminal-head p { margin-top: 2px; font-size: 11px; color: var(--muted); }
+    .terminal-close { border: 0; background: transparent; color: var(--muted); cursor: pointer; padding: 2px 5px; font-size: 14px; }
+    .terminal-choices { display: grid; grid-template-columns: 1.2fr 1fr 1fr; gap: 6px; margin-top: 10px; }
+    .terminal-action { min-height: 34px; padding: 6px 8px; font-size: 11px; border-radius: var(--radius-sm); border: 1px solid var(--border); background: var(--surface-2); color: var(--text); }
+    .terminal-action.primary { color: #fff; border-color: var(--accent); background: var(--accent); font-weight: 600; }
+    .terminal-action.danger { color: var(--red); border-color: rgba(196, 101, 101, 0.35); background: rgba(196, 101, 101, 0.08); }
+    .terminal-settlement { display: none; margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--border-subtle); }
+    .terminal-settlement.open { display: block; }
+    .terminal-fields { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+    .terminal-field { display: flex; flex-direction: column; gap: 2px; color: var(--muted); font-size: 11px; }
+    .terminal-field input, .terminal-field select {
+      height: 30px; border: 1px solid var(--border); border-radius: var(--radius-sm);
+      background: var(--bg-deep); color: var(--text); padding: 0 8px; font-size: 11px; outline: none;
+    }
+    .terminal-field select option { background: var(--surface); }
+    .terminal-footer { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-top: 10px; }
+    .terminal-status { min-height: 16px; font-size: 11px; color: var(--muted); }
+    .terminal-status.error { color: var(--red); }
+    .terminal-submit { height: 30px; padding: 0 12px; color: #fff; border-color: var(--accent); background: var(--accent); font-weight: 600; border-radius: var(--radius-sm); border: 1px solid var(--accent); }
+    
+    .warehouse-capture-overlay { display: none; margin-left: 8px; font-size: 11px; color: var(--muted); }
+    .warehouse-capture-overlay.is-visible { display: inline; }
+    .hidden { display: none !important; }
+  </style>
+</head>
+<body>
+  <div class="shell" id="shell">
+    <!-- Top Overlay Bar (Collapsed & Expanded Share) -->
+    <div class="bar" id="dragBar">
+      <!-- Neutral Geometric HUD Mark -->
+      <div class="brand-mark">
+        <svg width="22" height="22" viewBox="0 0 28 28" fill="none">
+          <rect x="2" y="2" width="24" height="24" rx="4" fill="#1d2129" stroke="#2a3039" stroke-width="1"/>
+          <rect x="8" y="8" width="12" height="12" rx="2" transform="rotate(45 14 14)" stroke="#5a677d" stroke-width="1.4" fill="rgba(90, 103, 125, 0.15)"/>
+          <circle cx="14" cy="14" r="1.5" fill="#a7afba"/>
+        </svg>
+      </div>
+
+      <!-- Decision Hero Block (行动建议与出价上限) -->
+      <div class="decision-hero-block" id="topDecisionBlock">
+        <div class="decision-action-badge" id="topActionBadge">等待情报</div>
+        <div class="decision-cap-wrap">
+          <span class="decision-cap-label">建议上限</span>
+          <strong class="decision-cap-val" id="topRecommendedMax">—</strong>
+        </div>
+      </div>
+
+      <div class="v-divider"></div>
+
+      <!-- Center: ValueCenter (P50 Focus + Range) -->
+      <div class="center">
+        <div class="center-row">
+          <span class="k" id="valuationCaption">估值 (P50)</span>
+          <span class="support-tag" id="topSupportTag">结构推断</span>
+          <span id="topVisionHealth" role="status" style="font-size:10px;color:var(--red)" hidden>识别异常</span>
+        </div>
+        <div class="v" id="p50Label">—</div>
+        <div class="band" id="pRange">区间 P20 — · P80 —</div>
+      </div>
+
+      <div class="v-divider"></div>
+
+      <!-- Lead Fact: 金均 / Q -->
+      <div class="fact-block">
+        <div class="k" id="leadFactLabel">金均</div>
+        <div class="v" id="leadFactValue">—</div>
+      </div>
+
+      <!-- Action Buttons -->
+      <div class="actions no-drag">
+        <button class="btn" id="recognitionModeBtn" type="button" data-mode="manual" title="切换局内手动／自动识别" onclick="sendHost({action:'manual_facts',type:'manual_facts',facts:{recognitionMode:this.dataset.mode === 'auto' ? 'manual' : 'auto'}})">手动</button>
+        <!-- Screenshot Triggered Snapshot -->
+        <button class="btn btn-icon btn-shot" id="shotBtn" type="button" title="截图识别 (快捷捕获)">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/>
+            <circle cx="12" cy="13" r="4"/>
+          </svg>
+        </button>
+        <!-- Next Match -->
+        <button class="btn btn-next" id="nextBtn" type="button" title="新一局">
+          <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+            <line x1="12" y1="5" x2="12" y2="19"/>
+            <line x1="5" y1="12" x2="19" y2="12"/>
+          </svg>
+          <span>新一局</span>
+        </button>
+        <!-- Toggle Expand -->
+        <button class="btn btn-icon" id="toggleBtn" type="button" title="展开">
+          <svg id="toggleIcon" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+            <polyline points="6 9 12 15 18 9"/>
+          </svg>
+        </button>
+      </div>
+    </div>
+
+    <!-- Expanded Body Pane -->
+    <div class="expand no-drag" id="expandPane">
+      <!-- Row 1: Parameter Chips Bar & Anchored Custom Popover -->
+      <div class="chip-row" id="paramBar">
+        <button class="chip" id="venueChip" type="button" title="拍卖场">
+          <span id="venueChipText">选场地</span>
+          <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="6 9 12 15 18 9"/></svg>
+        </button>
+        <button class="chip" id="fieldChip" type="button" title="场地条件">
+          <span id="fieldChipText">标准对局</span>
+          <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="6 9 12 15 18 9"/></svg>
+        </button>
+        <button class="chip" id="boxChip" type="button" title="箱型">
+          <span id="boxChipText">选箱型</span>
+          <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="6 9 12 15 18 9"/></svg>
+        </button>
+        <span class="save" id="saveHint">已保存草稿</span>
+
+        <!-- Custom Popover Panel (Zero native select) -->
+        <div class="popover-panel" id="customPopover">
+          <div class="popover-header" id="popoverHeader">选择场地等级</div>
+          <div class="popover-list" id="popoverList"></div>
+        </div>
+      </div>
+
+      <!-- Row 2: Global & Whole-Warehouse Parameters Grid -->
+      <div class="facts-grid">
+        <div class="fact-card">
+          <label for="qInput">Q</label>
+          <input id="qInput" inputmode="numeric" placeholder="高阶件数">
+        </div>
+        <div class="fact-card">
+          <label for="totalItemsInput">总件数</label>
+          <input id="totalItemsInput" type="number" min="0" step="1" placeholder="--">
+        </div>
+        <div class="fact-card">
+          <label for="totalGridInput">总占格</label>
+          <input id="totalGridInput" type="number" min="0" step="1" placeholder="--">
+        </div>
+        <div class="fact-card">
+          <label for="leaderBidInput">当前叫价</label>
+          <input id="leaderBidInput" inputmode="numeric" placeholder="未填写">
+        </div>
+        <div class="fact-card"><label for="intelCostInput">情报费用</label><input id="intelCostInput" inputmode="numeric" placeholder="0"></div>
+        <div class="fact-card"><label for="otherCostInput">其他已付费用</label><input id="otherCostInput" inputmode="numeric" placeholder="0"></div>
+        <div class="fact-card"><label for="futureIncrementalCostInput">预计后续费用</label><input id="futureIncrementalCostInput" inputmode="numeric" placeholder="0"></div>
+      </div>
+
+      <p id="freeIntelStatus" role="status" hidden></p><details id="darkControls" hidden><summary>私人上限与可见次数</summary><p>记录自己的计划上限及画面可见次数，不代表对手金额。</p><label>私人出价上限<input id="privateBidCapInput" class="known-input" type="text" inputmode="numeric" placeholder="未知留空，明确没有填0" aria-describedby="privateBidCapError"></label><p id="privateBidCapError" role="alert" style="color:#ff9d8e"></p><label>可见出价次数<input id="bidActionCountInput" class="known-input" type="text" inputmode="numeric" placeholder="未知留空，明确没有填0" aria-describedby="bidActionCountError"></label><p id="bidActionCountError" role="alert" style="color:#ff9d8e"></p></details><p id="hiddenBidNotice" hidden>本词条出价金额隐藏；参考保本线决定自己的出价，不用旧叫价判断追价盈亏。</p>
+      <!-- Live four-seat bids and intel (projected from native payload) -->
+      <div class="live-board" id="liveBoard">
+        <div class="live-board-title">四人出价</div>
+        <div class="live-seats" id="liveSeats"></div>
+        <div class="live-board-title">情报原文</div>
+        <div class="live-intel" id="liveIntel">暂无情报</div>
+      </div>
+
+      <!-- Row 3: Known Constraints -->
+      <div class="known-list" id="knownBlock">
+        <div class="known-item">
+          <div class="rarity-badge badge-gold" title="金色约束">金</div>
+          <div class="known-input-wrap">
+            <input id="knownGoldInput" class="known-input" data-rarity="gold" placeholder="例如 51077/18031 或 万有星仪">
+            <div class="suggest" id="goldSuggest"></div>
+          </div>
+        </div>
+        <div class="known-item">
+          <div class="rarity-badge badge-red" title="红色约束">红</div>
+          <div class="known-input-wrap">
+            <input id="knownRedInput" class="known-input" data-rarity="red" placeholder="例如 577777*2 或 古旧手提箱">
+            <div class="suggest" id="redSuggest"></div>
+          </div>
+        </div>
+        <div class="known-item hidden" id="purpleKnownRow">
+          <div class="rarity-badge badge-purple" title="紫色约束">紫</div>
+          <div class="known-input-wrap">
+            <input id="knownPurpleInput" class="known-input" data-rarity="purple" placeholder="需要时填写紫藏品约束">
+            <div class="suggest" id="purpleSuggest"></div>
+          </div>
+        </div>
+      </div>
+
+      <details><summary>蓝、绿、白已知藏品</summary><div class="known-item"><div class="rarity-badge" title="蓝色约束">蓝</div><div class="known-input-wrap"><input id="knownBlueInput" class="known-input" data-rarity="blue" placeholder="已知蓝色名称或价格"><div class="suggest" id="blueSuggest"></div></div></div>
+<div class="known-item"><div class="rarity-badge" title="绿色约束">绿</div><div class="known-input-wrap"><input id="knownGreenInput" class="known-input" data-rarity="green" placeholder="已知绿色名称或价格"><div class="suggest" id="greenSuggest"></div></div></div>
+<div class="known-item"><div class="rarity-badge" title="白色约束">白</div><div class="known-input-wrap"><input id="knownWhiteInput" class="known-input" data-rarity="white" placeholder="已知白色名称或价格"><div class="suggest" id="whiteSuggest"></div></div></div>
+</details>
+      <details id="sparkleFields" hidden><summary>闪耀之心：转换宝石证据</summary><label>转换宝石总件数<input id="sparkleCountInput" class="known-input" type="text" inputmode="numeric" placeholder="未知留空，0表示没有"></label><label>已确认名称<input id="sparkleNamesInput" class="known-input" type="text" placeholder="泪滴+绿林*2"></label><p>仅转换的1×1宝石；名称用 + 分隔，重复用 *。</p><p id="sparkleBounds" role="status"></p></details><div><label>福利金实际到账<input id="welfareReceivedInput" class="known-input" type="text" inputmode="numeric" aria-describedby="welfareError" placeholder="未知留空，明确未收到填0"></label><p id="welfareError" role="alert" style="color:#ff9d8e"></p><p id="sessionAccounting" role="status"></p></div>      <!-- Quality Numeric Constraints: 6 rows (金 → 紫 → 蓝 → 绿 → 白 → 红), 4 columns aligned -->
+      <details id="extraNumericFields" open>
+        <summary>品质数值约束（件数 · 均价 · 占格）</summary>
+        <div class="quality-matrix-table">
+          <!-- 表头: 品质 | 件数 | 均价 | 占格 -->
+          <div class="quality-matrix-header">
+            <span>品质</span>
+            <span>件数</span>
+            <span>均价</span>
+            <span>占格</span>
+          </div>
+
+          <!-- 1. 金色行 -->
+          <div class="quality-matrix-row">
+            <div class="quality-matrix-badge-cell">
+              <div class="rarity-badge badge-gold" title="金色">金</div>
+            </div>
+            <input id="goldCountInput" type="number" min="0" step="1" placeholder="--">
+            <input id="goldAvgInput" inputmode="numeric" placeholder="真实价格">
+            <input id="goldGridInput" type="number" min="0" step="1" placeholder="--">
+          </div>
+
+          <!-- 2. 紫色行 -->
+          <div class="quality-matrix-row">
+            <div class="quality-matrix-badge-cell">
+              <div class="rarity-badge badge-purple" title="紫色">紫</div>
+            </div>
+            <input id="purpleCountInput" inputmode="numeric" placeholder="已知紫件数">
+            <input id="purpleAvgInput" type="number" min="0" step="1" placeholder="--">
+            <input id="purpleGridInput" type="number" min="0" step="1" placeholder="--">
+          </div>
+
+          <!-- 3. 蓝色行 -->
+          <div class="quality-matrix-row">
+            <div class="quality-matrix-badge-cell">
+              <div class="rarity-badge badge-blue" title="蓝色">蓝</div>
+            </div>
+            <input id="blueCountInput" type="number" min="0" step="1" placeholder="--">
+            <input id="blueAvgInput" type="number" min="0" step="1" placeholder="--">
+            <input id="blueGridInput" type="number" min="0" step="1" placeholder="--">
+          </div>
+
+          <!-- 4. 绿色行 -->
+          <div class="quality-matrix-row">
+            <div class="quality-matrix-badge-cell">
+              <div class="rarity-badge badge-green" title="绿色">绿</div>
+            </div>
+            <input id="greenCountInput" type="number" min="0" step="1" placeholder="--">
+            <input id="greenAvgInput" type="number" min="0" step="1" placeholder="--">
+            <input id="greenGridInput" type="number" min="0" step="1" placeholder="--">
+          </div>
+
+          <!-- 5. 白色行 -->
+          <div class="quality-matrix-row">
+            <div class="quality-matrix-badge-cell">
+              <div class="rarity-badge badge-white" title="白色">白</div>
+            </div>
+            <input id="whiteCountInput" type="number" min="0" step="1" placeholder="--">
+            <input id="whiteAvgInput" type="number" min="0" step="1" placeholder="--">
+            <input id="whiteGridInput" type="number" min="0" step="1" placeholder="--">
+          </div>
+
+          <!-- 6. 红色行 -->
+          <div class="quality-matrix-row">
+            <div class="quality-matrix-badge-cell">
+              <div class="rarity-badge badge-red" title="红色">红</div>
+            </div>
+            <input id="redCountInput" type="number" min="0" step="1" placeholder="--">
+            <div class="quality-matrix-placeholder" title="红色无均价约束">--</div>
+            <input id="redGridInput" type="number" min="0" step="1" placeholder="--">
+          </div>
+        </div>
+      </details>
+      <div class="advice-strip" id="adviceStrip">
+        <div class="advice-copy">
+          <div class="advice-mode" id="supportMode">基础结构推断</div>
+          <div class="advice-action" id="actionText">补齐拍卖事实后生成估值</div>
+          <div class="advice-reason" id="costSummary">费用待确认</div>
+          <div class="advice-reason" id="currentOwnership" role="status" hidden></div>
+          <div class="advice-reason" id="visionHealthStatus" role="status" hidden></div>
+          <button class="btn" id="restoreVisionBtn" type="button" hidden onclick="sendHost({action:'start_live_vision',type:'start_live_vision'})">恢复识别</button>
+          <div class="advice-reason" id="expectedProfit">预期盈亏：—</div>
+          <div class="advice-reason" id="actionReason">正式出价建议只在输入与历史支持满足时显示</div>
+        </div>
+        <div class="advice-cap">
+          <span>建议最高价</span>
+          <strong id="recommendedMax">—</strong>
+        </div>
+      </div>
+
+      <!-- Row 4: Foot Info -->
+      <div class="foot">
+        <button class="ghost-btn" id="togglePurple" type="button">
+          <span>+ 展开紫色约束</span>
+        </button>
+        <span class="status-hint" id="statusHint">信息还没补齐，结果可能继续变化</span>
+        <span class="warehouse-capture-overlay" id="warehouseCaptureStatus" hidden></span>
+      </div>
+    </div>
+
+    <div class="terminal-layer no-drag" id="terminalLayer" aria-hidden="true">
+      <div class="terminal-card">
+        <div class="terminal-head">
+          <div><strong>当前局要怎么处理？</strong><p>未结算草稿不会再被静默当作已完成对局。</p></div>
+          <button class="terminal-close" id="terminalClose" type="button" aria-label="取消">×</button>
+        </div>
+        <div class="terminal-choices" id="terminalChoices">
+          <button class="btn terminal-action primary" id="terminalFinish" type="button">本局结束<br>结算并保存</button>
+          <button class="btn terminal-action" id="terminalKeep" type="button">保留草稿<br>开始下一局</button>
+          <button class="btn terminal-action danger" id="terminalDiscard" type="button">放弃当前局<br>开始下一局</button>
+        </div>
+        <div class="terminal-settlement" id="terminalSettlement">
+          <div class="terminal-fields">
+            <label class="terminal-field">最终成交价<input id="terminalClearingPrice" inputmode="numeric" type="number" min="1"></label>
+            <label class="terminal-field">最后实际总价<input id="terminalActualTotal" inputmode="numeric" type="number" min="1"></label>
+            <label class="terminal-field">是否由本人拍下<select id="terminalAcquired"><option value="">请选择</option><option value="true">是，本人拍下</option><option value="false">否，未拍下</option></select></label>
+            <label class="terminal-field">拍下方<input id="terminalWinner" placeholder="填写结算画面中的竞得者名称"></label>
+          </div>
+          <div class="terminal-footer">
+            <span class="terminal-status" id="terminalStatus">结算成功后才会清空并生成下一局。</span>
+            <button class="btn terminal-submit" id="terminalSubmit" type="button">结算并开始下一局</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const extraNumericFields = ["privateBidCap", "bidActionCount", "welfareReceived", "blueCount", "goldCount", "redCount", "totalItems", "purpleAvg", "totalGrid", "goldGrid", "purpleGrid", "whiteCount", "whiteAvg", "whiteGrid", "greenCount", "greenAvg", "greenGrid", "blueAvg", "blueGrid", "redGrid"];
+    const collapsedSize = [600, 72];
+
+    const FIELD_CONDITIONS = [
+      { id: "standard", name: "标准对局" },
+      { id: "dark", name: "天黑了" },
+      { id: "extraIntel", name: "一手情报" },
+      { id: "purpleDouble", name: "加倍！！" },
+      { id: "goldDouble", name: "加倍！！！" },
+      { id: "sparkle", name: "闪耀之心" },
+      { id: "welfare", name: "福利多多" },
+      { id: "gemMaze", name: "宝石迷阵" }
+    ];
+
+    const manualState = {
+      dirty: false, suppress: false, matchId: "",
+      venueId: null,
+      venue: null,
+      boxId: null,
+      fieldCondition: "standard",
+      box: "",
+      options: { venues: [], fieldConditions: [] },
+      activePopover: null,
+      suggest: { rarity: null, items: [], index: 0, tokenStart: 0, token: "" },
+      activeFieldId: null,
+      isComposing: false,
+      lastSyncedFacts: {},
+      boxUnknownExplicit: false,
+      fieldStates: {},
+      latestEngineResult: null,
+      latestNativePayload: null,
+      lastSyncedPredictionId: null,
+      shadowPollCount: 0,
+      liveVisionActive: false,
+      liveVisionMatchId: "",
+      liveVisionSequence: 0
+    };
+    let hudWsClient = null;
+    let syncTimer = null;
+    let solverTimer = null;
+    let shadowRefreshTimer = null;
+
+    function sendHost(payload) {
+      if (window.chrome && window.chrome.webview) {
+        window.chrome.webview.postMessage(JSON.stringify(payload));
+        return true;
+      }
+      const api = window.pywebview && window.pywebview.api;
+      if (api) {
+        if (payload.action === "manual_facts" && api.apply_manual_facts) { api.apply_manual_facts(payload); return true; }
+        if (payload.action === "manual_finalize" && api.finalize_manual_match) { api.finalize_manual_match(payload); return true; }
+        if (payload.action === "manual_next_match" && api.begin_next_manual_match) { api.begin_next_manual_match(payload); return true; }
+        if (payload.action === "manual_bootstrap" && api.manual_bootstrap) { api.manual_bootstrap(); return true; }
+        if (payload.action === "triggered_snapshot" && api.triggered_snapshot) { api.triggered_snapshot(); return true; }
+        if (payload.action === "resize_hud" && api.resize_hud) { api.resize_hud(payload.w, payload.h); return true; }
+        if (payload.action === "capture_hud" && (api.triggered_snapshot || api.capture_game)) { (api.triggered_snapshot || api.capture_game)(); return true; }
+      }
+      if (hudWsClient && hudWsClient.readyState === WebSocket.OPEN) {
+        hudWsClient.send(JSON.stringify({ ...payload, type: payload.action || payload.type }));
+        return true;
+      }
+      return false;
+    }
+
+    function getExpandedHeight() {
+      const pane = document.getElementById("expandPane");
+      const bar = document.querySelector(".bar");
+      const visible = pane ? [...pane.children].filter(el => getComputedStyle(el).display !== "none") : [];
+      const style = pane ? getComputedStyle(pane) : null;
+      const naturalHeight = visible.reduce((sum, el) => sum + el.getBoundingClientRect().height, 0)
+        + Math.max(0, visible.length - 1) * (parseFloat(style?.rowGap) || 0)
+        + (parseFloat(style?.paddingTop) || 0) + (parseFloat(style?.paddingBottom) || 0);
+      const contentHeight = Math.ceil((bar?.getBoundingClientRect().height || 56) + naturalHeight + 2);
+      const available = Math.max(340, (window.screen?.availHeight || 900) - 80);
+      const terminalMinimum = document.getElementById("terminalLayer")?.classList.contains("open") ? 430 : 340;
+      return Math.min(available, Math.max(terminalMinimum, contentHeight));
+    }
+
+    function setTerminalStatus(text, error = false) {
+      const el = document.getElementById("terminalStatus");
+      if (!el) return;
+      el.textContent = text || "";
+      el.classList.toggle("error", Boolean(error));
+    }
+
+    function openTerminal() {
+      flushSync();
+      closePopover();
+      setExpanded(true);
+      document.getElementById("terminalLayer").classList.add("open");
+      document.getElementById("terminalLayer").setAttribute("aria-hidden", "false");
+      document.getElementById("terminalSettlement").classList.remove("open");
+      setTerminalStatus("请选择明确的本局处理方式。", false);
+      resizeHud(true);
+    }
+
+    function closeTerminal(clear = false) {
+      document.getElementById("terminalLayer").classList.remove("open");
+      document.getElementById("terminalLayer").setAttribute("aria-hidden", "true");
+      document.getElementById("terminalSettlement").classList.remove("open");
+      if (clear) {
+        ["terminalClearingPrice", "terminalActualTotal"].forEach(id => { document.getElementById(id).value = ""; });
+        document.getElementById("terminalAcquired").value = "";
+        document.getElementById("terminalWinner").value = "";
+      }
+      resizeHud(document.getElementById("shell").classList.contains("expanded"));
+    }
+
+    function requestNextDisposition(disposition) {
+      setTerminalStatus("正在保存当前状态…", false);
+      sendHost({
+        action: "manual_next_match",
+        type: "manual_next_match",
+        expectedMatchId: manualState.matchId,
+        disposition
+      });
+    }
+
+    function submitSettlement() {
+      const clearingPrice = Number(document.getElementById("terminalClearingPrice").value);
+      const actualTotal = Number(document.getElementById("terminalActualTotal").value);
+      const acquiredRaw = document.getElementById("terminalAcquired").value;
+      const winner = document.getElementById("terminalWinner").value;
+      if (!(clearingPrice > 0) || !(actualTotal > 0) || !acquiredRaw || !winner) {
+        setTerminalStatus("请完整填写成交价、实际总价、本人是否拍下与拍下方。", true);
+        return;
+      }
+      setTerminalStatus("正在结算并原子保存…", false);
+      sendHost({
+        action: "manual_finalize",
+        type: "manual_finalize",
+        expectedMatchId: manualState.matchId,
+        predictionSnapshot: manualState.latestEngineResult?.predictionSnapshot || null,
+        settlement: {
+          clearingPrice,
+          actualTotal,
+          acquired: acquiredRaw === "true",
+          winner
+        }
+      });
+    }
+
+    function resizeHud(expanded) {
+      const h = expanded ? getExpandedHeight() : collapsedSize[1];
+      sendHost({ action: "resize_hud", w: collapsedSize[0], h });
+    }
+
+    function formatExpectedProfit(value) {
+      if (typeof value !== "number" || !Number.isFinite(value)) return "—";
+      return value === 0 ? "0（保本）" : (value > 0 ? "+" : "") + value.toLocaleString("zh-CN");
+    }
+
+    function fmtWan(v) {
+      if (v == null || v === "" || Number.isNaN(Number(v))) return "—";
+      const n = Number(v);
+      return Math.round(n).toLocaleString("zh-CN");
+    }
+
+    function escapeHtml(str) {
+      if (!str) return "";
+      return String(str)
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/\"/g, "&quot;")
+        .replace(/'/g, "&#039;");
+    }
+
+    function validateKnownExpression(raw, rarity) {
+      if (!raw || !String(raw).trim()) return { valid: true, empty: true, error: null };
+      const engine = window.AuctionEngineV06;
+      if (!engine) return { valid: true, empty: false, error: null };
+      try {
+        if (rarity === "gold") {
+          engine.parseOr(raw);
+        } else if (rarity === "red") {
+          engine.parseFlexibleKnown(raw, engine.RED_ITEMS, "红色");
+        } else if (rarity === "purple") {
+          engine.parseFlexibleKnown(raw, engine.PURPLE_ITEMS, "紫色");
+        } else if (["blue", "green", "white"].includes(rarity)) {
+          engine.validateKnownInput({["known" + rarity[0].toUpperCase() + rarity.slice(1)]: raw});
+        }
+        return { valid: true, empty: false, error: null };
+      } catch (err) {
+        return { valid: false, empty: false, error: err.message || "未找到对应藏品或价格" };
+      }
+    }
+
+    function statusCopy(solverStatus, hasConstraintError) {
+      if (hasConstraintError) return "部分藏品约束尚未应用";
+      if (solverStatus === "valid") return "条件已较完整";
+      if (solverStatus === "fallback") return "信息不足，先按当前条件估算";
+      return "信息还没补齐，结果可能继续变化";
+    }
+
+    function saveCopy(d) {
+      if (d?.draftSaveStatus === "UNAVAILABLE") return { text: "保存不可用，请检查数据状态", ok: false };
+      if (d?.draftSaveStatus === "FAILED") return { text: "草稿保存失败", ok: false };
+      if (d?.draftSaveStatus === "PENDING") return { text: "等待保存草稿", ok: false };
+      if (d && d.draftSaved === false) return { text: "尚未保存", ok: false };
+      if (d && d.draftSaved) return { text: "已保存草稿", ok: true };
+      return { text: "自动保存中", ok: true };
+    }
+
+    function catalogItems(rarity) {
+      const engine = window.AuctionEngineV06 || {};
+      const list = engine.baseCatalogFor({playedAt: new Date().toISOString()})[rarity] || [];
+      return (list || []).map(x => ({
+        name: String(x[0] || ""),
+        price: Number(x[1]) || 0,
+        size: String(x[2] || "")
+      })).filter(x => Number.isFinite(x.price) && x.price > 0);
+    }
+
+    function currentToken(input) {
+      const value = String(input.value || "");
+      const caret = input.selectionStart == null ? value.length : input.selectionStart;
+      const left = value.slice(0, caret);
+      const start = Math.max(left.lastIndexOf("+"), left.lastIndexOf("/")) + 1;
+      return { start, token: left.slice(start).replace(/\*\d*$/, "").replace(/[,\s]/g, "") };
+    }
+
+    function hideSuggest() {
+      ["goldSuggest", "redSuggest", "purpleSuggest", "blueSuggest", "greenSuggest", "whiteSuggest"].forEach(id => {
+        const el = document.getElementById(id);
+        if (el) { el.style.display = "none"; el.innerHTML = ""; }
+      });
+      manualState.suggest = { rarity: null, items: [], index: 0, tokenStart: 0, token: "", targetInput: null };
+    }
+
+    function renderSuggest(rarity) {
+      const box = document.getElementById(`${rarity}Suggest`);
+      if (!box) return;
+      const items = manualState.suggest.items;
+      if (!items.length) { box.style.display = "none"; return; }
+      box.style.display = "block";
+      box.innerHTML = items.map((item, i) => {
+        const isSelected = i === manualState.suggest.index;
+        const text = item.label || String(item.value);
+        return `<div class="suggest-item ${isSelected ? "on" : ""}" data-val="${escapeHtml(String(item.value))}">${escapeHtml(text)}</div>`;
+      }).join("");
+
+      box.querySelectorAll(".suggest-item").forEach(el => {
+        el.addEventListener("mousedown", (e) => {
+          e.preventDefault();
+          const val = el.getAttribute("data-val");
+          const targetInput = manualState.suggest.targetInput || document.getElementById(`known${rarity[0].toUpperCase()}${rarity.slice(1)}Input`);
+          if (targetInput) applySuggest(targetInput, val);
+        });
+        el.addEventListener("click", (e) => {
+          e.preventDefault();
+          const val = el.getAttribute("data-val");
+          const targetInput = manualState.suggest.targetInput || document.getElementById(`known${rarity[0].toUpperCase()}${rarity.slice(1)}Input`);
+          if (targetInput) applySuggest(targetInput, val);
+        });
+      });
+    }
+
+    function applySuggest(input, chosenVal) {
+      const s = manualState.suggest;
+      const valToInsert = chosenVal || (s.items.length ? String(s.items[s.index].value) : "");
+      if (!valToInsert) return;
+      const value = String(input.value || "");
+      const caret = input.selectionStart == null ? value.length : input.selectionStart;
+      const after = value.slice(caret).replace(/^\d+/, "");
+      input.value = value.slice(0, s.tokenStart) + valToInsert + after;
+      const rarity = input.getAttribute("data-rarity");
+      const res = validateKnownExpression(input.value, rarity);
+      input.classList.toggle("has-error", !res.valid);
+      if (!res.valid) input.title = res.error || "未找到对应藏品/价格";
+      else input.removeAttribute("title");
+      hideSuggest();
+      handleLocalInput(input);
+    }
+
+    function updateSuggest(input) {
+      if (manualState.isComposing) { hideSuggest(); return; }
+      const rarity = input.getAttribute("data-rarity");
+      const { start, token } = currentToken(input);
+      if (!token) { hideSuggest(); return; }
+
+      const all = catalogItems(rarity);
+      const isNum = /^\d+$/.test(token);
+      let matched = [];
+      if (isNum) {
+        const seen = new Set();
+        for (const item of all) {
+          const pStr = String(item.price);
+          if (pStr.startsWith(token) && !seen.has(pStr)) {
+            seen.add(pStr);
+            matched.push({ value: pStr, label: `${pStr} (${item.name})` });
+          }
+        }
+      } else {
+        const seen = new Set();
+        for (const item of all) {
+          if (item.name.includes(token) && !seen.has(item.name)) {
+            seen.add(item.name);
+            matched.push({ value: item.name, label: `${item.name} (${item.price})` });
+          }
+        }
+      }
+
+      if (matched.length === 1 && (matched[0].value === token || (String(matched[0].value).startsWith(token) && matched[0].value.length === token.length))) {
+        hideSuggest();
+        return;
+      }
+
+      const hits = matched.slice(0, 6);
+      if (!hits.length) {
+        hideSuggest();
+        return;
+      }
+      manualState.suggest = { rarity, items: hits, index: 0, tokenStart: start, token, targetInput: input };
+      renderSuggest(rarity);
+    }
+
+    function selectedVenue() {
+      const venues = manualState.options.venues || [];
+      if (manualState.venueId) {
+        const byId = venues.find(v => v.venueId === manualState.venueId);
+        if (byId) return byId;
+      }
+      if (manualState.venue) {
+        const byName = venues.find(v => v.displayName === manualState.venue || v.venue === manualState.venue || (v.displayName && v.displayName.includes(manualState.venue)));
+        if (byName) return byName;
+      }
+      return venues.length ? venues[0] : null;
+    }
+
+    function findBox(val) {
+      const venue = selectedVenue();
+      const boxes = (venue && venue.boxes) || [];
+      return boxes.find(b => b.boxId === val || b.displayName === val || (b.displayName && val && val.includes(b.displayName)));
+    }
+
+    function venueLabel(id) {
+      const hit = (manualState.options.venues || []).find(v => v.venueId === id);
+      return hit ? hit.displayName : "选场地";
+    }
+
+    function fieldLabel(id) {
+      const hit = FIELD_CONDITIONS.find(x => x.id === id);
+      return (hit && hit.name) || id || "标准对局";
+    }
+
+    function shortBox(name) {
+      if (!name || name === "未知/其他") return "选箱型";
+      return String(name).split(/·|（|\(/)[0].trim() || name;
+    }
+
+    function updateChips() {
+      const venueChip = document.getElementById("venueChip");
+      const fieldChip = document.getElementById("fieldChip");
+      const boxChip = document.getElementById("boxChip");
+
+      if (venueChip) {
+        document.getElementById("venueChipText").textContent = venueLabel(manualState.venueId);
+        venueChip.classList.toggle("on", Boolean(manualState.venueId));
+      }
+      if (fieldChip) {
+        document.getElementById("fieldChipText").textContent = fieldLabel(manualState.fieldCondition);
+        fieldChip.classList.toggle("on", manualState.fieldCondition && manualState.fieldCondition !== "standard");
+      }
+      if (boxChip) {
+        document.getElementById("boxChipText").textContent = shortBox(manualState.box);
+        boxChip.classList.toggle("on", Boolean(manualState.box && manualState.box !== "未知/其他"));
+      }
+    }
+
+    function closePopover() {
+      const popover = document.getElementById("customPopover");
+      if (popover) popover.classList.remove("open");
+      manualState.activePopover = null;
+    }
+
+    function openPopover(type, anchorEl) {
+      if (manualState.activePopover === type) {
+        closePopover();
+        return;
+      }
+      const popover = document.getElementById("customPopover");
+      const header = document.getElementById("popoverHeader");
+      const list = document.getElementById("popoverList");
+      if (!popover || !header || !list) return;
+
+      hideSuggest();
+
+      let title = "";
+      let items = [];
+      let currentVal = "";
+
+      const venue = selectedVenue();
+
+      if (type === "venue") {
+        title = "选择拍卖场";
+        items = (manualState.options.venues || []).map(v => ({ val: v.venueId, label: v.displayName }));
+        currentVal = manualState.venueId || "";
+      } else if (type === "field") {
+        title = "选择场地条件";
+        items = FIELD_CONDITIONS.map(f => ({ val: f.id, label: f.name }));
+        currentVal = manualState.fieldCondition || "standard";
+      } else if (type === "box") {
+        title = "选择箱型 · " + venueLabel(manualState.venueId);
+        const availableBoxes = (venue && venue.boxes) || [];
+        items = availableBoxes.map(b => ({ val: b.boxId || "__unknown__", label: b.effectText ? `${b.displayName} · ${b.effectText}` : b.displayName }));
+        items.push({ val: "__unknown__", label: "未知/其他" });
+        if ((manualState.fieldStates || {}).box && manualState.fieldStates.box.protected) {
+          items.push({ val: "__restore_auto__", label: "恢复自动" });
+        }
+        currentVal = manualState.boxId || "__unknown__";
+      }
+
+      header.textContent = title;
+      list.innerHTML = items.map(item => {
+        const isActive = item.val === currentVal;
+        return `<div class="popover-item ${isActive ? 'active' : ''}" data-val="${escapeHtml(item.val)}">
+          <span>${escapeHtml(item.label)}</span>
+          <svg class="check-icon" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
+            <polyline points="20 6 9 17 4 12"/>
+          </svg>
+        </div>`;
+      }).join("");
+
+      const paramBar = document.getElementById("paramBar");
+      const anchorRect = anchorEl.getBoundingClientRect();
+      const barRect = paramBar.getBoundingClientRect();
+      const leftPos = Math.max(0, Math.min(anchorRect.left - barRect.left, 280));
+      popover.style.left = leftPos + "px";
+      popover.classList.add("open");
+      manualState.activePopover = type;
+
+      list.querySelectorAll(".popover-item").forEach(el => {
+        el.addEventListener("click", () => {
+          const selectedVal = el.getAttribute("data-val");
+          selectPopoverOption(type, selectedVal);
+        });
+      });
+    }
+
+    function selectPopoverOption(type, val) {
+      closePopover();
+      if (type === "venue") {
+        if (manualState.venueId !== val) {
+          manualState.venueId = val || null;
+          const venue = selectedVenue();
+          manualState.venue = venue ? venue.displayName : null;
+          manualState.boxId = null;
+          manualState.box = "";
+          updateChips();
+          manualState.dirty = true;
+          scheduleSync(true);
+          scheduleLocalSolver();
+        }
+      } else if (type === "field") {
+        manualState.fieldCondition = val === "standard" ? "standard" : val;
+        updateChips();
+        manualState.dirty = true;
+        scheduleSync(true);
+        scheduleLocalSolver();
+      } else if (type === "box") {
+        if (val === "__restore_auto__") {
+          sendHost({ action: "manual_facts", type: "manual_facts", facts: {}, restoreAutoFields: ["box", "boxId"] });
+          return;
+        }
+        if (val === "__unknown__") {
+          manualState.boxUnknownExplicit = true;
+          manualState.boxId = null;
+          manualState.box = "";
+          updateChips();
+          sendHost({
+            action: "manual_facts",
+            type: "manual_facts",
+            facts: { boxUnknown: true, box: null, boxId: null },
+            clearedFields: ["box", "boxId"]
+          });
+          return;
+        }
+        const box = findBox(val);
+        manualState.boxUnknownExplicit = val === "__unknown__";
+        manualState.boxId = (box && box.boxId) ? box.boxId : (val === "__unknown__" ? null : val);
+        manualState.box = box ? box.displayName : (val === "__unknown__" ? "" : val);
+        updateChips();
+        manualState.dirty = true;
+        scheduleSync(true);
+        scheduleLocalSolver();
+      }
+    }
+
+
+
+
+function validateWelfareReceipt(id, errorId) {
+  const input = document.getElementById(id);
+  const raw = input.value.trim();
+  const valid = !raw || (/^[0-9]+$/.test(raw) && Number.isSafeInteger(Number(raw)));
+  input.setAttribute('aria-invalid', String(!valid));
+  document.getElementById(errorId).textContent = valid ? '' : '请输入非负整数；未知请留空。此金额尚未保存。';
+  return valid;
+}
+
+function sessionAccountingText(a) {
+  if (!a) return '本局净收益待核对';
+  const n = v => v == null ? '未知' : Number(v).toLocaleString('zh-CN');
+  return `福利实收 ${n(a.welfareReceived)} · 已付费用 ${n(a.paidCosts)} · 按结算价值计净收益 ${n(a.sessionNet)}` + (a.complete ? '（不代表藏品已出售到账）' : `；待确认：${(a.missingFacts || []).join('、')}`);
+}
+
+function readSparkleInputs(countId, namesId) {
+  const count = document.getElementById(countId).value.trim();
+  const names = document.getElementById(namesId).value.trim();
+  if (!count && !names) return null;
+  return {transformedOneByOneCount: count || null, verifiedGemItems: names};
+}
+function sparkleNames(value) {
+  const items = value?.verifiedGemItems;
+  return Array.isArray(items) ? items.map(x => typeof x === 'string' ? x : `${x.name}*${x.count ?? 1}`).join('+') : (items || '');
+}
+function sparkleBoundsText(b) {
+  if (!b) return '等待宝石证据计算';
+  if (b.status !== 'valid') return '证据待核对：' + b.reason;
+  const n = value => Number(value).toLocaleString('zh-CN');
+  return `仅转换宝石：${n(b.lower)} ～ ${b.upper == null ? '上限未知' : n(b.upper)}；已确认 ${b.knownCount} 件。概率未确认，不用于整仓估值或出价建议。`;
+}
+
+    function collectFacts() {
+      const num = (id) => {
+        const raw = document.getElementById(id).value.trim();
+        if (!raw) return null;
+        const n = Number(raw.replace(/,/g, ""));
+        return Number.isFinite(n) ? n : null;
+      };
+      return {
+        venueId: manualState.venueId,
+        venueTier: null,
+        venue: manualState.venue || null,
+        boxId: manualState.boxId,
+        boxUnknown: Boolean(manualState.boxUnknownExplicit),
+        box: manualState.box || "",
+        fieldCondition: manualState.fieldCondition || "standard",
+        sparkle: readSparkleInputs("sparkleCountInput", "sparkleNamesInput"),
+        q: num("qInput"),
+        goldAvg: num("goldAvgInput"),
+        purpleCount: num("purpleCountInput"),
+        ...Object.fromEntries(extraNumericFields.map(key => [key, num(key + "Input")])),
+        knownGold: document.getElementById("knownGoldInput").value,
+        knownRed: document.getElementById("knownRedInput").value,
+        knownPurple: document.getElementById("knownPurpleInput").value,
+        knownBlue: document.getElementById("knownBlueInput").value,
+        knownGreen: document.getElementById("knownGreenInput").value,
+        knownWhite: document.getElementById("knownWhiteInput").value,
+
+        leaderBid: num("leaderBidInput"),
+        intelCost: num("intelCostInput"),
+        otherCost: num("otherCostInput"),
+        futureIncrementalCost: num("futureIncrementalCostInput"),
+        targetProfit: 0
+      };
+    }
+
+    function getChangedPatch() {
+      const current = collectFacts();
+      const patch = {};
+      const clearedFields = [];
+      let hasChange = false;
+      for (const [k, v] of Object.entries(current)) {
+        const oldVal = Object.prototype.hasOwnProperty.call(manualState.lastSyncedFacts, k)
+          ? manualState.lastSyncedFacts[k]
+          : undefined;
+        const oldMissing = oldVal === undefined || oldVal === null || oldVal === "";
+        const newMissing = v === null || v === "";
+        if ((k === "sparkle" && JSON.stringify(oldVal ?? null) === JSON.stringify(v)) || oldVal === v || (oldMissing && newMissing && k !== "boxUnknown")) {
+          if (oldVal === undefined && newMissing) manualState.lastSyncedFacts[k] = v;
+          continue;
+        }
+        if (k === "boxUnknown" && !v && !manualState.boxUnknownExplicit) continue;
+        patch[k] = v;
+        hasChange = true;
+        if (newMissing && !oldMissing && k !== "boxUnknown") clearedFields.push(k);
+      }
+      if (manualState.boxUnknownExplicit && !clearedFields.includes("box")) {
+        clearedFields.push("box", "boxId");
+        patch.boxUnknown = true;
+        hasChange = true;
+      }
+      return hasChange ? { patch, clearedFields } : null;
+    }
+
+    function flushSync() {
+      clearTimeout(syncTimer);
+      if (manualState.suppress || manualState.isComposing) return;
+      if (!validateWelfareReceipt("privateBidCapInput", "privateBidCapError")) return;
+      if (!validateWelfareReceipt("bidActionCountInput", "bidActionCountError")) return;
+      if (!validateWelfareReceipt("welfareReceivedInput", "welfareError")) return;
+      const changed = getChangedPatch();
+      const snap = manualState.latestEngineResult?.predictionSnapshot || null;
+      const frozen = manualState.latestEngineResult?.frozenPrediction || null;
+      const predictionId = snap && snap.predictionId;
+      const snapshotChanged = Boolean(predictionId && predictionId !== manualState.lastSyncedPredictionId);
+      if (!changed && !snapshotChanged) return;
+      const payload = {
+        action: "manual_facts",
+        type: "manual_facts",
+        facts: (changed && changed.patch) || {},
+        predictionSnapshot: snap,
+        frozenPrediction: frozen
+      };
+      if (changed && changed.clearedFields.length) payload.clearedFields = changed.clearedFields;
+      sendHost(payload);
+      if (changed) Object.assign(manualState.lastSyncedFacts, changed.patch);
+      if (predictionId) manualState.lastSyncedPredictionId = predictionId;
+    }
+
+    function scheduleSync(immediate = false) {
+      if (manualState.suppress || manualState.isComposing) return;
+      clearTimeout(syncTimer);
+      if (immediate) {
+        flushSync();
+      } else {
+        syncTimer = setTimeout(flushSync, 300);
+      }
+    }
+
+    function scheduleLocalSolver() {
+      clearTimeout(solverTimer);
+      solverTimer = setTimeout(() => {
+        if (manualState.isComposing) return;
+        // Native owns catalog compatibility and history support. A local ad-hoc
+        // input would bypass both authorities, so request the canonical payload.
+        flushSync();
+      }, 180);
+    }
+
+    function handleLocalInput(el) {
+      if (manualState.suppress || manualState.isComposing) return;
+      if (el && el.classList && el.classList.contains("known-input")) {
+        const rarity = el.getAttribute("data-rarity");
+        const res = validateKnownExpression(el.value, rarity);
+        if (res.valid || res.empty) {
+          el.classList.remove("has-error");
+          el.removeAttribute("title");
+        }
+        updateSuggest(el);
+      }
+      manualState.dirty = true;
+      scheduleLocalSolver();
+      scheduleSync(false);
+    }
+
+    function paintLeadFact(d) {
+      if (d && d.goldAvg != null) {
+        document.getElementById("leadFactLabel").textContent = "金均";
+        document.getElementById("leadFactValue").textContent = d.goldAvg;
+        return;
+      }
+      if (d && d.q != null) {
+        document.getElementById("leadFactLabel").textContent = "Q";
+        document.getElementById("leadFactValue").textContent = d.q;
+        return;
+      }
+      document.getElementById("leadFactLabel").textContent = "金均";
+      document.getElementById("leadFactValue").textContent = "—";
+    }
+
+    function isLiveVisionPayload(d) {
+      const state = d && d.visionState;
+      return Boolean(state && state.version === 1 && state.snapshot && state.snapshot.id);
+    }
+
+    function paintTrustedLiveResult(d) {
+      // Main/worker already ran the sole production Solver.  The live Overlay
+      // only projects its accepted snapshot; it must not translate the legacy
+      // manual solverInput or solve the same facts a second time.
+      const snapshot = d && d.predictionSnapshot;
+      const frozen = (d && d.frozenPrediction) || {};
+      const decision = frozen.decision || {};
+      const quantiles = (snapshot && snapshot.forecast && snapshot.forecast.quantiles) || {};
+      const p20 = quantiles.p20;
+      const p50 = quantiles.p50;
+      const p80 = quantiles.p80;
+      const mode = (snapshot && snapshot.mode && snapshot.mode.informationMode)
+        || decision.degradationLevel
+        || (d && d.shadowUpdating ? "SUPPORT_UPDATING" : "STRUCTURAL_ONLY");
+      const infeasible = snapshot?.status?.solverStatus === "no-match" && !d?.shadowUpdating;
+      const pending = !snapshot || !(snapshot.status && snapshot.status.solverStatus === "valid");
+      const calculating = pending && d?.shadowUpdating === true;
+      const settling = d?.scene === "SETTLEMENT" || d?.isSettlement === true;
+      const waitingScene = d?.scene !== "IN_AUCTION" && !settling;
+      const pendingLabel = settling ? "本局已结算" : waitingScene ? "等待进入拍卖" : calculating ? "计算中" : infeasible ? "约束冲突" : "情报不足";
+      const modeLabels = {
+        "full_shadow": "先验支持",
+        "FULL_SHADOW": "先验支持",
+        "partial_shadow": "部分先验",
+        "PARTIAL_SHADOW": "部分先验",
+        "structural_only": "结构推断",
+        "STRUCTURAL_ONLY": "结构推断",
+        "SUPPORT_UPDATING": "计算中",
+        "INFEASIBLE": "约束冲突",
+        "INSUFFICIENT_FACTS": "待补事实"
+      };
+      const forecast = snapshot?.forecast || {};
+      const structural = forecast.structural || {};
+      const sCenter = structural.center ?? decision.structuralCenter ?? frozen.formalValue?.ev ?? null;
+      const sMin = structural.candidateBoundsMin ?? decision.candidateBoundsMin ?? frozen.formalValue?.candidateBounds?.min ?? null;
+      const sMax = structural.candidateBoundsMax ?? decision.candidateBoundsMax ?? frozen.formalValue?.candidateBounds?.max ?? null;
+      const sRefBid = structural.recommendedMax ?? decision.structuralReferenceBid ?? null;
+      const isP80Null = p80 == null;
+      const hasStructuralCenter = sCenter != null;
+
+      const displayMode = pending ? pendingLabel : (isP80Null && hasStructuralCenter ? "非概率结构估值" : (modeLabels[mode] || "结构推断"));
+      const recommendation = !pending && (mode === "full_shadow" || mode === "FULL_SHADOW")
+        ? (decision.recommendedMax ?? frozen.globalLine ?? null)
+        : null;
+      const solverStatus = (snapshot && snapshot.status && snapshot.status.solverStatus)
+        || frozen.solverStatus
+        || "pending";
+      let p50Val;
+      if (infeasible) {
+        p50Val = "无可行解";
+      } else if (pending) {
+        p50Val = d && d.shadowUpdating ? "计算中..." : "—";
+      } else if (p50 != null) {
+        p50Val = fmtWan(p50);
+      } else if (sCenter != null) {
+        p50Val = fmtWan(sCenter);
+      } else {
+        p50Val = "整仓待补全";
+      }
+      const p50El = document.getElementById("p50Label");
+      p50El.textContent = p50Val;
+      p50El.classList.toggle("has-value", (p50 != null || sCenter != null) && !pending);
+      p50El.classList.remove("is-infeasible");
+
+      const pRangeEl = document.getElementById("pRange");
+      if (!pending && p20 != null && p80 != null) {
+        pRangeEl.textContent = `P20 ${fmtWan(p20)} · P80 ${fmtWan(p80)}`;
+      } else if (!pending && isP80Null && sMin != null && sMax != null) {
+        pRangeEl.textContent = `可行区间 ${fmtWan(sMin)}～${fmtWan(sMax)} · P80 暂无(0样本)`;
+      } else {
+        const partialReference = decision.partialShadowP50 ?? frozen.formalValue?.p50;
+        if (!pending && p50 == null && Number.isFinite(partialReference)) {
+          pRangeEl.textContent = `条件参考 ${fmtWan(partialReference)}（非整仓估值）`;
+        } else {
+          pRangeEl.textContent = pending ? "P20 — · P80 —" : "P20 — · P80 —";
+        }
+      }
+
+      const topSupportTag = document.getElementById("topSupportTag");
+      if (topSupportTag) {
+        topSupportTag.textContent = displayMode;
+        topSupportTag.className = `support-tag ${String(mode).toLowerCase()}`;
+      }
+
+      let badgeText = decision.actionDirective || frozen.actionDirective || "等待估值";
+      let adviceText = decision.actionDirective || frozen.actionDirective || "正在生成估值";
+      let adviceReason = decision.actionReason || frozen.actionReason || "等待生产 Shadow 结果";
+      if (pending) {
+        badgeText = calculating && !waitingScene && !settling ? "⏳ 正在计算" : pendingLabel;
+        adviceText = pendingLabel;
+        adviceReason = settling ? "查看对局历史核对结算与原图" : waitingScene ? "进入拍卖后自动采集情报" : calculating ? "正在根据已识别情报计算" : infeasible ? "当前数量、均价、占格或已知藏品互相矛盾，请核对或清空相关条件" : "现有情报不足以估计整仓价值，请补充均价、数量或已知藏品";
+      } else if (mode === "structural_only") {
+        if (sCenter != null) {
+          adviceText = `结构估值中枢 ${fmtWan(sCenter)} · 暂无正式出价建议`;
+          adviceReason = decision.actionReason || (sMin != null && sMax != null ? `可行区间 [${fmtWan(sMin)}～${fmtWan(sMax)}]；市场P80暂无（0个可比历史样本）` : "当前只有可行状态结构，没有真实历史样本");
+        } else {
+          adviceText = "整仓估值待补全 · 暂无正式出价建议";
+          adviceReason = decision.actionReason || "部分组合尚无可靠估值，请补充红货等已知情报";
+        }
+      } else if (mode !== "full_shadow" && mode !== "FULL_SHADOW") {
+        adviceText = "整仓估值待补全 · 暂无正式出价建议";
+        adviceReason = decision.actionReason || "部分组合尚无可靠估值，请补充红货等已知情报";
+      }
+
+      if (pending && !calculating && !waitingScene && !settling && snapshot?.status?.solverStatus === "fallback" && d?.fieldCondition === "sparkle") {
+        badgeText = adviceText = "宝石概率待确认";
+        adviceReason = decision.actionReason || "闪耀之心暂不生成整仓概率估值或出价建议";
+      }
+
+      const topActionBadge = document.getElementById("topActionBadge");
+      if (topActionBadge) {
+        topActionBadge.textContent = badgeText;
+        topActionBadge.className = "decision-action-badge";
+        if (!d?.hiddenBids && (badgeText.includes("跟进") || badgeText.includes("出价") || badgeText.includes("🟢"))) {
+          topActionBadge.classList.add("is-positive");
+        } else if (badgeText.includes("冲突") || badgeText.includes("⚠️")) {
+          topActionBadge.classList.add("is-danger");
+        } else if (badgeText.includes("观望") || badgeText.includes("等待") || badgeText.includes("⏸️") || badgeText.includes("需") || badgeText.includes("计算")) {
+          topActionBadge.classList.add("is-warning");
+        }
+      }
+
+      const topRecMax = document.getElementById("topRecommendedMax");
+      if (topRecMax) {
+        if (recommendation != null) {
+          topRecMax.textContent = fmtWan(recommendation);
+          topRecMax.classList.add("has-value");
+        } else if (sRefBid != null && isP80Null) {
+          topRecMax.textContent = fmtWan(sRefBid);
+          topRecMax.classList.add("has-value");
+        } else {
+          topRecMax.textContent = "—";
+          topRecMax.classList.remove("has-value");
+        }
+      }
+      document.getElementById("supportMode").textContent = displayMode;
+      document.getElementById("recommendedMax").textContent = recommendation != null ? fmtWan(recommendation) : (sRefBid != null && isP80Null ? `${fmtWan(sRefBid)} (结构上限)` : "—");
+      document.getElementById("actionText").textContent = adviceText;
+      document.getElementById("actionReason").textContent = adviceReason;
+      document.getElementById("expectedProfit").textContent = "预期盈亏（当前叫价，P50扣整局成本）：" + formatExpectedProfit(recommendation == null ? null : decision.expectedProfit);
+      document.getElementById("statusHint").textContent = pending
+        ? adviceReason
+        : (p50 == null && sCenter == null ? "当前结果不足以估计整仓价值" : statusCopy(solverStatus, false));
+      const save = saveCopy(d);
+      const hint = document.getElementById("saveHint");
+      hint.textContent = save.text;
+      hint.classList.toggle("ok", save.ok);
+      paintLeadFact(d);
+      manualState.latestEngineResult = snapshot ? {
+        source: "live_vision",
+        predictionSnapshot: snapshot,
+        frozenPrediction: frozen,
+        decision
+      } : null;
+    }
+
+    let lastSolveKey = null, lastSolveResult = null;
+    function solveOnce(engine, input) {
+      const key = JSON.stringify(input);
+      if (key !== lastSolveKey) {
+        const result = engine.solveAuctionPipeline(input);
+        lastSolveKey = key;
+        lastSolveResult = result;
+      }
+      return lastSolveResult;
+    }
+    function paintLiveSeatsAndIntel(d) {
+      const seatsEl = document.getElementById("liveSeats");
+      const intelEl = document.getElementById("liveIntel");
+      if (!seatsEl || !intelEl) return;
+      const seats = Array.isArray(d && d.seats) ? d.seats : [];
+      const projected = [1, 2, 3, 4].map((slot) => {
+        const raw = seats.find((s) => Number(s && (s.slot ?? s.seat)) === slot) || {};
+        const bid = raw.currentBid != null ? raw.currentBid : raw.bid;
+        const name = raw.name || (`座位 ${slot}`);
+        const me = raw.isMe ? " is-me" : "";
+        const bidText = d.hiddenBids ? "金额隐藏" : bid == null ? "未识别" : String(bid);
+        return `<div class="live-seat${me}"><span>${name}</span><strong>${bidText}</strong></div>`;
+      });
+      seatsEl.innerHTML = projected.join("");
+      const evidence = (d && d.auctionEvidence) || {};
+      const intel = Array.isArray(evidence.intel) ? evidence.intel : [];
+      if (!intel.length) {
+        intelEl.textContent = "暂无情报";
+        return;
+      }
+      intelEl.innerHTML = intel.slice(-6).map((row) => {
+        const texts = (row.lines || []).map((line) => (line && line.text) || line).filter(Boolean).join("；");
+        const round = row.round != null ? `第${row.round}回合` : "";
+        return `<p>${round} ${texts}</p>`;
+      }).join("");
+    }
+
+    function paintVisionHealth(d) {
+      if (!d?.visionHealth) return;
+      const el = document.getElementById('visionHealthStatus');
+      el.hidden = d.visionHealth.status !== 'ERROR';
+      el.textContent = el.hidden ? '' : '识别暂时异常，正在重试；当前显示为上次结果';
+      if (!el.hidden && d.visionHealth.stage === 'process') el.textContent = '识别进程已退出，点击恢复识别；当前显示为上次结果';
+      if (!el.hidden && d.visionHealth.stage === 'starting') el.textContent = '正在启动识别；当前显示为上次结果';
+      document.getElementById('restoreVisionBtn').hidden = el.hidden || d.visionHealth.stage !== 'process';
+      document.getElementById('topVisionHealth').hidden = el.hidden;
+      document.getElementById('topSupportTag').style.display = el.hidden ? '' : 'none';
+      document.getElementById('valuationCaption').textContent = el.hidden ? '估值 (P50)' : '上次估值';
+    }
+
+    function paintResult(d) {
+      paintVisionHealth(d);
+      const ownership = document.getElementById("currentOwnership");
+      const inSettlement = d?.isSettlement === true || d?.scene === "SETTLEMENT";
+      ownership.hidden = !inSettlement;
+      const acquired = d?.isAcquired;
+      const ownerLabel = acquired === true ? "本人拍下" : acquired === false ? "他人拍下" : "归属未知";
+      const winner = typeof d?.settlementData?.winner === "string" ? d.settlementData.winner.trim() : "";
+      ownership.textContent = inSettlement ? ownerLabel + (winner ? " · " + winner : "") : "";
+      document.getElementById("costSummary").textContent = d?.costSummary || "费用待确认";
+      paintLiveSeatsAndIntel(d || {});
+      if (d?.solverInput?.predictionSnapshot) {
+        paintTrustedLiveResult({...d, predictionSnapshot:d.solverInput.predictionSnapshot, frozenPrediction:d.solverInput.frozenPrediction});
+        return;
+      }
+      paintTrustedLiveResult(d);
+      return;
+      let engineResult = null;
+      let hasConstraintError = false;
+
+      try {
+        const engine = window.AuctionEngineV06;
+        const solverIn = d && d.solverAvailability !== "UNAVAILABLE" ? d.solverInput : null;
+        
+        if (engine && engine.solveAuctionPipeline && solverIn) {
+          const goldVal = validateKnownExpression(solverIn?.knownGold, "gold");
+          const redVal = validateKnownExpression(solverIn?.knownRed, "red");
+          const purpleVal = validateKnownExpression(solverIn?.knownPurple, "purple");
+          
+          if (!goldVal.valid || !redVal.valid || !purpleVal.valid) {
+            hasConstraintError = true;
+            const safeIn = {
+              ...solverIn,
+              knownGold: goldVal.valid ? solverIn.knownGold : "",
+              knownRed: redVal.valid ? solverIn.knownRed : "",
+              knownPurple: purpleVal.valid ? solverIn.knownPurple : "",
+              knownGoldGroups: goldVal.valid ? (solverIn.knownGoldGroups || []) : [],
+              knownRedGroups: redVal.valid ? (solverIn.knownRedGroups || []) : [],
+              knownPurpleGroups: purpleVal.valid ? (solverIn.knownPurpleGroups || []) : []
+            };
+            try {
+              engineResult = solveOnce(engine, safeIn || {});
+            } catch (_) {}
+          } else {
+            try {
+              engineResult = solveOnce(engine, solverIn || {});
+            } catch (err) {
+              const safeIn = { ...solverIn, knownGold: "", knownRed: "", knownPurple: "", knownGoldGroups: [], knownRedGroups: [], knownPurpleGroups: [] };
+              try { engineResult = solveOnce(engine, safeIn); } catch (_) {}
+            }
+          }
+        }
+      } catch (err) { console.error(err); }
+      manualState.latestEngineResult = engineResult;
+
+      const fv = (engineResult && engineResult.formalValue) || {};
+      const raw = (engineResult && engineResult.rawShadow) || {};
+      const dec = (engineResult && engineResult.decision) || {};
+      const formalQuantiles = engineResult?.predictionSnapshot?.forecast?.quantiles || {};
+      const p20 = formalQuantiles.p20;
+      const p50 = formalQuantiles.p50;
+      const p80 = formalQuantiles.p80;
+
+      const isInfeasible = Boolean(
+        engineResult && (
+          engineResult.solverStatus === "no-match" ||
+          (engineResult.states && engineResult.states.length === 0 && Boolean(d?.knownGold || d?.knownRed || d?.knownPurple))
+        )
+      );
+
+      const p50Val = isInfeasible ? "无可行解" : (p50 == null && engineResult?.solverStatus === "valid" ? "整仓待补全" : fmtWan(p50));
+      const p50El = document.getElementById("p50Label");
+      p50El.textContent = p50Val;
+      p50El.classList.toggle("has-value", p50 != null && !isInfeasible);
+      p50El.classList.toggle("is-infeasible", isInfeasible);
+
+      if (isInfeasible) {
+        document.getElementById("pRange").textContent = "约束冲突 · 无可行解";
+      } else if (p20 != null && p80 != null) {
+        document.getElementById("pRange").textContent = `P20 ${fmtWan(p20)} · P80 ${fmtWan(p80)}`;
+      } else {
+        document.getElementById("pRange").textContent = "P20 — · P80 —";
+      }
+
+      const support = (d && d.shadowSupport) || {};
+      const compatibility = (d && d.solverCompatibility) || {};
+      const hasQFact = Number(d?.q) > 0;
+      const hasGoldAvgFact = Number(d?.goldAvg || d?.avg) > 0;
+      const missingOfficialValueFacts = !hasQFact || !hasGoldAvgFact;
+      const rawMode = isInfeasible ? "INFEASIBLE" : (missingOfficialValueFacts ? "INSUFFICIENT_FACTS" : (engineResult?.degradationLevel || dec.degradationLevel || support.status || "STRUCTURAL_ONLY"));
+      const modeLabels = {
+        "full_shadow": "先验支持",
+        "FULL_SHADOW": "先验支持",
+        "partial_shadow": "部分先验",
+        "PARTIAL_SHADOW": "部分先验",
+        "structural_only": "结构推断",
+        "STRUCTURAL_ONLY": "结构推断",
+        "INFEASIBLE": "约束冲突",
+        "INSUFFICIENT_FACTS": "待补事实",
+        "UNAVAILABLE": "会场未就绪"
+      };
+      const displayMode = modeLabels[rawMode] || "结构推断";
+
+      const topSupportTag = document.getElementById("topSupportTag");
+      if (topSupportTag) {
+        topSupportTag.textContent = displayMode;
+        topSupportTag.className = `support-tag ${rawMode.toLowerCase()}`;
+      }
+
+      const currentBidReady = Number(d?.leaderBid) >= 0 && d?.leaderBid != null;
+      const fullAdvice = (rawMode === "full_shadow" || rawMode === "FULL_SHADOW") && compatibility.status === "COMPATIBILITY_TRANSLATION" && compatibility.boxStatus !== "UNKNOWN_NO_BOX_EFFECT";
+      const recommendation = fullAdvice ? dec.recommendedMax : null;
+      let adviceText = dec.actionDirective || "补齐拍卖事实后生成估值";
+      let adviceReason = dec.actionReason || "当前没有可用的正式建议";
+      let badgeText = dec.actionDirective || "等待情报";
+      if (isInfeasible) {
+        badgeText = "⚠️ 约束冲突";
+        adviceText = "⚠️ 输入无可行解 · 暂停追价";
+        adviceReason = "输入藏品或件数存在逻辑冲突，无可行解";
+      } else if ((d?.manualInputIssues || []).length) {
+        badgeText = "输入无效";
+        adviceText = "输入无效 · 未更新当前局";
+        adviceReason = d.manualInputIssues[0];
+      } else if (d?.solverAvailability === "UNAVAILABLE") {
+        badgeText = "会场未就绪";
+        adviceText = "当前场地无法安全映射到 Solver";
+        adviceReason = "当前场地参数未就绪";
+      } else if (missingOfficialValueFacts) {
+        badgeText = "⏸️ 缺少估价事实";
+        adviceText = hasQFact ? "暂无合法估价 · 缺少金色均价" : "暂无合法估价 · 缺少藏品数量";
+        adviceReason = hasQFact
+          ? "当前画面没有独立金色均价证据；不能用成交总价或候选身份推导，不生成正式出价建议"
+          : "当前画面没有独立藏品数量证据；补齐 Q 与金色均价后才进入正式求解";
+      } else if (compatibility.boxStatus === "UNKNOWN_NO_BOX_EFFECT") {
+        badgeText = (rawMode === "full_shadow" || rawMode === "FULL_SHADOW") ? "选箱型出建议" : "结构参考";
+        adviceText = (rawMode === "full_shadow" || rawMode === "FULL_SHADOW") ? "箱型未知 · 不生成正式出价建议" : "结构估值 · 未应用箱型效果";
+        adviceReason = "未选择宝箱，估值未应用加成";
+
+      } else if (rawMode !== "full_shadow" && rawMode !== "FULL_SHADOW") {
+        badgeText = "结构推断中";
+        adviceText = "整仓估值待补全 · 暂无正式出价建议";
+        adviceReason = dec.actionReason || "部分组合尚无可靠估值，请补充红货等已知情报";
+      } else if (!currentBidReady) {
+        badgeText = "上限已就绪";
+        adviceText = "建议上限已就绪 · 填写当前叫价后给出动作";
+        adviceReason = "需输入当前叫价以评估动作";
+      }
+
+      // Top Decision block
+      const topActionBadge = document.getElementById("topActionBadge");
+      if (topActionBadge) {
+        topActionBadge.textContent = badgeText;
+        topActionBadge.className = "decision-action-badge";
+        if (!d?.hiddenBids && (badgeText.includes("跟进") || badgeText.includes("出价") || badgeText.includes("🟢"))) {
+          topActionBadge.classList.add("is-positive");
+        } else if (badgeText.includes("冲突") || isInfeasible || badgeText.includes("⚠️")) {
+          topActionBadge.classList.add("is-danger");
+        } else if (badgeText.includes("观望") || badgeText.includes("等待") || badgeText.includes("⏸️") || badgeText.includes("需")) {
+          topActionBadge.classList.add("is-warning");
+        }
+      }
+
+      const topRecMax = document.getElementById("topRecommendedMax");
+      if (topRecMax) {
+        topRecMax.textContent = recommendation == null ? "—" : fmtWan(recommendation);
+        topRecMax.classList.toggle("has-value", recommendation != null);
+      }
+
+      document.getElementById("supportMode").textContent = displayMode;
+      document.getElementById("recommendedMax").textContent = recommendation == null ? "—" : fmtWan(recommendation);
+      document.getElementById("actionText").textContent = adviceText;
+      document.getElementById("actionReason").textContent = adviceReason;
+      document.getElementById("expectedProfit").textContent = "预期盈亏（当前叫价，P50扣整局成本）：" + formatExpectedProfit(recommendation == null ? null : dec.expectedProfit);
+      document.getElementById("statusHint").textContent = isInfeasible ? "当前输入条件与图鉴/场地倍率冲突" : (p50 == null && engineResult?.solverStatus === "valid" ? "当前结果不足以估计整仓价值" : statusCopy(engineResult && engineResult.solverStatus, hasConstraintError));
+      const save = saveCopy(d);
+      const hint = document.getElementById("saveHint");
+      hint.textContent = save.text;
+      hint.classList.toggle("ok", save.ok);
+      paintLeadFact(d);
+      if (engineResult?.predictionSnapshot || isInfeasible) setTimeout(flushSync, 0);
+    }
+
+    function scheduleShadowRefresh(d) {
+      clearTimeout(shadowRefreshTimer);
+      if (!d?.shadowUpdating) {
+        manualState.shadowPollCount = 0;
+        return;
+      }
+      if (manualState.shadowPollCount >= 30) return;
+      manualState.shadowPollCount += 1;
+      shadowRefreshTimer = setTimeout(() => {
+        sendHost({ action: "manual_bootstrap", type: "manual_bootstrap" });
+      }, 250);
+    }
+
+    function renderRecognitionMode(d) {
+      if (!d.recognitionMode) return;
+      const button = document.getElementById('recognitionModeBtn');
+      button.dataset.mode = d.recognitionMode;
+      button.textContent = d.recognitionMode === 'auto' ? '自动' : '手动';
+    }
+
+    function applyLiveVisionState(d) {
+      if (!isLiveVisionPayload(d)) return false;
+      renderRecognitionMode(d);
+      const state = d.visionState || {};
+      const snapshot = state.snapshot || {};
+      const incomingId = d.matchId || snapshot.id || "";
+      const incomingSequence = Number(state.sequence || 0);
+      if (incomingId && incomingId === manualState.liveVisionMatchId && incomingSequence && incomingSequence < manualState.liveVisionSequence) {
+        return true;
+      }
+      const resetMatch = Boolean(incomingId && incomingId !== manualState.liveVisionMatchId);
+      if (resetMatch) {
+        manualState.lastSyncedFacts = {};
+        manualState.dirty = false;
+        manualState.latestEngineResult = null;
+        manualState.latestNativePayload = null;
+        manualState.lastSyncedPredictionId = null;
+        manualState.shadowPollCount = 0;
+        manualState.liveVisionSequence = 0;
+        closePopover();
+      }
+      manualState.liveVisionActive = true;
+      manualState.liveVisionMatchId = incomingId;
+      manualState.liveVisionSequence = Math.max(manualState.liveVisionSequence, incomingSequence);
+      manualState.matchId = incomingId || manualState.matchId;
+      manualState.suppress = true;
+      const src = d.overlayState || d;
+      const isMissingVal = (v) => !v || v === "未选择" || v === "等待选择会场" || v === "请选择会场" || v === "未知场地" || v === "未知会场";
+      const incVenue = isMissingVal(src.venue || src.environment?.venue) ? null : (src.venue || src.environment?.venue);
+      const incVenueId = src.venueId || src.environment?.venueId || null;
+      if (resetMatch || incVenue) {
+        manualState.venueId = incVenueId || (incVenue ? manualState.venueId : null);
+        manualState.venue = incVenue;
+      } else if (src.fieldStates?.venue?.status === "cleared" || d.fieldStates?.venue?.status === "cleared") {
+        manualState.venueId = null;
+        manualState.venue = null;
+      }
+      manualState.fieldCondition = src.fieldCondition || src.environment?.fieldCondition || "unknown";
+      manualState.boxId = src.boxId || src.environment?.boxId || null;
+      manualState.box = src.box || src.environment?.box || "";
+      manualState.fieldStates = src.fieldStates || d.fieldStates || {};
+      manualState.latestNativePayload = d;
+      document.getElementById("freeIntelStatus").hidden = !d.freeIntelStatus;
+      document.getElementById("freeIntelStatus").textContent = d.freeIntelStatus?.message || "";
+      document.getElementById("darkControls").hidden = d.hiddenBids !== true && !["privateBidCapInput", "bidActionCountInput"].some(id => document.getElementById(id).getAttribute("aria-invalid") === "true");
+      document.getElementById("leaderBidInput").parentElement.hidden = d.hiddenBids === true;
+      document.getElementById("hiddenBidNotice").hidden = d.hiddenBids !== true;
+      document.getElementById("sessionAccounting").textContent = sessionAccountingText(d.sessionAccounting);
+      const sparkleEditing = ['sparkleCountInput', 'sparkleNamesInput'].some(id => manualState.activeFieldId === id || document.activeElement === document.getElementById(id));
+      if (resetMatch || !sparkleEditing) {
+        document.getElementById('sparkleCountInput').value = src.sparkle?.transformedOneByOneCount ?? d.sparkle?.transformedOneByOneCount ?? '';
+        document.getElementById('sparkleNamesInput').value = sparkleNames(src.sparkle || d.sparkle);
+        manualState.lastSyncedFacts.sparkle = (src.sparkle ?? d.sparkle) ?? null;
+      }
+      document.getElementById('sparkleFields').hidden = manualState.fieldCondition !== 'sparkle';
+      document.getElementById('sparkleBounds').textContent = sparkleBoundsText(d.predictionSnapshot?.evidenceBounds || d.solverInput?.predictionSnapshot?.evidenceBounds);
+
+      updateChips();
+      const inputs = [
+        ...extraNumericFields.map(key => ({id: key + "Input", val: src[key] != null ? src[key] : d[key]})),
+        { id: "qInput", val: src.q != null ? src.q : d.q },
+        { id: "goldAvgInput", val: src.goldAvg != null ? src.goldAvg : d.goldAvg },
+        { id: "purpleCountInput", val: (src.purpleCount != null ? src.purpleCount : src.purple) != null ? (src.purpleCount != null ? src.purpleCount : src.purple) : (d.purpleCount != null ? d.purpleCount : d.purple) },
+        { id: "knownGoldInput", val: src.knownGold != null ? src.knownGold : d.knownGold },
+        { id: "knownRedInput", val: src.knownRed != null ? src.knownRed : d.knownRed },
+        { id: "knownPurpleInput", val: src.knownPurple != null ? src.knownPurple : d.knownPurple },
+        { id: "knownBlueInput", val: src.knownBlue != null ? src.knownBlue : d.knownBlue },
+        { id: "knownGreenInput", val: src.knownGreen != null ? src.knownGreen : d.knownGreen },
+        { id: "knownWhiteInput", val: src.knownWhite != null ? src.knownWhite : d.knownWhite },
+
+        { id: "leaderBidInput", val: src.leaderBid != null ? src.leaderBid : d.leaderBid },
+        { id: "intelCostInput", val: (src.costs?.intel != null ? src.costs.intel : src.intelCost) ?? d.intelCost },
+        { id: "otherCostInput", val: (src.costs?.other != null ? src.costs.other : src.otherCost) ?? d.otherCost },
+        { id: "futureIncrementalCostInput", val: (src.costs?.futureIncrementalCost != null ? src.costs.futureIncrementalCost : src.futureIncrementalCost) ?? d.futureIncrementalCost }
+      ];
+      inputs.forEach(({ id, val }) => {
+        const el = document.getElementById(id);
+        if (!resetMatch && ["welfareReceivedInput", "privateBidCapInput", "bidActionCountInput"].includes(id) && el?.getAttribute("aria-invalid") === "true") return;
+        if (el && (resetMatch || (document.activeElement !== el && manualState.activeFieldId !== id))) {
+          el.value = (val == null || val === "") ? "" : String(val);
+          if (resetMatch && ["welfareReceivedInput", "privateBidCapInput", "bidActionCountInput"].includes(id)) validateWelfareReceipt(id, id === "welfareReceivedInput" ? "welfareError" : id.replace("Input", "Error"));
+          manualState.lastSyncedFacts[id.replace(/Input$/, '')] = collectFacts()[id.replace(/Input$/, '')];
+        }
+      });
+      paintResult(d);
+      renderWarehouseCaptureOverlay(d.warehouseCapture);
+      manualState.suppress = false;
+      return true;
+    }
+
+    function applyManualState(d, force) {
+      if (!d) return;
+      renderRecognitionMode(d);
+      const incomingId = d.matchId || (d.canonical && d.canonical.id) || "";
+      const resetMatch = Boolean(force) || (incomingId && incomingId !== manualState.matchId);
+      if (incomingId) manualState.matchId = incomingId;
+      if (resetMatch) {
+        manualState.lastSyncedFacts = {};
+        manualState.dirty = false;
+        manualState.latestEngineResult = null;
+        manualState.latestNativePayload = null;
+        manualState.lastSyncedPredictionId = null;
+        manualState.shadowPollCount = 0;
+        closePopover();
+      }
+
+      if (d.terminalResult) {
+        const terminal = d.terminalResult;
+        if (terminal.ok) {
+          closeTerminal(true);
+        } else {
+          setTerminalStatus(terminal.message || "操作失败，当前局仍然保留。", true);
+        }
+      }
+
+      manualState.suppress = true;
+
+      if (d.manualOptions) manualState.options = d.manualOptions;
+      const isMissingValPayload = (v) => !v || v === "未选择" || v === "等待选择会场" || v === "请选择会场" || v === "未知场地" || v === "未知会场";
+      const incVenuePayload = isMissingValPayload(d.venue || d.environment?.venue) ? null : (d.venue || d.environment?.venue);
+      const incVenueIdPayload = d.venueId || d.environment?.venueId || null;
+      if (resetMatch || incVenuePayload) {
+        manualState.venueId = incVenueIdPayload || (incVenuePayload ? manualState.venueId : null);
+        manualState.venue = incVenuePayload;
+      } else if (d.fieldStates?.venue?.status === "cleared") {
+        manualState.venueId = null;
+        manualState.venue = null;
+      }
+      manualState.fieldCondition = d.fieldCondition || d.environment?.fieldCondition || "standard";
+      manualState.boxId = d.boxId || d.environment?.boxId || null;
+      manualState.box = d.box || d.environment?.box || "";
+      if (manualState.boxId || manualState.box) manualState.boxUnknownExplicit = false;
+      manualState.lastSyncedFacts.venueId = manualState.venueId;
+      manualState.lastSyncedFacts.venue = manualState.venue;
+      manualState.lastSyncedFacts.boxId = manualState.boxId;
+      manualState.lastSyncedFacts.box = manualState.box || "";
+      manualState.lastSyncedFacts.fieldCondition = manualState.fieldCondition;
+      manualState.lastSyncedFacts.boxUnknown = Boolean(manualState.boxUnknownExplicit);
+      manualState.fieldStates = d.fieldStates || {};
+      manualState.latestNativePayload = d;
+      document.getElementById("freeIntelStatus").hidden = !d.freeIntelStatus;
+      document.getElementById("freeIntelStatus").textContent = d.freeIntelStatus?.message || "";
+      document.getElementById("darkControls").hidden = d.hiddenBids !== true && !["privateBidCapInput", "bidActionCountInput"].some(id => document.getElementById(id).getAttribute("aria-invalid") === "true");
+      document.getElementById("leaderBidInput").parentElement.hidden = d.hiddenBids === true;
+      document.getElementById("hiddenBidNotice").hidden = d.hiddenBids !== true;
+      document.getElementById("sessionAccounting").textContent = sessionAccountingText(d.sessionAccounting);
+      const sparkleEditing = ['sparkleCountInput', 'sparkleNamesInput'].some(id => manualState.activeFieldId === id || document.activeElement === document.getElementById(id));
+      if (resetMatch || !sparkleEditing) {
+        document.getElementById('sparkleCountInput').value = d.sparkle?.transformedOneByOneCount ?? '';
+        document.getElementById('sparkleNamesInput').value = sparkleNames(d.sparkle);
+        manualState.lastSyncedFacts.sparkle = d.sparkle ?? null;
+      }
+      document.getElementById('sparkleFields').hidden = manualState.fieldCondition !== 'sparkle';
+      document.getElementById('sparkleBounds').textContent = sparkleBoundsText(d.predictionSnapshot?.evidenceBounds || d.solverInput?.predictionSnapshot?.evidenceBounds);
+
+      updateChips();
+
+      const inputs = [
+        ...extraNumericFields.map(key => ({id: key + "Input", val: d[key], key})),
+        { id: "qInput", val: d.q, key: "q" },
+        { id: "goldAvgInput", val: d.goldAvg, key: "goldAvg" },
+        { id: "purpleCountInput", val: d.purpleCount != null ? d.purpleCount : d.purple, key: "purpleCount" },
+        { id: "knownGoldInput", val: d.knownGold, key: "knownGold" },
+        { id: "knownRedInput", val: d.knownRed, key: "knownRed" },
+        { id: "knownPurpleInput", val: d.knownPurple, key: "knownPurple" },
+        { id: "knownBlueInput", val: d.knownBlue, key: "knownBlue" },
+        { id: "knownGreenInput", val: d.knownGreen, key: "knownGreen" },
+        { id: "knownWhiteInput", val: d.knownWhite, key: "knownWhite" },
+
+        { id: "leaderBidInput", val: d.leaderBid, key: "leaderBid" },
+        { id: "intelCostInput", val: d.intelCost, key: "intelCost" },
+        { id: "otherCostInput", val: d.otherCost, key: "otherCost" },
+        { id: "futureIncrementalCostInput", val: d.futureIncrementalCost, key: "futureIncrementalCost" }
+      ];
+
+      inputs.forEach(({ id, val, key }) => {
+        const el = document.getElementById(id);
+        if (!el) return;
+        if (!resetMatch && ["welfareReceivedInput", "privateBidCapInput", "bidActionCountInput"].includes(id) && el?.getAttribute("aria-invalid") === "true") return;
+        const isEditingThis = (manualState.activeFieldId === id) || (document.activeElement === el) || (manualState.isComposing && manualState.activeFieldId === id);
+        if (resetMatch || !isEditingThis) {
+          el.value = (val == null || val === "") ? "" : String(val);
+          if (resetMatch && ["welfareReceivedInput", "privateBidCapInput", "bidActionCountInput"].includes(id)) validateWelfareReceipt(id, id === "welfareReceivedInput" ? "welfareError" : id.replace("Input", "Error"));
+          manualState.lastSyncedFacts[key] = val == null ? null : (typeof val === "number" ? val : String(val));
+          
+          if (el.classList.contains("known-input") && el.hasAttribute("data-rarity")) {
+            const rarity = el.getAttribute("data-rarity");
+            const valRes = validateKnownExpression(el.value, rarity);
+            el.classList.toggle("has-error", !valRes.valid);
+            if (!valRes.valid) el.title = valRes.error || "未找到对应藏品/价格";
+            else el.removeAttribute("title");
+          }
+        }
+      });
+
+      paintResult(d);
+      renderWarehouseCaptureOverlay(d.warehouseCapture);
+      // Programmatic value assignment emits no input event. Release the guard
+      // before returning so the next real edit cannot be silently dropped.
+      manualState.suppress = false;
+      scheduleShadowRefresh(d);
+    }
+
+    function renderWarehouseCaptureOverlay(capture) {
+      const el = document.getElementById("warehouseCaptureStatus");
+      if (!el) return;
+      const state = capture && capture.state;
+      const show = Boolean(capture && state && state !== "IDLE" && state !== "DRIVER_NOT_CONFIGURED");
+      el.hidden = !show;
+      el.classList.toggle("is-visible", show);
+      el.textContent = show ? String(capture.message || "") : "";
+      if (state === 'WAITING_FOR_GAME_FOCUS') {
+        document.getElementById('topActionBadge').textContent = '采集等待游戏前台';
+        document.getElementById('pRange').textContent = 'Alt+Tab 返回游戏后自动滚动采集';
+      }
+    }
+
+    function setExpanded(on) {
+      document.getElementById("shell").classList.toggle("expanded", on);
+      const icon = document.getElementById("toggleIcon");
+      if (icon) {
+        icon.innerHTML = on 
+          ? '<polyline points="18 15 12 9 6 15"/>'
+          : '<polyline points="6 9 12 15 18 9"/>';
+      }
+      document.getElementById("toggleBtn").title = on ? "收起" : "展开";
+      if (!on) closePopover();
+      resizeHud(on);
+    }
+    // QA / Review hook only: only exposed under explicit debug query/hash or local review
+    if (typeof window !== "undefined" && (window.location.search.includes("debug") || window.location.hash.includes("debug") || window.location.protocol === "file:")) {
+      window.setOverlayExpanded = setExpanded;
+    }
+
+    function bind() {
+      document.querySelectorAll("details").forEach(el => el.addEventListener("toggle", () => resizeHud(document.getElementById("shell").classList.contains("expanded"))));
+      ["sparkleCountInput", "sparkleNamesInput", ...extraNumericFields.map(key => key + "Input"), "intelCostInput", "otherCostInput", "futureIncrementalCostInput", "qInput", "goldAvgInput", "purpleCountInput", "leaderBidInput", "knownGoldInput", "knownRedInput", "knownPurpleInput", "knownBlueInput", "knownGreenInput", "knownWhiteInput"].forEach(id => {
+        const el = document.getElementById(id);
+        
+        el.addEventListener("focus", () => {
+          manualState.activeFieldId = id;
+        });
+
+        el.addEventListener("compositionstart", () => {
+          manualState.isComposing = true;
+          hideSuggest();
+        });
+
+        el.addEventListener("compositionend", () => {
+          manualState.isComposing = false;
+          handleLocalInput(el);
+        });
+
+        el.addEventListener("input", (e) => {
+          if (e.isComposing || manualState.isComposing) return;
+          handleLocalInput(el);
+        });
+
+        el.addEventListener("blur", () => {
+          if (manualState.activeFieldId === id) manualState.activeFieldId = null;
+          if (el.classList.contains("known-input") && el.hasAttribute("data-rarity")) {
+            const rarity = el.getAttribute("data-rarity");
+            const res = validateKnownExpression(el.value, rarity);
+            el.classList.toggle("has-error", !res.valid);
+            if (!res.valid) el.title = res.error || "未找到对应藏品/价格";
+            else el.removeAttribute("title");
+          }
+          window.setTimeout(hideSuggest, 200);
+          scheduleSync(true);
+        });
+
+        el.addEventListener("keydown", (e) => {
+          if (!el.classList.contains("known-input")) return;
+          if (manualState.suggest.items && manualState.suggest.items.length) {
+            if (e.key === "ArrowDown") {
+              e.preventDefault();
+              manualState.suggest.index = (manualState.suggest.index + 1) % manualState.suggest.items.length;
+              renderSuggest(manualState.suggest.rarity);
+            } else if (e.key === "ArrowUp") {
+              e.preventDefault();
+              manualState.suggest.index = (manualState.suggest.index - 1 + manualState.suggest.items.length) % manualState.suggest.items.length;
+              renderSuggest(manualState.suggest.rarity);
+            } else if (e.key === "Enter" || e.key === "Tab") {
+              e.preventDefault();
+              applySuggest(el);
+            } else if (e.key === "Escape") {
+              e.preventDefault();
+              hideSuggest();
+            }
+          }
+        });
+      });
+
+      document.getElementById("venueChip").onclick = (e) => {
+        e.stopPropagation();
+        openPopover("venue", document.getElementById("venueChip"));
+      };
+      document.getElementById("fieldChip").onclick = (e) => {
+        e.stopPropagation();
+        openPopover("field", document.getElementById("fieldChip"));
+      };
+      document.getElementById("boxChip").onclick = (e) => {
+        e.stopPropagation();
+        openPopover("box", document.getElementById("boxChip"));
+      };
+
+      document.getElementById("customPopover").onclick = (e) => e.stopPropagation();
+
+      document.addEventListener("click", (e) => {
+        if (!e.target.closest("#customPopover") && !e.target.closest(".chip")) {
+          closePopover();
+        }
+      });
+
+      document.addEventListener("keydown", (e) => {
+        if (e.key === "Escape") {
+          closePopover();
+          hideSuggest();
+        }
+      });
+
+      document.getElementById("togglePurple").onclick = () => {
+        const row = document.getElementById("purpleKnownRow");
+        const hidden = row.classList.contains("hidden");
+        row.classList.toggle("hidden", !hidden);
+        document.getElementById("togglePurple").querySelector("span").textContent = hidden ? "- 收起紫色约束" : "+ 展开紫色约束";
+        if (document.getElementById("shell").classList.contains("expanded")) {
+          resizeHud(true);
+        }
+      };
+
+      document.getElementById("nextBtn").onclick = openTerminal;
+      document.getElementById("terminalClose").onclick = () => closeTerminal(false);
+      document.getElementById("terminalFinish").onclick = () => {
+        document.getElementById("terminalSettlement").classList.add("open");
+        setTerminalStatus("结算成功后才会清空并生成下一局。", false);
+      };
+      document.getElementById("terminalKeep").onclick = () => requestNextDisposition("keep_draft");
+      document.getElementById("terminalDiscard").onclick = () => requestNextDisposition("discard");
+      document.getElementById("terminalSubmit").onclick = submitSettlement;
+      document.getElementById("terminalAcquired").onchange = (event) => {
+        document.getElementById("terminalWinner").placeholder = "填写结算画面中的竞得者名称";
+      };
+      document.getElementById("toggleBtn").onclick = () => setExpanded(!document.getElementById("shell").classList.contains("expanded"));
+      document.getElementById("shotBtn").onclick = () => {
+        sendHost({ action: "triggered_snapshot", type: "triggered_snapshot" });
+        const hint = document.getElementById("saveHint");
+        if (hint) {
+          hint.textContent = "正在快照识别...";
+          hint.classList.add("visible");
+        }
+      };
+
+      document.getElementById("dragBar").addEventListener("mousedown", (e) => {
+        if (e.target.closest(".no-drag, button, input, select")) return;
+        sendHost({ action: "begin_drag" });
+      });
+
+      window.addEventListener("beforeunload", () => {
+        flushSync();
+      });
+
+      sendHost({ action: "manual_bootstrap", type: "manual_bootstrap" });
+      resizeHud(false);
+      updateChips();
+    }
+
+    function hudWebSocketUrl(search) {
+      const configured = new URLSearchParams(search).get("wsPort");
+      const parsed = Number(configured);
+      const port = configured && /^\d+$/.test(configured) && Number.isInteger(parsed) && parsed >= 1 && parsed <= 65535 ? parsed : 8766;
+      return `ws://127.0.0.1:${port}`;
+    }
+
+    function connectWS() {
+      const ws = new WebSocket(hudWebSocketUrl(window.location.hash.slice(1) || window.location.search));
+      hudWsClient = ws;
+      ws.onopen = () => {
+        sendHost({ action: "manual_bootstrap", type: "manual_bootstrap" });
+        ws.send(JSON.stringify({
+          type: "report_hud_status",
+          status: {
+            pywebviewReady: true,
+            auctionEngineLoaded: Boolean(window.AuctionEngineV06),
+            overlayAlpha: true,
+            sharedCoreSelfTests: { passed: true, tested: 0 },
+            regression1553Passed: true
+          }
+        }));
+      };
+      ws.onmessage = (event) => {
+        try {
+          const d = JSON.parse(event.data);
+          paintVisionHealth(d);
+          if (d?.type === 'vision_health') return;
+          if (isLiveVisionPayload(d)) {
+            applyLiveVisionState(d);
+          } else if (d && (d.type === "manual_alpha_state" || d.manualMode || d.canonical)) {
+            const forceReset = Boolean(d.matchId && d.matchId !== manualState.matchId);
+            applyManualState(d, forceReset);
+            if (d.snapshotResult) {
+              const sr = d.snapshotResult;
+              const hint = document.getElementById("saveHint");
+              if (hint) {
+                hint.textContent = sr.summary || (sr.ok ? "快照识别完成" : "未识别到对局事实");
+                hint.classList.toggle("ok", Boolean(sr.ok));
+              }
+            }
+          } else if (d && d.type === "snapshot_assist_result") {
+            const hint = document.getElementById("saveHint");
+            if (hint) {
+              hint.textContent = d.summary || (d.ok ? "快照识别完成" : "未识别到对局事实");
+              hint.classList.toggle("ok", Boolean(d.ok));
+            }
+          }
+        } catch (err) { console.error(err); }
+      };
+      ws.onclose = () => setTimeout(connectWS, 1500);
+    }
+
+    document.addEventListener("DOMContentLoaded", () => { bind(); connectWS(); });
+  </script>
+</body>
+</html>

@@ -1,0 +1,16 @@
+{
+  "exportVersion": "settlement-component-export-v1",
+  "sourcePath": "experiments/vision_benchmark_v2/snapshots/source-c86e85c5712aea00ac7d.png",
+  "expectedSourceSha256": "c86e85c5712aea00ac7dc9fa08b8111faf0e6a14c85f126c4f9a1f4b2bedce17",
+  "expectedWidth": 307,
+  "expectedHeight": 329,
+  "sceneInputRole": "inventory_crop",
+  "inventoryRoi": {
+    "bbox": [0, 0, 307, 329],
+    "coordinateSpace": "source_pixel"
+  },
+  "productionPrimitive": {
+    "name": "SettlementItemRecognizer._segment_occupied_components",
+    "expectedImplementationSha256": "32dc8b0175adc9560a81213370bf2d6c975377101441942dea42bfd7681c3f1e"
+  }
+}

@@ -1,0 +1,23 @@
+{
+  "tracker": null,
+  "hits": [
+    {
+      "hwnd": 496180800,
+      "title": "⚡ 异环拍卖战术助手 HUD",
+      "cls": "WindowsForms10.Window.8.app.0.aec740_r21_ad1",
+      "real": false
+    },
+    {
+      "hwnd": 132918,
+      "title": "异环启动器",
+      "cls": "Qt51517QWindowOwnDC",
+      "real": false
+    },
+    {
+      "hwnd": 120792922,
+      "title": "异环拍卖助手 Overlay Alpha",
+      "cls": "Chrome_WidgetWin_1",
+      "real": false
+    }
+  ]
+}

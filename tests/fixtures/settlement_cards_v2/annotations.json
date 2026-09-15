@@ -1,0 +1,1771 @@
+[
+  {
+    "image": "2026-08-17_14-11-56_240.png",
+    "sourceSha256": "108ef4ad453f5507fe8579ec1302e5d0e3aa340a33e2524bccbd5ec0d5502d22",
+    "sourceBounds": [
+      1315,
+      214,
+      1878,
+      776
+    ],
+    "annotation": "Manually transcribed visible card rectangles from source image; no catalog identity labels. row,col,width,height.",
+    "rectangles": [
+      [
+        0,
+        0,
+        2,
+        2
+      ],
+      [
+        0,
+        2,
+        1,
+        1
+      ],
+      [
+        0,
+        3,
+        3,
+        3
+      ],
+      [
+        0,
+        6,
+        3,
+        2
+      ],
+      [
+        0,
+        9,
+        1,
+        1
+      ],
+      [
+        1,
+        2,
+        1,
+        1
+      ],
+      [
+        1,
+        9,
+        1,
+        1
+      ],
+      [
+        2,
+        0,
+        2,
+        3
+      ],
+      [
+        2,
+        2,
+        1,
+        1
+      ],
+      [
+        2,
+        6,
+        4,
+        5
+      ],
+      [
+        3,
+        2,
+        2,
+        1
+      ],
+      [
+        3,
+        4,
+        2,
+        1
+      ],
+      [
+        4,
+        2,
+        1,
+        3
+      ],
+      [
+        4,
+        3,
+        2,
+        1
+      ],
+      [
+        4,
+        5,
+        1,
+        2
+      ],
+      [
+        5,
+        0,
+        2,
+        1
+      ],
+      [
+        5,
+        3,
+        2,
+        1
+      ],
+      [
+        6,
+        0,
+        2,
+        1
+      ],
+      [
+        6,
+        3,
+        1,
+        1
+      ],
+      [
+        6,
+        4,
+        2,
+        3
+      ],
+      [
+        7,
+        0,
+        4,
+        1
+      ],
+      [
+        7,
+        6,
+        1,
+        3
+      ],
+      [
+        7,
+        7,
+        3,
+        1
+      ]
+    ],
+    "identityAnnotations": [
+      {
+        "rect": [
+          0,
+          0,
+          2,
+          2
+        ],
+        "name": "智能笔筒",
+        "value": 8177
+      },
+      {
+        "rect": [
+          0,
+          2,
+          1,
+          1
+        ],
+        "name": "猫丸秘制豚骨拉面",
+        "value": 9040
+      },
+      {
+        "rect": [
+          0,
+          3,
+          3,
+          3
+        ],
+        "name": "一簇幽火",
+        "value": 260423
+      },
+      {
+        "rect": [
+          0,
+          6,
+          3,
+          2
+        ],
+        "name": "引航者望远镜",
+        "value": 4840
+      },
+      {
+        "rect": [
+          0,
+          9,
+          1,
+          1
+        ],
+        "name": "噗卡好梦棉花糖",
+        "value": 995
+      },
+      {
+        "rect": [
+          1,
+          2,
+          1,
+          1
+        ],
+        "name": "扭扭饼干",
+        "value": 1021
+      },
+      {
+        "rect": [
+          1,
+          9,
+          1,
+          1
+        ],
+        "name": "月白沙",
+        "value": 2441
+      },
+      {
+        "rect": [
+          2,
+          0,
+          2,
+          3
+        ],
+        "name": "落雪水晶球",
+        "value": 15257
+      },
+      {
+        "rect": [
+          2,
+          2,
+          1,
+          1
+        ],
+        "name": "猫丸秘制豚骨拉面",
+        "value": 9040
+      },
+      {
+        "rect": [
+          2,
+          6,
+          4,
+          5
+        ],
+        "name": "乔望尼金雕像",
+        "value": 271827
+      },
+      {
+        "rect": [
+          3,
+          2,
+          2,
+          1
+        ],
+        "name": "万能遥控器",
+        "value": 4557
+      },
+      {
+        "rect": [
+          3,
+          4,
+          2,
+          1
+        ],
+        "name": "大满贯手握",
+        "value": 7610
+      },
+      {
+        "rect": [
+          4,
+          2,
+          1,
+          3
+        ],
+        "name": "断落的剑刃",
+        "value": 3665
+      },
+      {
+        "rect": [
+          4,
+          3,
+          2,
+          1
+        ],
+        "name": "双色冰棍",
+        "value": 3666
+      },
+      {
+        "rect": [
+          4,
+          5,
+          1,
+          2
+        ],
+        "name": "墨染瓶",
+        "value": 909
+      },
+      {
+        "rect": [
+          5,
+          0,
+          2,
+          1
+        ],
+        "name": "大将军章鱼烧",
+        "value": 3667
+      },
+      {
+        "rect": [
+          5,
+          3,
+          2,
+          1
+        ],
+        "name": "清凉凉止痛药",
+        "value": 1815
+      },
+      {
+        "rect": [
+          6,
+          0,
+          2,
+          1
+        ],
+        "name": "复古圆桌",
+        "value": 1682
+      },
+      {
+        "rect": [
+          6,
+          3,
+          1,
+          1
+        ],
+        "name": "无梦果核",
+        "value": 1012
+      },
+      {
+        "rect": [
+          6,
+          4,
+          2,
+          3
+        ],
+        "name": "「方盒科技」平板",
+        "value": 11038
+      },
+      {
+        "rect": [
+          7,
+          0,
+          4,
+          1
+        ],
+        "name": "涂鸦板",
+        "value": 3502
+      },
+      {
+        "rect": [
+          7,
+          6,
+          1,
+          3
+        ],
+        "name": "烟紫水晶",
+        "value": 3987
+      },
+      {
+        "rect": [
+          7,
+          7,
+          3,
+          1
+        ],
+        "name": "炫动三角铁",
+        "value": 1822
+      }
+    ],
+    "actualTotal": 631993,
+    "identityAnnotationMethod": "Visual comparison of warehouse objects to independently captured, named catalog cards. Total used only as subsequent consistency check, never matcher input."
+  },
+  {
+    "image": "2026-08-18_11-19-25_455.png",
+    "sourceSha256": "87945224c451eae7e37b50aaf31989d43fd43114cc1f35af9eb2b6378b3d7a7b",
+    "sourceBounds": [
+      1315,
+      214,
+      1878,
+      776
+    ],
+    "annotation": "Manually transcribed visible card rectangles from source image; no catalog identity labels. row,col,width,height.",
+    "rectangles": [
+      [
+        0,
+        0,
+        1,
+        3
+      ],
+      [
+        0,
+        1,
+        1,
+        1
+      ],
+      [
+        0,
+        2,
+        1,
+        2
+      ],
+      [
+        0,
+        3,
+        1,
+        1
+      ],
+      [
+        0,
+        4,
+        2,
+        1
+      ],
+      [
+        0,
+        6,
+        3,
+        1
+      ],
+      [
+        0,
+        9,
+        1,
+        1
+      ],
+      [
+        1,
+        1,
+        1,
+        1
+      ],
+      [
+        1,
+        3,
+        3,
+        3
+      ],
+      [
+        1,
+        6,
+        1,
+        1
+      ],
+      [
+        1,
+        7,
+        1,
+        1
+      ],
+      [
+        1,
+        8,
+        1,
+        2
+      ],
+      [
+        1,
+        9,
+        1,
+        1
+      ],
+      [
+        2,
+        1,
+        1,
+        3
+      ],
+      [
+        2,
+        2,
+        1,
+        1
+      ],
+      [
+        2,
+        6,
+        2,
+        2
+      ],
+      [
+        2,
+        9,
+        1,
+        1
+      ],
+      [
+        3,
+        0,
+        1,
+        5
+      ],
+      [
+        3,
+        2,
+        1,
+        1
+      ],
+      [
+        3,
+        8,
+        2,
+        2
+      ],
+      [
+        4,
+        2,
+        4,
+        1
+      ],
+      [
+        4,
+        6,
+        1,
+        3
+      ],
+      [
+        4,
+        7,
+        1,
+        3
+      ],
+      [
+        5,
+        1,
+        3,
+        2
+      ],
+      [
+        5,
+        4,
+        2,
+        2
+      ],
+      [
+        5,
+        8,
+        1,
+        3
+      ],
+      [
+        5,
+        9,
+        1,
+        1
+      ],
+      [
+        6,
+        9,
+        1,
+        1
+      ],
+      [
+        7,
+        1,
+        2,
+        2
+      ]
+    ],
+    "identityAnnotations": [
+      {
+        "rect": [
+          1,
+          3,
+          3,
+          3
+        ],
+        "name": "失落的甲胄",
+        "value": 3626
+      },
+      {
+        "rect": [
+          2,
+          1,
+          1,
+          3
+        ],
+        "name": "名为显赫的权杖",
+        "value": 77777
+      },
+      {
+        "rect": [
+          2,
+          6,
+          2,
+          2
+        ],
+        "name": "觊觎钱币",
+        "value": 3618
+      },
+      {
+        "rect": [
+          3,
+          8,
+          2,
+          2
+        ],
+        "name": "觊觎钱币",
+        "value": 3618
+      },
+      {
+        "rect": [
+          4,
+          2,
+          4,
+          1
+        ],
+        "name": "金龙鱼",
+        "value": 111111
+      },
+      {
+        "rect": [
+          4,
+          6,
+          1,
+          3
+        ],
+        "name": "断落的剑刃",
+        "value": 3665
+      },
+      {
+        "rect": [
+          5,
+          1,
+          3,
+          2
+        ],
+        "name": "引航者望远镜",
+        "value": 4840
+      },
+      {
+        "rect": [
+          5,
+          4,
+          2,
+          2
+        ],
+        "name": "鳞纹",
+        "value": 3677
+      },
+      {
+        "rect": [
+          5,
+          8,
+          1,
+          3
+        ],
+        "name": "角斗士之歌",
+        "value": 8019
+      },
+      {
+        "rect": [
+          0,
+          6,
+          3,
+          1
+        ],
+        "name": "气象指南",
+        "value": 15024
+      },
+      {
+        "rect": [
+          0,
+          9,
+          1,
+          1
+        ],
+        "name": "桂冠",
+        "value": 7648
+      },
+      {
+        "rect": [
+          3,
+          0,
+          1,
+          5
+        ],
+        "name": "「截云」",
+        "value": 18288
+      },
+      {
+        "rect": [
+          7,
+          1,
+          2,
+          2
+        ],
+        "name": "双颈玉瓶-白",
+        "value": 80754
+      },
+      {
+        "rect": [
+          4,
+          7,
+          1,
+          3
+        ],
+        "name": "灯塔",
+        "value": 4034
+      },
+      {
+        "rect": [
+          0,
+          0,
+          1,
+          3
+        ],
+        "name": "柠檬气泡水",
+        "value": 2224
+      },
+      {
+        "rect": [
+          0,
+          1,
+          1,
+          1
+        ],
+        "name": "崭新的弹珠",
+        "value": 100
+      },
+      {
+        "rect": [
+          0,
+          3,
+          1,
+          1
+        ],
+        "name": "噗卡好梦棉花糖",
+        "value": 995
+      },
+      {
+        "rect": [
+          0,
+          4,
+          2,
+          1
+        ],
+        "name": "惠比寿宫廷小塔",
+        "value": 1056
+      },
+      {
+        "rect": [
+          1,
+          1,
+          1,
+          1
+        ],
+        "name": "无梦果核",
+        "value": 1012
+      },
+      {
+        "rect": [
+          5,
+          9,
+          1,
+          1
+        ],
+        "name": "无梦果核",
+        "value": 1012
+      },
+      {
+        "rect": [
+          1,
+          6,
+          1,
+          1
+        ],
+        "name": "桂冠",
+        "value": 7648
+      },
+      {
+        "rect": [
+          1,
+          7,
+          1,
+          1
+        ],
+        "name": "几何灯",
+        "value": 561
+      },
+      {
+        "rect": [
+          1,
+          9,
+          1,
+          1
+        ],
+        "name": "饕目",
+        "value": 3060
+      },
+      {
+        "rect": [
+          2,
+          2,
+          1,
+          1
+        ],
+        "name": "绵绵云",
+        "value": 101
+      },
+      {
+        "rect": [
+          2,
+          9,
+          1,
+          1
+        ],
+        "name": "弹性球",
+        "value": 1992
+      },
+      {
+        "rect": [
+          3,
+          2,
+          1,
+          1
+        ],
+        "name": "咕比奇原味薯片",
+        "value": 99
+      },
+      {
+        "rect": [
+          6,
+          9,
+          1,
+          1
+        ],
+        "name": "扭扭饼干",
+        "value": 1021
+      },
+      {
+        "rect": [
+          1,
+          8,
+          1,
+          2
+        ],
+        "name": "算力面包",
+        "value": 60040
+      }
+    ],
+    "identityAnnotationMethod": "Partial independently visually matched labels only; other selected/occluded small objects remain unlabelled.",
+    "actualTotal": 426860,
+    "identityReviewNotes": "Painting at [0,2,1,2] remains unlabelled: enlarged reveal pixels differ from the available 花原 source card. Do not choose 解构 from bill remainder. Other labels were visually compared with original source cards; selected bread checked at preserved aspect ratio."
+  },
+  {
+    "image": "2026-08-17_12-42-40_109.png",
+    "sourceSha256": "98ab5e63e3652e6123aacb158912294147773af4073fba192350c0400cec11b6",
+    "sourceBounds": [
+      1315,
+      214,
+      1878,
+      776
+    ],
+    "annotation": "Manually transcribed card rectangles and identities by comparison with independently inspected catalog screenshots. Unresolved cards are excluded from identity labels. No prediction or total-based label completion.",
+    "rectangles": [
+      [
+        0,
+        0,
+        2,
+        1
+      ],
+      [
+        0,
+        2,
+        1,
+        1
+      ],
+      [
+        0,
+        3,
+        3,
+        2
+      ],
+      [
+        0,
+        6,
+        3,
+        2
+      ],
+      [
+        0,
+        9,
+        1,
+        2
+      ],
+      [
+        1,
+        0,
+        1,
+        2
+      ],
+      [
+        1,
+        1,
+        1,
+        1
+      ],
+      [
+        1,
+        2,
+        1,
+        1
+      ],
+      [
+        2,
+        1,
+        2,
+        1
+      ],
+      [
+        2,
+        3,
+        2,
+        2
+      ],
+      [
+        2,
+        5,
+        5,
+        5
+      ],
+      [
+        3,
+        0,
+        2,
+        2
+      ],
+      [
+        3,
+        2,
+        1,
+        1
+      ],
+      [
+        4,
+        2,
+        2,
+        1
+      ],
+      [
+        4,
+        4,
+        1,
+        1
+      ]
+    ],
+    "identityAnnotations": [
+      {
+        "rect": [
+          0,
+          0,
+          2,
+          1
+        ],
+        "name": "巡哨-干练精英",
+        "value": 37558
+      },
+      {
+        "rect": [
+          0,
+          2,
+          1,
+          1
+        ],
+        "name": "蔚蓝旋律",
+        "value": 3037
+      },
+      {
+        "rect": [
+          0,
+          3,
+          3,
+          2
+        ],
+        "name": "便携式折叠屏",
+        "value": 239342
+      },
+      {
+        "rect": [
+          0,
+          6,
+          3,
+          2
+        ],
+        "name": "阿瑞斯动感单车",
+        "value": 17847
+      },
+      {
+        "rect": [
+          0,
+          9,
+          1,
+          2
+        ],
+        "name": "断落的剑柄",
+        "value": 2139
+      },
+      {
+        "rect": [
+          1,
+          0,
+          1,
+          2
+        ],
+        "name": "断线之筝",
+        "value": 1072
+      },
+      {
+        "rect": [
+          1,
+          1,
+          1,
+          1
+        ],
+        "name": "VitalMax能量棒",
+        "value": 1012
+      },
+      {
+        "rect": [
+          1,
+          2,
+          1,
+          1
+        ],
+        "name": "（未来的）大师飞镖",
+        "value": 996
+      },
+      {
+        "rect": [
+          2,
+          1,
+          2,
+          1
+        ],
+        "name": "棉绒绒手办",
+        "value": 2101
+      },
+      {
+        "rect": [
+          2,
+          3,
+          2,
+          2
+        ],
+        "name": "「莲-C198」唱片机",
+        "value": 1624
+      },
+      {
+        "rect": [
+          2,
+          5,
+          5,
+          5
+        ],
+        "name": "万有星仪",
+        "value": 51077
+      },
+      {
+        "rect": [
+          3,
+          0,
+          2,
+          2
+        ],
+        "name": "跳跳兔盒",
+        "value": 7222
+      },
+      {
+        "rect": [
+          3,
+          2,
+          1,
+          1
+        ],
+        "name": "几何灯",
+        "value": 561
+      },
+      {
+        "rect": [
+          4,
+          2,
+          2,
+          1
+        ],
+        "name": "锻刀石",
+        "value": 167
+      },
+      {
+        "rect": [
+          4,
+          4,
+          1,
+          1
+        ],
+        "name": "蓝釉瓶",
+        "value": 1616
+      }
+    ],
+    "unresolvedIdentityRectangles": [],
+    "actualTotal": 367371,
+    "identityLabelCoverage": "complete"
+  },
+  {
+    "image": "2026-08-18_11-19-25_189.png",
+    "sourceSha256": "d80523470fdff187bec4ced04efa535dfed31c93f5b03d69721bee7a61748f99",
+    "sourceBounds": [
+      1315,
+      214,
+      1878,
+      776
+    ],
+    "annotation": "Manually transcribed card rectangles and identities by comparison with independently inspected catalog screenshots. Unresolved cards are excluded from identity labels. No prediction or total-based label completion.",
+    "rectangles": [
+      [
+        0,
+        0,
+        1,
+        1
+      ],
+      [
+        0,
+        1,
+        2,
+        3
+      ],
+      [
+        0,
+        3,
+        1,
+        1
+      ],
+      [
+        0,
+        4,
+        2,
+        2
+      ],
+      [
+        0,
+        6,
+        1,
+        2
+      ],
+      [
+        0,
+        7,
+        2,
+        2
+      ],
+      [
+        0,
+        9,
+        1,
+        1
+      ],
+      [
+        1,
+        0,
+        1,
+        1
+      ],
+      [
+        1,
+        3,
+        1,
+        1
+      ],
+      [
+        1,
+        9,
+        1,
+        1
+      ],
+      [
+        2,
+        0,
+        1,
+        1
+      ],
+      [
+        2,
+        3,
+        2,
+        2
+      ],
+      [
+        2,
+        5,
+        3,
+        2
+      ],
+      [
+        2,
+        8,
+        1,
+        1
+      ],
+      [
+        2,
+        9,
+        1,
+        1
+      ],
+      [
+        3,
+        0,
+        3,
+        3
+      ],
+      [
+        3,
+        8,
+        2,
+        3
+      ],
+      [
+        4,
+        3,
+        5,
+        5
+      ]
+    ],
+    "identityAnnotations": [
+      {
+        "rect": [
+          0,
+          0,
+          1,
+          1
+        ],
+        "name": "咕比奇原味薯片",
+        "value": 99
+      },
+      {
+        "rect": [
+          0,
+          1,
+          2,
+          3
+        ],
+        "name": "映像机",
+        "value": 76591
+      },
+      {
+        "rect": [
+          0,
+          3,
+          1,
+          1
+        ],
+        "name": "漫画书",
+        "value": 1114
+      },
+      {
+        "rect": [
+          0,
+          4,
+          2,
+          2
+        ],
+        "name": "觊觎钱币",
+        "value": 3618
+      },
+      {
+        "rect": [
+          0,
+          7,
+          2,
+          2
+        ],
+        "name": "番茄百分百果冻",
+        "value": 3185
+      },
+      {
+        "rect": [
+          0,
+          9,
+          1,
+          1
+        ],
+        "name": "咕比奇原味薯片",
+        "value": 99
+      },
+      {
+        "rect": [
+          1,
+          0,
+          1,
+          1
+        ],
+        "name": "金月",
+        "value": 610
+      },
+      {
+        "rect": [
+          1,
+          3,
+          1,
+          1
+        ],
+        "name": "幽灵态",
+        "value": 2040
+      },
+      {
+        "rect": [
+          1,
+          9,
+          1,
+          1
+        ],
+        "name": "复古暖灯",
+        "value": 995
+      },
+      {
+        "rect": [
+          2,
+          0,
+          1,
+          1
+        ],
+        "name": "鎏金坠",
+        "value": 1997
+      },
+      {
+        "rect": [
+          2,
+          3,
+          2,
+          2
+        ],
+        "name": "觊觎钱币",
+        "value": 3618
+      },
+      {
+        "rect": [
+          2,
+          5,
+          3,
+          2
+        ],
+        "name": "寻星者望远镜",
+        "value": 18317
+      },
+      {
+        "rect": [
+          2,
+          8,
+          1,
+          1
+        ],
+        "name": "毛茸茸的应答",
+        "value": 993
+      },
+      {
+        "rect": [
+          2,
+          9,
+          1,
+          1
+        ],
+        "name": "鎏金盂",
+        "value": 496
+      },
+      {
+        "rect": [
+          3,
+          0,
+          3,
+          3
+        ],
+        "name": "吨吨锤",
+        "value": 100000
+      },
+      {
+        "rect": [
+          3,
+          8,
+          2,
+          3
+        ],
+        "name": "褪色谜",
+        "value": 3351
+      },
+      {
+        "rect": [
+          4,
+          3,
+          5,
+          5
+        ],
+        "name": "绝对是亲手钓的鱼",
+        "value": 9952
+      }
+    ],
+    "unresolvedIdentityRectangles": [
+      [
+        0,
+        6,
+        1,
+        2
+      ]
+    ],
+    "actualTotal": 227253,
+    "identityLabelCoverage": "partial"
+  },
+  {
+    "image": "2026-08-25_21-58-33_6.png",
+    "sourceSha256": "b054dd94fbf7738989ff0843e34e1cd2fef292a5c1280b8f49b32870ded4afce",
+    "sourceBounds": [
+      1315,
+      214,
+      1878,
+      776
+    ],
+    "annotation": "Manually transcribed card rectangles and identities by comparison with independently inspected catalog screenshots. Unresolved cards are excluded from identity labels. No prediction or total-based label completion.",
+    "rectangles": [
+      [
+        0,
+        0,
+        5,
+        5
+      ],
+      [
+        0,
+        5,
+        1,
+        2
+      ],
+      [
+        0,
+        6,
+        2,
+        3
+      ],
+      [
+        0,
+        8,
+        1,
+        2
+      ],
+      [
+        0,
+        9,
+        1,
+        1
+      ],
+      [
+        1,
+        9,
+        1,
+        1
+      ],
+      [
+        2,
+        5,
+        1,
+        1
+      ],
+      [
+        2,
+        8,
+        2,
+        1
+      ],
+      [
+        3,
+        5,
+        4,
+        3
+      ],
+      [
+        3,
+        9,
+        1,
+        1
+      ],
+      [
+        4,
+        9,
+        1,
+        2
+      ],
+      [
+        5,
+        0,
+        5,
+        5
+      ],
+      [
+        6,
+        5,
+        1,
+        2
+      ],
+      [
+        6,
+        6,
+        3,
+        3
+      ],
+      [
+        6,
+        9,
+        1,
+        2
+      ],
+      [
+        8,
+        5,
+        1,
+        1
+      ],
+      [
+        8,
+        9,
+        1,
+        1
+      ],
+      [
+        9,
+        5,
+        2,
+        1
+      ],
+      [
+        9,
+        7,
+        1,
+        1
+      ],
+      [
+        9,
+        8,
+        1,
+        1
+      ],
+      [
+        9,
+        9,
+        1,
+        1
+      ]
+    ],
+    "identityAnnotations": [
+      {
+        "rect": [
+          0,
+          0,
+          5,
+          5
+        ],
+        "name": "万有星仪",
+        "value": 51077
+      },
+      {
+        "rect": [
+          0,
+          5,
+          1,
+          2
+        ],
+        "name": "结的艺术",
+        "value": 3652
+      },
+      {
+        "rect": [
+          0,
+          6,
+          2,
+          3
+        ],
+        "name": "心猎铁骑L3-一以当千",
+        "value": 22297
+      },
+      {
+        "rect": [
+          0,
+          9,
+          1,
+          1
+        ],
+        "name": "崭新的弹珠",
+        "value": 100
+      },
+      {
+        "rect": [
+          1,
+          9,
+          1,
+          1
+        ],
+        "name": "炭火脆皮烤肉",
+        "value": 557
+      },
+      {
+        "rect": [
+          2,
+          5,
+          1,
+          1
+        ],
+        "name": "肥皂",
+        "value": 509
+      },
+      {
+        "rect": [
+          2,
+          8,
+          2,
+          1
+        ],
+        "name": "奇异引火石",
+        "value": 7639
+      },
+      {
+        "rect": [
+          3,
+          5,
+          4,
+          3
+        ],
+        "name": "罐装随心泥",
+        "value": 124816
+      },
+      {
+        "rect": [
+          3,
+          9,
+          1,
+          1
+        ],
+        "name": "漫画书",
+        "value": 1114
+      },
+      {
+        "rect": [
+          4,
+          9,
+          1,
+          2
+        ],
+        "name": "专属客服",
+        "value": 1632
+      },
+      {
+        "rect": [
+          5,
+          0,
+          5,
+          5
+        ],
+        "name": "绝对是亲手钓的鱼",
+        "value": 9952
+      },
+      {
+        "rect": [
+          6,
+          5,
+          1,
+          2
+        ],
+        "name": "酷辣辣辣条",
+        "value": 280000
+      },
+      {
+        "rect": [
+          6,
+          6,
+          3,
+          3
+        ],
+        "name": "浅绯祈手办",
+        "value": 30264
+      },
+      {
+        "rect": [
+          6,
+          9,
+          1,
+          2
+        ],
+        "name": "沸腾之火",
+        "value": 1642
+      },
+      {
+        "rect": [
+          8,
+          5,
+          1,
+          1
+        ],
+        "name": "绿林",
+        "value": 99
+      },
+      {
+        "rect": [
+          8,
+          9,
+          1,
+          1
+        ],
+        "name": "咕比奇原味薯片",
+        "value": 99
+      },
+      {
+        "rect": [
+          9,
+          5,
+          2,
+          1
+        ],
+        "name": "清凉凉止痛药",
+        "value": 1815
+      },
+      {
+        "rect": [
+          9,
+          7,
+          1,
+          1
+        ],
+        "name": "金月",
+        "value": 610
+      },
+      {
+        "rect": [
+          9,
+          8,
+          1,
+          1
+        ],
+        "name": "劲爽「冰川」",
+        "value": 99
+      },
+      {
+        "rect": [
+          9,
+          9,
+          1,
+          1
+        ],
+        "name": "绿林",
+        "value": 99
+      }
+    ],
+    "unresolvedIdentityRectangles": [
+      [
+        0,
+        8,
+        1,
+        2
+      ]
+    ],
+    "actualTotal": 538255,
+    "identityLabelCoverage": "partial"
+  }
+]

@@ -1,0 +1,66 @@
+# Python caches and bytecode
+**/__pycache__/
+*.py[cod]
+
+# Local Python environments and test/tool caches
+.venv/
+venv/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+.coverage.*
+htmlcov/
+
+# Editor and operating-system temporary files
+*.swp
+*.swo
+*~
+Thumbs.db
+Desktop.ini
+/*.lnk
+
+# PyInstaller and build outputs
+**/build*/
+**/dist/
+**/_internal/
+**/_internal.*/
+*.exe
+build_info.json
+**/build_info.json
+isolated_trial.json
+**/isolated_trial.json
+# Keep *.spec: it is the formal PyInstaller build configuration.
+
+# Runtime logs and temporary files
+*.log
+*.tmp
+*.temp
+scratch_*.py
+scratch/
+ocr_results.txt
+**/ocr_results.txt
+
+# Local-only configuration
+.env
+.env.*
+config.local.json
+
+# Live auction databases and historical runtime copies
+**/异环拍卖数据*.json
+
+# Large runtime captures / generated frame sets
+**/录像关键帧/
+**/video_frames/
+**/settlement_frames/
+**/replay_frames/
+**/webview2_data/
+evidence/
+**/evidence/
+
+# Historical archive is retained on disk and in the external snapshot,
+# but is not part of the source baseline.
+/归档/
+
+# 旧损坏 .git 的只读取证封存（属于证据，不进入 recovery 源码基线）
+_forensic/

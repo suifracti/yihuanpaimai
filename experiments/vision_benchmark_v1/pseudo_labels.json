@@ -1,0 +1,1379 @@
+{
+  "benchmarkVersion": "1.0.0",
+  "source": "representative_vision_expansion",
+  "totalPseudoLabels": 57,
+  "highConfidenceCount": 42,
+  "mediumConfidenceCount": 13,
+  "lowConfidenceCount": 2,
+  "redSlotsCount": 6,
+  "items": [
+    {
+      "benchmarkId": "REP-01",
+      "slotId": "s01",
+      "sourceImage": "assets/settlement_frames/sec_488.jpg",
+      "cropPath": "experiments/vision_benchmark_v1/crops/crop_REP-01_s01.png",
+      "detectedTop1": {
+        "name": "九格小食",
+        "itemId": "red_jiugexiaoshi",
+        "quality": "red"
+      },
+      "detectedTop3": [
+        "red_jiugexiaoshi",
+        "red_yicuyouhuo",
+        "gold_dabing"
+      ],
+      "confidence": "high",
+      "impactCategory": "Red item in settlement",
+      "bbox": [
+        1408,
+        256,
+        1536,
+        384
+      ]
+    },
+    {
+      "benchmarkId": "REP-01",
+      "slotId": "s02",
+      "sourceImage": "assets/settlement_frames/sec_488.jpg",
+      "cropPath": "experiments/vision_benchmark_v1/crops/crop_REP-01_s02.png",
+      "detectedTop1": {
+        "name": "万有星仪",
+        "itemId": "gold_wanyouxingyi",
+        "quality": "gold"
+      },
+      "detectedTop3": [
+        "gold_wanyouxingyi",
+        "gold_qiaowangnijindiaoxiang",
+        "purple_arespaobuji"
+      ],
+      "confidence": "high",
+      "impactCategory": "Large Gold 2x3",
+      "bbox": [
+        1744,
+        256,
+        1872,
+        448
+      ]
+    },
+    {
+      "benchmarkId": "REP-01",
+      "slotId": "s03",
+      "sourceImage": "assets/settlement_frames/sec_488.jpg",
+      "cropPath": "experiments/vision_benchmark_v1/crops/crop_REP-01_s03.png",
+      "detectedTop1": {
+        "name": "心猎铁骑L3",
+        "itemId": "red_xinlietieqi_l3",
+        "quality": "red"
+      },
+      "detectedTop3": [
+        "red_xinlietieqi_l3",
+        "red_xinlietieqi_l2",
+        "purple_xinlietieqi_l1"
+      ],
+      "confidence": "high",
+      "impactCategory": "Red character toy 2x2",
+      "bbox": [
+        1744,
+        480,
+        1872,
+        608
+      ]
+    },
+    {
+      "benchmarkId": "REP-01",
+      "slotId": "s04",
+      "sourceImage": "assets/settlement_frames/sec_488.jpg",
+      "cropPath": "experiments/vision_benchmark_v1/crops/crop_REP-01_s04.png",
+      "detectedTop1": {
+        "name": "史莱姆随心泥",
+        "itemId": "purple_slime_mud",
+        "quality": "purple"
+      },
+      "detectedTop3": [
+        "purple_slime_mud",
+        "gold_guanzhuangsuixinni",
+        "purple_lvdongdanche"
+      ],
+      "confidence": "high",
+      "impactCategory": "Purple 2x2",
+      "bbox": [
+        1600,
+        448,
+        1728,
+        576
+      ]
+    },
+    {
+      "benchmarkId": "REP-01",
+      "slotId": "s05",
+      "sourceImage": "assets/settlement_frames/sec_488.jpg",
+      "cropPath": "experiments/vision_benchmark_v1/crops/crop_REP-01_s05.png",
+      "detectedTop1": {
+        "name": "艺术画「深林」",
+        "itemId": "blue_yishuhua_shenlin",
+        "quality": "blue"
+      },
+      "detectedTop3": [
+        "blue_yishuhua_shenlin",
+        "blue_yishuhua_haian",
+        "white_pailidexiangkuang"
+      ],
+      "confidence": "high",
+      "impactCategory": "Blue 2x2 painting",
+      "bbox": [
+        1424,
+        384,
+        1552,
+        512
+      ]
+    },
+    {
+      "benchmarkId": "REP-01",
+      "slotId": "s06",
+      "sourceImage": "assets/settlement_frames/sec_488.jpg",
+      "cropPath": "experiments/vision_benchmark_v1/crops/crop_REP-01_s06.png",
+      "detectedTop1": {
+        "name": "红药水",
+        "itemId": "purple_hongyaoshui",
+        "quality": "purple"
+      },
+      "detectedTop3": [
+        "purple_hongyaoshui",
+        "purple_chengjieweijiu",
+        "red_xiahongzuan"
+      ],
+      "confidence": "medium",
+      "impactCategory": "Purple 1x2 potion",
+      "bbox": [
+        1664,
+        288,
+        1728,
+        416
+      ]
+    },
+    {
+      "benchmarkId": "REP-01",
+      "slotId": "s07",
+      "sourceImage": "assets/settlement_frames/sec_488.jpg",
+      "cropPath": "experiments/vision_benchmark_v1/crops/crop_REP-01_s07.png",
+      "detectedTop1": {
+        "name": "智能手机",
+        "itemId": "blue_zhinengshouji",
+        "quality": "blue"
+      },
+      "detectedTop3": [
+        "blue_zhinengshouji",
+        "blue_zhinengchongdianqi",
+        "white_dianyingkaquan"
+      ],
+      "confidence": "high",
+      "impactCategory": "Blue 1x2",
+      "bbox": [
+        1632,
+        576,
+        1696,
+        672
+      ]
+    },
+    {
+      "benchmarkId": "REP-01",
+      "slotId": "s08",
+      "sourceImage": "assets/settlement_frames/sec_488.jpg",
+      "cropPath": "experiments/vision_benchmark_v1/crops/crop_REP-01_s08.png",
+      "detectedTop1": {
+        "name": "霞红钻",
+        "itemId": "purple_xiahongzuan",
+        "quality": "purple"
+      },
+      "detectedTop3": [
+        "purple_xiahongzuan",
+        "red_chixinshuidi",
+        "purple_youlingtai"
+      ],
+      "confidence": "high",
+      "impactCategory": "Small gem 1x1",
+      "bbox": [
+        1776,
+        448,
+        1840,
+        512
+      ]
+    },
+    {
+      "benchmarkId": "REP-01",
+      "slotId": "s09",
+      "sourceImage": "assets/settlement_frames/sec_488.jpg",
+      "cropPath": "experiments/vision_benchmark_v1/crops/crop_REP-01_s09.png",
+      "detectedTop1": {
+        "name": "电影卡券",
+        "itemId": "white_dianyingkaquan",
+        "quality": "white"
+      },
+      "detectedTop3": [
+        "white_dianyingkaquan",
+        "blue_zhinengshouji",
+        "white_zhezhibaozhi"
+      ],
+      "confidence": "medium",
+      "impactCategory": "Small ticket 1x1",
+      "bbox": [
+        1440,
+        528,
+        1504,
+        576
+      ]
+    },
+    {
+      "benchmarkId": "REP-01",
+      "slotId": "s10",
+      "sourceImage": "assets/settlement_frames/sec_488.jpg",
+      "cropPath": "experiments/vision_benchmark_v1/crops/crop_REP-01_s10.png",
+      "detectedTop1": {
+        "name": "留声奖杯",
+        "itemId": "purple_liushengjiangbei",
+        "quality": "purple"
+      },
+      "detectedTop3": [
+        "purple_liushengjiangbei",
+        "purple_liushengjiangzuo",
+        "gold_jinwan"
+      ],
+      "confidence": "high",
+      "impactCategory": "Purple trophy 1x2",
+      "bbox": [
+        1408,
+        496,
+        1472,
+        592
+      ]
+    },
+    {
+      "benchmarkId": "REP-01",
+      "slotId": "s11",
+      "sourceImage": "assets/settlement_frames/sec_488.jpg",
+      "cropPath": "experiments/vision_benchmark_v1/crops/crop_REP-01_s11.png",
+      "detectedTop1": {
+        "name": "金碗",
+        "itemId": "gold_jinwan",
+        "quality": "gold"
+      },
+      "detectedTop3": [
+        "gold_jinwan",
+        "white_huadiaowan",
+        "gold_liushengjilaba"
+      ],
+      "confidence": "medium",
+      "impactCategory": "Gold bowl 1x1",
+      "bbox": [
+        1728,
+        560,
+        1792,
+        624
+      ]
+    },
+    {
+      "benchmarkId": "REP-01",
+      "slotId": "s12",
+      "sourceImage": "assets/settlement_frames/sec_488.jpg",
+      "cropPath": "experiments/vision_benchmark_v1/crops/crop_REP-01_s12.png",
+      "detectedTop1": {
+        "name": "草莓软糖",
+        "itemId": "white_caomeiruantang",
+        "quality": "white"
+      },
+      "detectedTop3": [
+        "white_caomeiruantang",
+        "white_caomeitangguo",
+        "purple_yuebaisha"
+      ],
+      "confidence": "medium",
+      "impactCategory": "Small candy 1x1",
+      "bbox": [
+        1744,
+        608,
+        1808,
+        672
+      ]
+    },
+    {
+      "benchmarkId": "REP-01",
+      "slotId": "s13",
+      "sourceImage": "assets/settlement_frames/sec_488.jpg",
+      "cropPath": "experiments/vision_benchmark_v1/crops/crop_REP-01_s13.png",
+      "detectedTop1": {
+        "name": "月白沙",
+        "itemId": "purple_yuebaisha",
+        "quality": "purple"
+      },
+      "detectedTop3": [
+        "purple_yuebaisha",
+        "white_shuijingqiyuanqiu",
+        "purple_taomu"
+      ],
+      "confidence": "medium",
+      "impactCategory": "Small gem 1x1",
+      "bbox": [
+        1680,
+        256,
+        1744,
+        320
+      ]
+    },
+    {
+      "benchmarkId": "REP-01",
+      "slotId": "s14",
+      "sourceImage": "assets/settlement_frames/sec_488.jpg",
+      "cropPath": "experiments/vision_benchmark_v1/crops/crop_REP-01_s14.png",
+      "detectedTop1": {
+        "name": "珍珠蚌",
+        "itemId": "purple_zhenzhubang",
+        "quality": "purple"
+      },
+      "detectedTop3": [
+        "purple_zhenzhubang",
+        "purple_youlingtai",
+        "green_liulidanzhu"
+      ],
+      "confidence": "high",
+      "impactCategory": "Purple clam 1x1",
+      "bbox": [
+        1696,
+        368,
+        1760,
+        432
+      ]
+    },
+    {
+      "benchmarkId": "REP-01",
+      "slotId": "s15",
+      "sourceImage": "assets/settlement_frames/sec_488.jpg",
+      "cropPath": "experiments/vision_benchmark_v1/crops/crop_REP-01_s15.png",
+      "detectedTop1": {
+        "name": "小木桌",
+        "itemId": "green_xiaomuzhuo",
+        "quality": "green"
+      },
+      "detectedTop3": [
+        "green_xiaomuzhuo",
+        "blue_fuguonandeng",
+        "white_saokingweichen"
+      ],
+      "confidence": "medium",
+      "impactCategory": "Green table 1x1",
+      "bbox": [
+        1472,
+        480,
+        1536,
+        544
+      ]
+    },
+    {
+      "benchmarkId": "REP-02",
+      "slotId": "s01",
+      "sourceImage": "core/settlement_items_crop.png",
+      "cropPath": "experiments/vision_benchmark_v1/crops/crop_REP-02_s01.png",
+      "detectedTop1": {
+        "name": "赤尾鱼",
+        "itemId": "red_chiweiyu",
+        "quality": "red"
+      },
+      "detectedTop3": [
+        "red_chiweiyu",
+        "red_jinjinlidiaoxiang",
+        "red_pendragon"
+      ],
+      "confidence": "high",
+      "impactCategory": "Giant Red Fish 3x3",
+      "bbox": [
+        92,
+        100,
+        230,
+        230
+      ]
+    },
+    {
+      "benchmarkId": "REP-02",
+      "slotId": "s02",
+      "sourceImage": "core/settlement_items_crop.png",
+      "cropPath": "experiments/vision_benchmark_v1/crops/crop_REP-02_s02.png",
+      "detectedTop1": {
+        "name": "艺术画「深林」",
+        "itemId": "blue_yishuhua_shenlin",
+        "quality": "blue"
+      },
+      "detectedTop3": [
+        "blue_yishuhua_shenlin",
+        "blue_yishuhua_haian",
+        "white_pailidexiangkuang"
+      ],
+      "confidence": "high",
+      "impactCategory": "Blue 2x2 frame",
+      "bbox": [
+        200,
+        10,
+        275,
+        80
+      ]
+    },
+    {
+      "benchmarkId": "REP-02",
+      "slotId": "s03",
+      "sourceImage": "core/settlement_items_crop.png",
+      "cropPath": "experiments/vision_benchmark_v1/crops/crop_REP-02_s03.png",
+      "detectedTop1": {
+        "name": "律动单车A",
+        "itemId": "purple_lvdongdanche",
+        "quality": "purple"
+      },
+      "detectedTop3": [
+        "purple_lvdongdanche",
+        "purple_arespaobuji",
+        "gold_lunyimoxing"
+      ],
+      "confidence": "high",
+      "impactCategory": "Purple bike 2x2",
+      "bbox": [
+        10,
+        100,
+        85,
+        155
+      ]
+    },
+    {
+      "benchmarkId": "REP-02",
+      "slotId": "s04",
+      "sourceImage": "core/settlement_items_crop.png",
+      "cropPath": "experiments/vision_benchmark_v1/crops/crop_REP-02_s04.png",
+      "detectedTop1": {
+        "name": "律动单车B",
+        "itemId": "purple_lvdongdanche",
+        "quality": "purple"
+      },
+      "detectedTop3": [
+        "purple_lvdongdanche",
+        "purple_arespaobuji",
+        "gold_lunyimoxing"
+      ],
+      "confidence": "high",
+      "impactCategory": "Purple bike 2x2 (Instance 2)",
+      "bbox": [
+        170,
+        240,
+        245,
+        295
+      ]
+    },
+    {
+      "benchmarkId": "REP-02",
+      "slotId": "s05",
+      "sourceImage": "core/settlement_items_crop.png",
+      "cropPath": "experiments/vision_benchmark_v1/crops/crop_REP-02_s05.png",
+      "detectedTop1": {
+        "name": "海贝勋章",
+        "itemId": "gold_haibeixunzhang",
+        "quality": "gold"
+      },
+      "detectedTop3": [
+        "gold_haibeixunzhang",
+        "blue_jinianyinbi",
+        "gold_jinjiweijiu"
+      ],
+      "confidence": "high",
+      "impactCategory": "Gold badge 2x2",
+      "bbox": [
+        95,
+        45,
+        145,
+        85
+      ]
+    },
+    {
+      "benchmarkId": "REP-02",
+      "slotId": "s06",
+      "sourceImage": "core/settlement_items_crop.png",
+      "cropPath": "experiments/vision_benchmark_v1/crops/crop_REP-02_s06.png",
+      "detectedTop1": {
+        "name": "橙色鸡尾酒",
+        "itemId": "purple_chengjieweijiu",
+        "quality": "purple"
+      },
+      "detectedTop3": [
+        "purple_chengjieweijiu",
+        "gold_jinjiweijiu",
+        "purple_hongyaoshui"
+      ],
+      "confidence": "high",
+      "impactCategory": "Purple cocktail 2x2",
+      "bbox": [
+        10,
+        210,
+        85,
+        265
+      ]
+    },
+    {
+      "benchmarkId": "REP-02",
+      "slotId": "s07",
+      "sourceImage": "core/settlement_items_crop.png",
+      "cropPath": "experiments/vision_benchmark_v1/crops/crop_REP-02_s07.png",
+      "detectedTop1": {
+        "name": "金鸡尾酒",
+        "itemId": "gold_jinjiweijiu",
+        "quality": "gold"
+      },
+      "detectedTop3": [
+        "gold_jinjiweijiu",
+        "purple_chengjieweijiu",
+        "gold_haibeixunzhang"
+      ],
+      "confidence": "high",
+      "impactCategory": "Gold cocktail 2x2",
+      "bbox": [
+        225,
+        155,
+        275,
+        220
+      ]
+    },
+    {
+      "benchmarkId": "REP-02",
+      "slotId": "s08",
+      "sourceImage": "core/settlement_items_crop.png",
+      "cropPath": "experiments/vision_benchmark_v1/crops/crop_REP-02_s08.png",
+      "detectedTop1": {
+        "name": "球形无人机",
+        "itemId": "gold_qiuxingwurenji",
+        "quality": "gold"
+      },
+      "detectedTop3": [
+        "gold_qiuxingwurenji",
+        "red_xinlietieqi_l3",
+        "purple_lvdongdanche"
+      ],
+      "confidence": "high",
+      "impactCategory": "Gold drone 2x2",
+      "bbox": [
+        95,
+        240,
+        145,
+        295
+      ]
+    },
+    {
+      "benchmarkId": "REP-02",
+      "slotId": "s09",
+      "sourceImage": "core/settlement_items_crop.png",
+      "cropPath": "experiments/vision_benchmark_v1/crops/crop_REP-02_s09.png",
+      "detectedTop1": {
+        "name": "拍立得相框",
+        "itemId": "white_pailidexiangkuang",
+        "quality": "white"
+      },
+      "detectedTop3": [
+        "white_pailidexiangkuang",
+        "blue_yishuhua_shenlin",
+        "white_dianyingkaquan"
+      ],
+      "confidence": "high",
+      "impactCategory": "White camera 2x2",
+      "bbox": [
+        10,
+        155,
+        60,
+        205
+      ]
+    },
+    {
+      "benchmarkId": "REP-02",
+      "slotId": "s10",
+      "sourceImage": "core/settlement_items_crop.png",
+      "cropPath": "experiments/vision_benchmark_v1/crops/crop_REP-02_s10.png",
+      "detectedTop1": {
+        "name": "纪念银币",
+        "itemId": "blue_jinianyinbi",
+        "quality": "blue"
+      },
+      "detectedTop3": [
+        "blue_jinianyinbi",
+        "gold_haibeixunzhang",
+        "gold_jinwan"
+      ],
+      "confidence": "high",
+      "impactCategory": "Blue disc 2x2",
+      "bbox": [
+        225,
+        105,
+        275,
+        150
+      ]
+    },
+    {
+      "benchmarkId": "REP-02",
+      "slotId": "s11",
+      "sourceImage": "core/settlement_items_crop.png",
+      "cropPath": "experiments/vision_benchmark_v1/crops/crop_REP-02_s11.png",
+      "detectedTop1": {
+        "name": "炽心水滴",
+        "itemId": "red_chixinshuidi",
+        "quality": "red"
+      },
+      "detectedTop3": [
+        "red_chixinshuidi",
+        "purple_xiahongzuan",
+        "purple_youlingtai"
+      ],
+      "confidence": "medium",
+      "impactCategory": "Red gem 1x1 (High value)",
+      "bbox": [
+        65,
+        155,
+        90,
+        180
+      ]
+    },
+    {
+      "benchmarkId": "REP-02",
+      "slotId": "s12",
+      "sourceImage": "core/settlement_items_crop.png",
+      "cropPath": "experiments/vision_benchmark_v1/crops/crop_REP-02_s12.png",
+      "detectedTop1": {
+        "name": "霞红钻A",
+        "itemId": "purple_xiahongzuan",
+        "quality": "purple"
+      },
+      "detectedTop3": [
+        "purple_xiahongzuan",
+        "red_chixinshuidi",
+        "purple_youlingtai"
+      ],
+      "confidence": "high",
+      "impactCategory": "Purple gem 1x1",
+      "bbox": [
+        145,
+        45,
+        170,
+        70
+      ]
+    },
+    {
+      "benchmarkId": "REP-02",
+      "slotId": "s13",
+      "sourceImage": "core/settlement_items_crop.png",
+      "cropPath": "experiments/vision_benchmark_v1/crops/crop_REP-02_s13.png",
+      "detectedTop1": {
+        "name": "霞红钻B",
+        "itemId": "purple_xiahongzuan",
+        "quality": "purple"
+      },
+      "detectedTop3": [
+        "purple_xiahongzuan",
+        "red_chixinshuidi",
+        "purple_youlingtai"
+      ],
+      "confidence": "high",
+      "impactCategory": "Purple gem 1x1 (Instance 2)",
+      "bbox": [
+        145,
+        70,
+        170,
+        95
+      ]
+    },
+    {
+      "benchmarkId": "REP-02",
+      "slotId": "s14",
+      "sourceImage": "core/settlement_items_crop.png",
+      "cropPath": "experiments/vision_benchmark_v1/crops/crop_REP-02_s14.png",
+      "detectedTop1": {
+        "name": "幽灵态A",
+        "itemId": "purple_youlingtai",
+        "quality": "purple"
+      },
+      "detectedTop3": [
+        "purple_youlingtai",
+        "purple_xiahongzuan",
+        "purple_zhenzhubang"
+      ],
+      "confidence": "high",
+      "impactCategory": "Purple pearl 1x1",
+      "bbox": [
+        65,
+        180,
+        90,
+        205
+      ]
+    },
+    {
+      "benchmarkId": "REP-02",
+      "slotId": "s15",
+      "sourceImage": "core/settlement_items_crop.png",
+      "cropPath": "experiments/vision_benchmark_v1/crops/crop_REP-02_s15.png",
+      "detectedTop1": {
+        "name": "幽灵态B",
+        "itemId": "purple_youlingtai",
+        "quality": "purple"
+      },
+      "detectedTop3": [
+        "purple_youlingtai",
+        "purple_xiahongzuan",
+        "purple_zhenzhubang"
+      ],
+      "confidence": "high",
+      "impactCategory": "Purple pearl 1x1 (Instance 2)",
+      "bbox": [
+        35,
+        75,
+        60,
+        100
+      ]
+    },
+    {
+      "benchmarkId": "REP-02",
+      "slotId": "s16",
+      "sourceImage": "core/settlement_items_crop.png",
+      "cropPath": "experiments/vision_benchmark_v1/crops/crop_REP-02_s16.png",
+      "detectedTop1": {
+        "name": "留声机喇叭",
+        "itemId": "gold_liushengjilaba",
+        "quality": "gold"
+      },
+      "detectedTop3": [
+        "gold_liushengjilaba",
+        "gold_jinwan",
+        "purple_liushengjiangzuo"
+      ],
+      "confidence": "high",
+      "impactCategory": "Gold horn 1x1",
+      "bbox": [
+        10,
+        265,
+        40,
+        295
+      ]
+    },
+    {
+      "benchmarkId": "REP-02",
+      "slotId": "s17",
+      "sourceImage": "core/settlement_items_crop.png",
+      "cropPath": "experiments/vision_benchmark_v1/crops/crop_REP-02_s17.png",
+      "detectedTop1": {
+        "name": "火漆印",
+        "itemId": "green_huoqiyin",
+        "quality": "green"
+      },
+      "detectedTop3": [
+        "green_huoqiyin",
+        "green_liulidanzhu",
+        "green_maorongrongdequeding"
+      ],
+      "confidence": "high",
+      "impactCategory": "Green wax seal 1x1",
+      "bbox": [
+        250,
+        240,
+        275,
+        265
+      ]
+    },
+    {
+      "benchmarkId": "REP-02",
+      "slotId": "s18",
+      "sourceImage": "core/settlement_items_crop.png",
+      "cropPath": "experiments/vision_benchmark_v1/crops/crop_REP-02_s18.png",
+      "detectedTop1": {
+        "name": "琉璃弹珠",
+        "itemId": "green_liulidanzhu",
+        "quality": "green"
+      },
+      "detectedTop3": [
+        "green_liulidanzhu",
+        "green_huoqiyin",
+        "purple_taomu"
+      ],
+      "confidence": "medium",
+      "impactCategory": "Green marble 1x1",
+      "bbox": [
+        250,
+        265,
+        275,
+        295
+      ]
+    },
+    {
+      "benchmarkId": "REP-02",
+      "slotId": "s19",
+      "sourceImage": "core/settlement_items_crop.png",
+      "cropPath": "experiments/vision_benchmark_v1/crops/crop_REP-02_s19.png",
+      "detectedTop1": {
+        "name": "草莓糖果",
+        "itemId": "white_caomeitangguo",
+        "quality": "white"
+      },
+      "detectedTop3": [
+        "white_caomeitangguo",
+        "white_caomeiruantang",
+        "white_saokingweichen"
+      ],
+      "confidence": "high",
+      "impactCategory": "White candy 1x1",
+      "bbox": [
+        65,
+        265,
+        90,
+        295
+      ]
+    },
+    {
+      "benchmarkId": "REP-02",
+      "slotId": "s20",
+      "sourceImage": "core/settlement_items_crop.png",
+      "cropPath": "experiments/vision_benchmark_v1/crops/crop_REP-02_s20.png",
+      "detectedTop1": {
+        "name": "星影滑板",
+        "itemId": "blue_xingyinghuaban",
+        "quality": "blue"
+      },
+      "detectedTop3": [
+        "blue_xingyinghuaban",
+        "blue_zhinengshouji",
+        "white_dianyingkaquan"
+      ],
+      "confidence": "high",
+      "impactCategory": "Blue 1x3 board",
+      "bbox": [
+        115,
+        10,
+        175,
+        30
+      ]
+    },
+    {
+      "benchmarkId": "REP-03",
+      "slotId": "s01",
+      "sourceImage": "build/live_auc/t078_grid.png",
+      "cropPath": "experiments/vision_benchmark_v1/crops/crop_REP-03_s01.png",
+      "detectedTop1": {
+        "name": "银白胸甲",
+        "itemId": "blue_yinbaixiongjia",
+        "quality": "blue"
+      },
+      "detectedTop3": [
+        "blue_yinbaixiongjia",
+        "blue_yishuhua_shenlin",
+        "gold_wanyouxingyi"
+      ],
+      "confidence": "high",
+      "impactCategory": "Large Blue 3x3 armor",
+      "bbox": [
+        15,
+        30,
+        175,
+        190
+      ]
+    },
+    {
+      "benchmarkId": "REP-03",
+      "slotId": "s02",
+      "sourceImage": "build/live_auc/t078_grid.png",
+      "cropPath": "experiments/vision_benchmark_v1/crops/crop_REP-03_s02.png",
+      "detectedTop1": {
+        "name": "极速机车",
+        "itemId": "gold_jisujiche",
+        "quality": "gold"
+      },
+      "detectedTop3": [
+        "gold_jisujiche",
+        "gold_zhinengchongdianqi",
+        "purple_lvdongdanche"
+      ],
+      "confidence": "high",
+      "impactCategory": "Gold motorcycle 2x1",
+      "bbox": [
+        345,
+        15,
+        500,
+        85
+      ]
+    },
+    {
+      "benchmarkId": "REP-03",
+      "slotId": "s03",
+      "sourceImage": "build/live_auc/t078_grid.png",
+      "cropPath": "experiments/vision_benchmark_v1/crops/crop_REP-03_s03.png",
+      "detectedTop1": {
+        "name": "智能充电器",
+        "itemId": "gold_zhinengchongdianqi",
+        "quality": "gold"
+      },
+      "detectedTop3": [
+        "gold_zhinengchongdianqi",
+        "gold_jisujiche",
+        "blue_zhinengshouji"
+      ],
+      "confidence": "high",
+      "impactCategory": "Gold USB cable 2x1",
+      "bbox": [
+        235,
+        90,
+        390,
+        160
+      ]
+    },
+    {
+      "benchmarkId": "REP-03",
+      "slotId": "s04",
+      "sourceImage": "build/live_auc/t078_grid.png",
+      "cropPath": "experiments/vision_benchmark_v1/crops/crop_REP-03_s04.png",
+      "detectedTop1": {
+        "name": "留声奖座",
+        "itemId": "purple_liushengjiangzuo",
+        "quality": "purple"
+      },
+      "detectedTop3": [
+        "purple_liushengjiangzuo",
+        "purple_liushengjiangbei",
+        "gold_jinwan"
+      ],
+      "confidence": "high",
+      "impactCategory": "Purple trophy 1x2",
+      "bbox": [
+        180,
+        15,
+        235,
+        140
+      ]
+    },
+    {
+      "benchmarkId": "REP-03",
+      "slotId": "s05",
+      "sourceImage": "build/live_auc/t078_grid.png",
+      "cropPath": "experiments/vision_benchmark_v1/crops/crop_REP-03_s05.png",
+      "detectedTop1": {
+        "name": "饕目",
+        "itemId": "purple_taomu",
+        "quality": "purple"
+      },
+      "detectedTop3": [
+        "purple_taomu",
+        "purple_youlingtai",
+        "purple_xiahongzuan"
+      ],
+      "confidence": "high",
+      "impactCategory": "Purple eye gem 1x1",
+      "bbox": [
+        235,
+        15,
+        290,
+        85
+      ]
+    },
+    {
+      "benchmarkId": "REP-03",
+      "slotId": "s06",
+      "sourceImage": "build/live_auc/t078_grid.png",
+      "cropPath": "experiments/vision_benchmark_v1/crops/crop_REP-03_s06.png",
+      "detectedTop1": {
+        "name": "水晶祈愿球",
+        "itemId": "white_shuijingqiyuanqiu",
+        "quality": "white"
+      },
+      "detectedTop3": [
+        "white_shuijingqiyuanqiu",
+        "purple_yuebaisha",
+        "green_liulidanzhu"
+      ],
+      "confidence": "high",
+      "impactCategory": "White crystal doll ball 1x1",
+      "bbox": [
+        290,
+        15,
+        345,
+        85
+      ]
+    },
+    {
+      "benchmarkId": "REP-03",
+      "slotId": "s07",
+      "sourceImage": "build/live_auc/t078_grid.png",
+      "cropPath": "experiments/vision_benchmark_v1/crops/crop_REP-03_s07.png",
+      "detectedTop1": {
+        "name": "纯净矿泉水",
+        "itemId": "blue_chunjingkuangquanshui",
+        "quality": "blue"
+      },
+      "detectedTop3": [
+        "blue_chunjingkuangquanshui",
+        "purple_hongyaoshui",
+        "blue_zhinengshouji"
+      ],
+      "confidence": "high",
+      "impactCategory": "Blue water bottle 1x1",
+      "bbox": [
+        405,
+        90,
+        455,
+        160
+      ]
+    },
+    {
+      "benchmarkId": "REP-03",
+      "slotId": "s08",
+      "sourceImage": "build/live_auc/t078_grid.png",
+      "cropPath": "experiments/vision_benchmark_v1/crops/crop_REP-03_s08.png",
+      "detectedTop1": {
+        "name": "草莓糖果",
+        "itemId": "white_caomeitangguo",
+        "quality": "white"
+      },
+      "detectedTop3": [
+        "white_caomeitangguo",
+        "white_caomeiruantang",
+        "white_saokingweichen"
+      ],
+      "confidence": "high",
+      "impactCategory": "White candy 1x1",
+      "bbox": [
+        515,
+        15,
+        565,
+        85
+      ]
+    },
+    {
+      "benchmarkId": "REP-04",
+      "slotId": "s01",
+      "sourceImage": "assets/video_frames/sec_210.jpg",
+      "cropPath": "experiments/vision_benchmark_v1/crops/crop_REP-04_s01.png",
+      "detectedTop1": {
+        "name": "单反相机",
+        "itemId": "purple_danfanxiangji",
+        "quality": "purple"
+      },
+      "detectedTop3": [
+        "purple_danfanxiangji",
+        "purple_arespaobuji",
+        "purple_lvdongdanche"
+      ],
+      "confidence": "high",
+      "impactCategory": "Purple SLR 2x2",
+      "bbox": [
+        830,
+        275,
+        875,
+        365
+      ]
+    },
+    {
+      "benchmarkId": "REP-04",
+      "slotId": "s02",
+      "sourceImage": "assets/video_frames/sec_210.jpg",
+      "cropPath": "experiments/vision_benchmark_v1/crops/crop_REP-04_s02.png",
+      "detectedTop1": {
+        "name": "艺术画「深林」",
+        "itemId": "blue_yishuhua_shenlin",
+        "quality": "blue"
+      },
+      "detectedTop3": [
+        "blue_yishuhua_shenlin",
+        "blue_yishuhua_haian",
+        "white_pailidexiangkuang"
+      ],
+      "confidence": "high",
+      "impactCategory": "Blue frame 2x2",
+      "bbox": [
+        780,
+        380,
+        825,
+        440
+      ]
+    },
+    {
+      "benchmarkId": "REP-04",
+      "slotId": "s03",
+      "sourceImage": "assets/video_frames/sec_210.jpg",
+      "cropPath": "experiments/vision_benchmark_v1/crops/crop_REP-04_s03.png",
+      "detectedTop1": {
+        "name": "环星仪",
+        "itemId": "gold_huanxingyi",
+        "quality": "gold"
+      },
+      "detectedTop3": [
+        "gold_huanxingyi",
+        "gold_wanyouxingyi",
+        "purple_taomu"
+      ],
+      "confidence": "high",
+      "impactCategory": "Gold planet model 2x2",
+      "bbox": [
+        790,
+        255,
+        830,
+        295
+      ]
+    },
+    {
+      "benchmarkId": "REP-04",
+      "slotId": "s04",
+      "sourceImage": "assets/video_frames/sec_210.jpg",
+      "cropPath": "experiments/vision_benchmark_v1/crops/crop_REP-04_s04.png",
+      "detectedTop1": {
+        "name": "心猎铁骑玩具",
+        "itemId": "red_xinlietieqi_wanju",
+        "quality": "red"
+      },
+      "detectedTop3": [
+        "red_xinlietieqi_wanju",
+        "red_xinlietieqi_l3",
+        "purple_xinlietieqi_l1"
+      ],
+      "confidence": "medium",
+      "impactCategory": "Red toy 2x2 (High impact)",
+      "bbox": [
+        790,
+        305,
+        830,
+        365
+      ]
+    },
+    {
+      "benchmarkId": "REP-04",
+      "slotId": "s05",
+      "sourceImage": "assets/video_frames/sec_210.jpg",
+      "cropPath": "experiments/vision_benchmark_v1/crops/crop_REP-04_s05.png",
+      "detectedTop1": {
+        "name": "炽心水滴",
+        "itemId": "red_chixinshuidi",
+        "quality": "red"
+      },
+      "detectedTop3": [
+        "red_chixinshuidi",
+        "purple_xiahongzuan",
+        "purple_youlingtai"
+      ],
+      "confidence": "high",
+      "impactCategory": "Red teardrop gem 1x1",
+      "bbox": [
+        875,
+        255,
+        895,
+        295
+      ]
+    },
+    {
+      "benchmarkId": "REP-04",
+      "slotId": "s06",
+      "sourceImage": "assets/video_frames/sec_210.jpg",
+      "cropPath": "experiments/vision_benchmark_v1/crops/crop_REP-04_s06.png",
+      "detectedTop1": {
+        "name": "拍立得",
+        "itemId": "white_pailide",
+        "quality": "white"
+      },
+      "detectedTop3": [
+        "white_pailide",
+        "white_pailidexiangkuang",
+        "purple_danfanxiangji"
+      ],
+      "confidence": "high",
+      "impactCategory": "Pink polaroid 1x2",
+      "bbox": [
+        900,
+        255,
+        940,
+        320
+      ]
+    },
+    {
+      "benchmarkId": "REP-04",
+      "slotId": "s07",
+      "sourceImage": "assets/video_frames/sec_210.jpg",
+      "cropPath": "experiments/vision_benchmark_v1/crops/crop_REP-04_s07.png",
+      "detectedTop1": {
+        "name": "智能手机",
+        "itemId": "blue_zhinengshouji",
+        "quality": "blue"
+      },
+      "detectedTop3": [
+        "blue_zhinengshouji",
+        "blue_zhinengchongdianqi",
+        "white_dianyingkaquan"
+      ],
+      "confidence": "high",
+      "impactCategory": "Blue phone 1x2",
+      "bbox": [
+        900,
+        355,
+        940,
+        420
+      ]
+    },
+    {
+      "benchmarkId": "REP-04",
+      "slotId": "s08",
+      "sourceImage": "assets/video_frames/sec_210.jpg",
+      "cropPath": "experiments/vision_benchmark_v1/crops/crop_REP-04_s08.png",
+      "detectedTop1": {
+        "name": "薯片零食",
+        "itemId": "green_shupianlingshi",
+        "quality": "green"
+      },
+      "detectedTop3": [
+        "green_shupianlingshi",
+        "white_caomeitangguo",
+        "white_dianyingkaquan"
+      ],
+      "confidence": "medium",
+      "impactCategory": "Snack bag 1x2",
+      "bbox": [
+        875,
+        365,
+        900,
+        410
+      ]
+    },
+    {
+      "benchmarkId": "REP-04",
+      "slotId": "s09",
+      "sourceImage": "assets/video_frames/sec_210.jpg",
+      "cropPath": "experiments/vision_benchmark_v1/crops/crop_REP-04_s09.png",
+      "detectedTop1": {
+        "name": "烤肉串",
+        "itemId": "green_kaorouchuan",
+        "quality": "green"
+      },
+      "detectedTop3": [
+        "green_kaorouchuan",
+        "green_shupianlingshi",
+        "white_caomeiruantang"
+      ],
+      "confidence": "medium",
+      "impactCategory": "Skewer 1x2",
+      "bbox": [
+        875,
+        410,
+        900,
+        450
+      ]
+    },
+    {
+      "benchmarkId": "REP-04",
+      "slotId": "s10",
+      "sourceImage": "assets/video_frames/sec_210.jpg",
+      "cropPath": "experiments/vision_benchmark_v1/crops/crop_REP-04_s10.png",
+      "detectedTop1": {
+        "name": "留声奖座",
+        "itemId": "purple_liushengjiangzuo",
+        "quality": "purple"
+      },
+      "detectedTop3": [
+        "purple_liushengjiangzuo",
+        "purple_liushengjiangbei",
+        "gold_jinwan"
+      ],
+      "confidence": "high",
+      "impactCategory": "Trophy 1x2",
+      "bbox": [
+        875,
+        305,
+        900,
+        365
+      ]
+    },
+    {
+      "benchmarkId": "REP-05",
+      "slotId": "s01",
+      "sourceImage": "build/live_fail/t004.jpg",
+      "cropPath": "experiments/vision_benchmark_v1/crops/crop_REP-05_s01.png",
+      "detectedTop1": {
+        "name": "罐装随心泥",
+        "itemId": "gold_guanzhuangsuixinni",
+        "quality": "gold"
+      },
+      "detectedTop3": [
+        "gold_guanzhuangsuixinni",
+        "purple_slime_mud",
+        "gold_dabing"
+      ],
+      "confidence": "medium",
+      "impactCategory": "Gold mud 2x2",
+      "bbox": [
+        1400,
+        300,
+        1550,
+        450
+      ]
+    },
+    {
+      "benchmarkId": "REP-05",
+      "slotId": "s02",
+      "sourceImage": "build/live_fail/t004.jpg",
+      "cropPath": "experiments/vision_benchmark_v1/crops/crop_REP-05_s02.png",
+      "detectedTop1": {
+        "name": "阿瑞斯跑步机",
+        "itemId": "purple_arespaobuji",
+        "quality": "purple"
+      },
+      "detectedTop3": [
+        "purple_arespaobuji",
+        "purple_lvdongdanche",
+        "gold_lunyimoxing"
+      ],
+      "confidence": "medium",
+      "impactCategory": "Purple treadmill 2x2",
+      "bbox": [
+        1550,
+        300,
+        1700,
+        450
+      ]
+    },
+    {
+      "benchmarkId": "REP-05",
+      "slotId": "s03",
+      "sourceImage": "build/live_fail/t004.jpg",
+      "cropPath": "experiments/vision_benchmark_v1/crops/crop_REP-05_s03.png",
+      "detectedTop1": {
+        "name": "复古暖灯",
+        "itemId": "blue_fuguonandeng",
+        "quality": "blue"
+      },
+      "detectedTop3": [
+        "blue_fuguonandeng",
+        "green_xiaomuzhuo",
+        "white_saokingweichen"
+      ],
+      "confidence": "low",
+      "impactCategory": "Blue lamp 1x1 (Ambiguous)",
+      "bbox": [
+        1400,
+        450,
+        1480,
+        530
+      ]
+    },
+    {
+      "benchmarkId": "REP-05",
+      "slotId": "s04",
+      "sourceImage": "build/live_fail/t004.jpg",
+      "cropPath": "experiments/vision_benchmark_v1/crops/crop_REP-05_s04.png",
+      "detectedTop1": {
+        "name": "毛茸茸的肯定",
+        "itemId": "green_maorongrongdequeding",
+        "quality": "green"
+      },
+      "detectedTop3": [
+        "green_maorongrongdequeding",
+        "green_liulidanzhu",
+        "white_mianmianyun"
+      ],
+      "confidence": "low",
+      "impactCategory": "Green plush 1x1 (Low confidence)",
+      "bbox": [
+        1480,
+        450,
+        1560,
+        530
+      ]
+    }
+  ]
+}

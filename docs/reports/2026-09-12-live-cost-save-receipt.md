@@ -1,0 +1,11 @@
+# 自动成本覆盖与草稿保存回执
+
+业务提交7f0c8d1。上轮空白隔离根目录没有保存文件：源码目录存在多个旧用户数据候选，运行数据初始化进入迁移待处理，CANONICAL_DATABASE不可用。未绕过迁移保护。本轮验收明确创建新的空隔离历史库，测试目标不含真实历史。
+
+修复真实产品缺陷：build_manual_alpha_payload此前固定draftSaved=true，apply_manual_facts也在异步保存之前报告成功。现按实际写盘结果及当前对局id/facts_revision确认SAVED；未写PENDING、无目标UNAVAILABLE、写失败FAILED。定时保存后发送更新回执，否则仅修改后台状态不能刷新UI。改变事实后旧成功状态不代表新版本已保存。
+
+另修复LiveMatchControl仅写顶层intelCost等而遗留ctx.costs旧汇总的问题：有人工费用覆盖时重建entry/intel/other/sunk/future/total，清零生效，复制数据不改旧对象。生产自动控制层已接通，实战OCR全链尚未验收。
+
+cost-live-save-tests.json 11项通过3.875秒，无跳过：无保存目标、写成功绑定版本、再次编辑回到待保存、失败回执、成本转换及自动覆盖、控制与利润边界。cost-persistence-ui-final/report.json实际Main/HUD PASS：双端输入到canonical/solver合计7200，等待真实已保存回执，正常关闭后读取历史JSON同一id成本完整一致。未重启第二实例，不把本轮等同历史UI重启。第一轮cost-persistence-ui因后台保存结果未发布回执而超时，补发布后最终通过，保留失败日志。
+
+下一步补当前成本合计/生效反馈及主窗口历史费用显示，再做保存后第二实例历史回看；继续P4其他字段与隔离试用包。P3 PARTIAL；本人获胜实录仍缺；逐件匹配暂停。正式历史SHA256仍19100479bbb2dfd8e09faa2adbaf5117919126df4b4bcf92e377ad88c4da3431，v13未覆盖，无真实游戏输入。

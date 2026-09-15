@@ -1,0 +1,67 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://local.yihuan/benchmark/parent-grouping-review-v1.schema.json",
+  "title": "Parent Grouping Review Contract v1",
+  "description": "Reviewed proposal membership and source-pixel parent geometry without item identity authority.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["groupingVersion", "sourceId", "proposalArtifactPath", "proposalArtifactHash", "atomicityReviewPath", "atomicityReviewHash", "groups"],
+  "properties": {
+    "groupingVersion": {"const": "parent-grouping-review-v1"},
+    "sourceId": {"type": "string", "minLength": 1},
+    "proposalArtifactPath": {"type": "string", "minLength": 1},
+    "proposalArtifactHash": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+    "atomicityReviewPath": {"type": "string", "minLength": 1},
+    "atomicityReviewHash": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+    "splitReviewPath": {"type": "string", "minLength": 1},
+    "splitReviewHash": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+    "groups": {
+      "type": "array",
+      "minItems": 1,
+      "items": {"$ref": "#/$defs/group"}
+    }
+  },
+  "$defs": {
+    "bbox": {
+      "type": "array",
+      "minItems": 4,
+      "maxItems": 4,
+      "items": {"type": "integer", "minimum": 0}
+    },
+    "reviewEvidence": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["evidenceType", "sourceSnapshotPath", "reviewerRole", "note"],
+      "properties": {
+        "evidenceType": {"enum": ["manual_source_review", "independent_geometry_evidence"]},
+        "sourceSnapshotPath": {"type": "string", "minLength": 1},
+        "reviewerRole": {"enum": ["human_reviewer", "independent_geometry_reviewer"]},
+        "note": {"type": "string", "minLength": 1}
+      }
+    },
+    "group": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["groupId", "memberProposalIds", "resolvedParentBbox", "bboxCoordinateSpace", "bboxDerivation", "resolutionMethod", "reviewStatus", "reviewEvidence"],
+      "properties": {
+        "groupId": {"type": "string", "pattern": "^group-[A-Za-z0-9._:-]+$"},
+        "memberProposalIds": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {"type": "string", "pattern": "^proposal-[A-Za-z0-9._:-]+$"}
+        },
+        "memberSplitChildIds": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {"type": "string", "pattern": "^split-child-[A-Za-z0-9._:-]+$"}
+        },
+        "resolvedParentBbox": {"$ref": "#/$defs/bbox"},
+        "bboxCoordinateSpace": {"const": "source_pixel"},
+        "bboxDerivation": {"enum": ["proposal_bbox", "union", "reviewed_override"]},
+        "resolutionMethod": {"enum": ["single_proposal", "reviewed_multi_proposal_group", "reviewed_split_child_parent"]},
+        "reviewStatus": {"enum": ["pending_review", "reviewed_consistent", "rejected"]},
+        "reviewEvidence": {"$ref": "#/$defs/reviewEvidence"}
+      }
+    }
+  }
+}

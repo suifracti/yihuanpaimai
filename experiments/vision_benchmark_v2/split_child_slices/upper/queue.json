@@ -1,0 +1,39 @@
+{
+  "admissionStatus": "PASS",
+  "items": [
+    {
+      "cropDimensions": {
+        "height": 86,
+        "width": 30
+      },
+      "cropPath": "experiments/vision_benchmark_v2/split_child_slices/upper/crops/crop-d65cbfad1fb0a8f5cc0a.png",
+      "cropSha256": "cd71139e34380e5ffa5f5e7396d92da39b812ce5347293b6ccab00df092adf0b",
+      "instanceId": "inst-d65cbfad1fb0a8f5cc0a",
+      "materializer": {
+        "bbox": [
+          8,
+          13,
+          38,
+          99
+        ],
+        "coordinateSpace": "source_pixel",
+        "enhancement": null,
+        "library": "Pillow 12.3.0",
+        "name": "fixed_source_bbox_crop",
+        "padding": 0,
+        "resize": null,
+        "sourceSha256": "c86e85c5712aea00ac7dc9fa08b8111faf0e6a14c85f126c4f9a1f4b2bedce17",
+        "version": "exact-source-bbox-v1"
+      },
+      "queueId": "queue-d65cbfad1fb0a8f5cc0a",
+      "sourceId": "src-c86e85c5712aea00ac7d"
+    }
+  ],
+  "packVersion": "benchmark-v2-single-source-slice-v1",
+  "validation": {
+    "finalAdmission": "PASS",
+    "geometryContractVersion": "geometry-contract-v1",
+    "preflight": "PASS",
+    "validator": "experiments/vision_benchmark_v1/validate_geometry_contract.py"
+  }
+}

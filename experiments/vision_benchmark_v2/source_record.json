@@ -1,0 +1,90 @@
+{
+  "candidateSourcePath": "core/settlement_items_crop.png",
+  "coordinateSpace": "source_pixel",
+  "fixturePath": "experiments/vision_benchmark_v2/fixtures/reviewed_single_parent_v1.json",
+  "fixtureSha256": "71a712c5a17037d4e96d98a7832168e447a5e1e6a5fa9d24f3a91397cd1acfe1",
+  "height": 329,
+  "inventoryEligible": true,
+  "inventoryRoi": {
+    "coordinateSpace": "source_pixel",
+    "height": 329,
+    "width": 307,
+    "x": 0,
+    "y": 0
+  },
+  "proposalProvenance": {
+    "artifactPath": "experiments/vision_benchmark_v2/proposal_artifact.json",
+    "artifactSha256": "f0103050a96b66fbe696641e30535e41301ce460abad0c0054395d18fdc90314",
+    "atomicityClassifications": {
+      "proposal-57f0e84c5467469bce38": "ATOMIC_CLEAR"
+    },
+    "atomicityReviewPath": "experiments/vision_benchmark_v2/atomicity_review_v1.json",
+    "atomicityReviewSha256": "8e0e7d63420028516f8792992dbf7dbc47107f99fe9172380e666a8759b64415",
+    "atomicityReviewVersion": "atomicity-review-v1",
+    "bboxDerivation": "proposal_bbox",
+    "groupingReviewPath": "experiments/vision_benchmark_v2/fixtures/grouping_review_single_v1.json",
+    "groupingReviewSha256": "f21617360bb3394adaace9f32d9afd59645ad912b49aabe64f329505c42afd7e",
+    "groupingVersion": "parent-grouping-review-v1",
+    "parentResolutionMethod": "single_proposal",
+    "parentResolutionOwner": "benchmark-v2-adapter",
+    "productionPrimitives": [
+      {
+        "implementationPath": "core/settlement_item_recognizer.py",
+        "implementationSha256": "32dc8b0175adc9560a81213370bf2d6c975377101441942dea42bfd7681c3f1e",
+        "invocationVersion": "settlement-component-export-v1",
+        "name": "SettlementItemRecognizer._segment_occupied_components",
+        "runtimeDependencies": {
+          "numpy": "2.2.6",
+          "opencv": "5.0.0"
+        },
+        "version": "source-sha256:32dc8b0175adc9560a81213370bf2d6c975377101441942dea42bfd7681c3f1e"
+      }
+    ],
+    "resolvedParentBbox": [
+      61,
+      164,
+      92,
+      197
+    ],
+    "reviewEvidence": {
+      "evidenceType": "manual_source_review",
+      "note": "Source review confirms this saved proposal is one physical parent; no identity or quality is asserted.",
+      "reviewerRole": "human_reviewer",
+      "sourceSnapshotPath": "experiments/vision_benchmark_v2/snapshots/source-c86e85c5712aea00ac7d.png"
+    },
+    "reviewStatus": "reviewed_consistent",
+    "schemaVersion": "production-proposal-contract-v1",
+    "selectedGroupId": "group-4a71692b765b68a8",
+    "selectedProposalCount": 1,
+    "selectedProposalIds": [
+      "proposal-57f0e84c5467469bce38"
+    ],
+    "selectedProposalTrackIds": [
+      {
+        "proposalId": "proposal-57f0e84c5467469bce38",
+        "trackId": null
+      }
+    ],
+    "selectedProposalUnionBbox": [
+      61,
+      164,
+      92,
+      197
+    ],
+    "selectedSplitChildCount": 0,
+    "selectedSplitChildIds": []
+  },
+  "recordVersion": "benchmark-v2-source-record-v1",
+  "sceneAdmission": {
+    "decisionMethod": "reviewed_fixture",
+    "inventoryEligible": true,
+    "note": "Known fixed inventory crop reviewed only for source and geometry admission.",
+    "sceneType": "inventory_crop"
+  },
+  "sceneType": "inventory_crop",
+  "sha256": "c86e85c5712aea00ac7dc9fa08b8111faf0e6a14c85f126c4f9a1f4b2bedce17",
+  "snapshotOwner": "benchmark-v2-adapter-slice-v1",
+  "snapshotPath": "experiments/vision_benchmark_v2/snapshots/source-c86e85c5712aea00ac7d.png",
+  "sourceId": "src-c86e85c5712aea00ac7d",
+  "width": 307
+}

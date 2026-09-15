@@ -1,0 +1,73 @@
+{
+  "nte-auction-helper": {
+    "root": "C:\\Users\\Administrator\\.grok\\tmp\\nte-auction-helper",
+    "commit": "23d796e98addbb9f18216394807e7b6258b12155",
+    "commitShort": "23d796e",
+    "status": "## main...origin/main",
+    "README.md": {
+      "sha256": "123f2888927d48e5ffacd6901945825929ef2b82ec9eb1910094e339c27cdf4a",
+      "bytes": 3074
+    },
+    "app.py": {
+      "sha256": "a95fcdd8ca3e5b2a25bbc4c90777085cad39519e351f90062bfaa2b3fb512282",
+      "bytes": 133965
+    },
+    "desktop_app.py": {
+      "sha256": "a3065138b8a32e1aed47547ebbe031c93904e9dd598b6b03781a69b1e7794e7e",
+      "bytes": 6458
+    },
+    "templates/index.html": {
+      "sha256": "20a3c543de570fa2b5f0f99edcf7cf36346f26beef65ed026202968b2c50094e",
+      "bytes": 16206
+    },
+    "static/script.js": {
+      "sha256": "a7964fc213b51b8fca77992795c2af12590b65369cc8e2e575db6e5eae19faf0",
+      "bytes": 115719
+    },
+    "v1.3.json": {
+      "sha256": "38b2a62e8f179d7731ec2b97869939dfc2d4084e6e3c1a70b20c90687975ef88",
+      "bytes": 26226
+    },
+    "memory_config.json": {
+      "sha256": "22accb82ba28eba6aceb88efe8f5196feb6aa7847c76bdf8f5cc3b5bd82c7e58",
+      "bytes": 71
+    }
+  },
+  "AuctionPilot-v0.12.7": {
+    "root": "C:\\Users\\Administrator\\Downloads\\AuctionPilot-v0.12.7",
+    "Assets/CatalogFull/catalog.json": {
+      "sha256": "0a6dca470232eccd057e1e2ca13d20611ca06fe5d4b8affcfe52c83b5b9fc93f",
+      "bytes": 59338
+    },
+    "浣跨敤璇存槑.txt": {
+      "sha256": "b06da20439d8519ba579b8a6e2060e2978a2e54d848299afb03fcbcaa571a0b6",
+      "bytes": 13506
+    },
+    "寮€濮嬩娇鐢?txt": {
+      "sha256": "f511f8a10538582974af19f6cedeb46e042f6046a3f2f9a1182b15b8271718ad",
+      "bytes": 1590
+    },
+    "鏇存柊璇存槑.txt": {
+      "sha256": "d139fa7cb43153fdc758044db2d8485084001346d5f69e9b387f25151951b8a2",
+      "bytes": 2454
+    },
+    "AuctionPilot.dll": {
+      "sha256": "876934771929c42efacf0972d8c6360948b03ce9def36dff65b288ef52454b37",
+      "bytes": 698368
+    },
+    "AuctionPilot.exe": {
+      "sha256": "136c49c143b112a76ea5a8248587a788f096c5a6c4b8360be7cd05ebc0ea1545",
+      "bytes": 150016
+    },
+    "AuctionPilot.deps.json": {
+      "sha256": "4f2827d1952c41e5f96efbb08450eb3367a2d7b71e2100b13f08a7202256b237",
+      "bytes": 45189
+    },
+    "zip": {
+      "path": "C:\\Users\\Administrator\\Downloads\\AuctionPilot-v0.12.7.zip",
+      "sha256": null,
+      "bytes": null,
+      "declaredReleaseSha256": "2165472FC5074218FB653A3DB2EC5AAAE18E1132C203EDE4865F07739165DEE5"
+    }
+  }
+}

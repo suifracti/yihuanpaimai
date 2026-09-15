@@ -1,0 +1,98 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://yihuanpaimai.local/schemas/prediction-snapshot-v1.schema.json",
+  "title": "Prediction Snapshot v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion", "predictionId", "matchId", "solvedAt",
+    "informationCutoffAt", "snapshotRole", "producer", "input",
+    "mode", "status", "forecast", "frozen"
+  ],
+  "properties": {
+    "schemaVersion": {"const": "prediction-snapshot.v1"},
+    "predictionId": {"type": "string", "minLength": 1},
+    "matchId": {"type": "string", "minLength": 1},
+    "solvedAt": {"type": "string", "format": "date-time"},
+    "informationCutoffAt": {"type": "string", "format": "date-time"},
+    "snapshotRole": {"enum": ["latest_valid_pre_settlement"]},
+    "producer": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["runtime", "solverName", "solverVersion", "modelVersion", "catalogVersion", "codeRevision"],
+      "properties": {
+        "runtime": {"type": "string", "minLength": 1},
+        "solverName": {"type": "string", "minLength": 1},
+        "solverVersion": {"type": "string", "minLength": 1},
+        "modelVersion": {"type": "string", "minLength": 1},
+        "catalogVersion": {"type": "string", "minLength": 1},
+        "codeRevision": {"type": "string", "minLength": 1}
+      }
+    },
+    "input": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["contractVersion", "normalizedFacts", "hashAlgorithm", "inputHash", "datasetRevision"],
+      "properties": {
+        "contractVersion": {"const": 1},
+        "normalizedFacts": {"type": "object"},
+        "hashAlgorithm": {"const": "sha256"},
+        "inputHash": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+        "datasetRevision": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["sourceId", "sha256", "recordCount", "admissionPolicyVersion", "cutoffExclusive", "eligibleRecordIdsSha256"],
+          "properties": {
+            "sourceId": {"type": "string", "minLength": 1},
+            "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+            "recordCount": {"type": "integer", "minimum": 0},
+            "admissionPolicyVersion": {"const": 1},
+            "cutoffExclusive": {"type": "string", "format": "date-time"},
+            "eligibleRecordIdsSha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"}
+          }
+        }
+      }
+    },
+    "mode": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["informationMode", "coverageRatio", "supportedStateCount", "totalStateCount"],
+      "properties": {
+        "informationMode": {"enum": ["full_shadow", "partial_shadow", "structural_only"]},
+        "coverageRatio": {"type": "number", "minimum": 0, "maximum": 1},
+        "supportedStateCount": {"type": "integer", "minimum": 0},
+        "totalStateCount": {"type": "integer", "minimum": 0}
+      }
+    },
+    "status": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["solverStatus", "provisional", "diagnosticOnly"],
+      "properties": {
+        "solverStatus": {"enum": ["valid", "incomplete", "fallback", "diagnostic"]},
+        "provisional": {"type": "boolean"},
+        "diagnosticOnly": {"type": "boolean"}
+      }
+    },
+    "forecast": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["target", "scope", "quantiles"],
+      "properties": {
+        "target": {"type": "string", "minLength": 1},
+        "scope": {"type": "string", "minLength": 1},
+        "quantiles": {
+          "type": ["object", "null"],
+          "properties": {
+            "p20": {"type": "number", "minimum": 0},
+            "p50": {"type": "number", "minimum": 0},
+            "p80": {"type": "number", "minimum": 0}
+          },
+          "required": ["p20", "p50", "p80"],
+          "additionalProperties": false
+        }
+      }
+    },
+    "frozen": {"const": true}
+  }
+}

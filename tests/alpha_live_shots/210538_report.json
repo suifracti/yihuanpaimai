@@ -1,0 +1,106 @@
+{
+  "stamp": "210538",
+  "visionDisabled": true,
+  "shots": [
+    {
+      "file": "210538_01_startup.bmp",
+      "size": [
+        560,
+        78
+      ],
+      "window": [
+        1340,
+        413,
+        1900,
+        491
+      ],
+      "title": "⚡ 异环拍卖战术助手 HUD"
+    },
+    {
+      "file": "210538_02_empty.bmp",
+      "size": [
+        560,
+        78
+      ]
+    },
+    {
+      "file": "210538_03_partial_q.bmp",
+      "size": [
+        560,
+        78
+      ]
+    },
+    {
+      "file": "210538_04_full.bmp",
+      "size": [
+        560,
+        78
+      ]
+    },
+    {
+      "file": "210538_05_next.bmp",
+      "size": [
+        560,
+        78
+      ]
+    }
+  ],
+  "steps": [
+    {
+      "note": "launched HUD",
+      "pid": 9928,
+      "title": "⚡ 异环拍卖战术助手 HUD",
+      "box": [
+        1340,
+        413,
+        1900,
+        491
+      ]
+    }
+  ],
+  "window": {
+    "title": "⚡ 异环拍卖战术助手 HUD",
+    "rect": [
+      1340,
+      413,
+      1900,
+      491
+    ],
+    "w": 560,
+    "h": 78,
+    "capture": [
+      560,
+      78
+    ]
+  },
+  "bootstrap": {
+    "type": "manual_alpha_state",
+    "manualMode": true,
+    "lifecycleStatus": "DRAFT",
+    "matchId": "draft_1787058338_1",
+    "q": null,
+    "box": null
+  },
+  "full": {
+    "matchId": "draft_1787058338_1",
+    "lifecycleStatus": "DRAFT",
+    "box": null,
+    "fieldCondition": null,
+    "q": 9,
+    "goldAvg": null,
+    "purpleCount": null,
+    "knownGold": "",
+    "knownRed": "",
+    "knownPurple": "",
+    "draftSaved": true
+  },
+  "next": {
+    "matchId": "draft_1787058338_1",
+    "box": "琉璃宝箱 · 宝石类概率提升",
+    "fieldCondition": "standard",
+    "q": 9,
+    "knownGold": "4546/48648+185165",
+    "knownRed": "454654*2",
+    "lifecycleStatus": "DRAFT"
+  }
+}

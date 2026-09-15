@@ -1,0 +1,36 @@
+{
+  "auditDate": "2026-08-20T14:08:00+08:00",
+  "benchmarkVersion": "1.0.0",
+  "truthIntegrityPassed": false,
+  "groundTruthIndependentFromGemini": false,
+  "summaryCounts": {
+    "totalImages": 15,
+    "manifestDeclaredVisibleSlots": 165,
+    "verifiedHumanSlots": 0,
+    "verifiedPreexistingSlots": 0,
+    "modelDerivedPseudoSlots": 43,
+    "unknownProvenanceSlots": 0,
+    "independentVerifiedSlots": 0,
+    "contaminatedSlots": 43
+  },
+  "groundTruthProvenanceClassification": {
+    "A_pre_existing_manual_settlement_truth": 0,
+    "B_pre_existing_verified_itemized_truth": 0,
+    "C_human_confirmed_reference_match": 0,
+    "D_gemini_pilot_prediction": 43,
+    "E_script_derived_from_prediction": 0,
+    "F_inferred_from_actual_total": 0,
+    "G_unknown": 0
+  },
+  "blockingIssues": [
+    "No independent human or pre-existing slot-level ground truth exists in the repository.",
+    "All 43 slot annotations were model-derived from Gemini reference matching during session pilot.",
+    "Calling model-derived labels 'Human-confirmed' was an attribution error and has been revoked.",
+    "Benchmark must operate strictly as a Model Agreement & Multi-Model Consensus Benchmark until human verification is completed."
+  ],
+  "humanVerificationProtocol": {
+    "targetTimePerSlotSeconds": "2~5s",
+    "uiRequirements": "Display crop + Gemini Top-3 + GPT Top-3 + catalog reference images with 1-click select.",
+    "postVerificationAction": "Set verifiedBy='human', verifiedAt=timestamp, and promote from pseudo_labels to ground_truth.json."
+  }
+}
