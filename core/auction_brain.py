@@ -27,10 +27,16 @@ from strategy_ux_metrics import (
     UserEditCommand,
     UserStrategyEditHistory,
     compute_strategy_metrics_summary,
+    get_authoritative_strategy_store,
 )
 
 class AuctionBrain:
-    def __init__(self, node_engine_path: Optional[str] = None, archiver: Optional[AutoArchiver] = None):
+    def __init__(
+        self,
+        node_engine_path: Optional[str] = None,
+        archiver: Optional[AutoArchiver] = None,
+        strategy_store: Optional[UserStrategyEditHistory] = None,
+    ):
         core_dir = os.path.dirname(os.path.abspath(__file__))
         self.engine_path = node_engine_path or os.path.join(core_dir, "auction_engine_v06.js")
         self.delta_manager = DeltaIntelManager()
@@ -38,8 +44,12 @@ class AuctionBrain:
         self.fsm = AuctionSessionFSM()
         self.last_solver_status = "incomplete"
         self.last_decision = {}
-        self.strategy_history = UserStrategyEditHistory()
-        self.estimate_mode = EstimateMode.PRECISE
+        self.strategy_history = strategy_store if strategy_store is not None else get_authoritative_strategy_store()
+        self._active_session_id: Optional[str] = None
+
+    @property
+    def estimate_mode(self) -> EstimateMode:
+        return self.strategy_history.state.estimate_mode
 
     def format_w(self, val: Optional[int]) -> str:
         if val is None or not isinstance(val, (int, float)) or math_isnan(val):
@@ -69,9 +79,11 @@ class AuctionBrain:
             strategy_panel = StrategyPanelShellState(
                 is_panel_expanded=self.strategy_history.state.is_panel_expanded,
                 estimate_mode=active_mode.value,
-                round=int(session_ctx.get("round") or self.strategy_history.state.round or 1),
-                venue=str(session_ctx.get("venue") or self.strategy_history.state.venue or "standard"),
+                fast_mode_available=False,
+                strategy_round=self.strategy_history.state.strategy_round,
+                strategy_venue=self.strategy_history.state.strategy_venue,
                 strategy_profile=self.strategy_history.state.strategy_profile.value,
+                strategy_source="user_strategy",
                 metrics_summary=metrics_summary,
                 production_estimate=None,
                 is_experimental_expanded=self.strategy_history.state.is_experimental_expanded,
@@ -168,9 +180,11 @@ class AuctionBrain:
         strategy_panel = StrategyPanelShellState(
             is_panel_expanded=self.strategy_history.state.is_panel_expanded,
             estimate_mode=active_mode.value,
-            round=int(session_ctx.get("round") or self.strategy_history.state.round or 1),
-            venue=str(session_ctx.get("venue") or self.strategy_history.state.venue or "standard"),
+            fast_mode_available=False,
+            strategy_round=self.strategy_history.state.strategy_round,
+            strategy_venue=self.strategy_history.state.strategy_venue,
             strategy_profile=self.strategy_history.state.strategy_profile.value,
+            strategy_source="user_strategy",
             metrics_summary=metrics_summary,
             production_estimate=float(p50),
             is_experimental_expanded=self.strategy_history.state.is_experimental_expanded,
@@ -205,6 +219,12 @@ class AuctionBrain:
         # 1. 驱动有限状态机 (FSM)
         fsm_res = self.fsm.handle_observation(obs)
 
+        # Fix E: Only reset strategy history when a new match lifecycle begins
+        current_sid = self.fsm.session_id
+        if current_sid and current_sid != self._active_session_id:
+            self.strategy_history.reset_for_new_match(match_id=current_sid)
+            self._active_session_id = current_sid
+
         # 2. 增量更新流
         delta_res = self.delta_manager.process_observation(obs)
         session_ctx = delta_res["sessionContext"]
@@ -214,9 +234,8 @@ class AuctionBrain:
         self.last_decision = decision
         self.last_solver_status = decision.get("solverStatus", "incomplete")
 
-        # 4. 自动归档判定
+        # 4. 自动归档判定 (结算帧属于当前对局，不触发 reset_for_new_match)
         if obs.settlement.isSettlement:
-            self.strategy_history.reset_for_new_match()
             session_ctx["settlementReady"] = True
             saved_record = self.archiver.archive_match(session_ctx)
             if saved_record:
@@ -291,26 +310,18 @@ class AuctionBrain:
 
         return payload
 
-    def set_estimate_mode(self, mode: EstimateMode | str) -> None:
-        if isinstance(mode, str):
-            mode = EstimateMode(mode)
-        self.estimate_mode = mode
-        self.strategy_history.edit("estimate_mode", mode)
+    def set_estimate_mode(self, mode: EstimateMode | str) -> bool:
+        success, _ = self.strategy_history.edit_typed("estimate_mode", mode)
+        return success
 
-    def edit_user_strategy(self, field_name: str, new_value: Any) -> bool:
-        return self.strategy_history.edit(field_name, new_value)
+    def edit_user_strategy(self, field_name: str, new_value: Any) -> Tuple[bool, Optional[str]]:
+        return self.strategy_history.edit_typed(field_name, new_value)
 
     def undo_user_strategy(self) -> Optional[UserEditCommand]:
-        cmd = self.strategy_history.undo()
-        if cmd and cmd.field == "estimate_mode":
-            self.estimate_mode = self.strategy_history.state.estimate_mode
-        return cmd
+        return self.strategy_history.undo()
 
     def redo_user_strategy(self) -> Optional[UserEditCommand]:
-        cmd = self.strategy_history.redo()
-        if cmd and cmd.field == "estimate_mode":
-            self.estimate_mode = self.strategy_history.state.estimate_mode
-        return cmd
+        return self.strategy_history.redo()
 
 def math_isnan(v):
     return v != v
