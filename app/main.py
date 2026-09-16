@@ -3293,6 +3293,35 @@ def build_in_auction_hud_payload(ctx: Dict[str, Any], *, compute_shadow: bool = 
         "shadowStates": shadowed.get("shadowStates"),
         "shadowUpdating": shadow_updating,
     }
+    from strategy_ux_metrics import (
+        EstimateMode,
+        compute_strategy_metrics_summary,
+        StrategyPanelShellState,
+        GLOBAL_USER_STRATEGY_HISTORY,
+    )
+    snap_quantiles = (snap or {}).get("forecast", {}).get("quantiles") or {} if isinstance(snap, dict) else {}
+    strategy_metrics = compute_strategy_metrics_summary(
+        mode=GLOBAL_USER_STRATEGY_HISTORY.state.estimate_mode,
+        prediction_snapshot=snap,
+        val_p50=snap_quantiles.get("p50"),
+        val_p20=snap_quantiles.get("p20"),
+        val_p80=snap_quantiles.get("p80"),
+    )
+    strategy_panel = StrategyPanelShellState(
+        is_panel_expanded=GLOBAL_USER_STRATEGY_HISTORY.state.is_panel_expanded,
+        estimate_mode=GLOBAL_USER_STRATEGY_HISTORY.state.estimate_mode.value,
+        round=int(round_no or 1),
+        venue=str(ctx.get("venue") or "standard"),
+        strategy_profile=GLOBAL_USER_STRATEGY_HISTORY.state.strategy_profile.value,
+        metrics_summary=strategy_metrics,
+        production_estimate=strategy_metrics.meanEstimate,
+        is_experimental_expanded=GLOBAL_USER_STRATEGY_HISTORY.state.is_experimental_expanded,
+        can_undo=GLOBAL_USER_STRATEGY_HISTORY.can_undo,
+        can_redo=GLOBAL_USER_STRATEGY_HISTORY.can_redo,
+    )
+    payload["estimateMode"] = GLOBAL_USER_STRATEGY_HISTORY.state.estimate_mode.value
+    payload["strategyMetrics"] = strategy_metrics.to_payload()
+    payload["strategyPanel"] = strategy_panel.to_payload()
     return attach_warehouse_capture_presentation(payload)
 
 
@@ -3405,6 +3434,33 @@ def build_nav_hud_payload(ctx: Dict[str, Any]) -> Dict[str, Any]:
         "isSettlement": False,
         "gridCells": [0] * 250,
     }
+    from strategy_ux_metrics import (
+        EstimateMode,
+        compute_strategy_metrics_summary,
+        StrategyPanelShellState,
+        GLOBAL_USER_STRATEGY_HISTORY,
+    )
+    nav_metrics = compute_strategy_metrics_summary(
+        mode=GLOBAL_USER_STRATEGY_HISTORY.state.estimate_mode,
+        val_p50=None,
+        val_p20=None,
+        val_p80=None,
+    )
+    nav_panel = StrategyPanelShellState(
+        is_panel_expanded=GLOBAL_USER_STRATEGY_HISTORY.state.is_panel_expanded,
+        estimate_mode=GLOBAL_USER_STRATEGY_HISTORY.state.estimate_mode.value,
+        round=0,
+        venue=str(venue_label or "standard"),
+        strategy_profile=GLOBAL_USER_STRATEGY_HISTORY.state.strategy_profile.value,
+        metrics_summary=nav_metrics,
+        production_estimate=None,
+        is_experimental_expanded=GLOBAL_USER_STRATEGY_HISTORY.state.is_experimental_expanded,
+        can_undo=GLOBAL_USER_STRATEGY_HISTORY.can_undo,
+        can_redo=GLOBAL_USER_STRATEGY_HISTORY.can_redo,
+    )
+    payload["estimateMode"] = GLOBAL_USER_STRATEGY_HISTORY.state.estimate_mode.value
+    payload["strategyMetrics"] = nav_metrics.to_payload()
+    payload["strategyPanel"] = nav_panel.to_payload()
     return attach_warehouse_capture_presentation(payload)
 
 
@@ -4192,6 +4248,51 @@ class HudJsApi:
                 webbrowser.open(f"file:///{target_path.replace(os.sep, '/')}")
             except Exception:
                 pass
+
+    def strategy_edit(self, request=None):
+        req = request if isinstance(request, dict) else {}
+        field_name = req.get("field")
+        val = req.get("value")
+        if field_name:
+            from strategy_ux_metrics import GLOBAL_USER_STRATEGY_HISTORY
+            GLOBAL_USER_STRATEGY_HISTORY.edit(field_name, val)
+        return self._broadcast_strategy_state()
+
+    def strategy_undo(self, request=None):
+        from strategy_ux_metrics import GLOBAL_USER_STRATEGY_HISTORY
+        GLOBAL_USER_STRATEGY_HISTORY.undo()
+        return self._broadcast_strategy_state()
+
+    def strategy_redo(self, request=None):
+        from strategy_ux_metrics import GLOBAL_USER_STRATEGY_HISTORY
+        GLOBAL_USER_STRATEGY_HISTORY.redo()
+        return self._broadcast_strategy_state()
+
+    def _broadcast_strategy_state(self):
+        from strategy_ux_metrics import GLOBAL_USER_STRATEGY_HISTORY, StrategyPanelShellState, compute_strategy_metrics_summary
+        hist = GLOBAL_USER_STRATEGY_HISTORY
+        metrics = compute_strategy_metrics_summary(
+            mode=hist.state.estimate_mode,
+            val_p50=LATEST_PAYLOAD.get("valP50"),
+        )
+        panel = StrategyPanelShellState(
+            is_panel_expanded=hist.state.is_panel_expanded,
+            estimate_mode=hist.state.estimate_mode.value,
+            round=hist.state.round,
+            venue=hist.state.venue,
+            strategy_profile=hist.state.strategy_profile.value,
+            metrics_summary=metrics,
+            production_estimate=metrics.meanEstimate,
+            is_experimental_expanded=hist.state.is_experimental_expanded,
+            can_undo=hist.can_undo,
+            can_redo=hist.can_redo,
+        )
+        LATEST_PAYLOAD["estimateMode"] = hist.state.estimate_mode.value
+        LATEST_PAYLOAD["strategyMetrics"] = metrics.to_payload()
+        LATEST_PAYLOAD["strategyPanel"] = panel.to_payload()
+        if WS_EVENT_LOOP and WS_EVENT_LOOP.is_running():
+            asyncio.run_coroutine_threadsafe(broadcast_ws(json.dumps(LATEST_PAYLOAD)), WS_EVENT_LOOP)
+        return {"status": "ok", "strategyPanel": panel.to_payload()}
 
 
 def start_vision_worker():
