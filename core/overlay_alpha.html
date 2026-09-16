@@ -226,6 +226,68 @@
       border: 1px solid var(--border-subtle); border-radius: 4px; background: var(--bg-shell); color: var(--text); }
     #extraNumericFields input:focus { outline: 1px solid var(--accent); }
 
+    
+    /* Strategy & Metrics Panel Shell (PR-A feature/reference-ux-metrics) */
+    .strategy-panel-shell {
+      border: 1px solid var(--border-subtle);
+      border-radius: var(--radius-md);
+      background: var(--surface);
+      padding: 6px 10px;
+      margin-bottom: 6px;
+    }
+    .strategy-panel-content {
+      display: flex; flex-direction: column; gap: 8px; margin-top: 6px;
+    }
+    .strategy-control-row {
+      display: flex; justify-content: space-between; align-items: center; gap: 8px;
+    }
+    .mode-toggle-group {
+      display: inline-flex; border: 1px solid var(--border-subtle); border-radius: var(--radius-sm); overflow: hidden;
+    }
+    .mode-btn {
+      padding: 3px 8px; font-size: 11px; border: none; background: var(--bg-shell); color: var(--muted); cursor: pointer; transition: all 0.15s;
+    }
+    .mode-btn.active {
+      background: var(--accent); color: #fff; font-weight: 600;
+    }
+    .undo-redo-group {
+      display: inline-flex; gap: 4px;
+    }
+    .history-btn {
+      padding: 2px 6px; font-size: 11px; border: 1px solid var(--border-subtle); background: var(--bg-shell); color: var(--muted); border-radius: var(--radius-sm); cursor: pointer;
+    }
+    .history-btn:disabled {
+      opacity: 0.4; cursor: not-allowed;
+    }
+    .metrics-triplet-grid {
+      display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 6px;
+    }
+    .metric-card {
+      background: var(--bg-shell); border: 1px solid var(--border-subtle); border-radius: var(--radius-sm); padding: 4px 6px; display: flex; flex-direction: column;
+    }
+    .metric-card .m-label {
+      font-size: 10px; color: var(--muted);
+    }
+    .metric-card .m-val {
+      font-size: 13px; font-weight: 700; color: var(--text); font-family: monospace;
+    }
+    .metric-card .m-sub {
+      font-size: 9px; color: var(--muted-dark);
+    }
+    .strategy-options-row {
+      display: flex; gap: 6px;
+    }
+    .strategy-options-row .opt-col {
+      flex: 1; display: flex; flex-direction: column; gap: 2px;
+    }
+    .strategy-options-row label {
+      font-size: 10px; color: var(--muted);
+    }
+    .strategy-options-row select {
+      padding: 3px 4px; font-size: 11px; border: 1px solid var(--border-subtle); border-radius: var(--radius-sm); background: var(--bg-shell); color: var(--text);
+    }
+
+
     /* Row 1: Chips & Autosave */
     .chip-row {
       display: flex; align-items: center; gap: 6px; position: relative;
@@ -694,6 +756,85 @@
 <div class="known-item"><div class="rarity-badge" title="白色约束">白</div><div class="known-input-wrap"><input id="knownWhiteInput" class="known-input" data-rarity="white" placeholder="已知白色名称或价格"><div class="suggest" id="whiteSuggest"></div></div></div>
 </details>
       <details id="sparkleFields" hidden><summary>闪耀之心：转换宝石证据</summary><label>转换宝石总件数<input id="sparkleCountInput" class="known-input" type="text" inputmode="numeric" placeholder="未知留空，0表示没有"></label><label>已确认名称<input id="sparkleNamesInput" class="known-input" type="text" placeholder="泪滴+绿林*2"></label><p>仅转换的1×1宝石；名称用 + 分隔，重复用 *。</p><p id="sparkleBounds" role="status"></p></details><div><label>福利金实际到账<input id="welfareReceivedInput" class="known-input" type="text" inputmode="numeric" aria-describedby="welfareError" placeholder="未知留空，明确未收到填0"></label><p id="welfareError" role="alert" style="color:#ff9d8e"></p><p id="sessionAccounting" role="status"></p></div>      <!-- Quality Numeric Constraints: 6 rows (金 → 紫 → 蓝 → 绿 → 白 → 红), 4 columns aligned -->
+      
+      <!-- Strategy & Analysis Panel Shell (PR-A feature/reference-ux-metrics) -->
+      <details id="strategyUxPanel" class="strategy-panel-shell" open>
+        <summary>📊 策略决策看板与双模估算 (Strategy & Metrics)</summary>
+        <div class="strategy-panel-content">
+          <!-- Mode Toggle & Undo/Redo Header -->
+          <div class="strategy-control-row">
+            <div class="mode-toggle-group">
+              <button type="button" id="btnModeFast" class="mode-btn" onclick="setEstimateMode('fast')">⚡ 快速 (Fast)</button>
+              <button type="button" id="btnModePrecise" class="mode-btn active" onclick="setEstimateMode('precise')">🎯 精密 (Precise)</button>
+            </div>
+            <div class="undo-redo-group">
+              <button type="button" id="btnStrategyUndo" class="history-btn" title="撤销上次策略修改" onclick="strategyUndo()" disabled>↶ 撤销</button>
+              <button type="button" id="btnStrategyRedo" class="history-btn" title="重做策略修改" onclick="strategyRedo()" disabled>↷ 重做</button>
+            </div>
+          </div>
+
+          <!-- Triple Metrics Display: Mean / Median / Conservative -->
+          <div class="metrics-triplet-grid">
+            <div class="metric-card">
+              <span class="m-label">期望均值 (Mean)</span>
+              <span id="metricMeanVal" class="m-val">—</span>
+            </div>
+            <div class="metric-card">
+              <span class="m-label">中心中位 (Median)</span>
+              <span id="metricMedianVal" class="m-val">—</span>
+            </div>
+            <div class="metric-card">
+              <span class="m-label">保守底线 (Conservative)</span>
+              <span id="metricConservativeVal" class="m-val">—</span>
+              <span id="metricConservativeSource" class="m-sub">来源: 待定</span>
+            </div>
+          </div>
+
+          <!-- Unified Round / Venue / Profile Selectors -->
+          <div class="strategy-options-row">
+            <div class="opt-col">
+              <label for="strategyRoundSelect">当前轮次</label>
+              <select id="strategyRoundSelect" onchange="onStrategyFieldChange('round', parseInt(this.value, 10))">
+                <option value="1">R1 (第1轮)</option>
+                <option value="2">R2 (第2轮)</option>
+                <option value="3">R3 (第3轮)</option>
+                <option value="4">R4 (第4轮)</option>
+                <option value="5">R5 (结算)</option>
+              </select>
+            </div>
+            <div class="opt-col">
+              <label for="strategyVenueSelect">对局场地</label>
+              <select id="strategyVenueSelect" onchange="onStrategyFieldChange('venue', this.value)">
+                <option value="standard">标准 / 自动</option>
+                <option value="shanhu">珊瑚场 (Coral)</option>
+                <option value="zhenzhu">真珠场 (Pearl)</option>
+                <option value="haibei">海贝场 (Shell)</option>
+              </select>
+            </div>
+            <div class="opt-col">
+              <label for="strategyProfileSelect">出价策略</label>
+              <select id="strategyProfileSelect" onchange="onStrategyFieldChange('strategy_profile', this.value)">
+                <option value="default">默认推荐 (Default)</option>
+                <option value="conservative">严格保本 (Conservative)</option>
+                <option value="balanced">均衡博弈 (Balanced)</option>
+                <option value="aggressive">激进争顶 (Aggressive)</option>
+              </select>
+            </div>
+          </div>
+
+          <!-- Experimental Area Placeholder (Default Collapsed) -->
+          <details id="strategyExperimentalArea" class="experimental-area" style="margin-top: 6px;">
+            <summary style="font-size: 11px; color: var(--muted-dark); cursor: pointer;">🧪 实验性高阶模型 (未接入 · 待后续 PR 扩展)</summary>
+            <div class="experimental-placeholder-body" style="font-size: 11px; color: var(--muted-dark); padding: 4px 6px; background: rgba(0,0,0,0.2); border-radius: 4px; margin-top: 4px;">
+              <p>• 红色品质先验 PMF 与条件后验 (PR-B 规划)</p>
+              <p>• 卷积生成函数与赢家诅咒折扣策略 (PR-C 规划)</p>
+              <p>• 格子数回归 CELL_FIT 校验 (PR-D 规划)</p>
+              <span style="display:inline-block; margin-top: 2px; color: #60a5fa;">当前生产运行模式: 严格六品质联合约束 + 历史影子 (Historical Shadow)</span>
+            </div>
+          </details>
+        </div>
+      </details>
+
       <details id="extraNumericFields" open>
         <summary>品质数值约束（件数 · 均价 · 占格）</summary>
         <div class="quality-matrix-table">
@@ -1049,6 +1190,62 @@
         if (el) { el.style.display = "none"; el.innerHTML = ""; }
       });
       manualState.suggest = { rarity: null, items: [], index: 0, tokenStart: 0, token: "", targetInput: null };
+    }
+
+    
+    // Strategy & UX Metrics Support (PR-A)
+    function setEstimateMode(mode) {
+      sendHost({ action: "strategy_edit", field: "estimate_mode", value: mode });
+      updateModeButtons(mode);
+    }
+
+    function updateModeButtons(mode) {
+      const btnFast = document.getElementById("btnModeFast");
+      const btnPrecise = document.getElementById("btnModePrecise");
+      if (btnFast && btnPrecise) {
+        btnFast.classList.toggle("active", mode === "fast");
+        btnPrecise.classList.toggle("active", mode === "precise");
+      }
+    }
+
+    function strategyUndo() {
+      sendHost({ action: "strategy_undo" });
+    }
+
+    function strategyRedo() {
+      sendHost({ action: "strategy_redo" });
+    }
+
+    function onStrategyFieldChange(field, val) {
+      sendHost({ action: "strategy_edit", field: field, value: val });
+    }
+
+    function updateStrategyPanelUI(panel, metrics) {
+      if (!panel && !metrics) return;
+      if (panel) {
+        if (panel.estimateMode) updateModeButtons(panel.estimateMode);
+        const uBtn = document.getElementById("btnStrategyUndo");
+        const rBtn = document.getElementById("btnStrategyRedo");
+        if (uBtn) uBtn.disabled = !panel.canUndo;
+        if (rBtn) rBtn.disabled = !panel.canRedo;
+        const rSelect = document.getElementById("strategyRoundSelect");
+        if (rSelect && panel.round) rSelect.value = String(panel.round);
+        const vSelect = document.getElementById("strategyVenueSelect");
+        if (vSelect && panel.venue) vSelect.value = String(panel.venue);
+        const pSelect = document.getElementById("strategyProfileSelect");
+        if (pSelect && panel.strategyProfile) pSelect.value = String(panel.strategyProfile);
+      }
+      const m = metrics || (panel ? panel.metricsSummary : null);
+      if (m) {
+        const meanEl = document.getElementById("metricMeanVal");
+        const medEl = document.getElementById("metricMedianVal");
+        const conEl = document.getElementById("metricConservativeVal");
+        const srcEl = document.getElementById("metricConservativeSource");
+        if (meanEl) meanEl.textContent = m.meanEstimate != null ? fmtWan(m.meanEstimate) : "—";
+        if (medEl) medEl.textContent = m.medianEstimate != null ? fmtWan(m.medianEstimate) : "—";
+        if (conEl) conEl.textContent = m.conservativeEstimate != null ? fmtWan(m.conservativeEstimate) : "— 待定";
+        if (srcEl) srcEl.textContent = "来源: " + (m.conservativeSource || "unavailable");
+      }
     }
 
     function renderSuggest(rarity) {
@@ -1697,6 +1894,7 @@ function sparkleBoundsText(b) {
 
     function paintResult(d) {
       paintVisionHealth(d);
+          updateStrategyPanelUI(d?.strategyPanel, d?.strategyMetrics);
       const ownership = document.getElementById("currentOwnership");
       const inSettlement = d?.isSettlement === true || d?.scene === "SETTLEMENT";
       ownership.hidden = !inSettlement;

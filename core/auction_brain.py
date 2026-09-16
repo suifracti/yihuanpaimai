@@ -19,6 +19,15 @@ from vision_contract import VisionObservation
 from delta_intel import DeltaIntelManager
 from auto_archiver import AutoArchiver
 from session_fsm import AuctionSessionFSM, SessionState
+from strategy_ux_metrics import (
+    EstimateMode,
+    StrategyProfile,
+    StrategyMetricsSummary,
+    StrategyPanelShellState,
+    UserEditCommand,
+    UserStrategyEditHistory,
+    compute_strategy_metrics_summary,
+)
 
 class AuctionBrain:
     def __init__(self, node_engine_path: Optional[str] = None, archiver: Optional[AutoArchiver] = None):
@@ -29,17 +38,20 @@ class AuctionBrain:
         self.fsm = AuctionSessionFSM()
         self.last_solver_status = "incomplete"
         self.last_decision = {}
+        self.strategy_history = UserStrategyEditHistory()
+        self.estimate_mode = EstimateMode.PRECISE
 
     def format_w(self, val: Optional[int]) -> str:
         if val is None or not isinstance(val, (int, float)) or math_isnan(val):
             return "-- W"
         return f"{val / 10000.0:.1f} W"
 
-    def solve_session(self, session_ctx: Dict[str, Any]) -> Dict[str, Any]:
+    def solve_session(self, session_ctx: Dict[str, Any], mode: Optional[EstimateMode] = None) -> Dict[str, Any]:
         """
         求解当前对局状态并计算决策出价线 (零外部 Node.js 进程依赖)
         注：完整高精度组合推演由前端 WebView2 / Tactical HUD 加载的 Shared JS Core 实时执行。
         """
+        active_mode = mode or self.estimate_mode
         q = session_ctx.get("q")
         gold_avg = session_ctx.get("goldAvg") or session_ctx.get("avg")
         diagnostic_only = bool(session_ctx.get("diagnosticOnly", False))
@@ -48,6 +60,24 @@ class AuctionBrain:
         # 1. 情报不足判定
         if not q or not gold_avg:
             status = explicit_status or "fallback"
+            metrics_summary = compute_strategy_metrics_summary(
+                mode=active_mode,
+                val_p50=None,
+                val_p20=None,
+                val_p80=None,
+            )
+            strategy_panel = StrategyPanelShellState(
+                is_panel_expanded=self.strategy_history.state.is_panel_expanded,
+                estimate_mode=active_mode.value,
+                round=int(session_ctx.get("round") or self.strategy_history.state.round or 1),
+                venue=str(session_ctx.get("venue") or self.strategy_history.state.venue or "standard"),
+                strategy_profile=self.strategy_history.state.strategy_profile.value,
+                metrics_summary=metrics_summary,
+                production_estimate=None,
+                is_experimental_expanded=self.strategy_history.state.is_experimental_expanded,
+                can_undo=self.strategy_history.can_undo,
+                can_redo=self.strategy_history.can_redo,
+            )
             return {
                 "solverStatus": status,
                 "diagnosticOnly": diagnostic_only,
@@ -60,7 +90,10 @@ class AuctionBrain:
                 "actionDirective": "🟡 情报不足",
                 "actionReason": "等待拍卖师揭晓箱体件数 Q 与均价",
                 "entryGrade": "— 待定",
-                "isFold": False
+                "isFold": False,
+                "estimateMode": active_mode.value,
+                "strategyMetrics": metrics_summary.to_payload(),
+                "strategyPanel": strategy_panel.to_payload(),
             }
 
         # 2. 状态与基础成本解析
@@ -126,6 +159,25 @@ class AuctionBrain:
         roi_total = (p50 - (cur_bid + all_costs)) / (cur_bid + all_costs) if (cur_bid > 0 and (cur_bid + all_costs) > 0) else None
         roi_purchase = (p50 - (cur_bid + all_costs)) / cur_bid if cur_bid > 0 else None
 
+        metrics_summary = compute_strategy_metrics_summary(
+            mode=active_mode,
+            val_p50=p50,
+            val_p20=p20,
+            val_p80=p80,
+        )
+        strategy_panel = StrategyPanelShellState(
+            is_panel_expanded=self.strategy_history.state.is_panel_expanded,
+            estimate_mode=active_mode.value,
+            round=int(session_ctx.get("round") or self.strategy_history.state.round or 1),
+            venue=str(session_ctx.get("venue") or self.strategy_history.state.venue or "standard"),
+            strategy_profile=self.strategy_history.state.strategy_profile.value,
+            metrics_summary=metrics_summary,
+            production_estimate=float(p50),
+            is_experimental_expanded=self.strategy_history.state.is_experimental_expanded,
+            can_undo=self.strategy_history.can_undo,
+            can_redo=self.strategy_history.can_redo,
+        )
+
         return {
             "solverStatus": status,
             "diagnosticOnly": diagnostic_only,
@@ -140,7 +192,10 @@ class AuctionBrain:
             "entryGrade": grade,
             "isFold": is_fold,
             "roiOnTotalSpend": roi_total,
-            "roiOnPurchase": roi_purchase
+            "roiOnPurchase": roi_purchase,
+            "estimateMode": active_mode.value,
+            "strategyMetrics": metrics_summary.to_payload(),
+            "strategyPanel": strategy_panel.to_payload(),
         }
 
     def process_observation(self, obs: VisionObservation) -> Dict[str, Any]:
@@ -161,6 +216,7 @@ class AuctionBrain:
 
         # 4. 自动归档判定
         if obs.settlement.isSettlement:
+            self.strategy_history.reset_for_new_match()
             session_ctx["settlementReady"] = True
             saved_record = self.archiver.archive_match(session_ctx)
             if saved_record:
@@ -227,10 +283,34 @@ class AuctionBrain:
             "fieldCondition": session_ctx.get("fieldCondition"),
             "character": session_ctx.get("character"),
             "lobbyToolGroup": session_ctx.get("lobbyToolGroup"),
-            "solverToolGroup": session_ctx.get("solverToolGroup") or "group1"
+            "solverToolGroup": session_ctx.get("solverToolGroup") or "group1",
+            "estimateMode": decision.get("estimateMode", self.estimate_mode.value),
+            "strategyMetrics": decision.get("strategyMetrics"),
+            "strategyPanel": decision.get("strategyPanel"),
         }
 
         return payload
+
+    def set_estimate_mode(self, mode: EstimateMode | str) -> None:
+        if isinstance(mode, str):
+            mode = EstimateMode(mode)
+        self.estimate_mode = mode
+        self.strategy_history.edit("estimate_mode", mode)
+
+    def edit_user_strategy(self, field_name: str, new_value: Any) -> bool:
+        return self.strategy_history.edit(field_name, new_value)
+
+    def undo_user_strategy(self) -> Optional[UserEditCommand]:
+        cmd = self.strategy_history.undo()
+        if cmd and cmd.field == "estimate_mode":
+            self.estimate_mode = self.strategy_history.state.estimate_mode
+        return cmd
+
+    def redo_user_strategy(self) -> Optional[UserEditCommand]:
+        cmd = self.strategy_history.redo()
+        if cmd and cmd.field == "estimate_mode":
+            self.estimate_mode = self.strategy_history.state.estimate_mode
+        return cmd
 
 def math_isnan(v):
     return v != v
