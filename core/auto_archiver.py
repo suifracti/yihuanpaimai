@@ -514,11 +514,11 @@ class AutoArchiver:
         if q_sel is None and acquired is True:
             from quality_sell_selection import resolve_default_quality_sell_selection
             q_sel = resolve_default_quality_sell_selection(True)
-            q_src = "default_self_acquired"
+            q_src = q_src or "default_self_acquired"
         elif q_sel is None and (acquired is False or acquired is None):
-            if q_src:
-                from quality_sell_selection import resolve_default_quality_sell_selection
-                q_sel = resolve_default_quality_sell_selection(acquired)
+            from quality_sell_selection import resolve_default_quality_sell_selection
+            q_sel = resolve_default_quality_sell_selection(acquired)
+            q_src = q_src or "unknown"
         if q_sel is not None:
             from quality_sell_selection import (
                 aggregate_selection_source,

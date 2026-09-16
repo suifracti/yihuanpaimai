@@ -839,12 +839,11 @@ class CanonicalHistoryStore:
                         "settlementAuctionAssistantName",
                         "auctionAssistant",
                         "isSelfWinner",
-                        "qualitySellSelection",
-                        "qualitySellSelectionSource",
-                        "qualitySellSelectionSources",
                     ):
                         if field in ex_st and field not in rec_settlement:
                             rec_settlement[field] = copy.deepcopy(ex_st[field])
+                    from quality_sell_selection import merge_quality_sell_sidecar_bundle
+                    merge_quality_sell_sidecar_bundle(ex_st, rec_settlement)
 
                     rows[existing_idx] = rec_dict
                 else:
@@ -865,15 +864,11 @@ class CanonicalHistoryStore:
                             "warehouseIdentityReview",
                             "reviewUnits",
                             "warehouseReviewUnits",
-                            "qualitySellSelection",
-                            "qualitySellSelectionSource",
-                            # Boundary 2: per-colour provenance must survive the archive-sidecar
-                            # merge too, otherwise one OCR pass silently flattens it back to
-                            # the aggregate/unknown default while the selection survives.
-                            "qualitySellSelectionSources",
                         ):
                             if field in prior_settlement and field not in rec_dict.setdefault("settlement", {}):
                                 rec_dict.setdefault("settlement", {})[field] = copy.deepcopy(prior_settlement[field])
+                        from quality_sell_selection import merge_quality_sell_sidecar_bundle
+                        merge_quality_sell_sidecar_bundle(prior_settlement, rec_dict.setdefault("settlement", {}))
                         for f in ("reviewUnits", "warehouseReviewUnits"):
                             if f in existing_record and f not in rec_dict:
                                 rec_dict[f] = copy.deepcopy(existing_record[f])
