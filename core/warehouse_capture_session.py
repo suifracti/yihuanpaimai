@@ -60,6 +60,7 @@ STATUS_SCHEMA_VERSION = "warehouse-capture-session-status.v1"
 REASON_COMPLETE = "COMPLETE"
 REASON_USER_STOP = "USER_STOP"
 REASON_USER_INPUT = "USER_INPUT"
+REASON_USER_MOUSE_MOVE = "USER_MOUSE_MOVE"
 REASON_ESCAPE = "ESCAPE"
 REASON_INPUT_GUARD_FAILED = "INPUT_GUARD_FAILED"
 REASON_TIMEOUT = "TIMEOUT"
@@ -146,7 +147,7 @@ def _as_bool(value: Any) -> bool:
 
 
 def _ledger_reason(session_reason: str) -> str:
-    if session_reason in {REASON_USER_STOP, REASON_USER_INPUT, REASON_ESCAPE}:
+    if session_reason in {REASON_USER_STOP, REASON_USER_INPUT, REASON_ESCAPE, REASON_USER_MOUSE_MOVE}:
         return LEDGER_USER_STOP
     if session_reason == REASON_TIMEOUT:
         return LEDGER_TIMEOUT
@@ -430,6 +431,12 @@ class WarehouseCaptureSession:
 
     def attach_input_abort_guard(self, guard: Any) -> None:
         self._input_abort_guard = guard
+        requester = self._scroll_requester
+        if requester is not None and hasattr(requester, "attach_input_abort_guard"):
+            try:
+                requester.attach_input_abort_guard(guard)
+            except Exception:
+                pass
 
     def update_game_countdown(
         self, remaining_s: float, observation_monotonic: Optional[float] = None
@@ -501,7 +508,7 @@ class WarehouseCaptureSession:
                 reason = guard.abort_reason()
             except Exception:
                 reason = None
-            if reason in {REASON_ESCAPE, REASON_USER_INPUT}:
+            if reason in {REASON_ESCAPE, REASON_USER_INPUT, REASON_USER_MOUSE_MOVE}:
                 return str(reason)
         token = self._cancellation_token
         if token is not None and hasattr(token, "reason"):
@@ -509,7 +516,7 @@ class WarehouseCaptureSession:
                 reason = token.reason() if callable(token.reason) else token.reason
             except Exception:
                 reason = None
-            if reason in {REASON_ESCAPE, REASON_USER_INPUT, REASON_USER_STOP}:
+            if reason in {REASON_ESCAPE, REASON_USER_INPUT, REASON_USER_MOUSE_MOVE, REASON_USER_STOP}:
                 return str(reason)
         return REASON_USER_STOP
 

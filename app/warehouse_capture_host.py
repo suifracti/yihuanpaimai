@@ -209,7 +209,17 @@ class CaptureCancelToken:
                 return
             self._cancelled = True
             text = str(reason or "USER_STOP").strip().upper()
-            if text not in {"USER_STOP", "USER_INPUT", "ESCAPE"}:
+            if text not in {
+                "USER_STOP",
+                "USER_INPUT",
+                "USER_MOUSE_MOVE",
+                "ESCAPE",
+                "MOUSE_BUTTON",
+                "WHEEL",
+                "HORIZONTAL_WHEEL",
+                "KEY_DOWN",
+                "USER_TAKEOVER",
+            }:
                 text = "USER_STOP"
             self._reason = text
 
