@@ -1,6 +1,9 @@
 import sys
 import threading
-from typing import Any, Callable, Optional
+import time
+import uuid
+from dataclasses import dataclass
+from typing import Any, Callable, Optional, Tuple
 
 from warehouse_wheel_driver import WAREHOUSE_WHEEL_EXTRA_INFO, is_warehouse_wheel_input
 
@@ -10,6 +13,8 @@ KIND_MOUSE_BUTTON = "MOUSE_BUTTON"
 KIND_WHEEL = "WHEEL"
 KIND_HORIZONTAL_WHEEL = "HORIZONTAL_WHEEL"
 KIND_MOUSE_MOVE = "MOUSE_MOVE"
+KIND_USER_MOUSE_MOVE = "USER_MOUSE_MOVE"
+KIND_PROGRAM_CURSOR_MOVE = "PROGRAM_CURSOR_MOVE"
 KIND_MARKED_WHEEL = "MARKED_WHEEL"
 
 ABORT_KINDS = frozenset({
@@ -18,16 +23,19 @@ ABORT_KINDS = frozenset({
     KIND_MOUSE_BUTTON,
     KIND_WHEEL,
     KIND_HORIZONTAL_WHEEL,
+    KIND_USER_MOUSE_MOVE,
 })
-IGNORE_KINDS = frozenset({KIND_MOUSE_MOVE, KIND_MARKED_WHEEL})
+IGNORE_KINDS = frozenset({KIND_PROGRAM_CURSOR_MOVE, KIND_MARKED_WHEEL})
 REASON_ESCAPE = "ESCAPE"
 REASON_USER_INPUT = "USER_INPUT"
+REASON_USER_MOUSE_MOVE = "USER_MOUSE_MOVE"
 REASON_INPUT_GUARD_FAILED = "INPUT_GUARD_FAILED"
 
 WH_KEYBOARD_LL = 13
 WH_MOUSE_LL = 14
 WM_KEYDOWN = 0x0100
 WM_SYSKEYDOWN = 0x0104
+WM_MOUSEMOVE = 0x0200
 WM_LBUTTONDOWN = 0x0201
 WM_RBUTTONDOWN = 0x0204
 WM_MBUTTONDOWN = 0x0207
@@ -248,7 +256,10 @@ class Win32InputActivityAdapter:
                 try:
                     ms = api.ctypes.cast(lParam, api.ctypes.POINTER(api.MSLLHOOKSTRUCT)).contents
                     kind = None
-                    if wParam in (WM_LBUTTONDOWN, WM_RBUTTONDOWN, WM_MBUTTONDOWN, WM_XBUTTONDOWN):
+                    pt = (int(ms.pt.x), int(ms.pt.y)) if hasattr(ms, "pt") else None
+                    if wParam == WM_MOUSEMOVE:
+                        kind = KIND_MOUSE_MOVE
+                    elif wParam in (WM_LBUTTONDOWN, WM_RBUTTONDOWN, WM_MBUTTONDOWN, WM_XBUTTONDOWN):
                         kind = KIND_MOUSE_BUTTON
                     elif wParam == WM_MOUSEWHEEL:
                         kind = KIND_WHEEL
@@ -257,7 +268,13 @@ class Win32InputActivityAdapter:
                     if kind is not None:
                         cb = self._on_event
                         if cb is not None:
-                            cb(kind, ms.dwExtraInfo)
+                            try:
+                                cb(kind, ms.dwExtraInfo, pt)
+                            except TypeError:
+                                try:
+                                    cb(kind, ms.dwExtraInfo)
+                                except TypeError:
+                                    cb(kind)
                 except Exception:
                     pass
             return api.CallNextHookEx(self._hook_ms, nCode, wParam, lParam)
@@ -322,12 +339,44 @@ class Win32InputActivityAdapter:
             self._c_ms_proc = None
 
 
+@dataclass
+class ExpectedCursorMove:
+    target_x: int
+    target_y: int
+    registered_at: float
+    ttl_s: float
+    nonce: str
+    consumed: bool = False
+
+    def matches(self, x: int, y: int, now: float) -> bool:
+        if self.consumed:
+            return False
+        if now - self.registered_at > self.ttl_s:
+            return False
+        return int(x) == int(self.target_x) and int(y) == int(self.target_y)
+
+    def consume(self) -> bool:
+        if self.consumed:
+            return False
+        self.consumed = True
+        return True
+
+
 def classify_input_kind(kind: Any, *, dw_extra_info: Any = None) -> Optional[str]:
     """Map a closed event kind. Never stores extra_info or coordinates."""
     if dw_extra_info is not None and is_warehouse_wheel_input(dw_extra_info):
         return KIND_MARKED_WHEEL
     text = str(kind or "").strip().upper()
-    if text in {KIND_KEY_DOWN, KIND_ESCAPE, KIND_MOUSE_BUTTON, KIND_WHEEL, KIND_HORIZONTAL_WHEEL, KIND_MOUSE_MOVE, KIND_MARKED_WHEEL}:
+    if text in {
+        KIND_KEY_DOWN,
+        KIND_ESCAPE,
+        KIND_MOUSE_BUTTON,
+        KIND_WHEEL,
+        KIND_HORIZONTAL_WHEEL,
+        KIND_USER_MOUSE_MOVE,
+        KIND_PROGRAM_CURSOR_MOVE,
+        KIND_MARKED_WHEEL,
+    }:
         return text
     if text in {"LBUTTON", "RBUTTON", "MBUTTON", "XBUTTON", "MOUSEDOWN", "MOUSE_DOWN"}:
         return KIND_MOUSE_BUTTON
@@ -335,8 +384,10 @@ def classify_input_kind(kind: Any, *, dw_extra_info: Any = None) -> Optional[str
         return KIND_HORIZONTAL_WHEEL
     if text in {"ESC", "VK_ESCAPE"}:
         return KIND_ESCAPE
-    if text in {"MOVE", "MOUSEMOVE"}:
-        return KIND_MOUSE_MOVE
+    if text in {"USER_MOUSE_MOVE", "USER_MOVE"}:
+        return KIND_USER_MOUSE_MOVE
+    if text in {"MOVE", "MOUSEMOVE", KIND_MOUSE_MOVE}:
+        return KIND_USER_MOUSE_MOVE
     return None
 
 
@@ -355,6 +406,12 @@ class WarehouseInputAbortGuard:
         self._armed = False
         self._cleaned = False
         self._abort_reason: Optional[str] = None
+        self._expected_move: Optional[ExpectedCursorMove] = None
+        self._lock = threading.Lock()
+        self.program_move_registered_at: Optional[float] = None
+        self.program_move_observed_at: Optional[float] = None
+        self.user_move_observed_at: Optional[float] = None
+        self.cancel_at: Optional[float] = None
 
     @property
     def installed(self) -> bool:
@@ -366,6 +423,37 @@ class WarehouseInputAbortGuard:
 
     def abort_reason(self) -> Optional[str]:
         return self._abort_reason
+
+    def register_expected_cursor_move(self, x: int, y: int, ttl_s: float = 0.5) -> str:
+        """Register a strict, one-shot expected cursor move before calling SetCursorPos."""
+        with self._lock:
+            nonce = uuid.uuid4().hex
+            now = time.monotonic()
+            self._expected_move = ExpectedCursorMove(
+                target_x=int(x),
+                target_y=int(y),
+                registered_at=now,
+                ttl_s=float(ttl_s),
+                nonce=nonce,
+                consumed=False,
+            )
+            self.program_move_registered_at = now
+            return nonce
+
+    def consume_expected_cursor_move(self, pt: Optional[Tuple[int, int]]) -> bool:
+        """One-shot consumption of matching expected cursor move. Returns True only if matched."""
+        if pt is None:
+            return False
+        with self._lock:
+            move = self._expected_move
+            if move is None:
+                return False
+            now = time.monotonic()
+            if move.matches(pt[0], pt[1], now):
+                move.consume()
+                self.program_move_observed_at = now
+                return True
+            return False
 
     def install(self) -> bool:
         if self._cleaned:
@@ -406,21 +494,41 @@ class WarehouseInputAbortGuard:
         except Exception:
             return
 
-    def _on_event(self, kind: Any, dw_extra_info: Any = None) -> None:
+    def _on_event(self, kind: Any, dw_extra_info: Any = None, pt: Optional[Tuple[int, int]] = None) -> None:
         if self._cleaned or not self._armed:
             return
-        classified = classify_input_kind(kind, dw_extra_info=dw_extra_info)
+        norm_kind = str(kind or "").strip().upper()
+        if norm_kind in {KIND_MOUSE_MOVE, "MOVE", "MOUSEMOVE"}:
+            if pt is not None and self.consume_expected_cursor_move(pt):
+                # Matched program's planned cursor move: consumed and ignored
+                return
+            # Unmatched physical mouse move: classify as user takeover
+            classified = KIND_USER_MOUSE_MOVE
+            self.user_move_observed_at = time.monotonic()
+        elif norm_kind == KIND_PROGRAM_CURSOR_MOVE:
+            return
+        else:
+            classified = classify_input_kind(kind, dw_extra_info=dw_extra_info)
+
         if classified is None or classified in IGNORE_KINDS:
             return
         if classified not in ABORT_KINDS:
             return
-        reason = REASON_ESCAPE if classified == KIND_ESCAPE else REASON_USER_INPUT
+
+        if classified == KIND_ESCAPE:
+            reason = REASON_ESCAPE
+        elif classified == KIND_USER_MOUSE_MOVE:
+            reason = REASON_USER_MOUSE_MOVE
+        else:
+            reason = REASON_USER_INPUT
+
         self._abort_reason = reason
         self._armed = False
         token = self._cancel_token
         if token is None:
             return
         try:
+            self.cancel_at = time.monotonic()
             if hasattr(token, "cancel") and callable(token.cancel):
                 try:
                     token.cancel(reason)
