@@ -40,6 +40,39 @@ class StrategyProfile(str, Enum):
 LEGAL_STRATEGY_VENUES: Set[str] = frozenset({"standard", "haibei", "zhenzhu", "shanhu"})
 LEGAL_STRATEGY_ROUNDS: Set[int] = frozenset({1, 2, 3, 4, 5})
 
+FAST_MODE_AVAILABLE: bool = False
+
+
+def validate_estimate_mode_request(value: Any) -> Tuple[bool, Optional[EstimateMode], Optional[str]]:
+    """Validate and coerce estimate mode request across all entry points.
+    
+    Guarantees:
+    - PRECISE -> accepted
+    - FAST -> rejected if not FAST_MODE_AVAILABLE (Option 2 fail-closed)
+    - All other values/types -> rejected fail-closed
+    
+    Returns:
+        (is_valid: bool, coerced_mode: Optional[EstimateMode], error_message: Optional[str])
+    """
+    mode: Optional[EstimateMode] = None
+    if isinstance(value, EstimateMode):
+        mode = value
+    elif isinstance(value, str):
+        val_lower = value.strip().lower()
+        if val_lower == "precise":
+            mode = EstimateMode.PRECISE
+        elif val_lower == "fast":
+            mode = EstimateMode.FAST
+        else:
+            return False, None, f"Invalid estimate_mode '{value}'. Allowed: 'precise', 'fast'."
+    else:
+        return False, None, f"Invalid estimate_mode type: {type(value).__name__}"
+
+    if mode == EstimateMode.FAST and not FAST_MODE_AVAILABLE:
+        return False, None, "Fast mode compute-budget solver is currently unavailable (fastModeAvailable=False); system remains in PRECISE mode."
+
+    return True, mode, None
+
 
 @dataclass(frozen=True)
 class StrategyMetricsSummary:
@@ -101,9 +134,11 @@ def compute_strategy_metrics_summary(
     - If no true mean is available, meanEstimate is None with meanSource="unavailable".
     - Median legitimately reflects val_p50 or explicit median_val.
     - Conservative strictly reflects val_p20 or explicit lower quantile; if missing, returns None.
-    - productionEligible is always True, experimental is False for these outputs.
     """
-    mode_str = mode.value if isinstance(mode, EstimateMode) else str(mode)
+    valid, validated_mode, err = validate_estimate_mode_request(mode)
+    if not valid:
+        raise ValueError(f"compute_strategy_metrics_summary rejected: {err}")
+    mode_str = validated_mode.value
 
     # 1. Resolve from prediction_snapshot if provided and individual values are not given
     dist_mean: Optional[float] = None
@@ -307,19 +342,10 @@ class UserStrategyEditHistory:
         # Typed validation & coercion
         coerced_value: Any = None
         if field_key == "estimate_mode":
-            if isinstance(new_value, EstimateMode):
-                coerced_value = new_value
-            elif isinstance(new_value, str):
-                val_lower = new_value.strip().lower()
-                if val_lower == "precise":
-                    coerced_value = EstimateMode.PRECISE
-                elif val_lower == "fast":
-                    # Fix D (Option 2): Fast mode compute budget is not yet implemented. Fail-closed.
-                    return False, "Fast mode compute-budget solver is currently unavailable (fastModeAvailable=False); system remains in PRECISE mode."
-                else:
-                    return False, f"Invalid estimate_mode '{new_value}'. Allowed: 'precise', 'fast'."
-            else:
-                return False, f"Invalid estimate_mode type: {type(new_value).__name__}"
+            valid, validated_mode, err = validate_estimate_mode_request(new_value)
+            if not valid:
+                return False, err
+            coerced_value = validated_mode
 
         elif field_key == "strategy_profile":
             if isinstance(new_value, StrategyProfile):
@@ -417,7 +443,7 @@ class StrategyPanelShellState:
     """Collapsible Strategy & Analysis Panel shell representation."""
     is_panel_expanded: bool = True
     estimate_mode: str = EstimateMode.PRECISE.value
-    fast_mode_available: bool = False
+    fast_mode_available: bool = FAST_MODE_AVAILABLE
     fast_mode_notes: str = "Fast mode compute-budget solver is reserved for future PR; PRECISE is active."
     strategy_round: int = 1
     strategy_venue: str = "standard"
