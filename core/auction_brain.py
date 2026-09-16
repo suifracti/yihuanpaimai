@@ -28,6 +28,7 @@ from strategy_ux_metrics import (
     UserStrategyEditHistory,
     compute_strategy_metrics_summary,
     get_authoritative_strategy_store,
+    validate_estimate_mode_request,
 )
 
 class AuctionBrain:
@@ -57,11 +58,14 @@ class AuctionBrain:
         return f"{val / 10000.0:.1f} W"
 
     def solve_session(self, session_ctx: Dict[str, Any], mode: Optional[EstimateMode] = None) -> Dict[str, Any]:
-        """
-        求解当前对局状态并计算决策出价线 (零外部 Node.js 进程依赖)
-        注：完整高精度组合推演由前端 WebView2 / Tactical HUD 加载的 Shared JS Core 实时执行。
-        """
-        active_mode = mode or self.estimate_mode
+        """求解当前对局状态并计算决策出价线 (零外部 Node.js 进程依赖)。"""
+        if mode is not None:
+            valid, validated_mode, err = validate_estimate_mode_request(mode)
+            if not valid:
+                raise ValueError(f"solve_session rejected: {err}")
+            active_mode = validated_mode
+        else:
+            active_mode = self.estimate_mode
         q = session_ctx.get("q")
         gold_avg = session_ctx.get("goldAvg") or session_ctx.get("avg")
         diagnostic_only = bool(session_ctx.get("diagnosticOnly", False))

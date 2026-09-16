@@ -197,19 +197,59 @@ class TestStrategySSOTAndBridge(unittest.TestCase):
         self.assertEqual(res_unknown["status"], "error")
         self.assertIn("Unknown or disallowed", res_unknown["error"])
 
-    def test_06_fast_mode_unavailable_contract(self):
-        """Verify Option 2: Fast mode solver is unavailable and setting it fails closed."""
-        panel_state = StrategyPanelShellState()
-        self.assertFalse(panel_state.fast_mode_available)
-        payload = panel_state.to_payload()
-        self.assertFalse(payload["fastModeAvailable"])
-
-        # Attempt to edit estimate_mode to fast
-        res_fast = self.api.strategy_edit({"field": "estimate_mode", "value": "fast"})
-        self.assertEqual(res_fast["status"], "error")
-        self.assertIn("Fast mode compute-budget solver is currently unavailable", res_fast["error"])
-        # Mode remains PRECISE
+    def test_06a_enum_fast_rejected(self):
+        """Verify Enum EstimateMode.FAST is strictly rejected by store.edit_typed (Fix Fast internal bypass)."""
+        ok, err = self.store.edit_typed("estimate_mode", EstimateMode.FAST)
+        self.assertFalse(ok)
+        self.assertIn("Fast mode compute-budget solver is currently unavailable", str(err))
         self.assertEqual(self.store.state.estimate_mode, EstimateMode.PRECISE)
+
+    def test_06b_brain_set_estimate_mode_fast_rejected(self):
+        """Verify AuctionBrain.set_estimate_mode(EstimateMode.FAST) is rejected."""
+        brain = AuctionBrain(strategy_store=self.store)
+        ok = brain.set_estimate_mode(EstimateMode.FAST)
+        self.assertFalse(ok)
+        self.assertEqual(brain.estimate_mode, EstimateMode.PRECISE)
+        self.assertEqual(self.store.state.estimate_mode, EstimateMode.PRECISE)
+
+    def test_06c_direct_solve_session_fast_cannot_produce_fake_fast(self):
+        """Verify AuctionBrain.solve_session rejects mode=FAST without executing fake fast."""
+        brain = AuctionBrain(strategy_store=self.store)
+        session_ctx = {"q": 9, "goldAvg": 33538}
+        with self.assertRaises(ValueError) as cm_err:
+            brain.solve_session(session_ctx, mode=EstimateMode.FAST)
+        self.assertIn("solve_session rejected", str(cm_err.exception))
+        self.assertIn("Fast mode compute-budget solver is currently unavailable", str(cm_err.exception))
+
+    def test_06d_string_fast_still_rejected(self):
+        """Verify string 'fast' continues to be rejected by both store and WebView API."""
+        res_api = self.api.strategy_edit({"field": "estimate_mode", "value": "fast"})
+        self.assertEqual(res_api["status"], "error")
+        self.assertIn("Fast mode compute-budget solver is currently unavailable", res_api["error"])
+
+        ok, err = self.store.edit_typed("estimate_mode", "fast")
+        self.assertFalse(ok)
+        self.assertEqual(self.store.state.estimate_mode, EstimateMode.PRECISE)
+
+    def test_06e_precise_still_accepted(self):
+        """Verify PRECISE mode continues to be accepted in both Enum and string form."""
+        ok_enum, err_enum = self.store.edit_typed("estimate_mode", EstimateMode.PRECISE)
+        self.assertTrue(ok_enum)
+        self.assertIsNone(err_enum)
+        self.assertEqual(self.store.state.estimate_mode, EstimateMode.PRECISE)
+
+        ok_str, err_str = self.store.edit_typed("estimate_mode", "precise")
+        self.assertTrue(ok_str)
+        self.assertIsNone(err_str)
+        self.assertEqual(self.store.state.estimate_mode, EstimateMode.PRECISE)
+
+    def test_06f_fast_rejection_does_not_write_undo_history(self):
+        """Verify rejected FAST requests do not pollute the undo stack."""
+        undo_len_before = len(self.store.undo_stack)
+        self.store.edit_typed("estimate_mode", EstimateMode.FAST)
+        self.store.edit_typed("estimate_mode", "fast")
+        self.api.strategy_edit({"field": "estimate_mode", "value": "fast"})
+        self.assertEqual(len(self.store.undo_stack), undo_len_before)
 
     def test_07_strategy_round_and_venue_do_not_impersonate_canonical_facts(self):
         """Verify strategyRound/strategyVenue are labeled with user_strategy and do not touch CurrentMatch."""
