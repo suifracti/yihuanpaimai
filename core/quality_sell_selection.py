@@ -178,6 +178,23 @@ def aggregate_selection_source(sources: Optional[Mapping[str, str]]) -> str:
     return SOURCE_UNKNOWN
 
 
+def has_concrete_quality_sell_evidence(
+    sources: Optional[Mapping[str, str]] = None,
+    source: Optional[str] = None,
+) -> bool:
+    """Check if quality sell selection has concrete evidence (manual override or visual observation).
+
+    Default self-acquired and unknown states are derived defaults, not concrete evidence.
+    """
+    if isinstance(sources, Mapping):
+        norm = normalize_quality_sell_selection_sources(sources)
+        if any(v in (SOURCE_MANUAL_OVERRIDE, SOURCE_VISUAL_OBSERVED) for v in norm.values()):
+            return True
+    if isinstance(source, str) and source.strip().lower() in (SOURCE_MANUAL_OVERRIDE, SOURCE_VISUAL_OBSERVED):
+        return True
+    return False
+
+
 def merge_quality_sell_selection(
     current_selection: Any,
     current_sources: Any,
@@ -243,6 +260,45 @@ def apply_single_color_override(
     sources = normalize_quality_sell_selection_sources(current_sources)
     sources[str(quality).strip().lower()] = SOURCE_MANUAL_OVERRIDE
     return updated, sources
+
+
+def merge_quality_sell_sidecar_bundle(prior_settlement: Any, rec_settlement: Dict[str, Any]) -> None:
+    """Merge quality sell selection coupled bundle from prior settlement into rec_settlement.
+
+    Rule: Real visual/user interaction facts > acquisition-derived default selection.
+    (qualitySellSelection, qualitySellSelectionSource, qualitySellSelectionSources)
+    is treated as an atomic coupled bundle.
+    """
+    if not isinstance(prior_settlement, Mapping):
+        return
+    prior_has_qs = any(k in prior_settlement for k in ("qualitySellSelection", "qualitySellSelectionSource", "qualitySellSelectionSources"))
+    if not prior_has_qs:
+        return
+
+    incoming_has_qs = any(k in rec_settlement for k in ("qualitySellSelection", "qualitySellSelectionSource", "qualitySellSelectionSources"))
+    prior_has_evidence = has_concrete_quality_sell_evidence(
+        prior_settlement.get("qualitySellSelectionSources"),
+        prior_settlement.get("qualitySellSelectionSource"),
+    )
+    incoming_has_evidence = has_concrete_quality_sell_evidence(
+        rec_settlement.get("qualitySellSelectionSources"),
+        rec_settlement.get("qualitySellSelectionSource"),
+    )
+
+    if (not incoming_has_qs) or (prior_has_evidence and not incoming_has_evidence):
+        for k in ("qualitySellSelection", "qualitySellSelectionSource", "qualitySellSelectionSources"):
+            if k in prior_settlement:
+                rec_settlement[k] = copy.deepcopy(prior_settlement[k])
+            elif k in rec_settlement:
+                del rec_settlement[k]
+    else:
+        if "qualitySellSelection" in rec_settlement:
+            rec_settlement["qualitySellSelection"] = normalize_quality_sell_selection(rec_settlement["qualitySellSelection"])
+            if "qualitySellSelectionSources" in rec_settlement:
+                rec_settlement["qualitySellSelectionSources"] = normalize_quality_sell_selection_sources(rec_settlement["qualitySellSelectionSources"])
+            else:
+                rec_settlement["qualitySellSelectionSources"] = sources_from_aggregate(rec_settlement.get("qualitySellSelectionSource"))
+            rec_settlement["qualitySellSelectionSource"] = aggregate_selection_source(rec_settlement["qualitySellSelectionSources"])
 
 
 def detect_quality_sell_selection_from_frame(frame: Optional[np.ndarray]) -> Optional[Dict[str, str]]:

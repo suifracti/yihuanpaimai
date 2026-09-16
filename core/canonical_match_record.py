@@ -9,6 +9,7 @@ Provides:
 
 from __future__ import annotations
 
+import copy
 import math
 from datetime import datetime
 from typing import Any, Dict, List, Mapping, Optional, Tuple
@@ -272,13 +273,18 @@ def build_canonical_match_record_v7(
     q_sel = st.get("qualitySellSelection")
     q_src = st.get("qualitySellSelectionSource")
     q_sources = st.get("qualitySellSelectionSources")
+    from quality_sell_selection import (
+        DEFAULT_SELF_ACQUIRED_SELECTION,
+        DEFAULT_UNKNOWN_SELECTION,
+        SOURCE_DEFAULT_SELF_ACQUIRED,
+        SOURCE_UNKNOWN,
+        aggregate_selection_source,
+        normalize_quality_sell_selection,
+        normalize_quality_sell_selection_sources,
+        resolve_default_quality_sell_selection,
+        sources_from_aggregate,
+    )
     if q_sel is not None:
-        from quality_sell_selection import (
-            aggregate_selection_source,
-            normalize_quality_sell_selection,
-            normalize_quality_sell_selection_sources,
-            sources_from_aggregate,
-        )
         norm_sel = normalize_quality_sell_selection(q_sel)
         record["settlement"]["qualitySellSelection"] = norm_sel
         if isinstance(q_sources, Mapping):
@@ -286,17 +292,24 @@ def build_canonical_match_record_v7(
         else:
             norm_sources = sources_from_aggregate(q_src)
         record["settlement"]["qualitySellSelectionSources"] = norm_sources
-        record["settlement"]["qualitySellSelectionSource"] = (
-            aggregate_selection_source(norm_sources) if norm_sources else (str(q_src) if q_src else "unknown")
-        )
+        record["settlement"]["qualitySellSelectionSource"] = aggregate_selection_source(norm_sources)
     elif record["settlement"].get("acquired") is True:
-        from quality_sell_selection import resolve_default_quality_sell_selection
-        record["settlement"]["qualitySellSelection"] = resolve_default_quality_sell_selection(True)
-        record["settlement"]["qualitySellSelectionSource"] = str(q_src) if q_src else "default_self_acquired"
-    elif q_src or (record["settlement"].get("acquired") is not None):
-        from quality_sell_selection import resolve_default_quality_sell_selection
+        record["settlement"]["qualitySellSelection"] = copy.deepcopy(DEFAULT_SELF_ACQUIRED_SELECTION)
+        if isinstance(q_sources, Mapping):
+            norm_sources = normalize_quality_sell_selection_sources(q_sources)
+        else:
+            norm_sources = sources_from_aggregate(q_src or SOURCE_DEFAULT_SELF_ACQUIRED)
+        record["settlement"]["qualitySellSelectionSources"] = norm_sources
+        record["settlement"]["qualitySellSelectionSource"] = aggregate_selection_source(norm_sources)
+    else:
+        # acquired is False or None (or q_src provided)
         record["settlement"]["qualitySellSelection"] = resolve_default_quality_sell_selection(record["settlement"].get("acquired"))
-        record["settlement"]["qualitySellSelectionSource"] = str(q_src) if q_src else "unknown"
+        if isinstance(q_sources, Mapping):
+            norm_sources = normalize_quality_sell_selection_sources(q_sources)
+        else:
+            norm_sources = sources_from_aggregate(q_src or SOURCE_UNKNOWN)
+        record["settlement"]["qualitySellSelectionSources"] = norm_sources
+        record["settlement"]["qualitySellSelectionSource"] = aggregate_selection_source(norm_sources)
 
     if prediction_snapshot is not None:
         record["predictionSnapshot"] = dict(prediction_snapshot)
@@ -468,12 +481,21 @@ def validate_canonical_match_record_v7(
                 from quality_sell_selection import (
                     CANONICAL_QUALITIES,
                     VALID_SELECTION_SOURCES,
+                    aggregate_selection_source,
                 )
+                missing_colors = [qk for qk in CANONICAL_QUALITIES if qk not in q_sources]
+                if missing_colors:
+                    reasons.append("SETTLEMENT_QUALITY_SELL_SELECTION_SOURCES_INCOMPLETE")
                 for qk, qv in q_sources.items():
                     if qk not in CANONICAL_QUALITIES:
                         reasons.append(f"SETTLEMENT_QUALITY_SELL_SELECTION_SOURCES_INVALID_COLOR_{qk.upper()}")
                     if qv not in VALID_SELECTION_SOURCES:
                         reasons.append(f"SETTLEMENT_QUALITY_SELL_SELECTION_SOURCES_INVALID_SOURCE_{qk.upper()}")
+                if not missing_colors and all(qv in VALID_SELECTION_SOURCES for qv in q_sources.values()):
+                    expected_agg = aggregate_selection_source(q_sources)
+                    actual_agg = settlement.get("qualitySellSelectionSource")
+                    if actual_agg != expected_agg:
+                        reasons.append("SETTLEMENT_QUALITY_SELL_SELECTION_SOURCE_MISMATCH")
 
     # Optional Warehouse Namespace validation if present
     if "warehouse" in record:
