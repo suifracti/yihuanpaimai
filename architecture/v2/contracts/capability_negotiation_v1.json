@@ -1,0 +1,78 @@
+{
+  "schemaVersion": "capability.negotiation.v1",
+  "protocolVersion": "1.0.0",
+  "title": "NTE Host-Engine Capability Negotiation Specification",
+  "description": "Defines runtime capability advertisement, statuses, and strict fallback policies between Native Host and Python Intelligence Engine.",
+  "statusEnum": ["AVAILABLE", "UNAVAILABLE", "EXPERIMENTAL", "NOT_MEASURED"],
+  "capabilities": [
+    {
+      "name": "BitBlt",
+      "category": "CAPTURE",
+      "status": "AVAILABLE",
+      "description": "Win32 GDI BitBlt frame capture baseline.",
+      "isMandatory": true,
+      "fallbackAction": "NONE",
+      "notes": "Proven production baseline with ~3.2ms median latency."
+    },
+    {
+      "name": "WGC",
+      "category": "CAPTURE",
+      "status": "NOT_MEASURED",
+      "description": "Windows.Graphics.Capture API via WinRT interop.",
+      "isMandatory": false,
+      "fallbackAction": "FALLBACK_TO_BITBLT",
+      "notes": "Requires WinRT interop, manifest registration, and D3D11 staging texture readback. Not proven in production; must remain strictly NOT_MEASURED until isolated benchmark proves frame delivery."
+    },
+    {
+      "name": "SharedMemoryRing",
+      "category": "TRANSPORT",
+      "status": "AVAILABLE",
+      "description": "Windows Named Shared Memory (MemoryMappedFile) 64-byte aligned ring buffer.",
+      "isMandatory": true,
+      "fallbackAction": "NONE",
+      "notes": "Zero-copy at process boundary mapping via numpy.frombuffer(mm, offset=64)."
+    },
+    {
+      "name": "NamedPipeIpc",
+      "category": "TRANSPORT",
+      "status": "AVAILABLE",
+      "description": "Windows Named Pipe control plane with 4-byte uint32 length prefix framing.",
+      "isMandatory": true,
+      "fallbackAction": "FALLBACK_TO_STDIO",
+      "notes": "Supports fail-closed message parsing and 1 MB maxMessageBytes guard."
+    },
+    {
+      "name": "LowLevelHooks",
+      "category": "INPUT",
+      "status": "AVAILABLE",
+      "description": "Win32 WH_MOUSE_LL and WH_KEYBOARD_LL physical input monitoring on dedicated thread.",
+      "isMandatory": true,
+      "fallbackAction": "NONE",
+      "notes": "Explicit distinction: registryConfiguredLowLevelHooksTimeoutMs is 25000ms, but Windows 10 1709+ OS effectiveLowLevelHooksTimeoutMs is hard-capped at 1000ms. Synthetic microbench is 45us; real OS callback latency is NOT_MEASURED."
+    },
+    {
+      "name": "WebView2",
+      "category": "UI",
+      "status": "EXPERIMENTAL",
+      "description": "Microsoft Edge WebView2 HTML/CSS/JS modern overlay presentation.",
+      "isMandatory": false,
+      "fallbackAction": "FALLBACK_TO_STATIC_NATIVE_HUD",
+      "notes": "WebView2 environment initialization succeeded in spike, but CoreWebView2Controller Live Visual Tree hosting in Win32 HWND overlay is NOT automatic and remains EXPERIMENTAL."
+    },
+    {
+      "name": "SendInput",
+      "category": "INPUT",
+      "status": "UNAVAILABLE",
+      "description": "Win32 SendInput automated input synthesis.",
+      "isMandatory": false,
+      "fallbackAction": "FAIL_CLOSED_REJECT",
+      "notes": "Strictly prohibited and isolated from production. Unavailable in V2-0."
+    }
+  ],
+  "negotiationRules": {
+    "hostAdvertisement": "Host includes full dictionary of capabilities and statuses in HELLO message payload.",
+    "engineAcceptance": "Engine verifies all isMandatory capabilities are AVAILABLE. If any mandatory capability is UNAVAILABLE, Engine responds HELLO_ACK with status=REJECTED_CAPABILITY.",
+    "unmeasuredPolicy": "Any capability marked NOT_MEASURED (e.g. WGC) must NOT be activated by Engine; default fallback must be activated.",
+    "experimentalPolicy": "Any capability marked EXPERIMENTAL (e.g. WebView2) must be treated as non-authoritative projection only, with immediate fallback path to static native HUD."
+  }
+}

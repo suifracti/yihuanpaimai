@@ -1,0 +1,95 @@
+{
+  "allVectorsPass": true,
+  "headerPackingParity": true,
+  "totalVectorsTested": 11,
+  "vectors": [
+    {
+      "name": "Host Handshake Hello",
+      "messageType": "HELLO",
+      "envelopeValid": true,
+      "lengthPrefixBytes": 604,
+      "lengthPrefixMatch": true,
+      "framedHexMatch": true
+    },
+    {
+      "name": "Engine Handshake Ack",
+      "messageType": "HELLO_ACK",
+      "envelopeValid": true,
+      "lengthPrefixBytes": 319,
+      "lengthPrefixMatch": true,
+      "framedHexMatch": true
+    },
+    {
+      "name": "Liveness Heartbeat",
+      "messageType": "HEARTBEAT",
+      "envelopeValid": true,
+      "lengthPrefixBytes": 274,
+      "lengthPrefixMatch": true,
+      "framedHexMatch": true
+    },
+    {
+      "name": "Frame Available Notification",
+      "messageType": "FRAME_READY",
+      "envelopeValid": true,
+      "lengthPrefixBytes": 343,
+      "lengthPrefixMatch": true,
+      "framedHexMatch": true
+    },
+    {
+      "name": "Frame Processing Acknowledgment",
+      "messageType": "FRAME_ACK",
+      "envelopeValid": true,
+      "lengthPrefixBytes": 297,
+      "lengthPrefixMatch": true,
+      "framedHexMatch": true
+    },
+    {
+      "name": "Auction Perception Result",
+      "messageType": "PERCEPTION_RESULT",
+      "envelopeValid": true,
+      "lengthPrefixBytes": 465,
+      "lengthPrefixMatch": true,
+      "framedHexMatch": true
+    },
+    {
+      "name": "User Takeover Abort Scan",
+      "messageType": "ABORT_SCAN",
+      "envelopeValid": true,
+      "lengthPrefixBytes": 258,
+      "lengthPrefixMatch": true,
+      "framedHexMatch": true
+    },
+    {
+      "name": "Refresh Valuation Command",
+      "messageType": "COMMAND",
+      "envelopeValid": true,
+      "lengthPrefixBytes": 301,
+      "lengthPrefixMatch": true,
+      "framedHexMatch": true
+    },
+    {
+      "name": "Command Execution Result",
+      "messageType": "COMMAND_RESULT",
+      "envelopeValid": true,
+      "lengthPrefixBytes": 305,
+      "lengthPrefixMatch": true,
+      "framedHexMatch": true
+    },
+    {
+      "name": "State Snapshot Sync",
+      "messageType": "STATE_SNAPSHOT",
+      "envelopeValid": true,
+      "lengthPrefixBytes": 345,
+      "lengthPrefixMatch": true,
+      "framedHexMatch": true
+    },
+    {
+      "name": "Fail Closed Error",
+      "messageType": "ERROR",
+      "envelopeValid": true,
+      "lengthPrefixBytes": 351,
+      "lengthPrefixMatch": true,
+      "framedHexMatch": true
+    }
+  ]
+}

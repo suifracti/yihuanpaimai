@@ -1,0 +1,193 @@
+{
+  "schemaVersion": "message.catalog.v1",
+  "protocolVersion": "1.0.0",
+  "totalMessageTypes": 14,
+  "messages": [
+    {
+      "messageType": "HELLO",
+      "direction": "Host -> Engine",
+      "description": "Initial handshake initiation message sent by Native Host upon process spawn or reconnect.",
+      "payloadSchema": {
+        "hostVersion": "string",
+        "supportedProtocols": ["string"],
+        "sessionNonce": "string",
+        "capabilities": {
+          "type": "object",
+          "additionalProperties": { "type": "string", "enum": ["AVAILABLE", "UNAVAILABLE", "EXPERIMENTAL", "NOT_MEASURED"] }
+        },
+        "frameBufferName": "string",
+        "frameBufferSize": "integer"
+      },
+      "requiredPayloadFields": ["hostVersion", "supportedProtocols", "sessionNonce", "capabilities", "frameBufferName", "frameBufferSize"]
+    },
+    {
+      "messageType": "HELLO_ACK",
+      "direction": "Engine -> Host",
+      "description": "Handshake response from Python Engine agreeing on protocol version and session parameters.",
+      "payloadSchema": {
+        "engineVersion": "string",
+        "negotiatedProtocol": "string",
+        "status": { "type": "string", "enum": ["ACCEPTED", "REJECTED_VERSION", "REJECTED_CAPABILITY"] },
+        "enginePid": "integer",
+        "modelStatus": "string"
+      },
+      "requiredPayloadFields": ["engineVersion", "negotiatedProtocol", "status", "enginePid"]
+    },
+    {
+      "messageType": "HEARTBEAT",
+      "direction": "Bidirectional (Host <-> Engine)",
+      "description": "Periodic liveness probe exchanged every 1000ms with 3000ms timeout threshold.",
+      "payloadSchema": {
+        "timestamp": "number",
+        "state": { "type": "string", "enum": ["HEALTHY", "BUSY", "DEGRADED"] },
+        "activeMatchId": "string|null"
+      },
+      "requiredPayloadFields": ["timestamp", "state"]
+    },
+    {
+      "messageType": "FRAME_READY",
+      "direction": "Host -> Engine",
+      "description": "Notification that a new frame has been written to the shared memory buffer.",
+      "payloadSchema": {
+        "bufferIndex": "integer",
+        "sequence": "integer (int64)",
+        "width": "integer",
+        "height": "integer",
+        "stride": "integer",
+        "pixelFormat": "string",
+        "captureTimestampNs": "integer (int64)",
+        "checksum": "integer"
+      },
+      "requiredPayloadFields": ["bufferIndex", "sequence", "width", "height", "stride", "pixelFormat", "captureTimestampNs"]
+    },
+    {
+      "messageType": "FRAME_ACK",
+      "direction": "Engine -> Host",
+      "description": "Acknowledgment from Engine indicating read completion of the specified buffer slot.",
+      "payloadSchema": {
+        "bufferIndex": "integer",
+        "sequence": "integer (int64)",
+        "status": { "type": "string", "enum": ["CONSUMED", "SKIPPED", "CORRUPTED"] },
+        "mappingLatencyMs": "number",
+        "processingLatencyMs": "number"
+      },
+      "requiredPayloadFields": ["bufferIndex", "sequence", "status"]
+    },
+    {
+      "messageType": "PERCEPTION_RESULT",
+      "direction": "Engine -> Host",
+      "description": "Structured visual intelligence result containing recognized bids, items, or scene classification.",
+      "payloadSchema": {
+        "frameSequence": "integer (int64)",
+        "scene": "string",
+        "inAuction": "boolean",
+        "bids": {
+          "type": "array",
+          "items": {
+            "seat": "integer",
+            "price": "integer",
+            "isWinning": "boolean"
+          }
+        },
+        "intel": {
+          "type": "array",
+          "items": { "id": "string", "value": "string" }
+        },
+        "warehouseSummary": "object|null",
+        "processingMs": "number"
+      },
+      "requiredPayloadFields": ["frameSequence", "scene", "inAuction", "bids"]
+    },
+    {
+      "messageType": "ABORT_SCAN",
+      "direction": "Host -> Engine",
+      "description": "Immediate halt instruction emitted when user moves physical mouse, presses Escape, or window focus is lost.",
+      "payloadSchema": {
+        "reason": { "type": "string", "enum": ["USER_TAKEOVER", "FOCUS_LOST", "ESCAPE_KEY", "TARGET_CLOSED"] },
+        "triggerTimestampNs": "integer (int64)"
+      },
+      "requiredPayloadFields": ["reason", "triggerTimestampNs"]
+    },
+    {
+      "messageType": "COMMAND",
+      "direction": "Host -> Engine",
+      "description": "High-level user or UI intent submitted to Engine (e.g. trigger scan, refresh valuation).",
+      "payloadSchema": {
+        "commandId": "string",
+        "action": "string",
+        "parameters": "object",
+        "expiresAtNs": "integer (int64)"
+      },
+      "requiredPayloadFields": ["commandId", "action", "expiresAtNs"]
+    },
+    {
+      "messageType": "COMMAND_RESULT",
+      "direction": "Engine -> Host",
+      "description": "Execution status and output of a previously submitted COMMAND.",
+      "payloadSchema": {
+        "commandId": "string",
+        "status": { "type": "string", "enum": ["ACK", "REJECT", "EXPIRED", "STALE_SESSION", "DUPLICATE", "NOT_FOREGROUND", "FROZEN", "CAPABILITY_UNAVAILABLE", "FAILED"] },
+        "errorDetails": "string|null",
+        "resultData": "object|null"
+      },
+      "requiredPayloadFields": ["commandId", "status"]
+    },
+    {
+      "messageType": "STATE_SNAPSHOT_REQUEST",
+      "direction": "Host -> Engine",
+      "description": "Request from Host to retrieve full business state snapshot following engine reconnect or resync.",
+      "payloadSchema": {
+        "sinceSequence": "integer (int64)|null",
+        "includeDrafts": "boolean"
+      },
+      "requiredPayloadFields": ["includeDrafts"]
+    },
+    {
+      "messageType": "STATE_SNAPSHOT",
+      "direction": "Engine -> Host",
+      "description": "Authoritative match and session state payload serialized by Python Engine.",
+      "payloadSchema": {
+        "matchId": "string|null",
+        "matchState": "string",
+        "draftCount": "integer",
+        "finalizedCount": "integer",
+        "activeAuctionItems": "array",
+        "snapshotSequence": "integer (int64)"
+      },
+      "requiredPayloadFields": ["matchState", "draftCount", "finalizedCount", "snapshotSequence"]
+    },
+    {
+      "messageType": "ENGINE_SHUTDOWN",
+      "direction": "Host -> Engine",
+      "description": "Graceful termination request issued by Host prior to application exit.",
+      "payloadSchema": {
+        "reason": "string",
+        "timeoutMs": "integer"
+      },
+      "requiredPayloadFields": ["reason", "timeoutMs"]
+    },
+    {
+      "messageType": "ENGINE_RESTARTING",
+      "direction": "Engine -> Host",
+      "description": "Self-diagnosed recovery signal emitted by Engine before controlled restart (e.g. memory threshold exceeded).",
+      "payloadSchema": {
+        "reason": "string",
+        "exitCode": "integer"
+      },
+      "requiredPayloadFields": ["reason", "exitCode"]
+    },
+    {
+      "messageType": "ERROR",
+      "direction": "Bidirectional (Host <-> Engine)",
+      "description": "Structured fail-closed error payload detailing protocol, transport, payload, or authority violations.",
+      "payloadSchema": {
+        "errorCode": "string",
+        "category": { "type": "string", "enum": ["PROTOCOL", "TRANSPORT", "PAYLOAD", "TIMEOUT", "AUTHORITY", "CAPABILITY"] },
+        "message": "string",
+        "faultingMessageId": "string|null",
+        "isFatal": "boolean"
+      },
+      "requiredPayloadFields": ["errorCode", "category", "message", "isFatal"]
+    }
+  ]
+}

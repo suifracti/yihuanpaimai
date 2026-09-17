@@ -1,0 +1,57 @@
+{
+  "schemaVersion": "lifecycle.recovery.v1",
+  "protocolVersion": "1.0.0",
+  "title": "Engine Process Lifecycle & Recovery State Machine",
+  "operationalPhases": [
+    { "phase": "PROCESS_ALIVE", "check": "OS Process ID exists and Process.HasExited == false" },
+    { "phase": "IPC_CONNECTED", "check": "Named Pipe client and server handles connected and streamable" },
+    { "phase": "ENGINE_INITIALIZED", "check": "HELLO / HELLO_ACK negotiation completed with status == ACCEPTED" },
+    { "phase": "STATE_RESYNCED", "check": "STATE_SNAPSHOT received, validated, and applied by Host projection" },
+    { "phase": "BUSINESS_READY", "check": "CV models loaded, visual catalog initialized, ready for FRAME_READY processing" }
+  ],
+  "states": [
+    {
+      "name": "ENGINE_DOWN",
+      "description": "Python process is not running (stopped, crashed, or pending initial spawn).",
+      "validTransitions": ["STARTING"]
+    },
+    {
+      "name": "STARTING",
+      "description": "Host has spawned child Python process; awaiting IPC pipe readiness.",
+      "validTransitions": ["HANDSHAKING", "ENGINE_DOWN"]
+    },
+    {
+      "name": "HANDSHAKING",
+      "description": "Named Pipe connected; Host emitted HELLO; awaiting HELLO_ACK.",
+      "validTransitions": ["SYNCING", "READY", "DEGRADED", "ENGINE_DOWN"]
+    },
+    {
+      "name": "SYNCING",
+      "description": "Handshake accepted; Host issued STATE_SNAPSHOT_REQUEST to rebuild match state after restart.",
+      "validTransitions": ["READY", "DEGRADED", "ENGINE_DOWN"]
+    },
+    {
+      "name": "READY",
+      "description": "Normal operating state. Heartbeat active, frames streaming, perception processing.",
+      "validTransitions": ["DEGRADED", "ENGINE_DOWN"]
+    },
+    {
+      "name": "DEGRADED",
+      "description": "Heartbeat missed, command rejected, or unsupported capability; running in safe fallback mode.",
+      "validTransitions": ["READY", "SYNCING", "ENGINE_DOWN"]
+    }
+  ],
+  "recoveryWorkflow": {
+    "step1_detection": "Host Process.Exited event fires (typically 8-15ms); Host UI preserves overlay and displays 'Reconnecting engine...'.",
+    "step2_drain": "Host drains and closes stale Named Pipe handles; discards pending in-flight control messages.",
+    "step3_restart": "Host supervisor spawns replacement Python process with unique session nonce; transition to STARTING.",
+    "step4_handshake": "Host initiates HELLO with sessionNonce and capability advertisement; transition to HANDSHAKING.",
+    "step5_snapshot_request": "Upon HELLO_ACK, Host transitions to SYNCING and emits STATE_SNAPSHOT_REQUEST.",
+    "step6_resync_verification": "Engine serializes CurrentMatch DRAFT/FINALIZED ledger in STATE_SNAPSHOT; Host verifies snapshotSequence and sessionNonce.",
+    "step7_ready": "Host transitions to READY; frame streaming and perception resumes."
+  },
+  "spikeAcknowledge": {
+    "businessStateResyncStatus": "NOT_MEASURED",
+    "notes": "Spike measured supervisor process exit detection (7.7ms) and mock restart (7.6ms). Full business recovery requiring model weight loading and match history recovery is explicitly marked NOT_MEASURED in this contract phase."
+  }
+}

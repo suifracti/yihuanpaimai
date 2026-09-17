@@ -1,0 +1,313 @@
+{
+  "schemaVersion": "golden.vectors.v1",
+  "protocolVersion": "1.0.0",
+  "description": "Deterministic cross-language golden vectors for IPC protocol envelope and shared memory frame header verification.",
+  "frameHeaderVector": {
+    "fields": {
+      "magic": "0x4246544E",
+      "headerVersion": 1,
+      "sequence": 101,
+      "width": 1920,
+      "height": 1080,
+      "stride": 7680,
+      "pixelFormat": 1,
+      "bufferLength": 8294400,
+      "flags": 1,
+      "captureTimestampNs": 1000000000,
+      "producerTimestampNs": 1003200000,
+      "cornerChecksum": "0x12345678",
+      "reserved": 0
+    },
+    "headerSizeBytes": 64,
+    "packedHex": "4e5446420100000065000000000000008007000038040000001e00000100000000907e000100000000ca9a3b00000000009ecb3b000000007856341200000000"
+  },
+  "messageVectors": [
+    {
+      "name": "Host Handshake Hello",
+      "messageType": "HELLO",
+      "envelope": {
+        "protocolVersion": "1.0.0",
+        "sessionId": "test-session-001",
+        "messageType": "HELLO",
+        "requestId": "req-hello-01",
+        "correlationId": "corr-req-hello-01",
+        "sequence": 1,
+        "monotonicTimestampNs": 1001000000,
+        "payload": {
+          "hostVersion": "2.0.0-spike",
+          "supportedProtocols": [
+            "1.0.0"
+          ],
+          "sessionNonce": "0123456789abcdef0123456789abcdef",
+          "capabilities": {
+            "BitBlt": "AVAILABLE",
+            "WGC": "NOT_MEASURED",
+            "SharedMemoryRing": "AVAILABLE",
+            "NamedPipeIpc": "AVAILABLE",
+            "LowLevelHooks": "AVAILABLE",
+            "WebView2": "EXPERIMENTAL",
+            "SendInput": "UNAVAILABLE"
+          },
+          "frameBufferName": "Local\\\\NteFrameBuffer_v1_test-session-001_nonce",
+          "frameBufferSize": 8294464
+        }
+      },
+      "expectedJsonCompact": "{\"protocolVersion\":\"1.0.0\",\"sessionId\":\"test-session-001\",\"messageType\":\"HELLO\",\"requestId\":\"req-hello-01\",\"correlationId\":\"corr-req-hello-01\",\"sequence\":1,\"monotonicTimestampNs\":1001000000,\"payload\":{\"hostVersion\":\"2.0.0-spike\",\"supportedProtocols\":[\"1.0.0\"],\"sessionNonce\":\"0123456789abcdef0123456789abcdef\",\"capabilities\":{\"BitBlt\":\"AVAILABLE\",\"WGC\":\"NOT_MEASURED\",\"SharedMemoryRing\":\"AVAILABLE\",\"NamedPipeIpc\":\"AVAILABLE\",\"LowLevelHooks\":\"AVAILABLE\",\"WebView2\":\"EXPERIMENTAL\",\"SendInput\":\"UNAVAILABLE\"},\"frameBufferName\":\"Local\\\\\\\\NteFrameBuffer_v1_test-session-001_nonce\",\"frameBufferSize\":8294464}}",
+      "lengthPrefixBytes": 604,
+      "expectedFramedHex": "5c0200007b2270726f746f636f6c56657273696f6e223a22312e302e30222c2273657373696f6e4964223a22746573742d73657373696f6e2d303031222c226d65737361676554797065223a2248454c4c4f222c22726571756573744964223a227265712d68656c6c6f2d3031222c22636f7272656c6174696f6e4964223a22636f72722d7265712d68656c6c6f2d3031222c2273657175656e6365223a312c226d6f6e6f746f6e696354696d657374616d704e73223a313030313030303030302c227061796c6f6164223a7b22686f737456657273696f6e223a22322e302e302d7370696b65222c22737570706f7274656450726f746f636f6c73223a5b22312e302e30225d2c2273657373696f6e4e6f6e6365223a223031323334353637383961626364656630313233343536373839616263646566222c226361706162696c6974696573223a7b22426974426c74223a22415641494c41424c45222c22574743223a224e4f545f4d45415355524544222c225368617265644d656d6f727952696e67223a22415641494c41424c45222c224e616d656450697065497063223a22415641494c41424c45222c224c6f774c6576656c486f6f6b73223a22415641494c41424c45222c225765625669657732223a224558504552494d454e54414c222c2253656e64496e707574223a22554e415641494c41424c45227d2c226672616d654275666665724e616d65223a224c6f63616c5c5c5c5c4e74654672616d654275666665725f76315f746573742d73657373696f6e2d3030315f6e6f6e6365222c226672616d6542756666657253697a65223a383239343436347d7d"
+    },
+    {
+      "name": "Engine Handshake Ack",
+      "messageType": "HELLO_ACK",
+      "envelope": {
+        "protocolVersion": "1.0.0",
+        "sessionId": "test-session-001",
+        "messageType": "HELLO_ACK",
+        "requestId": "ack-hello-01",
+        "correlationId": "corr-ack-hello-01",
+        "sequence": 2,
+        "monotonicTimestampNs": 1002000000,
+        "payload": {
+          "engineVersion": "1.0.0",
+          "negotiatedProtocol": "1.0.0",
+          "status": "ACCEPTED",
+          "enginePid": 12345,
+          "modelStatus": "READY"
+        }
+      },
+      "expectedJsonCompact": "{\"protocolVersion\":\"1.0.0\",\"sessionId\":\"test-session-001\",\"messageType\":\"HELLO_ACK\",\"requestId\":\"ack-hello-01\",\"correlationId\":\"corr-ack-hello-01\",\"sequence\":2,\"monotonicTimestampNs\":1002000000,\"payload\":{\"engineVersion\":\"1.0.0\",\"negotiatedProtocol\":\"1.0.0\",\"status\":\"ACCEPTED\",\"enginePid\":12345,\"modelStatus\":\"READY\"}}",
+      "lengthPrefixBytes": 319,
+      "expectedFramedHex": "3f0100007b2270726f746f636f6c56657273696f6e223a22312e302e30222c2273657373696f6e4964223a22746573742d73657373696f6e2d303031222c226d65737361676554797065223a2248454c4c4f5f41434b222c22726571756573744964223a2261636b2d68656c6c6f2d3031222c22636f7272656c6174696f6e4964223a22636f72722d61636b2d68656c6c6f2d3031222c2273657175656e6365223a322c226d6f6e6f746f6e696354696d657374616d704e73223a313030323030303030302c227061796c6f6164223a7b22656e67696e6556657273696f6e223a22312e302e30222c226e65676f74696174656450726f746f636f6c223a22312e302e30222c22737461747573223a224143434550544544222c22656e67696e65506964223a31323334352c226d6f64656c537461747573223a225245414459227d7d"
+    },
+    {
+      "name": "Liveness Heartbeat",
+      "messageType": "HEARTBEAT",
+      "envelope": {
+        "protocolVersion": "1.0.0",
+        "sessionId": "test-session-001",
+        "messageType": "HEARTBEAT",
+        "requestId": "hb-001",
+        "correlationId": "corr-hb-001",
+        "sequence": 3,
+        "monotonicTimestampNs": 1003000000,
+        "payload": {
+          "timestamp": 1726617600.0,
+          "state": "HEALTHY",
+          "activeMatchId": "match-20260917-001"
+        }
+      },
+      "expectedJsonCompact": "{\"protocolVersion\":\"1.0.0\",\"sessionId\":\"test-session-001\",\"messageType\":\"HEARTBEAT\",\"requestId\":\"hb-001\",\"correlationId\":\"corr-hb-001\",\"sequence\":3,\"monotonicTimestampNs\":1003000000,\"payload\":{\"timestamp\":1726617600.0,\"state\":\"HEALTHY\",\"activeMatchId\":\"match-20260917-001\"}}",
+      "lengthPrefixBytes": 274,
+      "expectedFramedHex": "120100007b2270726f746f636f6c56657273696f6e223a22312e302e30222c2273657373696f6e4964223a22746573742d73657373696f6e2d303031222c226d65737361676554797065223a22484541525442454154222c22726571756573744964223a2268622d303031222c22636f7272656c6174696f6e4964223a22636f72722d68622d303031222c2273657175656e6365223a332c226d6f6e6f746f6e696354696d657374616d704e73223a313030333030303030302c227061796c6f6164223a7b2274696d657374616d70223a313732363631373630302e302c227374617465223a224845414c544859222c226163746976654d617463684964223a226d617463682d32303236303931372d303031227d7d"
+    },
+    {
+      "name": "Frame Available Notification",
+      "messageType": "FRAME_READY",
+      "envelope": {
+        "protocolVersion": "1.0.0",
+        "sessionId": "test-session-001",
+        "messageType": "FRAME_READY",
+        "requestId": "fr-001",
+        "correlationId": "corr-fr-001",
+        "sequence": 4,
+        "monotonicTimestampNs": 1004000000,
+        "payload": {
+          "bufferIndex": 0,
+          "sequence": 101,
+          "width": 1920,
+          "height": 1080,
+          "stride": 7680,
+          "pixelFormat": "BGRA8",
+          "captureTimestampNs": 1000000000,
+          "checksum": 305419896
+        }
+      },
+      "expectedJsonCompact": "{\"protocolVersion\":\"1.0.0\",\"sessionId\":\"test-session-001\",\"messageType\":\"FRAME_READY\",\"requestId\":\"fr-001\",\"correlationId\":\"corr-fr-001\",\"sequence\":4,\"monotonicTimestampNs\":1004000000,\"payload\":{\"bufferIndex\":0,\"sequence\":101,\"width\":1920,\"height\":1080,\"stride\":7680,\"pixelFormat\":\"BGRA8\",\"captureTimestampNs\":1000000000,\"checksum\":305419896}}",
+      "lengthPrefixBytes": 343,
+      "expectedFramedHex": "570100007b2270726f746f636f6c56657273696f6e223a22312e302e30222c2273657373696f6e4964223a22746573742d73657373696f6e2d303031222c226d65737361676554797065223a224652414d455f5245414459222c22726571756573744964223a2266722d303031222c22636f7272656c6174696f6e4964223a22636f72722d66722d303031222c2273657175656e6365223a342c226d6f6e6f746f6e696354696d657374616d704e73223a313030343030303030302c227061796c6f6164223a7b22627566666572496e646578223a302c2273657175656e6365223a3130312c227769647468223a313932302c22686569676874223a313038302c22737472696465223a373638302c22706978656c466f726d6174223a224247524138222c226361707475726554696d657374616d704e73223a313030303030303030302c22636865636b73756d223a3330353431393839367d7d"
+    },
+    {
+      "name": "Frame Processing Acknowledgment",
+      "messageType": "FRAME_ACK",
+      "envelope": {
+        "protocolVersion": "1.0.0",
+        "sessionId": "test-session-001",
+        "messageType": "FRAME_ACK",
+        "requestId": "fa-001",
+        "correlationId": "corr-fa-001",
+        "sequence": 5,
+        "monotonicTimestampNs": 1005000000,
+        "payload": {
+          "bufferIndex": 0,
+          "sequence": 101,
+          "status": "CONSUMED",
+          "mappingLatencyMs": 0.05,
+          "processingLatencyMs": 12.34
+        }
+      },
+      "expectedJsonCompact": "{\"protocolVersion\":\"1.0.0\",\"sessionId\":\"test-session-001\",\"messageType\":\"FRAME_ACK\",\"requestId\":\"fa-001\",\"correlationId\":\"corr-fa-001\",\"sequence\":5,\"monotonicTimestampNs\":1005000000,\"payload\":{\"bufferIndex\":0,\"sequence\":101,\"status\":\"CONSUMED\",\"mappingLatencyMs\":0.05,\"processingLatencyMs\":12.34}}",
+      "lengthPrefixBytes": 297,
+      "expectedFramedHex": "290100007b2270726f746f636f6c56657273696f6e223a22312e302e30222c2273657373696f6e4964223a22746573742d73657373696f6e2d303031222c226d65737361676554797065223a224652414d455f41434b222c22726571756573744964223a2266612d303031222c22636f7272656c6174696f6e4964223a22636f72722d66612d303031222c2273657175656e6365223a352c226d6f6e6f746f6e696354696d657374616d704e73223a313030353030303030302c227061796c6f6164223a7b22627566666572496e646578223a302c2273657175656e6365223a3130312c22737461747573223a22434f4e53554d4544222c226d617070696e674c6174656e63794d73223a302e30352c2270726f63657373696e674c6174656e63794d73223a31322e33347d7d"
+    },
+    {
+      "name": "Auction Perception Result",
+      "messageType": "PERCEPTION_RESULT",
+      "envelope": {
+        "protocolVersion": "1.0.0",
+        "sessionId": "test-session-001",
+        "messageType": "PERCEPTION_RESULT",
+        "requestId": "pr-001",
+        "correlationId": "corr-pr-001",
+        "sequence": 6,
+        "monotonicTimestampNs": 1006000000,
+        "payload": {
+          "frameSequence": 101,
+          "scene": "AUCTION_BIDDING",
+          "inAuction": true,
+          "bids": [
+            {
+              "seat": 1,
+              "price": 150000,
+              "isWinning": false
+            },
+            {
+              "seat": 2,
+              "price": 200000,
+              "isWinning": true
+            }
+          ],
+          "intel": [
+            {
+              "id": "intel_1",
+              "value": "astrolabe"
+            }
+          ],
+          "warehouseSummary": {
+            "totalItems": 12
+          },
+          "processingMs": 18.5
+        }
+      },
+      "expectedJsonCompact": "{\"protocolVersion\":\"1.0.0\",\"sessionId\":\"test-session-001\",\"messageType\":\"PERCEPTION_RESULT\",\"requestId\":\"pr-001\",\"correlationId\":\"corr-pr-001\",\"sequence\":6,\"monotonicTimestampNs\":1006000000,\"payload\":{\"frameSequence\":101,\"scene\":\"AUCTION_BIDDING\",\"inAuction\":true,\"bids\":[{\"seat\":1,\"price\":150000,\"isWinning\":false},{\"seat\":2,\"price\":200000,\"isWinning\":true}],\"intel\":[{\"id\":\"intel_1\",\"value\":\"astrolabe\"}],\"warehouseSummary\":{\"totalItems\":12},\"processingMs\":18.5}}",
+      "lengthPrefixBytes": 465,
+      "expectedFramedHex": "d10100007b2270726f746f636f6c56657273696f6e223a22312e302e30222c2273657373696f6e4964223a22746573742d73657373696f6e2d303031222c226d65737361676554797065223a2250455243455054494f4e5f524553554c54222c22726571756573744964223a2270722d303031222c22636f7272656c6174696f6e4964223a22636f72722d70722d303031222c2273657175656e6365223a362c226d6f6e6f746f6e696354696d657374616d704e73223a313030363030303030302c227061796c6f6164223a7b226672616d6553657175656e6365223a3130312c227363656e65223a2241554354494f4e5f42494444494e47222c22696e41756374696f6e223a747275652c2262696473223a5b7b2273656174223a312c227072696365223a3135303030302c22697357696e6e696e67223a66616c73657d2c7b2273656174223a322c227072696365223a3230303030302c22697357696e6e696e67223a747275657d5d2c22696e74656c223a5b7b226964223a22696e74656c5f31222c2276616c7565223a22617374726f6c616265227d5d2c2277617265686f75736553756d6d617279223a7b22746f74616c4974656d73223a31327d2c2270726f63657373696e674d73223a31382e357d7d"
+    },
+    {
+      "name": "User Takeover Abort Scan",
+      "messageType": "ABORT_SCAN",
+      "envelope": {
+        "protocolVersion": "1.0.0",
+        "sessionId": "test-session-001",
+        "messageType": "ABORT_SCAN",
+        "requestId": "abort-001",
+        "correlationId": "corr-abort-001",
+        "sequence": 7,
+        "monotonicTimestampNs": 1007000000,
+        "payload": {
+          "reason": "USER_TAKEOVER",
+          "triggerTimestampNs": 1007000000
+        }
+      },
+      "expectedJsonCompact": "{\"protocolVersion\":\"1.0.0\",\"sessionId\":\"test-session-001\",\"messageType\":\"ABORT_SCAN\",\"requestId\":\"abort-001\",\"correlationId\":\"corr-abort-001\",\"sequence\":7,\"monotonicTimestampNs\":1007000000,\"payload\":{\"reason\":\"USER_TAKEOVER\",\"triggerTimestampNs\":1007000000}}",
+      "lengthPrefixBytes": 258,
+      "expectedFramedHex": "020100007b2270726f746f636f6c56657273696f6e223a22312e302e30222c2273657373696f6e4964223a22746573742d73657373696f6e2d303031222c226d65737361676554797065223a2241424f52545f5343414e222c22726571756573744964223a2261626f72742d303031222c22636f7272656c6174696f6e4964223a22636f72722d61626f72742d303031222c2273657175656e6365223a372c226d6f6e6f746f6e696354696d657374616d704e73223a313030373030303030302c227061796c6f6164223a7b22726561736f6e223a22555345525f54414b454f564552222c227472696767657254696d657374616d704e73223a313030373030303030307d7d"
+    },
+    {
+      "name": "Refresh Valuation Command",
+      "messageType": "COMMAND",
+      "envelope": {
+        "protocolVersion": "1.0.0",
+        "sessionId": "test-session-001",
+        "messageType": "COMMAND",
+        "requestId": "cmd-001",
+        "correlationId": "corr-cmd-001",
+        "sequence": 8,
+        "monotonicTimestampNs": 1008000000,
+        "payload": {
+          "commandId": "cmd-val-100",
+          "action": "REFRESH_VALUATION",
+          "parameters": {
+            "itemId": 42
+          },
+          "expiresAtNs": 1500000000
+        }
+      },
+      "expectedJsonCompact": "{\"protocolVersion\":\"1.0.0\",\"sessionId\":\"test-session-001\",\"messageType\":\"COMMAND\",\"requestId\":\"cmd-001\",\"correlationId\":\"corr-cmd-001\",\"sequence\":8,\"monotonicTimestampNs\":1008000000,\"payload\":{\"commandId\":\"cmd-val-100\",\"action\":\"REFRESH_VALUATION\",\"parameters\":{\"itemId\":42},\"expiresAtNs\":1500000000}}",
+      "lengthPrefixBytes": 301,
+      "expectedFramedHex": "2d0100007b2270726f746f636f6c56657273696f6e223a22312e302e30222c2273657373696f6e4964223a22746573742d73657373696f6e2d303031222c226d65737361676554797065223a22434f4d4d414e44222c22726571756573744964223a22636d642d303031222c22636f7272656c6174696f6e4964223a22636f72722d636d642d303031222c2273657175656e6365223a382c226d6f6e6f746f6e696354696d657374616d704e73223a313030383030303030302c227061796c6f6164223a7b22636f6d6d616e644964223a22636d642d76616c2d313030222c22616374696f6e223a22524546524553485f56414c554154494f4e222c22706172616d6574657273223a7b226974656d4964223a34327d2c226578706972657341744e73223a313530303030303030307d7d"
+    },
+    {
+      "name": "Command Execution Result",
+      "messageType": "COMMAND_RESULT",
+      "envelope": {
+        "protocolVersion": "1.0.0",
+        "sessionId": "test-session-001",
+        "messageType": "COMMAND_RESULT",
+        "requestId": "cmdres-001",
+        "correlationId": "corr-cmdres-001",
+        "sequence": 9,
+        "monotonicTimestampNs": 1009000000,
+        "payload": {
+          "commandId": "cmd-val-100",
+          "status": "ACK",
+          "errorDetails": null,
+          "resultData": {
+            "optimalPrice": 220000
+          }
+        }
+      },
+      "expectedJsonCompact": "{\"protocolVersion\":\"1.0.0\",\"sessionId\":\"test-session-001\",\"messageType\":\"COMMAND_RESULT\",\"requestId\":\"cmdres-001\",\"correlationId\":\"corr-cmdres-001\",\"sequence\":9,\"monotonicTimestampNs\":1009000000,\"payload\":{\"commandId\":\"cmd-val-100\",\"status\":\"ACK\",\"errorDetails\":null,\"resultData\":{\"optimalPrice\":220000}}}",
+      "lengthPrefixBytes": 305,
+      "expectedFramedHex": "310100007b2270726f746f636f6c56657273696f6e223a22312e302e30222c2273657373696f6e4964223a22746573742d73657373696f6e2d303031222c226d65737361676554797065223a22434f4d4d414e445f524553554c54222c22726571756573744964223a22636d647265732d303031222c22636f7272656c6174696f6e4964223a22636f72722d636d647265732d303031222c2273657175656e6365223a392c226d6f6e6f746f6e696354696d657374616d704e73223a313030393030303030302c227061796c6f6164223a7b22636f6d6d616e644964223a22636d642d76616c2d313030222c22737461747573223a2241434b222c226572726f7244657461696c73223a6e756c6c2c22726573756c7444617461223a7b226f7074696d616c5072696365223a3232303030307d7d7d"
+    },
+    {
+      "name": "State Snapshot Sync",
+      "messageType": "STATE_SNAPSHOT",
+      "envelope": {
+        "protocolVersion": "1.0.0",
+        "sessionId": "test-session-001",
+        "messageType": "STATE_SNAPSHOT",
+        "requestId": "snap-001",
+        "correlationId": "corr-snap-001",
+        "sequence": 10,
+        "monotonicTimestampNs": 1010000000,
+        "payload": {
+          "matchId": "match-20260917-001",
+          "matchState": "IN_PROGRESS",
+          "draftCount": 0,
+          "finalizedCount": 14,
+          "activeAuctionItems": [
+            42
+          ],
+          "snapshotSequence": 10
+        }
+      },
+      "expectedJsonCompact": "{\"protocolVersion\":\"1.0.0\",\"sessionId\":\"test-session-001\",\"messageType\":\"STATE_SNAPSHOT\",\"requestId\":\"snap-001\",\"correlationId\":\"corr-snap-001\",\"sequence\":10,\"monotonicTimestampNs\":1010000000,\"payload\":{\"matchId\":\"match-20260917-001\",\"matchState\":\"IN_PROGRESS\",\"draftCount\":0,\"finalizedCount\":14,\"activeAuctionItems\":[42],\"snapshotSequence\":10}}",
+      "lengthPrefixBytes": 345,
+      "expectedFramedHex": "590100007b2270726f746f636f6c56657273696f6e223a22312e302e30222c2273657373696f6e4964223a22746573742d73657373696f6e2d303031222c226d65737361676554797065223a2253544154455f534e415053484f54222c22726571756573744964223a22736e61702d303031222c22636f7272656c6174696f6e4964223a22636f72722d736e61702d303031222c2273657175656e6365223a31302c226d6f6e6f746f6e696354696d657374616d704e73223a313031303030303030302c227061796c6f6164223a7b226d617463684964223a226d617463682d32303236303931372d303031222c226d617463685374617465223a22494e5f50524f4752455353222c226472616674436f756e74223a302c2266696e616c697a6564436f756e74223a31342c2261637469766541756374696f6e4974656d73223a5b34325d2c22736e617073686f7453657175656e6365223a31307d7d"
+    },
+    {
+      "name": "Fail Closed Error",
+      "messageType": "ERROR",
+      "envelope": {
+        "protocolVersion": "1.0.0",
+        "sessionId": "test-session-001",
+        "messageType": "ERROR",
+        "requestId": "err-001",
+        "correlationId": "corr-err-001",
+        "sequence": 11,
+        "monotonicTimestampNs": 1011000000,
+        "payload": {
+          "errorCode": "ERR_FRAME_CHECKSUM_FAILED",
+          "category": "PAYLOAD",
+          "message": "Corner pixel checksum mismatch detected",
+          "faultingMessageId": "fr-001",
+          "isFatal": false
+        }
+      },
+      "expectedJsonCompact": "{\"protocolVersion\":\"1.0.0\",\"sessionId\":\"test-session-001\",\"messageType\":\"ERROR\",\"requestId\":\"err-001\",\"correlationId\":\"corr-err-001\",\"sequence\":11,\"monotonicTimestampNs\":1011000000,\"payload\":{\"errorCode\":\"ERR_FRAME_CHECKSUM_FAILED\",\"category\":\"PAYLOAD\",\"message\":\"Corner pixel checksum mismatch detected\",\"faultingMessageId\":\"fr-001\",\"isFatal\":false}}",
+      "lengthPrefixBytes": 351,
+      "expectedFramedHex": "5f0100007b2270726f746f636f6c56657273696f6e223a22312e302e30222c2273657373696f6e4964223a22746573742d73657373696f6e2d303031222c226d65737361676554797065223a224552524f52222c22726571756573744964223a226572722d303031222c22636f7272656c6174696f6e4964223a22636f72722d6572722d303031222c2273657175656e6365223a31312c226d6f6e6f746f6e696354696d657374616d704e73223a313031313030303030302c227061796c6f6164223a7b226572726f72436f6465223a224552525f4652414d455f434845434b53554d5f4641494c4544222c2263617465676f7279223a225041594c4f4144222c226d657373616765223a22436f726e657220706978656c20636865636b73756d206d69736d61746368206465746563746564222c226661756c74696e674d6573736167654964223a2266722d303031222c226973466174616c223a66616c73657d7d"
+    }
+  ]
+}
