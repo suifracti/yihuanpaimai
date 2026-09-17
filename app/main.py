@@ -3326,10 +3326,17 @@ def build_in_auction_hud_payload(ctx: Dict[str, Any], *, compute_shadow: bool = 
     payload["strategyMetrics"] = strategy_metrics.to_payload()
     payload["strategyPanel"] = strategy_panel.to_payload()
     from experimental_red_inference import safe_evaluate_experimental_red
+    from experimental_probability_strategy import safe_evaluate_experimental_probability_strategy
     payload["experimentalRed"] = safe_evaluate_experimental_red(
         ctx,
         production_metrics=strategy_metrics.to_payload(),
         shadow_profile=profile,
+    )
+    payload["experimentalProbabilityStrategy"] = safe_evaluate_experimental_probability_strategy(
+        ctx,
+        production_metrics=strategy_metrics.to_payload(),
+        shadow_profile=profile,
+        experimental_red=payload.get("experimentalRed"),
     )
     return attach_warehouse_capture_presentation(payload)
 
@@ -3474,9 +3481,15 @@ def build_nav_hud_payload(ctx: Dict[str, Any]) -> Dict[str, Any]:
     payload["strategyMetrics"] = nav_metrics.to_payload()
     payload["strategyPanel"] = nav_panel.to_payload()
     from experimental_red_inference import safe_evaluate_experimental_red
+    from experimental_probability_strategy import safe_evaluate_experimental_probability_strategy
     payload["experimentalRed"] = safe_evaluate_experimental_red(
         ctx,
         production_metrics=nav_metrics.to_payload(),
+    )
+    payload["experimentalProbabilityStrategy"] = safe_evaluate_experimental_probability_strategy(
+        ctx,
+        production_metrics=nav_metrics.to_payload(),
+        experimental_red=payload.get("experimentalRed"),
     )
     return attach_warehouse_capture_presentation(payload)
 

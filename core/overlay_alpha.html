@@ -825,11 +825,17 @@
           </div>
 
           <!-- Experimental Area: PR-B Red Inference Lab (Default Collapsed) -->
+          <!-- Experimental Area: PR-B & PR-C Strategy Labs (Default Collapsed) -->
           <details id="strategyExperimentalArea" class="experimental-area" style="margin-top: 6px;">
-            <summary style="font-size: 11px; color: var(--muted-dark); cursor: pointer;">🧪 Red inference experimental</summary>
+            <summary style="font-size: 11px; color: var(--muted-dark); cursor: pointer;">🧪 Experimental labs (PR-B Red / PR-C Probability & Strategy)</summary>
             <div class="experimental-body" style="font-size: 11px; padding: 6px 8px; background: rgba(0,0,0,0.25); border-radius: 4px; margin-top: 4px; border: 1px solid rgba(245, 158, 11, 0.2);">
               <div style="font-size: 11px; font-weight: bold; color: #f59e0b; padding: 3px 6px; background: rgba(245, 158, 11, 0.12); border: 1px solid rgba(245, 158, 11, 0.35); border-radius: 3px; margin-bottom: 6px; text-align: center;">
                 实验结果 · 不参与正式出价
+              </div>
+
+              <!-- PR-B Red Inference Lab Section -->
+              <div style="font-weight: 600; color: var(--text); margin-bottom: 4px; border-bottom: 1px solid rgba(255,255,255,0.08); padding-bottom: 2px;">
+                🔴 PR-B: 红品质概率推断
               </div>
               <div style="display: flex; justify-content: space-between; margin-bottom: 4px; color: var(--muted);">
                 <span>有效历史样本:</span>
@@ -857,9 +863,50 @@
                 <span style="color: var(--muted);">与正式求解器差值 (Δ vs Prod):</span>
                 <span id="expRedDeltaProd" style="color: #60a5fa;">—</span>
               </div>
-              <div style="font-size: 10px; color: var(--muted-dark); border-top: 1px solid rgba(255,255,255,0.05); padding-top: 4px; margin-top: 4px;">
+              <div style="font-size: 10px; color: var(--muted-dark); padding-top: 2px; margin-top: 2px; margin-bottom: 8px;">
                 <div>假设: <span id="expRedAssumptions">sampling=unknown, conditioning=observational_only</span></div>
                 <div id="expRedWarnings" style="color: #fbbf24; margin-top: 2px;"></div>
+              </div>
+
+              <!-- PR-C Probability / Strategy Lab Section -->
+              <div style="font-weight: 600; color: var(--text); margin-top: 8px; margin-bottom: 4px; border-top: 1px solid rgba(255,255,255,0.1); padding-top: 6px;">
+                🧪 PR-C: 概率 / 策略实验 (Probability & Strategy Lab)
+              </div>
+              <div id="expProbExternalWarning" style="display: none; font-size: 10px; color: #f59e0b; background: rgba(245, 158, 11, 0.08); padding: 2px 4px; border-radius: 2px; margin-bottom: 4px; border: 1px solid rgba(245, 158, 11, 0.25);">
+                外部经验参数 · 未经我方真实历史验证
+              </div>
+              <div style="display: flex; justify-content: space-between; margin-bottom: 4px; color: var(--muted);">
+                <span>当前启用 Profile:</span>
+                <span id="expProbActiveProfiles" style="color: var(--text); font-weight: 600;">baseline</span>
+              </div>
+              <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 4px; margin-bottom: 6px;">
+                <div style="background: rgba(255,255,255,0.03); padding: 4px; border-radius: 3px; text-align: center;">
+                  <span style="display:block; font-size: 9px; color: var(--muted);">实验P20</span>
+                  <span id="expProbP20" style="font-size: 11px; font-weight: 600;">—</span>
+                </div>
+                <div style="background: rgba(255,255,255,0.03); padding: 4px; border-radius: 3px; text-align: center;">
+                  <span style="display:block; font-size: 9px; color: var(--muted);">实验P50</span>
+                  <span id="expProbP50" style="font-size: 11px; font-weight: 600;">—</span>
+                </div>
+                <div style="background: rgba(255,255,255,0.03); padding: 4px; border-radius: 3px; text-align: center;">
+                  <span style="display:block; font-size: 9px; color: var(--muted);">实验P80</span>
+                  <span id="expProbP80" style="font-size: 11px; font-weight: 600;">—</span>
+                </div>
+              </div>
+              <div style="display: flex; justify-content: space-between; margin-bottom: 4px; font-size: 10px;">
+                <span style="color: var(--muted);">实验保留价 / 保守价:</span>
+                <span id="expProbReserve" style="color: #34d399;">— / —</span>
+              </div>
+              <div style="display: flex; justify-content: space-between; margin-bottom: 4px; font-size: 10px;">
+                <span style="color: var(--muted);">CELL_FIT 空间诊断:</span>
+                <span id="expProbCellFit" style="color: var(--text);">—</span>
+              </div>
+              <div style="display: flex; justify-content: space-between; margin-bottom: 4px; font-size: 10px;">
+                <span style="color: var(--muted);">Δ vs Prod / Δ vs Red:</span>
+                <span id="expProbDeltas" style="color: #60a5fa;">—</span>
+              </div>
+              <div style="font-size: 10px; color: var(--muted-dark); border-top: 1px solid rgba(255,255,255,0.05); padding-top: 4px; margin-top: 4px;">
+                <div id="expProbWarnings" style="color: #fbbf24;"></div>
               </div>
             </div>
           </details>
@@ -1335,6 +1382,62 @@
 
       if (warnEl) {
         const warns = expRed.warnings || [];
+        warnEl.textContent = warns.join(" | ");
+      }
+    }
+
+    function updateExperimentalProbabilityStrategyUI(expStrat) {
+      if (!expStrat) return;
+      const actEl = document.getElementById("expProbActiveProfiles");
+      const p20El = document.getElementById("expProbP20");
+      const p50El = document.getElementById("expProbP50");
+      const p80El = document.getElementById("expProbP80");
+      const resEl = document.getElementById("expProbReserve");
+      const cfEl = document.getElementById("expProbCellFit");
+      const deltaEl = document.getElementById("expProbDeltas");
+      const warnEl = document.getElementById("expProbWarnings");
+      const extWarnEl = document.getElementById("expProbExternalWarning");
+
+      if (actEl) {
+        const profs = expStrat.activeProfiles || ["baseline"];
+        actEl.textContent = profs.join(", ");
+        const hasExternal = profs.some(p => p !== "baseline");
+        if (extWarnEl) extWarnEl.style.display = hasExternal ? "block" : "none";
+      }
+
+      if (p20El) p20El.textContent = expStrat.p20 != null ? fmtWan(expStrat.p20) : "—";
+      if (p50El) p50El.textContent = expStrat.p50 != null ? fmtWan(expStrat.p50) : "—";
+      if (p80El) p80El.textContent = expStrat.p80 != null ? fmtWan(expStrat.p80) : "—";
+
+      if (resEl) {
+        const rStr = expStrat.experimentalReservePrice != null ? fmtWan(expStrat.experimentalReservePrice) : "—";
+        const cStr = expStrat.experimentalConservativePrice != null ? fmtWan(expStrat.experimentalConservativePrice) : "—";
+        resEl.textContent = `${rStr} / ${cStr}`;
+      }
+
+      if (cfEl) {
+        const cf = expStrat.cellFit;
+        if (cf) {
+          const score = (cf.fitScore * 100).toFixed(0);
+          const statusStr = cf.feasible ? `可行 (${score}%)` : `冲突 (${cf.conflicts?.[0] || "不可行"})`;
+          cfEl.textContent = statusStr;
+          cfEl.style.color = cf.feasible ? "var(--text)" : "#ef4444";
+        } else {
+          cfEl.textContent = "未启用";
+          cfEl.style.color = "var(--muted)";
+        }
+      }
+
+      if (deltaEl) {
+        const dProd = expStrat.deltaVsProduction?.medianDelta;
+        const dRed = expStrat.deltaVsPrBRed?.deltaVsRedMedian;
+        const pStr = dProd != null ? `${dProd >= 0 ? "+" : ""}${fmtWan(dProd)}` : "—";
+        const rStr = dRed != null ? `${dRed >= 0 ? "+" : ""}${fmtWan(dRed)}` : "—";
+        deltaEl.textContent = `${pStr} (Prod) | ${rStr} (Red)`;
+      }
+
+      if (warnEl) {
+        const warns = expStrat.warnings || [];
         warnEl.textContent = warns.join(" | ");
       }
     }
@@ -1987,6 +2090,7 @@ function sparkleBoundsText(b) {
       paintVisionHealth(d);
       updateStrategyPanelUI(d?.strategyPanel, d?.strategyMetrics);
       updateExperimentalRedUI(d?.experimentalRed);
+      updateExperimentalProbabilityStrategyUI(d?.experimentalProbabilityStrategy);
       const ownership = document.getElementById("currentOwnership");
       const inSettlement = d?.isSettlement === true || d?.scene === "SETTLEMENT";
       ownership.hidden = !inSettlement;
