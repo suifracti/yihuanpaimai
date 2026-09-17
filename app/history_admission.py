@@ -283,7 +283,7 @@ def _potential_content_fingerprint(record: Mapping[str, Any]) -> Optional[str]:
     return hashlib.sha256(canonical.encode("utf-8")).hexdigest()
 
 
-def canonical_duplicate_group_key(record: Mapping[str, Any]) -> Optional[str]:
-    """Expose the authoritative canonical content fingerprint used for duplicate grouping."""
+def potential_content_duplicate_group_key(record: Mapping[str, Any]) -> Optional[str]:
+    """Expose content fingerprint used for potential content duplicate detection."""
     return _potential_content_fingerprint(record)
 

@@ -182,10 +182,10 @@ class TestExperimentalRedInferenceLab(unittest.TestCase):
     def test_05_source_rejected_records_excluded(self):
         """5. Non-FINALIZED or rejected records (DRAFT, CANCELLED, DIAGNOSTIC) are excluded."""
         records = [
-            _build_test_record("rec_draft", lifecycle="DRAFT", red_count=1),
-            _build_test_record("rec_cancelled", lifecycle="CANCELLED", red_count=2),
-            _build_test_record("rec_diagnostic", diagnostic_only=True, red_count=1),
-            _build_test_record("rec_valid", lifecycle="FINALIZED", red_count=0),
+            _build_test_record("rec_draft", played_at="2026-09-16T12:01:00Z", lifecycle="DRAFT", red_count=1),
+            _build_test_record("rec_cancelled", played_at="2026-09-16T12:02:00Z", lifecycle="CANCELLED", red_count=2),
+            _build_test_record("rec_diagnostic", played_at="2026-09-16T12:03:00Z", diagnostic_only=True, red_count=1),
+            _build_test_record("rec_valid", played_at="2026-09-16T12:04:00Z", lifecycle="FINALIZED", red_count=0),
         ]
         lab = ExperimentalRedInferenceLab(records)
         report = lab.evaluate_inference({"venue": "standard", "box": "box_normal", "q": 60})
@@ -195,10 +195,10 @@ class TestExperimentalRedInferenceLab(unittest.TestCase):
     def test_06_replay_test_origin_excluded_from_training(self):
         """6. Replay/test dataOrigin records are strictly excluded from formal training history."""
         records = [
-            _build_test_record("rec_replay", origin="replay", red_count=1),
-            _build_test_record("rec_test", origin="test", red_count=1),
-            _build_test_record("rec_mock", origin="mock", red_count=1),
-            _build_test_record("rec_live", origin="live", red_count=0),
+            _build_test_record("rec_replay", played_at="2026-09-16T12:01:00Z", origin="replay", red_count=1),
+            _build_test_record("rec_test", played_at="2026-09-16T12:02:00Z", origin="test", red_count=1),
+            _build_test_record("rec_mock", played_at="2026-09-16T12:03:00Z", origin="mock", red_count=1),
+            _build_test_record("rec_live", played_at="2026-09-16T12:04:00Z", origin="live", red_count=0),
         ]
         lab = ExperimentalRedInferenceLab(records)
         report = lab.evaluate_inference({"venue": "standard", "box": "box_normal", "q": 60})
@@ -208,8 +208,8 @@ class TestExperimentalRedInferenceLab(unittest.TestCase):
     def test_07_known_red_does_not_assume_without_replacement(self):
         """7. Known red items condition observational evidence only (conditioningMode='observational_only')."""
         records = [
-            _build_test_record("rec_01", red_count=1, red_total_value=120000.0),
-            _build_test_record("rec_02", red_count=2, red_total_value=250000.0),
+            _build_test_record("rec_01", played_at="2026-09-16T12:01:00Z", red_count=1, red_total_value=120000.0),
+            _build_test_record("rec_02", played_at="2026-09-16T12:02:00Z", red_count=2, red_total_value=250000.0),
         ]
         lab = ExperimentalRedInferenceLab(records)
         report = lab.evaluate_inference({"venue": "standard", "box": "box_normal", "q": 60, "knownRed": 1})
@@ -228,12 +228,12 @@ class TestExperimentalRedInferenceLab(unittest.TestCase):
     def test_09_pmf_normalization(self):
         """9. Red count PMF probabilities must sum strictly to 1.0."""
         records = [
-            _build_test_record("rec_01", red_count=0, red_total_value=0.0),
-            _build_test_record("rec_02", red_count=0, red_total_value=0.0),
-            _build_test_record("rec_03", red_count=1, red_total_value=100000.0),
-            _build_test_record("rec_04", red_count=1, red_total_value=120000.0),
-            _build_test_record("rec_05", red_count=2, red_total_value=250000.0),
-            _build_test_record("rec_06", red_count=2, red_total_value=280000.0),
+            _build_test_record("rec_01", played_at="2026-09-16T12:01:00Z", red_count=0, red_total_value=0.0),
+            _build_test_record("rec_02", played_at="2026-09-16T12:02:00Z", red_count=0, red_total_value=0.0),
+            _build_test_record("rec_03", played_at="2026-09-16T12:03:00Z", red_count=1, red_total_value=100000.0),
+            _build_test_record("rec_04", played_at="2026-09-16T12:04:00Z", red_count=1, red_total_value=120000.0),
+            _build_test_record("rec_05", played_at="2026-09-16T12:05:00Z", red_count=2, red_total_value=250000.0),
+            _build_test_record("rec_06", played_at="2026-09-16T12:06:00Z", red_count=2, red_total_value=280000.0),
         ]
         lab = ExperimentalRedInferenceLab(records)
         report = lab.evaluate_inference({"venue": "standard", "box": "box_normal", "q": 60})
@@ -249,12 +249,12 @@ class TestExperimentalRedInferenceLab(unittest.TestCase):
     def test_10_quantile_monotonicity(self):
         """10. Quantiles must be strictly monotonic: p10 <= p20 <= p25 <= p50 <= p75 <= p80 <= p90 <= p95."""
         records = [
-            _build_test_record("rec_01", red_count=1, red_total_value=50000.0),
-            _build_test_record("rec_02", red_count=1, red_total_value=80000.0),
-            _build_test_record("rec_03", red_count=1, red_total_value=120000.0),
-            _build_test_record("rec_04", red_count=2, red_total_value=200000.0),
-            _build_test_record("rec_05", red_count=2, red_total_value=250000.0),
-            _build_test_record("rec_06", red_count=2, red_total_value=300000.0),
+            _build_test_record("rec_01", played_at="2026-09-16T12:01:00Z", red_count=1, red_total_value=50000.0),
+            _build_test_record("rec_02", played_at="2026-09-16T12:02:00Z", red_count=1, red_total_value=80000.0),
+            _build_test_record("rec_03", played_at="2026-09-16T12:03:00Z", red_count=1, red_total_value=120000.0),
+            _build_test_record("rec_04", played_at="2026-09-16T12:04:00Z", red_count=2, red_total_value=200000.0),
+            _build_test_record("rec_05", played_at="2026-09-16T12:05:00Z", red_count=2, red_total_value=250000.0),
+            _build_test_record("rec_06", played_at="2026-09-16T12:06:00Z", red_count=2, red_total_value=300000.0),
         ]
         lab = ExperimentalRedInferenceLab(records)
         report = lab.evaluate_inference({"venue": "standard", "box": "box_normal", "q": 60})
@@ -494,13 +494,13 @@ class TestExperimentalRedInferenceLab(unittest.TestCase):
         self.assertEqual(lab.history_generation, 2)
 
     def test_28_fix_h_same_physical_match_different_ids_cannot_cross_train_eval(self):
-        """Fix H & Final Fix 2: Same physical match duplicate group split across cutoff cannot cross train/eval."""
-        from history_admission import build_duplicate_index, canonical_duplicate_group_key
+        """Fix H & Final Semantic Fix B: Potential content duplicate pair across cutoff are both excluded from train and eval."""
+        from history_admission import build_duplicate_index, potential_content_duplicate_group_key
 
         # rec1 at 10:00 (train candidate)
         rec1 = _build_test_record("rec_id_1", played_at="2026-09-16T10:00:00Z", red_count=1, red_total_value=120000.0)
-        # rec_dup_a at 11:00 (train candidate) and rec_dup_b at 11:00 (eval candidate)
-        # Identical playedAt, venue, box, actualTotal, clearingPrice => same canonical duplicate group!
+        # rec_dup_a at 11:00 and rec_dup_b at 11:00
+        # Identical playedAt, venue, box, actualTotal, clearingPrice => potential content duplicates!
         rec_dup_a = _build_test_record("rec_dup_a", played_at="2026-09-16T11:00:00Z", red_count=1, red_total_value=120000.0)
         rec_dup_b = _build_test_record("rec_dup_b", played_at="2026-09-16T11:00:00Z", red_count=1, red_total_value=120000.0)
         # rec_eval_3 at 15:00 (eval candidate)
@@ -508,22 +508,20 @@ class TestExperimentalRedInferenceLab(unittest.TestCase):
 
         records = [rec1, rec_dup_a, rec_dup_b, rec_eval_3]
 
-        # Verify they are judged as the same duplicate group by canonical DuplicateIndex authority
+        # Verify they are judged as potential content duplicates by DuplicateIndex
         dup_idx = build_duplicate_index(records)
         self.assertIn("rec_dup_a", dup_idx.potential_content_duplicate_ids)
         self.assertIn("rec_dup_b", dup_idx.potential_content_duplicate_ids)
-        self.assertEqual(canonical_duplicate_group_key(rec_dup_a), canonical_duplicate_group_key(rec_dup_b))
+        self.assertEqual(potential_content_duplicate_group_key(rec_dup_a), potential_content_duplicate_group_key(rec_dup_b))
 
-        # Split with train_ratio=0.5 -> divides indices [0, 1] into train and [2, 3] into eval
-        # rec_dup_a goes to train side, rec_dup_b goes to eval side
+        # Split with train_ratio=0.5 -> under exclude_all policy, BOTH duplicates are excluded from admission
         res = run_time_split_evaluation(records, train_ratio=0.5)
         self.assertEqual(res["status"], "completed")
-        self.assertEqual(res["trainMatchCount"], 2)  # rec1 & rec_dup_a in train
-        # rec_dup_b MUST be purged from eval because it shares physical match group with rec_dup_a in train!
-        self.assertEqual(res["evalMatchCount"], 1)   # ONLY rec_eval_3 survives in eval!
+        self.assertEqual(res["trainMatchCount"], 1)  # ONLY rec1 in train! rec_dup_a excluded!
+        self.assertEqual(res["evalMatchCount"], 1)   # ONLY rec_eval_3 in eval! rec_dup_b excluded!
 
-        # Assert no record ID intersection and no physical group intersection
-        train_ids = {str(r.get("id")) for r in [rec1, rec_dup_a]}
+        # Assert no record ID intersection
+        train_ids = {str(r.get("id")) for r in [rec1]}
         eval_ids = {str(r.get("id")) for r in [rec_eval_3]}
         self.assertTrue(train_ids.isdisjoint(eval_ids))
 
@@ -646,6 +644,202 @@ class TestExperimentalRedInferenceLab(unittest.TestCase):
         res = run_time_split_evaluation([rec_bad])
         self.assertEqual(res["status"], "insufficient_data")
         self.assertEqual(res["evaluatedCount"], 0)
+
+    # ---------------------------------------------------------------------------------
+    # Final Semantic Fix A & B Tests
+    # ---------------------------------------------------------------------------------
+
+    def test_40_coverage_complete_unit_rarity_unknown_rejected(self):
+        """Final Semantic Fix A: Whole warehouse coverage COMPLETE but one unit rarity unknown => redCountEligible=False."""
+        rec = _build_test_record(
+            "r_unknown_rarity",
+            red_count=0,
+            red_inventory_complete=False,
+            coverage_status="COMPLETE",
+            red_provenance=None,
+        )
+        rec["settlement"]["settlementItems"] = [
+            {"name": "ItemGold", "quality": "gold", "confirmationStatus": "CONFIRMED", "value": 10000},
+            {"name": "ItemUnknown", "quality": None, "confirmationStatus": "CONFIRMED", "value": 10000},
+        ]
+        el = evaluate_record_red_eligibility(rec)
+        self.assertTrue(el.warehouse_complete_eligible)
+        self.assertFalse(el.red_count_eligible)
+        self.assertFalse(el.red_total_value_eligible)
+        self.assertEqual(el.red_count_truth_source, "QUALITY_CLASSIFICATION_INCOMPLETE")
+        self.assertIn("QUALITY_CLASSIFICATION_INCOMPLETE", el.exclusion_reasons)
+
+    def test_41_coverage_complete_no_red_evidence_classification_incomplete_cannot_infer_r0(self):
+        """Final Semantic Fix A: Coverage COMPLETE + no red evidence + classification incomplete => cannot infer R=0."""
+        rec = _build_test_record(
+            "r_incomplete_class",
+            red_count=0,
+            red_inventory_complete=False,
+            coverage_status="COMPLETE",
+            red_provenance=None,
+        )
+        # 5 items observed, none called red, but one unit has non-canonical rarity 'unknown_rarity'
+        rec["settlement"]["settlementItems"] = [
+            {"name": f"Item_{i}", "quality": "gold" if i < 4 else "unknown_rarity", "confirmationStatus": "CONFIRMED", "value": 10000}
+            for i in range(5)
+        ]
+        el = evaluate_record_red_eligibility(rec)
+        self.assertTrue(el.warehouse_complete_eligible)
+        self.assertFalse(el.red_count_eligible)
+        # Cannot infer R=0 just because no red was observed!
+        self.assertIsNone(el.observed_red_count)
+        self.assertEqual(el.red_count_truth_source, "QUALITY_CLASSIFICATION_INCOMPLETE")
+
+    def test_42_coverage_complete_all_units_classified_zero_red_valid_r0(self):
+        """Final Semantic Fix A: Coverage COMPLETE + all units trusted rarity-classified + zero red => valid R=0."""
+        rec = _build_test_record(
+            "r_clean_zero",
+            red_count=0,
+            red_inventory_complete=False,
+            coverage_status="COMPLETE",
+            red_provenance=None,
+        )
+        rec["settlement"]["settlementItems"] = [
+            {"name": "ItemGold", "quality": "gold", "confirmationStatus": "CONFIRMED", "value": 10000},
+            {"name": "ItemBlue", "quality": "blue", "confirmationStatus": "CONFIRMED", "value": 5000},
+            {"name": "ItemPurple", "quality": "purple", "confirmationStatus": "CONFIRMED", "value": 8000},
+        ]
+        el = evaluate_record_red_eligibility(rec)
+        self.assertTrue(el.warehouse_complete_eligible)
+        self.assertTrue(el.red_count_eligible)
+        self.assertEqual(el.observed_red_count, 0)
+        self.assertEqual(el.red_count_truth_source, "COMPLETE_LEDGER_FULL_QUALITY_CLASSIFICATION")
+        self.assertTrue(el.red_total_value_eligible)
+        self.assertEqual(el.observed_red_total_value, 0.0)
+
+    def test_43_trusted_red_inventory_complete_explicit_r2_valid_truth(self):
+        """Final Semantic Fix A: Authority 1 trusted redInventoryComplete + trusted provenance + explicit R=2 => valid count truth."""
+        rec = _build_test_record(
+            "r_auth1_valid",
+            red_count=2,
+            red_total_value=200000.0,
+            red_inventory_complete=True,
+            coverage_status="COMPLETE",
+            red_provenance="post_settlement_verified_warehouse",
+        )
+        el = evaluate_record_red_eligibility(rec)
+        self.assertTrue(el.warehouse_complete_eligible)
+        self.assertTrue(el.red_count_eligible)
+        self.assertEqual(el.observed_red_count, 2)
+        self.assertEqual(el.red_count_truth_source, "TRUSTED_RED_INVENTORY_COMPLETE")
+
+    def test_44_settlement_verified_red_items_subset_vs_complete_ledger(self):
+        """Final Semantic Fix A: settlementVerifiedRedItems=1 + complete ledger R=2 => redCount remains 2, subset count remains 1."""
+        rec = _build_test_record(
+            "r_subset_vs_ledger",
+            red_count=2,
+            red_total_value=200000.0,
+            red_inventory_complete=False,
+            coverage_status="COMPLETE",
+            red_provenance=None,
+        )
+        # Complete physical ledger has 2 red items and 1 gold item
+        rec["settlement"]["settlementItems"] = [
+            {"name": "Red1", "quality": "red", "confirmationStatus": "CONFIRMED", "value": 100000.0},
+            {"name": "Red2", "quality": "red", "confirmationStatus": "CONFIRMED", "value": 100000.0},
+            {"name": "Gold1", "quality": "gold", "confirmationStatus": "CONFIRMED", "value": 10000.0},
+        ]
+        # Verified subset has only 1 item
+        rec["qualities"]["red"]["settlementVerifiedRedItems"] = [
+            {"name": "Red1", "quality": "red", "confirmationStatus": "CONFIRMED", "value": 100000.0}
+        ]
+        el = evaluate_record_red_eligibility(rec)
+        self.assertTrue(el.red_count_eligible)
+        # Red count truth is derived from complete ledger (R=2), NOT overwritten by subset (1)!
+        self.assertEqual(el.observed_red_count, 2)
+        self.assertEqual(el.red_count_truth_source, "COMPLETE_LEDGER_FULL_QUALITY_CLASSIFICATION")
+        self.assertEqual(len(rec["qualities"]["red"]["settlementVerifiedRedItems"]), 1)
+
+    def test_45_verified_subset_without_complete_ledger_no_total_count(self):
+        """Final Semantic Fix A: Verified red subset without complete warehouse ledger => no total red-count truth."""
+        rec = _build_test_record(
+            "r_subset_no_cov",
+            red_count=1,
+            red_inventory_complete=False,
+            coverage_status="PARTIAL",
+            red_provenance=None,
+        )
+        rec["qualities"]["red"]["settlementVerifiedRedItems"] = [
+            {"name": "Red1", "quality": "red", "confirmationStatus": "CONFIRMED", "value": 100000.0}
+        ]
+        el = evaluate_record_red_eligibility(rec)
+        self.assertFalse(el.warehouse_complete_eligible)
+        self.assertFalse(el.red_count_eligible)
+        self.assertFalse(el.red_total_value_eligible)
+        self.assertEqual(el.red_count_truth_source, "VERIFIED_RED_SUBSET_WITHOUT_COVERAGE_PROOF")
+
+    def test_46_potential_content_duplicate_pair_both_excluded_from_training(self):
+        """Final Semantic Fix B: Potential content duplicate pair => both excluded from PR-B training."""
+        from history_admission import build_duplicate_index
+
+        rec_a = _build_test_record("dup_train_a", played_at="2026-09-16T12:00:00Z", red_count=1, red_total_value=100000.0)
+        rec_b = _build_test_record("dup_train_b", played_at="2026-09-16T12:00:00Z", red_count=1, red_total_value=100000.0)
+
+        records = [rec_a, rec_b]
+        dup_idx = build_duplicate_index(records)
+        self.assertIn("dup_train_a", dup_idx.potential_content_duplicate_ids)
+        self.assertIn("dup_train_b", dup_idx.potential_content_duplicate_ids)
+
+        el_a = evaluate_record_red_eligibility(rec_a, dup_idx)
+        el_b = evaluate_record_red_eligibility(rec_b, dup_idx)
+        self.assertFalse(el_a.match_eligible)
+        self.assertFalse(el_b.match_eligible)
+        self.assertIn("POTENTIAL_CONTENT_DUPLICATE", el_a.exclusion_reasons)
+        self.assertIn("POTENTIAL_CONTENT_DUPLICATE", el_b.exclusion_reasons)
+
+        lab = ExperimentalRedInferenceLab(records)
+        report = lab.evaluate_inference({"venue": "standard", "box": "box_normal", "q": 60})
+        # Both excluded, zero training samples admitted
+        self.assertEqual(report.eligible_match_count, 0)
+        self.assertNotIn("dup_train_a", report.history_evidence_ids)
+        self.assertNotIn("dup_train_b", report.history_evidence_ids)
+
+    def test_47_potential_content_duplicate_pair_across_cutoff_excluded(self):
+        """Final Semantic Fix B: Potential content duplicate pair across cutoff => neither enters train/eval metrics."""
+        rec_train = _build_test_record("rec_clean_train", played_at="2026-09-16T09:00:00Z", red_count=1, red_total_value=100000.0)
+        rec_dup_1 = _build_test_record("dup_cutoff_1", played_at="2026-09-16T12:00:00Z", red_count=1, red_total_value=100000.0)
+        rec_dup_2 = _build_test_record("dup_cutoff_2", played_at="2026-09-16T12:00:00Z", red_count=1, red_total_value=100000.0)
+        rec_eval = _build_test_record("rec_clean_eval", played_at="2026-09-16T15:00:00Z", red_count=2, red_total_value=200000.0)
+
+        records = [rec_train, rec_dup_1, rec_dup_2, rec_eval]
+        res = run_time_split_evaluation(records, train_ratio=0.5)
+        self.assertEqual(res["status"], "completed")
+        self.assertEqual(res["trainMatchCount"], 1)
+        self.assertEqual(res["evalMatchCount"], 1)
+
+        eval_records = [item["recordId"] for item in res.get("sampleEvaluations", [])]
+        self.assertNotIn("dup_cutoff_1", eval_records)
+        self.assertNotIn("dup_cutoff_2", eval_records)
+
+    def test_48_offline_metadata_downgraded_leakage_proof_level(self):
+        """Final Semantic Fix B: Offline metadata => stablePhysicalMatchIdentityAvailable=False, leakageProofLevel downgraded."""
+        records = [
+            _build_test_record(f"rec_meta_{i}", played_at=f"2026-09-16T{10 + i:02d}:00:00Z", red_count=i % 2, red_total_value=float((i % 2) * 100000))
+            for i in range(6)
+        ]
+        res = run_time_split_evaluation(records, train_ratio=0.5)
+        meta = res.get("metadata", {})
+        self.assertFalse(meta.get("stablePhysicalMatchIdentityAvailable"))
+        self.assertEqual(meta.get("potentialDuplicateGuard"), "exclude_all")
+        self.assertEqual(meta.get("leakageProofLevel"), "record_id_and_known_potential_duplicate_guard")
+
+    def test_49_no_custom_sha_physical_identity_path_exists(self):
+        """Final Semantic Fix B: Verification that no custom SHA physical identity path exists."""
+        import red_inference_offline_eval
+        self.assertFalse(
+            hasattr(red_inference_offline_eval, "get_canonical_physical_match_fingerprint"),
+            "red_inference_offline_eval must not have get_canonical_physical_match_fingerprint",
+        )
+        import history_admission
+        self.assertTrue(
+            hasattr(history_admission, "potential_content_duplicate_group_key"),
+            "history_admission must have potential_content_duplicate_group_key",
+        )
 
 
 if __name__ == "__main__":
