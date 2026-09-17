@@ -9,11 +9,13 @@ Strict Invariants:
 1. experimental = True, productionEligible = False.
 2. Zero mutation of production solvers, six-quality joint constraints, or bidding lines.
 3. Zero copying of competitor source code, weights, decay constants, or magic tables.
-4. Input data must pass canonical history admission and eligibility gates.
+4. Input data must pass canonical history admission and post-settlement truth gates.
 5. Replay, test, synthetic, and mock records are strictly excluded from training history.
 6. Default sampling assumption is explicitly 'unknown' (no assumed replacement model).
 7. Known red items are observational evidence only ('observational_only').
 8. Small or zero eligible samples strictly trigger insufficientData=True without smoothing.
+9. Runtime calls must be fail-isolated (exceptions never crash production solve/HUD).
+10. O(1) cached lookups using (historyGeneration, contextFingerprint).
 """
 
 from __future__ import annotations
@@ -63,6 +65,12 @@ SCHEMA_VERSION = 1
 MIN_CONFIDENCE_SAMPLE_COUNT = 5
 DISALLOWED_DATA_ORIGINS = frozenset({"replay", "test", "synthetic", "mock", "diagnostic"})
 
+SIMILARITY_PROFILE = {
+    "similarityProfileVersion": "v1_canonical_coarse",
+    "featuresUsed": ["venue", "box", "q"],
+    "feasibilityGates": ["knownRedCount"],
+}
+
 
 @dataclass(frozen=True)
 class RedEligibilityBreakdown:
@@ -70,7 +78,12 @@ class RedEligibilityBreakdown:
     match_eligible: bool
     red_count_eligible: bool
     red_item_identity_eligible: bool
+    red_total_value_eligible: bool
     warehouse_complete_eligible: bool
+    red_count_truth_source: str
+    red_identity_truth_source: str
+    red_value_truth_source: str
+    warehouse_completeness_source: str
     exclusion_reasons: Tuple[str, ...]
     observed_red_count: Optional[int]
     observed_red_total_value: Optional[float]
@@ -88,7 +101,12 @@ class RedEligibilityBreakdown:
             "matchEligible": self.match_eligible,
             "redCountEligible": self.red_count_eligible,
             "redItemIdentityEligible": self.red_item_identity_eligible,
+            "redTotalValueEligible": self.red_total_value_eligible,
             "warehouseCompleteEligible": self.warehouse_complete_eligible,
+            "redCountTruthSource": self.red_count_truth_source,
+            "redIdentityTruthSource": self.red_identity_truth_source,
+            "redValueTruthSource": self.red_value_truth_source,
+            "warehouseCompletenessSource": self.warehouse_completeness_source,
             "exclusionReasons": list(self.exclusion_reasons),
             "observedRedCount": self.observed_red_count,
             "observedRedTotalValue": self.observed_red_total_value,
@@ -154,6 +172,7 @@ class RedInferenceReport:
     effective_sample_weight: float = 0.0
     sampling_assumption: str = "unknown"
     conditioning_mode: str = "observational_only"
+    similarity_profile: Dict[str, Any] = field(default_factory=lambda: dict(SIMILARITY_PROFILE))
     red_count_pmf: Dict[int, float] = field(default_factory=dict)
     red_total_quantiles: RedQuantiles = field(default_factory=RedQuantiles)
     red_total_mean: Optional[float] = None
@@ -176,6 +195,7 @@ class RedInferenceReport:
             "effectiveSampleWeight": round(self.effective_sample_weight, 4),
             "samplingAssumption": self.sampling_assumption,
             "conditioningMode": self.conditioning_mode,
+            "similarityProfile": self.similarity_profile,
             "redCountPmf": {str(k): round(v, 6) for k, v in sorted(self.red_count_pmf.items())},
             "redTotalQuantiles": self.red_total_quantiles.to_dict(),
             "redTotalMean": round(self.red_total_mean, 2) if self.red_total_mean is not None else None,
@@ -205,7 +225,7 @@ def evaluate_record_red_eligibility(
     record: Mapping[str, Any],
     duplicate_index: Optional[Any] = None,
 ) -> RedEligibilityBreakdown:
-    """Evaluate a canonical record across layered admission and red-specific eligibility gates."""
+    """Evaluate a canonical record across strict layered admission and verified truth gates (Fix A, B, C)."""
     rid = str(record.get("id") or "").strip()
     reasons: List[str] = []
 
@@ -236,61 +256,136 @@ def evaluate_record_red_eligibility(
 
     match_eligible = (len(reasons) == 0)
 
-    # 5. Red Count Extraction & Verification
-    observed_red_count: Optional[int] = None
+    # 5. Warehouse Completeness Gate (Fix B - delete settlement.verified fallback!)
     qualities = record.get("qualities") if isinstance(record.get("qualities"), Mapping) else {}
     red_q = qualities.get("red") if isinstance(qualities.get("red"), Mapping) else {}
-    raw_count = red_q.get("count")
-    if _is_finite_nonnegative_int(raw_count):
-        observed_red_count = int(raw_count)
-
     settlement = record.get("settlement") if isinstance(record.get("settlement"), Mapping) else {}
+    warehouse = record.get("warehouse") if isinstance(record.get("warehouse"), Mapping) else {}
+    review_units = record.get("reviewUnits") or settlement.get("reviewUnits") or []
+
+    warehouse_complete_eligible = False
+    warehouse_completeness_source = "UNVERIFIED_OR_PARTIAL_WAREHOUSE"
+
+    if red_q.get("redInventoryComplete") is True:
+        warehouse_complete_eligible = match_eligible
+        warehouse_completeness_source = "RED_INVENTORY_COMPLETE_FLAG"
+    elif _is_positive_finite(warehouse.get("itemCount")) and warehouse.get("unknownCount") == 0:
+        warehouse_complete_eligible = match_eligible
+        warehouse_completeness_source = "WAREHOUSE_SLOTS_ZERO_UNKNOWN"
+    elif isinstance(review_units, list) and len(review_units) > 0 and all(
+        isinstance(u, dict) and u.get("confirmationStatus") == "CONFIRMED" for u in review_units
+    ):
+        warehouse_complete_eligible = match_eligible
+        warehouse_completeness_source = "ALL_REVIEW_UNITS_CONFIRMED"
+    elif str(record.get("coverageStatus") or "").upper() == "COMPLETE":
+        warehouse_complete_eligible = match_eligible
+        warehouse_completeness_source = "CANONICAL_COVERAGE_STATUS_COMPLETE"
+
+    # 6. Red Count Ground Truth Gate (Fix A - auction OCR / constraints alone cannot be truth!)
+    observed_red_count: Optional[int] = None
+    red_count_eligible = False
+    red_count_truth_source = "UNVERIFIED_AUCTION_OR_OCR"
+
+    # Check for settlement verified items
+    st_verified_items_raw = red_q.get("settlementVerifiedRedItems")
     st_items = settlement.get("settlementItems") if isinstance(settlement.get("settlementItems"), list) else []
     red_st_items = [
         item for item in st_items
         if isinstance(item, Mapping) and str(item.get("quality") or item.get("rarity") or "").lower() in ("red", "红")
     ]
-    if observed_red_count is None and settlement.get("verified") is True and len(st_items) > 0:
-        observed_red_count = len(red_st_items)
 
-    red_count_eligible = match_eligible and (observed_red_count is not None)
+    if red_q.get("redInventoryComplete") is True and _is_finite_nonnegative_int(red_q.get("count")):
+        # Case A: Post-settlement verified complete inventory
+        observed_red_count = int(red_q.get("count"))
+        red_count_eligible = match_eligible
+        red_count_truth_source = "POST_SETTLEMENT_VERIFIED_INVENTORY"
+    elif st_verified_items_raw and isinstance(st_verified_items_raw, (str, list)):
+        # Case B: Explicit settlement verified red items
+        if isinstance(st_verified_items_raw, str):
+            items_list = [p.strip() for p in st_verified_items_raw.split("+") if p.strip()]
+        else:
+            items_list = list(st_verified_items_raw)
+        observed_red_count = len(items_list)
+        red_count_eligible = match_eligible
+        red_count_truth_source = "SETTLEMENT_VERIFIED_RED_ITEMS"
+    elif warehouse_complete_eligible:
+        # Case C: Warehouse proven complete with zero unknown items
+        # Count confirmed red items in warehouse slots or review units
+        conf_red_count = sum(
+            1 for u in review_units
+            if isinstance(u, dict) and str(u.get("quality") or u.get("rarity") or "").lower() in ("red", "红")
+        )
+        observed_red_count = conf_red_count
+        red_count_eligible = match_eligible
+        red_count_truth_source = "WAREHOUSE_CONFIRMED_ITEMS"
+    else:
+        # Auction OCR or unverified count alone cannot be truth!
+        reasons.append("RED_COUNT_LACKS_VERIFIED_POST_SETTLEMENT_OR_WAREHOUSE_TRUTH")
 
-    # 6. Red Item Identity & Value Extraction
+    # 7. Red Item Identity & Value Truth Gate (Fix C - distinguish exact vs ambiguous vs unknown)
     known_items = red_q.get("knownItems") if isinstance(red_q.get("knownItems"), list) else []
     known_red_items = tuple(it for it in known_items if isinstance(it, dict))
 
-    confirmed_red_identities = []
-    total_val = 0.0
-    val_complete = False
+    observed_red_total_value: Optional[float] = None
+    red_item_identity_eligible = False
+    red_total_value_eligible = False
+    red_identity_truth_source = "UNVERIFIED_RED_IDENTITIES"
+    red_value_truth_source = "UNVERIFIED_RED_VALUES"
 
-    if red_st_items:
-        has_all_vals = True
-        for it in red_st_items:
-            name = str(it.get("name") or it.get("itemName") or "").strip()
-            if name:
-                confirmed_red_identities.append(name)
-            v = it.get("value") or it.get("price") or it.get("unitPrice")
-            if _is_positive_finite(v):
-                total_val += float(v)
+    if red_count_eligible and observed_red_count == 0:
+        # Zero red count: valid 0 total value ONLY IF warehouse is complete with proof of zero red!
+        if warehouse_complete_eligible:
+            observed_red_total_value = 0.0
+            red_item_identity_eligible = match_eligible
+            red_total_value_eligible = match_eligible
+            red_identity_truth_source = "VERIFIED_ZERO_RED_COMPLETE"
+            red_value_truth_source = "VERIFIED_ZERO_RED_COMPLETE"
+        else:
+            red_identity_truth_source = "ZERO_RED_WITHOUT_WAREHOUSE_COMPLETENESS"
+            red_value_truth_source = "ZERO_RED_WITHOUT_WAREHOUSE_COMPLETENESS"
+    elif red_count_eligible and observed_red_count is not None and observed_red_count > 0:
+        # Check all observed red items for exact confirmation and positive finite value
+        candidate_items = red_st_items if red_st_items else [
+            u for u in review_units if isinstance(u, dict) and str(u.get("quality") or u.get("rarity") or "").lower() in ("red", "红")
+        ]
+        if len(candidate_items) == observed_red_count:
+            all_exact = True
+            all_valued = True
+            tot_v = 0.0
+            for item in candidate_items:
+                conf_status = str(item.get("confirmationStatus") or "").upper()
+                ident_status = str(item.get("identityStatus") or "").upper()
+                name = str(item.get("name") or item.get("canonicalName") or "").strip()
+                # Check exact identity (must not be candidate-only, ambiguous, or unknown)
+                is_exact = (
+                    conf_status == "CONFIRMED"
+                    or ident_status == "EXACT_IDENTIFIED"
+                    or (item.get("confirmed") is True and name and name != "UNKNOWN")
+                )
+                if not is_exact:
+                    all_exact = False
+                val = item.get("value") or item.get("price") or item.get("unitPrice")
+                if _is_positive_finite(val):
+                    tot_v += float(val)
+                else:
+                    all_valued = False
+
+            if all_exact and all_valued:
+                observed_red_total_value = tot_v
+                red_item_identity_eligible = match_eligible
+                red_total_value_eligible = match_eligible
+                red_identity_truth_source = "EXACT_CONFIRMED_RED_ITEMS"
+                red_value_truth_source = "EXACT_CONFIRMED_RED_PRICES"
+            elif all_exact:
+                red_item_identity_eligible = match_eligible
+                red_identity_truth_source = "EXACT_CONFIRMED_RED_ITEMS"
+                red_value_truth_source = "AMBIGUOUS_OR_MISSING_RED_VALUES"
             else:
-                has_all_vals = False
-        if has_all_vals and len(red_st_items) == observed_red_count:
-            val_complete = True
-
-    if observed_red_count == 0:
-        observed_red_total_value = 0.0
-        val_complete = True
-        red_item_identity_eligible = match_eligible
-    elif val_complete:
-        observed_red_total_value = total_val
-        red_item_identity_eligible = match_eligible and len(confirmed_red_identities) > 0
-    else:
-        observed_red_total_value = None
-        red_item_identity_eligible = False
-
-    # 7. Warehouse Complete Gate
-    warehouse_complete = bool(red_q.get("redInventoryComplete") is True or (settlement.get("verified") is True and len(st_items) > 0))
-    warehouse_complete_eligible = match_eligible and warehouse_complete
+                red_identity_truth_source = "AMBIGUOUS_OR_CANDIDATE_RED_ITEMS"
+                red_value_truth_source = "AMBIGUOUS_OR_CANDIDATE_RED_ITEMS"
+        else:
+            red_identity_truth_source = "INCOMPLETE_RED_ITEMS_RECORDED"
+            red_value_truth_source = "INCOMPLETE_RED_ITEMS_RECORDED"
 
     # Context fields
     env = record.get("environment") if isinstance(record.get("environment"), Mapping) else {}
@@ -310,7 +405,12 @@ def evaluate_record_red_eligibility(
         match_eligible=match_eligible,
         red_count_eligible=red_count_eligible,
         red_item_identity_eligible=red_item_identity_eligible,
+        red_total_value_eligible=red_total_value_eligible,
         warehouse_complete_eligible=warehouse_complete_eligible,
+        red_count_truth_source=red_count_truth_source,
+        red_identity_truth_source=red_identity_truth_source,
+        red_value_truth_source=red_value_truth_source,
+        warehouse_completeness_source=warehouse_completeness_source,
         exclusion_reasons=tuple(reasons),
         observed_red_count=observed_red_count,
         observed_red_total_value=observed_red_total_value,
@@ -328,7 +428,11 @@ def compute_canonical_similarity(
     context_features: SimilarityFeatures,
     candidate: RedEligibilityBreakdown,
 ) -> float:
-    """Compute independent multi-feature canonical similarity score between context and candidate record."""
+    """Compute independent multi-feature canonical similarity score (Fix K: honest declaration).
+
+    Features used: venue, box, q.
+    Feasibility gate: knownRedCount <= candidate.observed_red_count.
+    """
     if candidate.observed_red_count is not None and context_features.known_red_count > candidate.observed_red_count:
         return 0.0
 
@@ -405,13 +509,15 @@ def _compute_weighted_quantiles(
 
 
 class ExperimentalRedInferenceLab:
-    """Stateful coordinator for the experimental red probability inference lab."""
+    """Stateful coordinator for the experimental red probability inference lab (Fix E, F, G)."""
 
     def __init__(self, history_records: Optional[Sequence[Mapping[str, Any]]] = None):
         self._records_cache: Dict[str, Mapping[str, Any]] = {}
         self._eligibility_cache: Dict[str, RedEligibilityBreakdown] = {}
+        self._eval_cache: Dict[Tuple[int, str], RedInferenceReport] = {}
         self._duplicate_index: Optional[Any] = None
         self._history_generation: int = 0
+        self._source_history_generation: Optional[int] = None
         if history_records:
             self.set_records(history_records)
 
@@ -422,29 +528,46 @@ class ExperimentalRedInferenceLab:
     def clear(self) -> None:
         self._records_cache.clear()
         self._eligibility_cache.clear()
+        self._eval_cache.clear()
         self._duplicate_index = None
         self._history_generation += 1
+
+    def sync_with_live_history(self) -> bool:
+        """Cheap generation sync: reloads canonical snapshot only when source history generation changed (Fix F)."""
+        try:
+            import live_shadow
+            current_source_gen = live_shadow.history_generation()
+            if current_source_gen != self._source_history_generation:
+                recs = live_shadow.load_history_snapshot()
+                self.set_records(recs)
+                self._source_history_generation = current_source_gen
+                return True
+        except Exception as e:
+            _LOG.warning("Failed cheap generation sync with live_shadow: %s", e)
+        return False
 
     def set_records(self, records: Sequence[Mapping[str, Any]]) -> None:
         """Replace all records idempotently."""
         self._records_cache.clear()
         self._eligibility_cache.clear()
+        self._eval_cache.clear()
+
+        valid_recs = [r for r in records if isinstance(r, Mapping)]
         if build_duplicate_index is not None:
-            self._duplicate_index = build_duplicate_index(records)
+            self._duplicate_index = build_duplicate_index(valid_recs)
         else:
             self._duplicate_index = None
 
-        for r in records:
-            if isinstance(r, Mapping):
-                rid = str(r.get("id") or "").strip()
-                if rid and rid not in self._records_cache:
-                    self._records_cache[rid] = r
-                    self._eligibility_cache[rid] = evaluate_record_red_eligibility(r, self._duplicate_index)
+        for r in valid_recs:
+            rid = str(r.get("id") or "").strip()
+            if rid and rid not in self._records_cache:
+                self._records_cache[rid] = r
+                self._eligibility_cache[rid] = evaluate_record_red_eligibility(r, self._duplicate_index)
 
         self._history_generation += 1
 
     def ingest_record(self, record: Mapping[str, Any]) -> bool:
-        """Idempotently ingest a single record."""
+        """Idempotently ingest a single record and re-evaluate all records' duplicate eligibility (Fix G)."""
         if not isinstance(record, Mapping):
             return False
         rid = str(record.get("id") or "").strip()
@@ -457,7 +580,15 @@ class ExperimentalRedInferenceLab:
         all_recs = list(self._records_cache.values())
         if build_duplicate_index is not None:
             self._duplicate_index = build_duplicate_index(all_recs)
-        self._eligibility_cache[rid] = evaluate_record_red_eligibility(record, self._duplicate_index)
+        else:
+            self._duplicate_index = None
+
+        # Re-evaluate eligibility for ALL records to ensure duplicate status updates (Fix G)
+        self._eligibility_cache = {
+            r_id: evaluate_record_red_eligibility(rec, self._duplicate_index)
+            for r_id, rec in self._records_cache.items()
+        }
+        self._eval_cache.clear()
         self._history_generation += 1
         return True
 
@@ -467,9 +598,7 @@ class ExperimentalRedInferenceLab:
         production_metrics: Optional[Mapping[str, Any]] = None,
         shadow_profile: Optional[Mapping[str, Any]] = None,
     ) -> RedInferenceReport:
-        """Evaluate experimental red probability and value distribution for a given session context."""
-        warnings: List[str] = []
-
+        """Evaluate experimental red probability and value distribution with O(1) snapshot caching (Fix E)."""
         venue = session_ctx.get("venue") or (session_ctx.get("environment") or {}).get("venue")
         box = session_ctx.get("box") or (session_ctx.get("environment") or {}).get("box")
         q = session_ctx.get("q")
@@ -485,6 +614,15 @@ class ExperimentalRedInferenceLab:
         else:
             known_red_count = 0
 
+        # Check O(1) cache before running full history scan
+        fingerprint = f"{venue}|{box}|{q}|{known_red_count}"
+        cache_key = (self._history_generation, fingerprint)
+        if cache_key in self._eval_cache:
+            cached_base = self._eval_cache[cache_key]
+            # Attach current production deltas without recomputing distribution
+            return self._attach_deltas(cached_base, production_metrics, shadow_profile)
+
+        warnings: List[str] = []
         features = SimilarityFeatures(
             venue=str(venue).strip() if venue else None,
             box=str(box).strip() if box else None,
@@ -493,16 +631,17 @@ class ExperimentalRedInferenceLab:
             known_red_count=known_red_count,
         )
 
-        eligible_candidates: List[Tuple[RedEligibilityBreakdown, float]] = []
+        # 1. Gather Eligible Red Count Candidates (Fix A & C)
+        eligible_count_candidates: List[Tuple[RedEligibilityBreakdown, float]] = []
         for cand in self._eligibility_cache.values():
             if not cand.match_eligible or not cand.red_count_eligible:
                 continue
             sim = compute_canonical_similarity(features, cand)
             if sim > 0:
-                eligible_candidates.append((cand, sim))
+                eligible_count_candidates.append((cand, sim))
 
-        eligible_match_count = len(eligible_candidates)
-        total_effective_weight = sum(sim for _, sim in eligible_candidates)
+        eligible_match_count = len(eligible_count_candidates)
+        total_effective_weight = sum(sim for _, sim in eligible_count_candidates)
 
         insufficient_data = (
             eligible_match_count < MIN_CONFIDENCE_SAMPLE_COUNT
@@ -516,10 +655,11 @@ class ExperimentalRedInferenceLab:
                 "insufficient for high-confidence statistical inference."
             )
 
+        # 2. Compute Red Count PMF
         red_count_pmf: Dict[int, float] = {}
-        if eligible_candidates and total_effective_weight > 0:
+        if eligible_count_candidates and total_effective_weight > 0:
             count_weights: Dict[int, float] = {}
-            for cand, weight in eligible_candidates:
+            for cand, weight in eligible_count_candidates:
                 rc = cand.observed_red_count
                 if rc is not None:
                     count_weights[rc] = count_weights.get(rc, 0.0) + weight
@@ -529,10 +669,11 @@ class ExperimentalRedInferenceLab:
                 for k, w in count_weights.items():
                     red_count_pmf[k] = w / sum_w
 
+        # 3. Gather Eligible Total Value Candidates (Fix C: redTotalValueEligible gate)
         val_samples: List[float] = []
         val_weights: List[float] = []
-        for cand, weight in eligible_candidates:
-            if cand.observed_red_total_value is not None:
+        for cand, weight in eligible_count_candidates:
+            if cand.red_total_value_eligible and cand.observed_red_total_value is not None:
                 val_samples.append(cand.observed_red_total_value)
                 val_weights.append(weight)
 
@@ -547,10 +688,17 @@ class ExperimentalRedInferenceLab:
         else:
             warnings.append("Insufficient verified red item settlement values; total value quantiles unavailable.")
 
+        # 4. Conditional Distribution P(totalRedValue | R = k)
         conditional_dists: Dict[int, Dict[str, Any]] = {}
         for k in sorted(red_count_pmf.keys()):
-            k_samples = [cand.observed_red_total_value for cand, _ in eligible_candidates if cand.observed_red_count == k and cand.observed_red_total_value is not None]
-            k_weights = [weight for cand, weight in eligible_candidates if cand.observed_red_count == k and cand.observed_red_total_value is not None]
+            k_samples = [
+                cand.observed_red_total_value for cand, _ in eligible_count_candidates
+                if cand.observed_red_count == k and cand.red_total_value_eligible and cand.observed_red_total_value is not None
+            ]
+            k_weights = [
+                weight for cand, weight in eligible_count_candidates
+                if cand.observed_red_count == k and cand.red_total_value_eligible and cand.observed_red_total_value is not None
+            ]
             if k_samples:
                 k_q = _compute_weighted_quantiles(k_samples, k_weights)
                 k_mean = sum(v * w for v, w in zip(k_samples, k_weights)) / sum(k_weights)
@@ -568,25 +716,7 @@ class ExperimentalRedInferenceLab:
                     "samplingAssumption": "unknown",
                 }
 
-        delta_vs_prod: Dict[str, Any] = {}
-        if production_metrics:
-            prod_med = production_metrics.get("medianEstimate")
-            if prod_med is not None and median_val is not None:
-                delta_vs_prod["medianDelta"] = round(median_val - float(prod_med), 2)
-            prod_mean = production_metrics.get("meanEstimate")
-            if prod_mean is not None and mean_val is not None:
-                delta_vs_prod["meanDelta"] = round(mean_val - float(prod_mean), 2)
-
-        delta_vs_shadow: Dict[str, Any] = {}
-        if shadow_profile:
-            shadow_p50 = shadow_profile.get("p50")
-            if shadow_p50 is not None and median_val is not None:
-                delta_vs_shadow["p50Delta"] = round(median_val - float(shadow_p50), 2)
-            shadow_p20 = shadow_profile.get("p20")
-            if shadow_p20 is not None and quantiles.p20 is not None:
-                delta_vs_shadow["p20Delta"] = round(quantiles.p20 - float(shadow_p20), 2)
-
-        return RedInferenceReport(
+        report = RedInferenceReport(
             schema_version=SCHEMA_VERSION,
             experimental=True,
             production_eligible=False,
@@ -595,18 +725,50 @@ class ExperimentalRedInferenceLab:
             effective_sample_weight=total_effective_weight,
             sampling_assumption="unknown",
             conditioning_mode="observational_only",
+            similarity_profile=dict(SIMILARITY_PROFILE),
             red_count_pmf=red_count_pmf,
             red_total_quantiles=quantiles,
             red_total_mean=mean_val,
             red_total_median=median_val,
             conditional_distributions=conditional_dists,
-            history_evidence_ids=[cand.record_id for cand, _ in eligible_candidates],
+            history_evidence_ids=[cand.record_id for cand, _ in eligible_count_candidates],
             history_generation=self._history_generation,
             warnings=warnings,
             insufficient_data=insufficient_data,
-            delta_vs_production=delta_vs_prod,
-            delta_vs_historical_shadow=delta_vs_shadow,
         )
+
+        # Store in eval cache
+        self._eval_cache[cache_key] = report
+        return self._attach_deltas(report, production_metrics, shadow_profile)
+
+    def _attach_deltas(
+        self,
+        base_report: RedInferenceReport,
+        production_metrics: Optional[Mapping[str, Any]],
+        shadow_profile: Optional[Mapping[str, Any]],
+    ) -> RedInferenceReport:
+        delta_vs_prod: Dict[str, Any] = {}
+        if production_metrics:
+            prod_med = production_metrics.get("medianEstimate")
+            if prod_med is not None and base_report.red_total_median is not None:
+                delta_vs_prod["medianDelta"] = round(base_report.red_total_median - float(prod_med), 2)
+            prod_mean = production_metrics.get("meanEstimate")
+            if prod_mean is not None and base_report.red_total_mean is not None:
+                delta_vs_prod["meanDelta"] = round(base_report.red_total_mean - float(prod_mean), 2)
+
+        delta_vs_shadow: Dict[str, Any] = {}
+        if shadow_profile:
+            shadow_p50 = shadow_profile.get("p50")
+            if shadow_p50 is not None and base_report.red_total_median is not None:
+                delta_vs_shadow["p50Delta"] = round(base_report.red_total_median - float(shadow_p50), 2)
+            shadow_p20 = shadow_profile.get("p20")
+            if shadow_p20 is not None and base_report.red_total_quantiles.p20 is not None:
+                delta_vs_shadow["p20Delta"] = round(base_report.red_total_quantiles.p20 - float(shadow_p20), 2)
+
+        rep = copy.copy(base_report)
+        rep.delta_vs_production = delta_vs_prod
+        rep.delta_vs_historical_shadow = delta_vs_shadow
+        return rep
 
 
 _GLOBAL_RED_LAB: Optional[ExperimentalRedInferenceLab] = None
@@ -617,11 +779,49 @@ def get_authoritative_red_inference_lab() -> ExperimentalRedInferenceLab:
     global _GLOBAL_RED_LAB
     if _GLOBAL_RED_LAB is None:
         _GLOBAL_RED_LAB = ExperimentalRedInferenceLab()
-        try:
-            from live_shadow import load_history_snapshot
-            recs = load_history_snapshot()
-            if recs:
-                _GLOBAL_RED_LAB.set_records(recs)
-        except Exception as e:
-            _LOG.warning("Could not pre-load live history snapshot for RedInferenceLab: %s", e)
+        _GLOBAL_RED_LAB.sync_with_live_history()
     return _GLOBAL_RED_LAB
+
+
+def safe_evaluate_experimental_red(
+    session_ctx: Mapping[str, Any],
+    production_metrics: Optional[Mapping[str, Any]] = None,
+    shadow_profile: Optional[Mapping[str, Any]] = None,
+    lab: Optional[ExperimentalRedInferenceLab] = None,
+) -> Dict[str, Any]:
+    """Fail-isolated runtime entrypoint: guarantees zero crash on production solve or HUD (Fix D)."""
+    try:
+        active_lab = lab if lab is not None else get_authoritative_red_inference_lab()
+        active_lab.sync_with_live_history()
+        report = active_lab.evaluate_inference(
+            session_ctx=session_ctx,
+            production_metrics=production_metrics,
+            shadow_profile=shadow_profile,
+        )
+        return report.to_payload()
+    except Exception as exc:
+        _LOG.warning("Experimental red inference isolated failure: %s", exc)
+        return {
+            "schemaVersion": SCHEMA_VERSION,
+            "experimental": True,
+            "productionEligible": False,
+            "status": "unavailable",
+            "eligibleMatchCount": 0,
+            "eligibleObservationCount": 0,
+            "effectiveSampleWeight": 0.0,
+            "samplingAssumption": "unknown",
+            "conditioningMode": "observational_only",
+            "similarityProfile": dict(SIMILARITY_PROFILE),
+            "redCountPmf": {},
+            "redTotalQuantiles": RedQuantiles().to_dict(),
+            "redTotalMean": None,
+            "redTotalMedian": None,
+            "conditionalDistributions": {},
+            "historyEvidenceIds": [],
+            "historyGeneration": 0,
+            "warnings": [f"Experimental red inference failed safely: {exc}"],
+            "insufficientData": True,
+            "deltaVsProduction": {},
+            "deltaVsHistoricalShadow": {},
+            "disclaimer": "实验结果 · 不参与正式出价",
+        }
