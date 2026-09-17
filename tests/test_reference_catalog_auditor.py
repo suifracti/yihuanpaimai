@@ -1,15 +1,12 @@
 # -*- coding: utf-8 -*-
 """Unit tests for PR-F Reference Catalog Discrepancy Auditor.
 
-Covers all review remediation requirements (Review Items A through H):
-- Review Item A: Identity ladder, solver alias/name variant not promoted to missing, 9-missing regression comparison
-- Review Item B: Preserved accepted latiao truth (visual-latiao-1x2, NO_ACTION, not in queue)
-- Review Item C: Hardcoded historical footprint hypotheses rejected without provenance
-- Review Item D: External source SHA256 included, unavailable source explicit, dynamic counts
-- Review Item E: Boundary 3 intersection using real PR #1 touched set (intersection strictly 0)
-- Review Item F: Content-based determinism (canonicalReportSha256 invariant to timestamps, sensitive to content)
-- Review Item G: Fail-closed provenance on git failure
-- Review Item H: Targeted comprehensive tests + security/safety invariants (autoWriteAllowed=false, zero competitor binary assets, mutation guard)
+Covers all review remediation requirements:
+- Review Item A: 碧波天垂 held as INDEPENDENT_VERIFICATION_REQUIRED, not promoted to genuine missing. Genuine missing = strictly confirmed 9.
+- Review Item B: External cross-audit reuses local identity resolution; solver gaps have external corroboration, not duplicate REFERENCE_ONLY_UNVERIFIED; variants reuse resolution.
+- Review Item C: External provenance emits sourcePathOrProvenanceRef without copying external files.
+- Review Item D: Semantic Chinese character '一' preserved by normalization (not replaced with hyphen).
+- Review Item E & Invariants: Cross-report identity exclusivity invariant, determinism, mutation guard, Boundary 3 intersection == 0, autoWriteAllowed = false.
 """
 
 import copy
@@ -53,6 +50,7 @@ from reference_catalog_auditor import (
     compute_canonical_report_sha256,
     compute_file_sha256,
     get_actual_boundary3_touched_files,
+    normalize_item_name,
 )
 
 
@@ -151,14 +149,12 @@ class TestReferenceCatalogAuditor(unittest.TestCase):
     # 6. Delete unprovenanced hardcoded historical footprint shifts (Review Item C)
     def test_06_hardcoded_historical_footprint_without_provenance_rejected(self):
         report = self.auditor.audit()
-        # Verify no discrepancy asserts unprovenanced transition hypotheses
         for d in report["discrepancies"]:
             notes = d.get("notes", "")
             self.assertNotIn(
                 "3x2 -> 3x3 footprint transition", notes,
                 "Unprovenanced historical transition hypothesis must not be asserted as fact!"
             )
-            # All discrepancies must have a clear reference source
             self.assertTrue(d["referenceSource"], "Discrepancy missing reference source provenance")
 
     # 7. Solver alias and name conflict NOT promoted to missing (Review Item A)
@@ -166,7 +162,6 @@ class TestReferenceCatalogAuditor(unittest.TestCase):
         report = self.auditor.audit()
         unmapped_names = set(report["inventorySummary"]["solverGaps"]["unmappedNames"])
 
-        # Aliases defined in solver CATALOG_NAME_ALIASES or known lexical variants
         aliases_to_check = ["咚咚锤", "储钱小啰", "巡哨一干练精英"]
         for name in aliases_to_check:
             self.assertNotIn(
@@ -174,7 +169,6 @@ class TestReferenceCatalogAuditor(unittest.TestCase):
                 f"Solver alias '{name}' was wrongly promoted to unmapped missing solver gap!"
             )
 
-        # Same-ID OCR/character conflict variants
         same_id_conflicts_to_check = ["条纹椰", "浅绯祈手办", "酥酥酥天丼", "梦中萤", "圣聆晶石", "鎏金盏"]
         for name in same_id_conflicts_to_check:
             self.assertNotIn(
@@ -182,7 +176,6 @@ class TestReferenceCatalogAuditor(unittest.TestCase):
                 f"Same-ID name conflict '{name}' was wrongly promoted to unmapped missing solver gap!"
             )
 
-        # Verify reconciliation rows exist and have proper classification
         reconcil_map = {r["solverName"]: r for r in report["solverGapReconciliation"]}
         for name in aliases_to_check + same_id_conflicts_to_check:
             if name in reconcil_map:
@@ -213,19 +206,12 @@ class TestReferenceCatalogAuditor(unittest.TestCase):
                 f"Known 9 item '{name}' must be marked as '确实缺运行时条目'",
             )
 
-        # Explain additions beyond the 9 items: 碧波天垂
-        if "碧波天垂" in reconcil_map:
-            rec = reconcil_map["碧波天垂"]
-            self.assertEqual(rec["currentClassification"], CLASSIFICATION_SOLVER_NAMED_VISUAL_UNNAMED)
-            self.assertEqual(rec["priorAuditClassification"], "not_in_auctionpilot_corpus")
-            self.assertIn("not in AuctionPilot's 220 items corpus", rec["classificationReason"])
-
     # 9. Preserve accepted latiao truth: not reopened (Review Item B)
     def test_09_accepted_latiao_truth_not_reopened(self):
         report = self.auditor.audit()
         latiao_records = [
             d for d in report["discrepancies"]
-            if d.get("canonicalId") == "visual-latiao-1x2" or d.get("canonicalName") == "辣条"
+            if d.get("canonicalId") == "visual-latiao-1x2" or d.get("canonicalName") == "酷辣辣辣条"
         ]
         self.assertEqual(len(latiao_records), 1, "Expected exactly 1 accepted truth preservation record for latiao")
         latiao = latiao_records[0]
@@ -235,7 +221,6 @@ class TestReferenceCatalogAuditor(unittest.TestCase):
         self.assertFalse(latiao["autoWriteAllowed"])
         self.assertTrue(latiao["independentVerificationAvailable"])
 
-        # Must NOT be in the independent verification queue
         queue_ids = [q["discrepancyId"] for q in report["independentVerificationQueue"]]
         self.assertNotIn(
             latiao["discrepancyId"], queue_ids,
@@ -321,7 +306,6 @@ class TestReferenceCatalogAuditor(unittest.TestCase):
         }
         hash1 = compute_canonical_report_sha256(sample_report)
 
-        # Changing timestamp should NOT change hash
         sample_report_time2 = copy.deepcopy(sample_report)
         sample_report_time2["auditTimestamp"] = "2026-09-17T15:30:00Z"
         sample_report_time2["generatedAt"] = "2026-09-17T15:30:00Z"
@@ -463,6 +447,133 @@ class TestReferenceCatalogAuditor(unittest.TestCase):
         self.assertEqual(len(disc_ids), len(set(disc_ids)), "Found duplicate discrepancy IDs!")
         for did in disc_ids:
             self.assertTrue(did.startswith("disc-"), f"Invalid discrepancyId format: {did}")
+
+    # 22. Review Item A: 碧波天垂 cannot be promoted to 10th genuine missing
+    def test_22_bibotianchui_not_promoted_to_genuine_missing(self):
+        report = self.auditor.audit()
+        # Genuine missing count must be strictly 9
+        unmapped_count = report["inventorySummary"]["solverGaps"]["unmappedVisualGapsCount"]
+        self.assertEqual(
+            unmapped_count, 9,
+            f"Genuine missing count must strictly equal 9 confirmed items, got {unmapped_count}"
+        )
+        unmapped_names = report["inventorySummary"]["solverGaps"]["unmappedNames"]
+        self.assertNotIn(
+            "碧波天垂", unmapped_names,
+            "碧波天垂 must not be included in genuine unmapped visual gaps!"
+        )
+        self.assertEqual(sorted(unmapped_names), sorted(list(PRIOR_20260914_AUDIT_MISSING_9.keys())))
+
+        # 碧波天垂 must be classified as INDEPENDENT_VERIFICATION_REQUIRED with USER_ITEM_CARD
+        reconcil_map = {r["solverName"]: r for r in report["solverGapReconciliation"]}
+        self.assertIn("碧波天垂", reconcil_map)
+        bibo = reconcil_map["碧波天垂"]
+        self.assertEqual(bibo["currentClassification"], CLASSIFICATION_INDEPENDENT_VERIFICATION_REQUIRED)
+        self.assertEqual(bibo["recommendedNextEvidence"], RECOMMENDED_EVIDENCE_USER_ITEM_CARD)
+        self.assertEqual(bibo["priorAuditClassification"], "证据不足，暂不处理")
+        self.assertTrue(bibo["priorAuditSource"].endswith("2026-09-14-runtime-visual-catalog-diff.json"))
+        self.assertIsNotNone(bibo["priorAuditSha256"])
+
+        # Must be in verification queue
+        queue_names = [q.get("canonicalName") for q in report["independentVerificationQueue"]]
+        self.assertIn("碧波天垂", queue_names)
+
+    # 23. Review Item B: Solver-known external observation not reference-only
+    def test_23_solver_known_external_observation_not_reference_only(self):
+        report = self.auditor.audit()
+        ref_only_names = {
+            d.get("referenceObservedName")
+            for d in report["discrepancies"]
+            if d["classification"] == CLASSIFICATION_REFERENCE_ONLY_UNVERIFIED
+        }
+        for name in PRIOR_20260914_AUDIT_MISSING_9.keys():
+            self.assertNotIn(
+                name, ref_only_names,
+                f"Solver gap item '{name}' was wrongly emitted as REFERENCE_ONLY_UNVERIFIED!"
+            )
+        self.assertNotIn(
+            "碧波天垂", ref_only_names,
+            "碧波天垂 must not be emitted as REFERENCE_ONLY_UNVERIFIED!"
+        )
+        self.assertNotIn(
+            "碧波天玺", ref_only_names,
+            "碧波天玺 must not be emitted as REFERENCE_ONLY_UNVERIFIED!"
+        )
+
+    # 24. Review Item B: Same-ID variant external observation reuses identity resolution
+    def test_24_same_id_variant_external_observation_reuses_identity_resolution(self):
+        report = self.auditor.audit()
+        ref_only_names = {
+            d.get("referenceObservedName")
+            for d in report["discrepancies"]
+            if d["classification"] == CLASSIFICATION_REFERENCE_ONLY_UNVERIFIED
+        }
+        for variant in ("条纹椰", "浅绯祈手办", "酥酥酥天丼"):
+            self.assertNotIn(
+                variant, ref_only_names,
+                f"Known variant '{variant}' was wrongly emitted as REFERENCE_ONLY_UNVERIFIED!"
+            )
+
+    # 25. Review Item B: Confirmed solver gaps have external corroboration attached
+    def test_25_confirmed_solver_gap_can_have_external_corroboration(self):
+        report = self.auditor.audit()
+        reconcil_map = {r["solverName"]: r for r in report["solverGapReconciliation"]}
+        # Verify that solver gaps present in AuctionPilot (like 超级存储盘) have corroboratingReferences
+        for name in ("超级存储盘", "曜目权柄", "他山之石", "崭新限量排球", "鸣佩"):
+            rec = reconcil_map.get(name)
+            self.assertIsNotNone(rec, f"Missing solver reconciliation row for {name}")
+            corrob = rec.get("corroboratingReferences", [])
+            self.assertGreater(
+                len(corrob), 0,
+                f"Expected external corroboration for solver gap '{name}' from AuctionPilot"
+            )
+            c0 = corrob[0]
+            self.assertIn("source", c0)
+            self.assertIn("version", c0)
+            self.assertIn("sourceSha256", c0)
+            self.assertIn("sourcePathOrProvenanceRef", c0)
+            self.assertEqual(c0["observedName"], name)
+
+    # 26. Review Items B & E: Cross-report identity exclusivity invariant
+    def test_26_cross_report_identity_exclusivity_invariant(self):
+        report = self.auditor.audit()
+        solver_gap_names = {
+            d.get("canonicalName")
+            for d in report["discrepancies"]
+            if d["classification"] == CLASSIFICATION_SOLVER_NAMED_VISUAL_UNNAMED
+        }
+        ref_only_names = {
+            d.get("referenceObservedName")
+            for d in report["discrepancies"]
+            if d["classification"] == CLASSIFICATION_REFERENCE_ONLY_UNVERIFIED
+        }
+        overlap = solver_gap_names.intersection(ref_only_names)
+        self.assertEqual(
+            len(overlap), 0,
+            f"Mutually exclusive classification violation: items {overlap} have both SOLVER_NAMED_VISUAL_UNNAMED and REFERENCE_ONLY_UNVERIFIED!"
+        )
+
+    # 27. Review Item C: External provenance emits sourcePathOrProvenanceRef
+    def test_27_external_provenance_ref_emitted(self):
+        report = self.auditor.audit()
+        ref_sources = report["canonicalAuthority"]["referenceOnlySources"]
+        for src in ref_sources:
+            self.assertIn("sourcePathOrProvenanceRef", src)
+            if src.get("sourceAvailable"):
+                self.assertTrue(
+                    len(src["sourcePathOrProvenanceRef"]) > 0,
+                    f"Available source {src['source']} missing sourcePathOrProvenanceRef"
+                )
+
+    # 28. Review Item D: Semantic Chinese character not destroyed by normalization
+    def test_28_semantic_chinese_character_not_destroyed_by_normalization(self):
+        # '一' is a meaningful Chinese character (e.g. 一簇幽火, 一心一意) and must not be replaced by hyphen
+        res = normalize_item_name("一簇幽火")
+        self.assertEqual(
+            res, "一簇幽火",
+            f"Normalization illegally altered Chinese character '一': got '{res}'"
+        )
+        self.assertNotIn("-", res)
 
 
 if __name__ == "__main__":
