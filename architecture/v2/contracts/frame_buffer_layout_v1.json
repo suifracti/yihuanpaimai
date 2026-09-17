@@ -1,0 +1,69 @@
+{
+  "schemaVersion": "frame.buffer.layout.v1",
+  "protocolVersion": "1.0.0",
+  "name": "NTE Shared Memory Frame Buffer Layout Specification",
+  "bufferGeometry": {
+    "maxWidth": 3840,
+    "maxHeight": 2160,
+    "defaultWidth": 1920,
+    "defaultHeight": 1080,
+    "bytesPerPixel": 4,
+    "defaultStride": 7680,
+    "defaultPayloadBytes": 8294400,
+    "headerSizeBytes": 64,
+    "totalBufferSizeBytes": 8294464,
+    "alignmentBytes": 64,
+    "endianness": "LITTLE_ENDIAN",
+    "pixelFormat": {
+      "formatId": 1,
+      "formatName": "BGRA8",
+      "channelOrder": ["B", "G", "R", "A"],
+      "bitsPerChannel": 8
+    }
+  },
+  "headerStructure": {
+    "totalSizeBytes": 64,
+    "fields": [
+      { "offset": 0,  "size": 4, "type": "uint32", "name": "magic", "expectedValue": "0x4246544E ('NTFB')", "description": "4-byte ASCII magic identifier 'NTFB' in little-endian" },
+      { "offset": 4,  "size": 4, "type": "int32",  "name": "headerVersion", "expectedValue": 1, "description": "Binary header specification version" },
+      { "offset": 8,  "size": 8, "type": "int64",  "name": "sequence", "description": "Monotonically increasing 64-bit frame sequence number" },
+      { "offset": 16, "size": 4, "type": "int32",  "name": "width", "description": "Frame width in pixels (e.g. 1920)" },
+      { "offset": 20, "size": 4, "type": "int32",  "name": "height", "description": "Frame height in pixels (e.g. 1080)" },
+      { "offset": 24, "size": 4, "type": "int32",  "name": "stride", "description": "Byte stride per row (width * 4, e.g. 7680)" },
+      { "offset": 28, "size": 4, "type": "int32",  "name": "pixelFormat", "expectedValue": 1, "description": "1 = BGRA8" },
+      { "offset": 32, "size": 4, "type": "int32",  "name": "bufferLength", "description": "Total pixel data bytes (stride * height)" },
+      { "offset": 36, "size": 4, "type": "int32",  "name": "flags", "description": "Bit 0: Keyframe, Bit 1: Checksum Present, Bit 2: Compressed (future)" },
+      { "offset": 40, "size": 8, "type": "int64",  "name": "captureTimestampNs", "description": "Hardware capture acquisition timestamp in nanoseconds" },
+      { "offset": 48, "size": 8, "type": "int64",  "name": "producerTimestampNs", "description": "Host write completion timestamp in nanoseconds" },
+      { "offset": 56, "size": 4, "type": "uint32", "name": "cornerChecksum", "description": "Sum of 4 corner pixel BGRA channels for tearing and corruption detection" },
+      { "offset": 60, "size": 4, "type": "int32",  "name": "reserved", "description": "Reserved for 64-byte alignment; must be 0" }
+    ]
+  },
+  "bufferOwnershipAndLifecycle": {
+    "producer": "Native Host (.NET 8)",
+    "consumer": "Python Intelligence Engine",
+    "flow": [
+      "1. Host acquires frame via Win32 BitBlt / WGC.",
+      "2. Host selects next available ring buffer slot (ensuring slot is not currently locked by consumer).",
+      "3. Host writes 64-byte FrameHeaderV1 and pixel buffer to MemoryMappedFile.",
+      "4. Host emits FRAME_READY message over Named Pipe control plane.",
+      "5. Python maps slot via numpy.frombuffer(mm, offset=64) zero-copy view.",
+      "6. Python verifies header magic, sequence, and corner checksum.",
+      "7. Python executes visual parsing / inference.",
+      "8. Python emits FRAME_ACK message.",
+      "9. Host marks slot available for reuse."
+    ]
+  },
+  "backpressureAndDropPolicy": {
+    "strategy": "LATEST_FRAME_WINS",
+    "guarantee": "Host shall NEVER overwrite a ring buffer slot currently being read by Python. If all slots are locked or Python OCR is slower than capture rate, Host drops newly captured frames and increments distinct drop counters.",
+    "dropCounters": {
+      "producerOverwrite": "Host attempted to write to a locked buffer slot (strictly avoided by ring selection, incremented on forced discard)",
+      "consumerTimeout": "Python consumer did not return FRAME_ACK within frameAckTimeoutMs (100ms)",
+      "captureFailure": "Underlying Win32 PrintWindow or BitBlt API returned failure or zero-sized DC",
+      "contentInvalid": "Frame header magic mismatch or corner checksum corruption detected",
+      "frameSuperseded": "New frame arrived while a previous frame was queued; superseded frame discarded without sending to consumer",
+      "bufferUnavailable": "All available ring buffer slots locked by active consumer processing"
+    }
+  }
+}

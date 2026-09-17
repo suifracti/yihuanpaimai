@@ -1,0 +1,73 @@
+{
+  "allOffsetsEqual": true,
+  "headerSizeEqual": true,
+  "headerSizeBytes": 64,
+  "fieldCount": 13,
+  "fields": {
+    "magic": {
+      "expectedOffset": 0,
+      "actualOffset": 0,
+      "match": true
+    },
+    "headerVersion": {
+      "expectedOffset": 4,
+      "actualOffset": 4,
+      "match": true
+    },
+    "sequence": {
+      "expectedOffset": 8,
+      "actualOffset": 8,
+      "match": true
+    },
+    "width": {
+      "expectedOffset": 16,
+      "actualOffset": 16,
+      "match": true
+    },
+    "height": {
+      "expectedOffset": 20,
+      "actualOffset": 20,
+      "match": true
+    },
+    "stride": {
+      "expectedOffset": 24,
+      "actualOffset": 24,
+      "match": true
+    },
+    "pixelFormat": {
+      "expectedOffset": 28,
+      "actualOffset": 28,
+      "match": true
+    },
+    "bufferLength": {
+      "expectedOffset": 32,
+      "actualOffset": 32,
+      "match": true
+    },
+    "flags": {
+      "expectedOffset": 36,
+      "actualOffset": 36,
+      "match": true
+    },
+    "captureTimestampNs": {
+      "expectedOffset": 40,
+      "actualOffset": 40,
+      "match": true
+    },
+    "producerTimestampNs": {
+      "expectedOffset": 48,
+      "actualOffset": 48,
+      "match": true
+    },
+    "cornerChecksum": {
+      "expectedOffset": 56,
+      "actualOffset": 56,
+      "match": true
+    },
+    "reserved": {
+      "expectedOffset": 60,
+      "actualOffset": 60,
+      "match": true
+    }
+  }
+}

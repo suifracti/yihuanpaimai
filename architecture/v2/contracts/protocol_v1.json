@@ -1,0 +1,73 @@
+{
+  "schemaVersion": "protocol.specification.v1",
+  "protocolVersion": "1.0.0",
+  "name": "NTE Host-Engine IPC Protocol Specification",
+  "description": "Standardized binary framing, JSON envelope, and memory-mapped data plane specification between .NET Native Host and Python Intelligence Engine.",
+  "transport": {
+    "controlPlane": {
+      "primary": "Windows Named Pipe",
+      "pipeNameFormat": "\\\\.\\pipe\\nte_engine_ipc_{sessionId}_{nonce}",
+      "fallback": "Standard I/O Streams (stdin/stdout)",
+      "framing": "4-byte little-endian uint32 payload length prefix followed by UTF-8 encoded JSON payload; for stdio stream fallback, newline-delimited JSON is supported",
+      "maxMessageBytes": 1048576,
+      "encoding": "UTF-8"
+    },
+    "dataPlane": {
+      "primary": "Windows Memory-Mapped File",
+      "mapNameFormat": "Local\\NteFrameBuffer_v1_{sessionId}_{nonce}",
+      "headerSizeBytes": 64,
+      "maxPayloadBytes": 33177600,
+      "defaultPayloadBytes": 8294400,
+      "totalBufferSizeBytes": 8294464,
+      "ownership": "HOST_WRITES, PYTHON_READS",
+      "zeroCopy": {
+        "zeroCopyAtProcessMapping": true,
+        "zeroCopyEndToEnd": false,
+        "clarificationNote": "Physical virtual address mapping is zero-copy between processes; GPU-to-CPU texture readback involves D3D11 staging copy."
+      }
+    }
+  },
+  "envelope": {
+    "requiredFields": [
+      "protocolVersion",
+      "sessionId",
+      "messageType",
+      "requestId",
+      "correlationId",
+      "sequence",
+      "monotonicTimestampNs",
+      "payload"
+    ],
+    "fieldTypes": {
+      "protocolVersion": "string",
+      "sessionId": "string",
+      "messageType": "string",
+      "requestId": "string",
+      "correlationId": "string|null",
+      "sequence": "integer (int64)",
+      "monotonicTimestampNs": "integer (int64)",
+      "payload": "object"
+    }
+  },
+  "policies": {
+    "unknownMessagePolicy": "FAIL_CLOSED_ERROR",
+    "unsupportedVersionPolicy": "FAIL_CLOSED_ERROR",
+    "malformedPayloadPolicy": "FAIL_CLOSED_ERROR",
+    "oversizedPayloadPolicy": "FAIL_CLOSED_ERROR",
+    "staleSequencePolicy": "LOG_AND_IGNORE",
+    "timeoutPolicy": "FAIL_CLOSED_RECONNECT"
+  },
+  "timeouts": {
+    "helloNegotiationTimeoutMs": 5000,
+    "heartbeatIntervalMs": 1000,
+    "heartbeatTimeoutMs": 3000,
+    "frameAckTimeoutMs": 100,
+    "perceptionResultSlaMs": 50,
+    "commandExecutionTimeoutMs": 500,
+    "shutdownTimeoutMs": 2000,
+    "registryConfiguredLowLevelHooksTimeoutMs": 25000,
+    "effectiveLowLevelHooksTimeoutMs": 1000,
+    "syntheticInternalDispatchMicrobenchUs": 45,
+    "realOsCallbackLatencyStatus": "NOT_MEASURED"
+  }
+}
