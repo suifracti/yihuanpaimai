@@ -1,7 +1,7 @@
 {
   "allVectorsPass": true,
   "headerPackingParity": true,
-  "totalVectorsTested": 11,
+  "totalVectorsTested": 14,
   "vectors": [
     {
       "name": "Host Handshake Hello",
@@ -76,10 +76,34 @@
       "framedHexMatch": true
     },
     {
+      "name": "State Snapshot Request",
+      "messageType": "STATE_SNAPSHOT_REQUEST",
+      "envelopeValid": true,
+      "lengthPrefixBytes": 282,
+      "lengthPrefixMatch": true,
+      "framedHexMatch": true
+    },
+    {
       "name": "State Snapshot Sync",
       "messageType": "STATE_SNAPSHOT",
       "envelopeValid": true,
       "lengthPrefixBytes": 524,
+      "lengthPrefixMatch": true,
+      "framedHexMatch": true
+    },
+    {
+      "name": "Engine Graceful Shutdown",
+      "messageType": "ENGINE_SHUTDOWN",
+      "envelopeValid": true,
+      "lengthPrefixBytes": 250,
+      "lengthPrefixMatch": true,
+      "framedHexMatch": true
+    },
+    {
+      "name": "Engine Restarting Signal",
+      "messageType": "ENGINE_RESTARTING",
+      "envelopeValid": true,
+      "lengthPrefixBytes": 261,
       "lengthPrefixMatch": true,
       "framedHexMatch": true
     },

@@ -15,8 +15,10 @@ namespace ArchitectureV2.Contracts
         public const int MaxMessageBytes = 1048576; // 1 MB
         public const int DefaultPixelFormatBgra8 = 1;
 
-        // Ring Buffer Geometry
+        // Ring Buffer Geometry & Maximum Capacity Invariants
         public const int SlotCount = 4;
+        public const int MaxWidth = 1920;
+        public const int MaxHeight = 1080;
         public const int SlotPayloadCapacityBytes = 8294400; // 1920 * 1080 * 4
         public const int SlotSizeBytes = 8294464;            // 64 + 8294400
         public const int SlotAlignmentBytes = 64;

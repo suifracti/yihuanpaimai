@@ -2,14 +2,13 @@
 architecture/v2/contracts/models.py
 
 Standardized Python models, dataclasses, binary framing, ring-buffer geometry,
-sequence trackers, command idempotency, struct packing, and fail-closed validators
-for NTE Architecture V2 Host-Engine IPC Protocol.
+connection-generation sequence trackers, QPC clock domain expiry, struct packing,
+and fail-closed validators for NTE Architecture V2 Host-Engine IPC Protocol.
 """
 
 from __future__ import annotations
 
 import json
-import re
 import struct
 import time
 from dataclasses import asdict, dataclass, field
@@ -24,8 +23,10 @@ FRAME_HEADER_SIZE: int = 64
 MAX_MESSAGE_BYTES: int = 1048576  # 1 MB maximum length prefix
 DEFAULT_PIXEL_FORMAT_BGRA8: int = 1
 
-# Ring Buffer Geometry Constants
+# Ring Buffer Geometry Constants & Invariants
 SLOT_COUNT: int = 4
+MAX_FRAME_WIDTH: int = 1920
+MAX_FRAME_HEIGHT: int = 1080
 SLOT_PAYLOAD_CAPACITY_BYTES: int = 8294400  # 1920 * 1080 * 4
 SLOT_SIZE_BYTES: int = 8294464             # 64 + 8294400
 SLOT_ALIGNMENT_BYTES: int = 64
@@ -246,6 +247,12 @@ class FrameHeaderV1:
                 "ERR_UNSUPPORTED_PIXEL_FORMAT",
                 f"Unsupported pixel format {self.pixelFormat}, expected {DEFAULT_PIXEL_FORMAT_BGRA8} (BGRA8)"
             )
+        # Capacity and dimension invariants
+        if self.width > MAX_FRAME_WIDTH or self.height > MAX_FRAME_HEIGHT:
+            raise ContractValidationError(
+                "ERR_FRAME_CAPACITY_EXCEEDED",
+                f"Frame geometry {self.width}x{self.height} exceeds max capacity {MAX_FRAME_WIDTH}x{MAX_FRAME_HEIGHT}"
+            )
         expected_stride = self.width * 4
         if self.stride != expected_stride:
             raise ContractValidationError(
@@ -257,6 +264,11 @@ class FrameHeaderV1:
             raise ContractValidationError(
                 "ERR_FRAME_METADATA_MISMATCH",
                 f"BufferLength {self.bufferLength} does not match expected stride * height = {expected_length}"
+            )
+        if self.bufferLength > SLOT_PAYLOAD_CAPACITY_BYTES:
+            raise ContractValidationError(
+                "ERR_FRAME_CAPACITY_EXCEEDED",
+                f"BufferLength {self.bufferLength} exceeds slot capacity {SLOT_PAYLOAD_CAPACITY_BYTES}"
             )
 
 
@@ -280,6 +292,17 @@ def verify_frame_metadata_match(frame_ready_payload: Dict[str, Any], header: Fra
             )
 
 
+def verify_message_allowed_in_state(current_state: LifecycleState, message_type: str) -> None:
+    """Ensures operational messages cannot be processed before completing handshake."""
+    if current_state in (LifecycleState.ENGINE_DOWN, LifecycleState.STARTING, LifecycleState.HANDSHAKING):
+        allowed = {"HELLO", "HELLO_ACK", "HEARTBEAT", "ENGINE_SHUTDOWN", "ERROR"}
+        if message_type not in allowed:
+            raise ContractValidationError(
+                "ERR_MESSAGE_BEFORE_HANDSHAKE",
+                f"Message '{message_type}' is forbidden in lifecycle state '{current_state.value}' prior to handshake completion"
+            )
+
+
 @dataclass
 class DropCounters:
     producerOverwrite: int = 0
@@ -294,47 +317,63 @@ class DropCounters:
 
 
 class SequenceTracker:
-    """Tracks sequence high-water mark per sender per session."""
-    def __init__(self, session_id: str):
+    """
+    Tracks monotonic sequence high-water marks per sender per connection generation.
+    Generation key: (sessionId, sessionNonce, senderRole).
+    """
+    def __init__(self, session_id: str, session_nonce: str):
         self.session_id: str = session_id
-        self._sender_high_water: Dict[str, int] = {}
+        self.current_nonce: str = session_nonce
+        self._sender_high_water: Dict[Tuple[str, str, str], int] = {}
 
-    def check_and_update(self, sender_id: str, session_id: str, sequence: int) -> None:
+    def reset_generation(self, session_id: str, new_nonce: str) -> None:
+        """Called upon new HELLO/HELLO_ACK handshake negotiation."""
+        self.session_id = session_id
+        self.current_nonce = new_nonce
+
+    def check_and_update(self, sender_role: str, session_id: str, session_nonce: str, sequence: int) -> None:
         if session_id != self.session_id:
             raise ContractValidationError(
                 "ERR_STALE_SESSION",
                 f"Session ID '{session_id}' does not match active session '{self.session_id}'"
+            )
+        if session_nonce != self.current_nonce:
+            raise ContractValidationError(
+                "ERR_STALE_GENERATION",
+                f"Session nonce '{session_nonce}' belongs to an earlier or unknown connection generation"
             )
         if sequence < 0:
             raise ContractValidationError(
                 "ERR_MALFORMED_ENVELOPE",
                 f"Negative sequence {sequence} not allowed"
             )
-        last_seq = self._sender_high_water.get(sender_id, -1)
+        gen_key = (session_id, session_nonce, sender_role)
+        last_seq = self._sender_high_water.get(gen_key, -1)
         if sequence <= last_seq:
             raise ContractValidationError(
                 "ERR_STALE_SEQUENCE",
-                f"Stale sequence {sequence} from sender '{sender_id}' (last high-water: {last_seq})"
+                f"Stale sequence {sequence} for generation {gen_key} (last high-water: {last_seq})"
             )
-        self._sender_high_water[sender_id] = sequence
+        self._sender_high_water[gen_key] = sequence
 
 
 class CommandIdempotencyManager:
-    """Deduplicates incoming COMMAND messages by (sessionId, commandId)."""
+    """Deduplicates incoming COMMAND messages by (sessionId, commandId) in QPC clock domain."""
     def __init__(self, retention_seconds: int = 300):
         self.retention_seconds: int = retention_seconds
         self._cache: Dict[Tuple[str, str], Tuple[Dict[str, Any], Optional[Dict[str, Any]], int, float]] = {}
 
-    def process_command(self, session_id: str, command_id: str, action: str, parameters: Dict[str, Any], expires_at_ns: int, now_ns: int) -> Optional[Dict[str, Any]]:
+    def process_command(self, session_id: str, command_id: str, action: str, parameters: Dict[str, Any], expires_at_ns: int, receiver_now_ns: int) -> Optional[Dict[str, Any]]:
         """
+        Evaluates receiverNowNs >= expiresAtNs upon arrival.
         Returns cached result if identical replay.
-        Raises ContractValidationError if mismatched payload reuse or expired.
+        Raises ContractValidationError if mismatched payload reuse.
         """
         key = (session_id, command_id)
         current_payload = {"action": action, "parameters": parameters}
 
-        if now_ns > expires_at_ns:
-            return {"commandId": command_id, "status": "EXPIRED", "errorDetails": "Command expired before processing"}
+        if receiver_now_ns >= expires_at_ns:
+            return {"commandId": command_id, "status": "EXPIRED", "errorDetails": "Command expired before receipt evaluation"}
 
         if key in self._cache:
             cached_payload, cached_result, exp_ns, _ = self._cache[key]
@@ -436,13 +475,11 @@ class LifecycleStateMachine:
         # Enforce READY Gate Invariants
         if new_state == LifecycleState.READY:
             if self._current_state == LifecycleState.HANDSHAKING:
-                # Reconnect / restart forbids skipping SYNCING
                 if not self.is_cold_boot:
                     raise ContractValidationError(
                         "ERR_INVALID_STATE_TRANSITION",
                         "Direct transition from HANDSHAKING to READY is forbidden on reconnect; MUST transition to SYNCING first"
                     )
-                # Cold boot requires no recoverable state AND engine business ready
                 if not self.engine_business_ready:
                     raise ContractValidationError(
                         "ERR_INVALID_STATE_TRANSITION",
@@ -455,7 +492,6 @@ class LifecycleStateMachine:
                         "Cannot transition from SYNCING to READY without validated snapshot and businessReady == true"
                     )
 
-        # Mark non-cold-boot on first shutdown/restart cycle
         if self._current_state == LifecycleState.READY and new_state in [LifecycleState.DEGRADED, LifecycleState.ENGINE_DOWN]:
             self.is_cold_boot = False
             self.snapshot_resynced = False
@@ -581,6 +617,19 @@ def validate_envelope(msg_dict: Dict[str, Any]) -> Envelope:
         monotonicTimestampNs=ts_ns,
         payload=payload,
     )
+
+
+def validate_state_snapshot(snapshot_envelope: Envelope, active_session_id: str) -> None:
+    """Validates STATE_SNAPSHOT session and projection integrity."""
+    if snapshot_envelope.messageType != MessageType.STATE_SNAPSHOT.value:
+        raise ContractValidationError("ERR_UNKNOWN_MESSAGE_TYPE", "Expected STATE_SNAPSHOT message")
+    payload = snapshot_envelope.payload
+    snap_sess = payload.get("snapshotSessionId")
+    if snap_sess != active_session_id:
+        raise ContractValidationError(
+            "ERR_STALE_SESSION",
+            f"STATE_SNAPSHOT snapshotSessionId '{snap_sess}' does not match active session '{active_session_id}'"
+        )
 
 
 def encode_framed_message(envelope: Envelope) -> bytes:

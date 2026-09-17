@@ -46,7 +46,9 @@ from architecture.v2.contracts.models import (
     encode_framed_message,
     get_slot_offset,
     validate_envelope,
+    validate_state_snapshot,
     verify_frame_metadata_match,
+    verify_message_allowed_in_state,
 )
 
 
@@ -313,19 +315,19 @@ class TestV2HostEngineContracts(unittest.TestCase):
         self.assertEqual(ctx2.exception.error_code, "ERR_INCOMPLETE_FRAME")
 
     def test_21_neg_stale_sequence(self):
-        tracker = SequenceTracker("session-01")
-        tracker.check_and_update("sender-A", "session-01", 10)
-        tracker.check_and_update("sender-A", "session-01", 15)
+        tracker = SequenceTracker("session-01", "nonce-01")
+        tracker.check_and_update("sender-A", "session-01", "nonce-01", 10)
+        tracker.check_and_update("sender-A", "session-01", "nonce-01", 15)
 
         # Sequence <= 15 is stale
         with self.assertRaises(ContractValidationError) as ctx:
-            tracker.check_and_update("sender-A", "session-01", 14)
+            tracker.check_and_update("sender-A", "session-01", "nonce-01", 14)
         self.assertEqual(ctx.exception.error_code, "ERR_STALE_SEQUENCE")
 
     def test_22_neg_stale_session_id(self):
-        tracker = SequenceTracker("session-01")
+        tracker = SequenceTracker("session-01", "nonce-01")
         with self.assertRaises(ContractValidationError) as ctx:
-            tracker.check_and_update("sender-A", "session-WRONG", 1)
+            tracker.check_and_update("sender-A", "session-WRONG", "nonce-01", 1)
         self.assertEqual(ctx.exception.error_code, "ERR_STALE_SESSION")
 
     def test_23_neg_duplicate_command(self):
@@ -459,7 +461,8 @@ class TestV2HostEngineContracts(unittest.TestCase):
         )
         self.assertEqual(h.pack().hex().lower(), h_vec["packedHex"].lower())
 
-        # All 11 message vectors
+        # All 14 message vectors
+        self.assertEqual(len(golden_data["messageVectors"]), 14)
         for vec in golden_data["messageVectors"]:
             env = validate_envelope(vec["envelope"])
             self.assertEqual(env.messageType, vec["messageType"])
@@ -483,7 +486,70 @@ class TestV2HostEngineContracts(unittest.TestCase):
             data = json.load(f)
         self.assertTrue(data["allPassed"])
         self.assertEqual(data["totalTests"], data["passedTests"])
-        self.assertGreaterEqual(data["totalTests"], 30)
+        self.assertGreaterEqual(data["totalTests"], 36)
+
+    def test_36_neg_frame_ready_before_handshake(self):
+        # FRAME_READY before completing handshake is strictly forbidden
+        with self.assertRaises(ContractValidationError) as ctx1:
+            verify_message_allowed_in_state(LifecycleState.HANDSHAKING, "FRAME_READY")
+        self.assertEqual(ctx1.exception.error_code, "ERR_MESSAGE_BEFORE_HANDSHAKE")
+
+        with self.assertRaises(ContractValidationError) as ctx2:
+            verify_message_allowed_in_state(LifecycleState.STARTING, "COMMAND")
+        self.assertEqual(ctx2.exception.error_code, "ERR_MESSAGE_BEFORE_HANDSHAKE")
+
+    def test_37_neg_state_snapshot_wrong_session(self):
+        snap_env = Envelope(
+            protocolVersion="1.0.0", sessionId="active-session-001",
+            messageType="STATE_SNAPSHOT", requestId="snap-1", correlationId=None,
+            sequence=1, monotonicTimestampNs=1000,
+            payload={
+                "snapshotSchemaVersion": "1.0.0",
+                "snapshotSessionId": "stale-session-999",  # Mismatch with active session
+                "snapshotSequence": 1,
+                "businessReady": True,
+                "currentMatchProjection": {"matchState": "IN_PROGRESS", "draftCount": 0, "finalizedCount": 1}
+            }
+        )
+        with self.assertRaises(ContractValidationError) as ctx:
+            validate_state_snapshot(snap_env, "active-session-001")
+        self.assertEqual(ctx.exception.error_code, "ERR_STALE_SESSION")
+
+    def test_38_neg_frame_capacity_exceeded(self):
+        # 3840x2160 frame into 1080p slot
+        huge_header = FrameHeaderV1(
+            magic=FRAME_HEADER_MAGIC, headerVersion=1, sequence=1,
+            width=3840, height=2160, stride=15360, pixelFormat=1,
+            bufferLength=33177600, flags=0, captureTimestampNs=1000,
+            producerTimestampNs=2000, cornerChecksum=0, reserved=0
+        )
+        with self.assertRaises(ContractValidationError) as ctx:
+            huge_header.validate()
+        self.assertEqual(ctx.exception.error_code, "ERR_FRAME_CAPACITY_EXCEEDED")
+
+    def test_39_pos_sequence_generation_reset_on_new_nonce(self):
+        # Generation 1: (sess-1, nonce-1, engine)
+        tracker = SequenceTracker("sess-1", "nonce-1")
+        tracker.check_and_update("engine", "sess-1", "nonce-1", 10)
+        tracker.check_and_update("engine", "sess-1", "nonce-1", 100)
+
+        # Host spawns new Engine child with nonce-2; generation resets
+        tracker.reset_generation("sess-1", "nonce-2")
+        # New Engine starting at sequence 0 or 1 is ACCEPTED
+        tracker.check_and_update("engine", "sess-1", "nonce-2", 0)
+        tracker.check_and_update("engine", "sess-1", "nonce-2", 1)
+
+        # Stale packet bearing old nonce-1 arrives
+        with self.assertRaises(ContractValidationError) as ctx:
+            tracker.check_and_update("engine", "sess-1", "nonce-1", 50)
+        self.assertEqual(ctx.exception.error_code, "ERR_STALE_GENERATION")
+
+    def test_40_pos_command_delayed_evaluates_expired(self):
+        mgr = CommandIdempotencyManager()
+        # Command originally valid with expiresAtNs = 5000, but arrives at receiverNowNs = 6000
+        res = mgr.process_command("sess-1", "cmd-late", "DO_VALUATION", {"id": 1}, 5000, 6000)
+        self.assertIsNotNone(res)
+        self.assertEqual(res["status"], "EXPIRED")
 
 
 if __name__ == "__main__":
