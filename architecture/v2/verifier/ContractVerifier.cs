@@ -116,9 +116,18 @@ namespace ArchitectureV2.Verifier
             RunTest("RingBuffer_Geometry_Parameters", () =>
             {
                 if (ContractConstants.SlotCount != 4) throw new Exception("SlotCount != 4");
+                if (ContractConstants.MaxWidth != 1920) throw new Exception("MaxWidth != 1920");
+                if (ContractConstants.MaxHeight != 1080) throw new Exception("MaxHeight != 1080");
                 if (ContractConstants.SlotPayloadCapacityBytes != 8294400) throw new Exception("Payload != 8294400");
                 if (ContractConstants.SlotSizeBytes != 8294464) throw new Exception("SlotSizeBytes != 8294464");
                 if (ContractConstants.MapTotalSizeBytes != 33177856) throw new Exception("MapTotalSizeBytes != 33177856");
+            });
+
+            RunTest("RingBuffer_Capacity_Invariants", () =>
+            {
+                long maxPayload = (long)ContractConstants.MaxWidth * ContractConstants.MaxHeight * 4;
+                if (maxPayload > ContractConstants.SlotPayloadCapacityBytes)
+                    throw new Exception("Max payload exceeds slot capacity");
             });
 
             for (int i = 0; i < 4; i++)
@@ -239,6 +248,12 @@ namespace ArchitectureV2.Verifier
             // 2. Message vectors
             var messageVectors = root.GetProperty("messageVectors");
             var vectorDetails = new List<Dictionary<string, object>>();
+
+            runTest("GoldenVector_Count_Is_14", () =>
+            {
+                if (messageVectors.GetArrayLength() != 14)
+                    throw new Exception($"Expected 14 message vectors, got {messageVectors.GetArrayLength()}");
+            });
 
             foreach (var vec in messageVectors.EnumerateArray())
             {

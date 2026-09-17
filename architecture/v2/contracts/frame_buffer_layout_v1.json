@@ -4,8 +4,8 @@
   "name": "NTE Shared Memory Ring Buffer Layout Specification",
   "ringBufferGeometry": {
     "slotCount": 4,
-    "maxWidth": 3840,
-    "maxHeight": 2160,
+    "maxWidth": 1920,
+    "maxHeight": 1080,
     "defaultWidth": 1920,
     "defaultHeight": 1080,
     "bytesPerPixel": 4,
@@ -17,6 +17,7 @@
     "mapTotalSizeBytes": 33177856,
     "slotOffsetFormula": "slotOffset(index) = index * slotSizeBytes",
     "validIndexRange": "0 <= bufferIndex < slotCount",
+    "capacityInvariant": "width <= maxWidth and height <= maxHeight and stride * height <= slotPayloadCapacityBytes. Frames exceeding capacity are rejected with ERR_FRAME_CAPACITY_EXCEEDED.",
     "endianness": "LITTLE_ENDIAN",
     "pixelFormat": {
       "formatId": 1,
@@ -31,14 +32,14 @@
       { "offset": 0,  "size": 4, "type": "uint32", "name": "magic", "expectedValue": "0x4246544E ('NTFB')", "description": "4-byte ASCII magic identifier 'NTFB' in little-endian" },
       { "offset": 4,  "size": 4, "type": "int32",  "name": "headerVersion", "expectedValue": 1, "description": "Binary header specification version" },
       { "offset": 8,  "size": 8, "type": "int64",  "name": "sequence", "description": "Monotonically increasing 64-bit frame sequence number" },
-      { "offset": 16, "size": 4, "type": "int32",  "name": "width", "description": "Frame width in pixels (e.g. 1920)" },
-      { "offset": 20, "size": 4, "type": "int32",  "name": "height", "description": "Frame height in pixels (e.g. 1080)" },
+      { "offset": 16, "size": 4, "type": "int32",  "name": "width", "description": "Frame width in pixels (valid: 1 <= width <= 1920)" },
+      { "offset": 20, "size": 4, "type": "int32",  "name": "height", "description": "Frame height in pixels (valid: 1 <= height <= 1080)" },
       { "offset": 24, "size": 4, "type": "int32",  "name": "stride", "description": "Byte stride per row (width * 4, e.g. 7680)" },
       { "offset": 28, "size": 4, "type": "int32",  "name": "pixelFormat", "expectedValue": 1, "description": "1 = BGRA8" },
-      { "offset": 32, "size": 4, "type": "int32",  "name": "bufferLength", "description": "Total pixel data bytes (stride * height)" },
+      { "offset": 32, "size": 4, "type": "int32",  "name": "bufferLength", "description": "Total pixel data bytes (stride * height <= 8294400)" },
       { "offset": 36, "size": 4, "type": "int32",  "name": "flags", "description": "Bit 0: Keyframe, Bit 1: Checksum Present, Bit 2: Compressed (future)" },
-      { "offset": 40, "size": 8, "type": "int64",  "name": "captureTimestampNs", "description": "Hardware capture acquisition timestamp in nanoseconds" },
-      { "offset": 48, "size": 8, "type": "int64",  "name": "producerTimestampNs", "description": "Host write completion timestamp in nanoseconds" },
+      { "offset": 40, "size": 8, "type": "int64",  "name": "captureTimestampNs", "description": "Hardware capture acquisition timestamp in nanoseconds (QPC domain)" },
+      { "offset": 48, "size": 8, "type": "int64",  "name": "producerTimestampNs", "description": "Host write completion timestamp in nanoseconds (QPC domain)" },
       { "offset": 56, "size": 4, "type": "uint32", "name": "cornerChecksum", "description": "Sum of 4 corner pixel BGRA channels for tearing and corruption detection" },
       { "offset": 60, "size": 4, "type": "int32",  "name": "reserved", "description": "Reserved for 64-byte alignment; must be 0" }
     ]
@@ -53,7 +54,7 @@
       "3. Host writes 64-byte FrameHeaderV1 at slotOffset(bufferIndex) and pixel buffer at slotOffset(bufferIndex) + 64.",
       "4. Host transitions slot state to COMMITTED, then CONSUMER_LOCKED upon emitting FRAME_READY.",
       "5. Python maps slot via numpy.frombuffer(mm, offset=slotOffset(bufferIndex)+64, count=bufferLength).",
-      "6. Python verifies header magic, sequence, geometry, and corner checksum against FRAME_READY metadata.",
+      "6. Python verifies header magic, sequence, geometry, capacity limits, and corner checksum against FRAME_READY metadata.",
       "7. Python executes visual parsing / inference.",
       "8. Python emits FRAME_ACK with (sessionId, bufferIndex, sequence) acting as explicit slot release token.",
       "9. Host verifies (sessionId, bufferIndex, sequence) matches active lock and marks slot FREE for reuse."
@@ -66,7 +67,7 @@
       "producerOverwrite": "Host attempted to write to a locked buffer slot (strictly avoided by ring selection; incremented on forced discard)",
       "consumerTimeout": "Python consumer did not return FRAME_ACK within frameAckTimeoutMs (slot remains locked; no overwrite)",
       "captureFailure": "Underlying Win32 PrintWindow or BitBlt API returned failure or zero-sized DC",
-      "contentInvalid": "Frame header magic mismatch, stride mismatch, or corner checksum corruption detected",
+      "contentInvalid": "Frame header magic mismatch, stride mismatch, capacity exceeded, or corner checksum corruption detected",
       "frameSuperseded": "New frame arrived while a previous frame was queued; superseded frame discarded without sending to consumer",
       "bufferUnavailable": "All available ring buffer slots (0 <= bufferIndex < 4) locked by active consumer processing"
     }

@@ -2,15 +2,21 @@
   "schemaVersion": "protocol.specification.v1",
   "protocolVersion": "1.0.0",
   "name": "NTE Host-Engine IPC Protocol Specification",
-  "description": "Standardized binary framing, JSON envelope, ring-buffer data plane, sequence scopes, and command idempotency specification between .NET Native Host and Python Intelligence Engine.",
+  "description": "Standardized binary framing, JSON envelope, ring-buffer data plane, sequence generation scopes, QPC clock domain, and command idempotency specification between .NET Native Host and Python Intelligence Engine.",
   "versionPolicy": {
     "strategy": "EXACT_MATCH_V1",
     "exactVersion": "1.0.0",
     "rule": "During V2 strangler migration, exact protocolVersion '1.0.0' equality is enforced across Host and Engine."
   },
   "sequenceScope": {
-    "scope": "PER_SENDER_PER_SESSION",
-    "description": "Host and Engine independently track monotonically increasing sequence counters per sender within the current session. Inbound messages with sequence <= lastHighWaterMark are detected as stale."
+    "scope": "PER_SENDER_PER_CONNECTION_GENERATION",
+    "generationKey": "(sessionId, sessionNonce, senderRole)",
+    "description": "Host and Engine independently track monotonically increasing sequence counters per connection generation. When a new sessionNonce is negotiated in HELLO/HELLO_ACK, sequence counters for that connection generation reset. Messages bearing stale sessionNonce or sequences <= high-water mark within that generation are rejected with ERR_STALE_SESSION or ERR_STALE_SEQUENCE."
+  },
+  "clockDomain": {
+    "domain": "WINDOWS_QPC_NANOSECONDS",
+    "description": "Both Host and Engine share the single hardware Windows QueryPerformanceCounter (QPC) clock domain normalized to nanoseconds (time.perf_counter_ns() in Python; Stopwatch.GetTimestamp() * 1_000_000_000 / Stopwatch.Frequency in .NET).",
+    "expiryEvaluation": "Expiry is strictly evaluated by the receiver upon message receipt: if receiverNowNs >= expiresAtNs, the command is expired."
   },
   "commandIdempotency": {
     "dedupKey": "(sessionId, commandId)",
@@ -18,7 +24,7 @@
     "rules": [
       "If incoming command matches an active or completed (sessionId, commandId) with identical payload, return cached COMMAND_RESULT without re-execution.",
       "If incoming command matches (sessionId, commandId) with differing action or parameters, reject fail-closed with ERR_COMMAND_ID_REUSE_MISMATCH.",
-      "If monotonicTimestampNs > expiresAtNs, reject with status EXPIRED."
+      "If receiverNowNs >= expiresAtNs upon evaluation, reject with status EXPIRED."
     ]
   },
   "transport": {
@@ -26,7 +32,7 @@
       "primary": "Windows Named Pipe",
       "pipeNameFormat": "\\\\.\\pipe\\nte_engine_ipc_{sessionId}_{nonce}",
       "fallback": "Standard I/O Streams (stdin/stdout)",
-      "framing": "4-byte little-endian uint32 payload length prefix followed by UTF-8 encoded JSON payload; for stdio stream fallback, newline-delimited JSON is supported",
+      "framing": "4-byte little-endian uint32 payload length prefix followed by UTF-8 encoded JSON payload uniformly across all binary transports (Windows Named Pipe and stdio fallback)",
       "maxMessageBytes": 1048576,
       "encoding": "UTF-8"
     },
@@ -34,6 +40,8 @@
       "primary": "Windows Memory-Mapped File",
       "mapNameFormat": "Local\\NteFrameBuffer_v1_{sessionId}_{nonce}",
       "slotCount": 4,
+      "maxWidth": 1920,
+      "maxHeight": 1080,
       "slotPayloadCapacityBytes": 8294400,
       "headerSizeBytes": 64,
       "slotSizeBytes": 8294464,
@@ -41,6 +49,7 @@
       "mapTotalSizeBytes": 33177856,
       "slotOffsetFormula": "index * slotSizeBytes",
       "validIndexRange": "0 <= bufferIndex < slotCount",
+      "capacityInvariant": "width <= maxWidth and height <= maxHeight and stride * height <= slotPayloadCapacityBytes. Frames exceeding capacity are rejected with ERR_FRAME_CAPACITY_EXCEEDED.",
       "ownership": "HOST_WRITES, PYTHON_READS",
       "zeroCopy": {
         "zeroCopyAtProcessMapping": true,
@@ -67,7 +76,7 @@
       "requestId": "string (non-empty string)",
       "correlationId": "string|null",
       "sequence": "integer (int64 >= 0)",
-      "monotonicTimestampNs": "integer (int64 >= 0)",
+      "monotonicTimestampNs": "integer (int64 >= 0 in WINDOWS_QPC_NANOSECONDS domain)",
       "payload": "object (non-null dict)"
     }
   },
