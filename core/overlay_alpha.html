@@ -824,14 +824,43 @@
             </div>
           </div>
 
-          <!-- Experimental Area Placeholder (Default Collapsed) -->
+          <!-- Experimental Area: PR-B Red Inference Lab (Default Collapsed) -->
           <details id="strategyExperimentalArea" class="experimental-area" style="margin-top: 6px;">
-            <summary style="font-size: 11px; color: var(--muted-dark); cursor: pointer;">🧪 实验性高阶模型 (未接入 · 待后续 PR 扩展)</summary>
-            <div class="experimental-placeholder-body" style="font-size: 11px; color: var(--muted-dark); padding: 4px 6px; background: rgba(0,0,0,0.2); border-radius: 4px; margin-top: 4px;">
-              <p>• 红色品质先验 PMF 与条件后验 (PR-B 规划)</p>
-              <p>• 卷积生成函数与赢家诅咒折扣策略 (PR-C 规划)</p>
-              <p>• 格子数回归 CELL_FIT 校验 (PR-D 规划)</p>
-              <span style="display:inline-block; margin-top: 2px; color: #60a5fa;">当前生产运行模式: 严格六品质联合约束 + 历史影子 (Historical Shadow)</span>
+            <summary style="font-size: 11px; color: var(--muted-dark); cursor: pointer;">🧪 Red inference experimental</summary>
+            <div class="experimental-body" style="font-size: 11px; padding: 6px 8px; background: rgba(0,0,0,0.25); border-radius: 4px; margin-top: 4px; border: 1px solid rgba(245, 158, 11, 0.2);">
+              <div style="font-size: 11px; font-weight: bold; color: #f59e0b; padding: 3px 6px; background: rgba(245, 158, 11, 0.12); border: 1px solid rgba(245, 158, 11, 0.35); border-radius: 3px; margin-bottom: 6px; text-align: center;">
+                实验结果 · 不参与正式出价
+              </div>
+              <div style="display: flex; justify-content: space-between; margin-bottom: 4px; color: var(--muted);">
+                <span>有效历史样本:</span>
+                <span id="expRedSampleCount" style="color: var(--text); font-weight: 600;">0 局</span>
+              </div>
+              <div style="margin-bottom: 4px;">
+                <span style="color: var(--muted);">红件数 PMF P(R=k):</span>
+                <div id="expRedPmf" style="font-size: 10px; color: var(--accent-soft); margin-top: 2px; font-family: monospace;">暂无样本</div>
+              </div>
+              <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 4px; margin-bottom: 6px;">
+                <div style="background: rgba(255,255,255,0.03); padding: 4px; border-radius: 3px; text-align: center;">
+                  <span style="display:block; font-size: 9px; color: var(--muted);">P20</span>
+                  <span id="expRedP20" style="font-size: 11px; font-weight: 600;">—</span>
+                </div>
+                <div style="background: rgba(255,255,255,0.03); padding: 4px; border-radius: 3px; text-align: center;">
+                  <span style="display:block; font-size: 9px; color: var(--muted);">P50</span>
+                  <span id="expRedP50" style="font-size: 11px; font-weight: 600;">—</span>
+                </div>
+                <div style="background: rgba(255,255,255,0.03); padding: 4px; border-radius: 3px; text-align: center;">
+                  <span style="display:block; font-size: 9px; color: var(--muted);">P80</span>
+                  <span id="expRedP80" style="font-size: 11px; font-weight: 600;">—</span>
+                </div>
+              </div>
+              <div style="display: flex; justify-content: space-between; margin-bottom: 4px; font-size: 10px;">
+                <span style="color: var(--muted);">与正式求解器差值 (Δ vs Prod):</span>
+                <span id="expRedDeltaProd" style="color: #60a5fa;">—</span>
+              </div>
+              <div style="font-size: 10px; color: var(--muted-dark); border-top: 1px solid rgba(255,255,255,0.05); padding-top: 4px; margin-top: 4px;">
+                <div>假设: <span id="expRedAssumptions">sampling=unknown, conditioning=observational_only</span></div>
+                <div id="expRedWarnings" style="color: #fbbf24; margin-top: 2px;"></div>
+              </div>
             </div>
           </details>
         </div>
@@ -1257,6 +1286,56 @@
         if (medSrcEl) medSrcEl.textContent = "来源: " + (m.medianSource || "p50_point");
         if (conEl) conEl.textContent = m.conservativeEstimate != null ? fmtWan(m.conservativeEstimate) : "— 待定";
         if (srcEl) srcEl.textContent = "来源: " + (m.conservativeSource || "unavailable");
+      }
+    }
+
+    function updateExperimentalRedUI(expRed) {
+      if (!expRed) return;
+      const countEl = document.getElementById("expRedSampleCount");
+      const pmfEl = document.getElementById("expRedPmf");
+      const p20El = document.getElementById("expRedP20");
+      const p50El = document.getElementById("expRedP50");
+      const p80El = document.getElementById("expRedP80");
+      const deltaEl = document.getElementById("expRedDeltaProd");
+      const asmEl = document.getElementById("expRedAssumptions");
+      const warnEl = document.getElementById("expRedWarnings");
+
+      if (countEl) {
+        countEl.textContent = `${expRed.eligibleMatchCount || 0} 局 (观测 ${expRed.eligibleObservationCount || 0} 条)`;
+      }
+
+      if (pmfEl) {
+        const pmf = expRed.redCountPmf || {};
+        const entries = Object.entries(pmf);
+        if (entries.length === 0) {
+          pmfEl.textContent = "暂无样本";
+        } else {
+          pmfEl.textContent = entries.map(([k, p]) => `P(R=${k})=${(Number(p) * 100).toFixed(1)}%`).join(" | ");
+        }
+      }
+
+      const q = expRed.redTotalQuantiles || {};
+      if (p20El) p20El.textContent = q.p20 != null ? fmtWan(q.p20) : "—";
+      if (p50El) p50El.textContent = q.p50 != null ? fmtWan(q.p50) : (expRed.redTotalMedian != null ? fmtWan(expRed.redTotalMedian) : "—");
+      if (p80El) p80El.textContent = q.p80 != null ? fmtWan(q.p80) : "—";
+
+      if (deltaEl) {
+        const dMed = expRed.deltaVsProduction?.medianDelta;
+        if (dMed != null) {
+          const sign = dMed >= 0 ? "+" : "";
+          deltaEl.textContent = `${sign}${fmtWan(dMed)} (中位数)`;
+        } else {
+          deltaEl.textContent = "—";
+        }
+      }
+
+      if (asmEl) {
+        asmEl.textContent = `sampling=${expRed.samplingAssumption || "unknown"}, conditioning=${expRed.conditioningMode || "observational_only"}`;
+      }
+
+      if (warnEl) {
+        const warns = expRed.warnings || [];
+        warnEl.textContent = warns.join(" | ");
       }
     }
 
@@ -1906,7 +1985,8 @@ function sparkleBoundsText(b) {
 
     function paintResult(d) {
       paintVisionHealth(d);
-          updateStrategyPanelUI(d?.strategyPanel, d?.strategyMetrics);
+      updateStrategyPanelUI(d?.strategyPanel, d?.strategyMetrics);
+      updateExperimentalRedUI(d?.experimentalRed);
       const ownership = document.getElementById("currentOwnership");
       const inSettlement = d?.isSettlement === true || d?.scene === "SETTLEMENT";
       ownership.hidden = !inSettlement;
