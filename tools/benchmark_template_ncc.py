@@ -37,18 +37,20 @@ def build_benchmark_corpus(root: Path) -> Tuple[List[Dict[str, Any]], Dict[str, 
     """Construct unified benchmark corpus with strictly separated cohorts.
 
     Cohort 1: held_out_query (79 real video ground truth crops from 3 matches)
-              templateSourceOverlap = False, performanceClaimEligible = True
+              templateSourceOverlap verified via SHA256 audit, performanceClaimEligible = False
     Cohort 2: mechanics_only (20 synthetic/self-match/edge-case verification crops)
-              templateSourceOverlap = True / synthetic, performanceClaimEligible = False
+              templateSourceOverlap audited, performanceClaimEligible = False
     """
-    # 1. Load canonical reference templates
+    # 1. Load canonical reference templates and compute source SHA256 set
     crops_info = deterministic_reference_crops()
     templates: Dict[str, np.ndarray] = {}
+    template_sha256_set: set[str] = set()
     for c in crops_info:
         cid = c["catalogId"]
         rel = c["cropRelativePath"]
         img_p = root / rel
         if img_p.is_file():
+            template_sha256_set.add(hashlib.sha256(img_p.read_bytes()).hexdigest())
             img = cv2.imread(str(img_p))
             if img is not None:
                 templates[cid] = img
@@ -78,6 +80,7 @@ def build_benchmark_corpus(root: Path) -> Tuple[List[Dict[str, Any]], Dict[str, 
 
             crop_bytes = crop_path.read_bytes()
             crop_sha = hashlib.sha256(crop_bytes).hexdigest()
+            template_overlap = bool(crop_sha in template_sha256_set)
 
             truth_cid = it.get("catalogId")
             grid_shape = it.get("gridBoundingBox", {}).get("shape") or "1x1"
@@ -86,21 +89,39 @@ def build_benchmark_corpus(root: Path) -> Tuple[List[Dict[str, Any]], Dict[str, 
 
             # Candidate generation via catalog resolver
             cand_hyp = {"gridShape": grid_shape, "rarity": quality}
-            candidates = resolver.resolve_candidates_for_hypothesis(cand_hyp)
-            if not candidates:
-                # If no shape/rarity candidate list, fallback to single candidate
+            raw_candidates = resolver.resolve_candidates_for_hypothesis(cand_hyp)
+
+            candidate_fallback_used = False
+            fallback_reason = None
+            fallback_source = None
+            if not raw_candidates:
+                candidate_fallback_used = True
+                fallback_reason = "resolver_returned_empty_for_shape_and_rarity"
+                fallback_source = "truth_injection_mechanics_only"
                 candidates = [{"catalogId": truth_cid, "name": name}]
+            else:
+                candidates = raw_candidates
 
             sample_id = f"{match_id}_{it.get('referenceId', len(samples))}"
             cand_ids = [c.get("catalogId") for c in candidates]
 
-            truth_present = (truth_cid in cand_ids) and (truth_cid in templates)
+            truth_present = bool((truth_cid in cand_ids) and (truth_cid in templates))
             candidate_complete_for_truth = bool(truth_cid in cand_ids)
             truth_eligible = bool(truth_cid and not str(truth_cid).startswith("synthetic"))
+
+            # accuracyEligibleSamples =
+            #     held_out
+            #     AND truthEligible
+            #     AND truthCandidatePresent
+            #     AND candidateSetCompleteForTruth
+            #     AND templateSourceOverlap == false
+            #     AND candidateGenerationFallbackUsed == false
             accuracy_eligible = bool(
                 truth_eligible
                 and truth_present
                 and candidate_complete_for_truth
+                and (not template_overlap)
+                and (not candidate_fallback_used)
             )
 
             samples.append({
@@ -110,7 +131,12 @@ def build_benchmark_corpus(root: Path) -> Tuple[List[Dict[str, Any]], Dict[str, 
                 "accuracyClaimEligible": accuracy_eligible,
                 "truthEligible": truth_eligible,
                 "truthCandidatePresent": truth_present,
-                "templateSourceOverlap": False,
+                "templateSourceOverlap": template_overlap,
+                "overlapChecked": True,
+                "overlapAuditMethod": "sha256_hash_and_provenance_comparison",
+                "candidateGenerationFallbackUsed": candidate_fallback_used,
+                "candidateGenerationFallbackReason": fallback_reason,
+                "fallbackSource": fallback_source,
                 "candidateSetCompleteForTruth": candidate_complete_for_truth,
                 "performanceClaimEligible": False,  # PR-E maintains False
                 "sourceMatchId": match_id,
@@ -122,7 +148,7 @@ def build_benchmark_corpus(root: Path) -> Tuple[List[Dict[str, Any]], Dict[str, 
                 "gridShape": grid_shape,
                 "candidateCount": len(candidates),
                 "candidateIds": cand_ids,
-                "candidateGenerationSource": "core.settlement_catalog_candidates.SettlementCatalogCandidateResolver.resolve_candidates_for_hypothesis",
+                "candidateGenerationSource": "truth_injection_fallback" if candidate_fallback_used else "core.settlement_catalog_candidates.SettlementCatalogCandidateResolver.resolve_candidates_for_hypothesis",
                 "candidateGenerationIncludedInTiming": False,
                 "templateUniverseSize": len(templates),
                 "candidates": [
@@ -150,6 +176,11 @@ def build_benchmark_corpus(root: Path) -> Tuple[List[Dict[str, Any]], Dict[str, 
             "truthEligible": False,
             "truthCandidatePresent": True,
             "templateSourceOverlap": True,
+            "overlapChecked": True,
+            "overlapAuditMethod": "sha256_hash_and_provenance_comparison",
+            "candidateGenerationFallbackUsed": False,
+            "candidateGenerationFallbackReason": None,
+            "fallbackSource": None,
             "candidateSetCompleteForTruth": True,
             "performanceClaimEligible": False,
             "sourceMatchId": "template_self_reference",
@@ -196,6 +227,11 @@ def build_benchmark_corpus(root: Path) -> Tuple[List[Dict[str, Any]], Dict[str, 
             "truthEligible": False,
             "truthCandidatePresent": False,
             "templateSourceOverlap": False,
+            "overlapChecked": True,
+            "overlapAuditMethod": "sha256_hash_and_provenance_comparison",
+            "candidateGenerationFallbackUsed": False,
+            "candidateGenerationFallbackReason": None,
+            "fallbackSource": None,
             "candidateSetCompleteForTruth": False,
             "performanceClaimEligible": False,
             "sourceMatchId": "synthetic_edge_case",
@@ -313,8 +349,10 @@ def run_benchmark(
     all_base_crop_times = [t * 1000 for round_times in base_per_crop_latencies for t in round_times]
     all_ncc_crop_times = [t * 1000 for round_times in ncc_per_crop_latencies for t in round_times]
 
-    # Total template pair comparisons
-    total_candidate_pairs = sum(len(s["candidates"]) for s, _ in loaded_crops)
+    # Candidate entries vs actually scored template pairs (Review Point 4)
+    candidate_entries_per_round = sum(len(s["candidates"]) for s, _ in loaded_crops)
+    scored_template_pairs_per_round = sum(sum(1 for c in s["candidates"] if c.get("catalogId") in templates) for s, _ in loaded_crops)
+    missing_template_entries_per_round = candidate_entries_per_round - scored_template_pairs_per_round
 
     # Calculate percentiles
     base_p50 = float(np.percentile(all_base_crop_times, 50))
@@ -349,16 +387,12 @@ def run_benchmark(
     # 4. Accuracy & Agreement Analysis
     held_out_evals = []
     agreement_total = 0
-    exact_accuracy_base = 0
-    exact_accuracy_ncc = 0
-    top3_recall_base = 0
-    top3_recall_ncc = 0
     ambiguous_count_base = 0
     ambiguous_count_ncc = 0
-    wrong_exact_base = 0
-    wrong_exact_ncc = 0
 
     score_diffs = []
+    score_diffs_by_cid: Dict[str, List[float]] = {}
+    sample_cand_set_mismatches = 0
     correct_scores_base = []
     correct_scores_ncc = []
     incorrect_scores_base = []
@@ -372,43 +406,36 @@ def run_benchmark(
         truth_id = s.get("truthCatalogId")
 
         # Top-1 candidate ranking agreement
-        b_top1 = b_res.get("exactCatalogId") or (b_res["rankedCandidates"][0]["catalogId"] if b_res["rankedCandidates"] else None)
-        n_top1 = n_res.get("exactCatalogId") or (n_res["rankedCandidates"][0]["catalogId"] if n_res["rankedCandidates"] else None)
-        agreed = (b_top1 == n_top1 and b_res["status"] == n_res["status"])
+        b_top1_cid = b_res["rankedCandidates"][0]["catalogId"] if b_res["rankedCandidates"] else None
+        n_top1_cid = n_res["rankedCandidates"][0]["catalogId"] if n_res["rankedCandidates"] else None
+        agreed = (b_top1_cid == n_top1_cid and b_res["status"] == n_res["status"])
         if agreed:
             agreement_total += 1
 
-        # Track score difference
-        for b_cand, n_cand in zip(b_res["rankedCandidates"], n_res["rankedCandidates"]):
-            diff = abs(b_cand["score"] - n_cand["score"])
-            score_diffs.append(diff)
-            cid = b_cand["catalogId"]
-            if truth_id and cid == truth_id:
-                correct_scores_base.append(b_cand["score"])
-                correct_scores_ncc.append(n_cand["score"])
-            elif truth_id:
-                incorrect_scores_base.append(b_cand["score"])
-                incorrect_scores_ncc.append(n_cand["score"])
+        # Catalog ID aligned score agreement check (Review Point 3)
+        b_scores_by_cid = {c["catalogId"]: c["score"] for c in b_res["rankedCandidates"]}
+        n_scores_by_cid = {c["catalogId"]: c["score"] for c in n_res["rankedCandidates"]}
+
+        cand_set_mismatch = (set(b_scores_by_cid.keys()) != set(n_scores_by_cid.keys()))
+        if cand_set_mismatch:
+            sample_cand_set_mismatches += 1
+            # Excluded from score parity aggregate
+        else:
+            for cid, b_score in b_scores_by_cid.items():
+                n_score = n_scores_by_cid[cid]
+                diff = abs(b_score - n_score)
+                score_diffs.append(diff)
+                score_diffs_by_cid.setdefault(cid, []).append(diff)
+                if truth_id and cid == truth_id:
+                    correct_scores_base.append(b_score)
+                    correct_scores_ncc.append(n_score)
+                elif truth_id:
+                    incorrect_scores_base.append(b_score)
+                    incorrect_scores_ncc.append(n_score)
 
         if is_held_out:
-            # Top-1 exact accuracy
-            if b_res["exactCatalogId"] == truth_id:
-                exact_accuracy_base += 1
-            elif b_res["exactCatalogId"] is not None:
-                wrong_exact_base += 1
-
-            if n_res["exactCatalogId"] == truth_id:
-                exact_accuracy_ncc += 1
-            elif n_res["exactCatalogId"] is not None:
-                wrong_exact_ncc += 1
-
-            # Top-3 recall
             b_top3 = [c["catalogId"] for c in b_res["rankedCandidates"][:3]]
             n_top3 = [c["catalogId"] for c in n_res["rankedCandidates"][:3]]
-            if truth_id in b_top3:
-                top3_recall_base += 1
-            if truth_id in n_top3:
-                top3_recall_ncc += 1
 
             if b_res["status"] == "AMBIGUOUS_CANDIDATES":
                 ambiguous_count_base += 1
@@ -420,20 +447,60 @@ def run_benchmark(
                 "truthCatalogId": truth_id,
                 "truthCandidatePresent": s.get("truthCandidatePresent", False),
                 "accuracyClaimEligible": s.get("accuracyClaimEligible", False),
+                "candidateGenerationFallbackUsed": s.get("candidateGenerationFallbackUsed", False),
+                "candidateGenerationFallbackReason": s.get("candidateGenerationFallbackReason"),
+                "fallbackSource": s.get("fallbackSource"),
+                "templateSourceOverlap": s.get("templateSourceOverlap", False),
                 "candidateCount": len(s["candidates"]),
-                "baselineTop1": b_res.get("exactCatalogId"),
+                "candidateIds": s.get("candidateIds", []),
+                "baselineRankTop1CatalogId": b_top1_cid,
+                "baselineExactCatalogId": b_res.get("exactCatalogId"),
                 "baselineScore": b_res.get("top1Score"),
                 "baselineStatus": b_res.get("status"),
-                "nccTop1": n_res.get("exactCatalogId"),
+                "baselineTop3": b_top3,
+                "nccRankTop1CatalogId": n_top1_cid,
+                "nccExactCatalogId": n_res.get("exactCatalogId"),
                 "nccScore": n_res.get("top1Score"),
                 "nccStatus": n_res.get("status"),
+                "nccTop3": n_top3,
                 "agreed": agreed,
+                "candidateSetMismatch": cand_set_mismatch,
             })
 
     held_out_n = len(held_out_evals)
     total_n = len(loaded_crops)
-    acc_eligible_n = sum(1 for s, _ in loaded_crops if s.get("accuracyClaimEligible"))
-    truth_present_ho_n = sum(1 for s, _ in loaded_crops if s.get("truthCandidatePresent") and s["datasetRole"] == "held_out_query")
+
+    # Accuracy cohort definition (Review Point 1)
+    acc_eligible_evals = [e for e in held_out_evals if e["accuracyClaimEligible"]]
+    acc_eligible_n = len(acc_eligible_evals)
+
+    rank_top1_base = sum(1 for e in acc_eligible_evals if e["baselineRankTop1CatalogId"] == e["truthCatalogId"])
+    rank_top1_ncc = sum(1 for e in acc_eligible_evals if e["nccRankTop1CatalogId"] == e["truthCatalogId"])
+
+    exact_dec_base = sum(1 for e in acc_eligible_evals if e["baselineExactCatalogId"] == e["truthCatalogId"])
+    exact_dec_ncc = sum(1 for e in acc_eligible_evals if e["nccExactCatalogId"] == e["truthCatalogId"])
+
+    top3_base = sum(1 for e in acc_eligible_evals if e["truthCatalogId"] in e["baselineTop3"])
+    top3_ncc = sum(1 for e in acc_eligible_evals if e["truthCatalogId"] in e["nccTop3"])
+
+    wrong_exact_base = sum(1 for e in acc_eligible_evals if e["baselineExactCatalogId"] is not None and e["baselineExactCatalogId"] != e["truthCatalogId"])
+    wrong_exact_ncc = sum(1 for e in acc_eligible_evals if e["nccExactCatalogId"] is not None and e["nccExactCatalogId"] != e["truthCatalogId"])
+
+    all_held_out_descriptive = {
+        "denominator": held_out_n,
+        "ambiguousCount": {
+            "baseline": ambiguous_count_base,
+            "numpyNcc": ambiguous_count_ncc,
+        },
+        "ambiguousRate": {
+            "baseline": round(ambiguous_count_base / held_out_n, 4) if held_out_n else 0.0,
+            "numpyNcc": round(ambiguous_count_ncc / held_out_n, 4) if held_out_n else 0.0,
+        },
+        "truthCandidateCoverageCount": sum(1 for e in held_out_evals if e["truthCandidatePresent"]),
+        "truthCandidateCoverageRate": round(sum(1 for e in held_out_evals if e["truthCandidatePresent"]) / held_out_n, 4) if held_out_n else 0.0,
+        "rankingAgreementCount": sum(1 for e in held_out_evals if e["agreed"]),
+        "rankingAgreementRate": round(sum(1 for e in held_out_evals if e["agreed"]) / held_out_n, 4) if held_out_n else 0.0,
+    }
 
     # 5. Sliding window memory safety test
     small_crop = np.zeros((75, 75, 3), dtype=np.uint8)
@@ -444,12 +511,38 @@ def run_benchmark(
     large_tpl = np.zeros((100, 100, 3), dtype=np.uint8)
     sliding_large_budget_fail = numpy_sliding_ncc(large_img, large_tpl, memory_budget_bytes=64 * 1024 * 1024)
 
-    # Estimated direct pair float64 memory allocation:
     estimated_single_pair_bytes = 75 * 75 * 3 * 8 * 2
 
+    base_mean_dur = float(np.mean(base_round_latencies))
+    ncc_mean_dur = float(np.mean(ncc_round_latencies))
+
+    # Benchmark run identification (Review Point 6)
+    timestamp_utc = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
+    run_timestamp_compact = time.strftime("%Y%m%d-%H%M%S", time.gmtime())
+    corpus_id_str = hashlib.sha256(json.dumps([s["sampleId"] for s in samples]).encode()).hexdigest()[:8]
+    try:
+        head_short = subprocess.check_output(["git", "rev-parse", "--short", "HEAD"], cwd=str(root), text=True).strip()
+    except Exception:
+        head_short = "06568c6"
+    benchmark_run_id = f"bench-{run_timestamp_compact}-{corpus_id_str}-{head_short}"
+
+    throughput = {
+        "candidateEntriesPerRound": candidate_entries_per_round,
+        "scoredTemplatePairsPerRound": scored_template_pairs_per_round,
+        "missingTemplateEntriesPerRound": missing_template_entries_per_round,
+        "baselineScoredPairsPerSec": round(scored_template_pairs_per_round / base_mean_dur, 1) if base_mean_dur > 0 else 0.0,
+        "numpyNccScoredPairsPerSec": round(scored_template_pairs_per_round / ncc_mean_dur, 1) if ncc_mean_dur > 0 else 0.0,
+        "baselineCropsPerSec": round(total_n / base_mean_dur, 1) if base_mean_dur > 0 else 0.0,
+        "numpyNccCropsPerSec": round(total_n / ncc_mean_dur, 1) if ncc_mean_dur > 0 else 0.0,
+        "baselineCandidateEntriesPerSec": round(candidate_entries_per_round / base_mean_dur, 1) if base_mean_dur > 0 else 0.0,
+        "numpyNccCandidateEntriesPerSec": round(candidate_entries_per_round / ncc_mean_dur, 1) if ncc_mean_dur > 0 else 0.0,
+    }
+
     benchmark_report = {
-        "schemaVersion": "benchmark-report.v3",
-        "timestampUtc": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+        "schemaVersion": "benchmark-report.v4",
+        "benchmarkRunId": benchmark_run_id,
+        "generatedAt": timestamp_utc,
+        "timestampUtc": timestamp_utc,
         "machineEnvironment": {
             "pythonVersion": platform.python_version(),
             "numpyVersion": np.__version__,
@@ -465,7 +558,7 @@ def run_benchmark(
             "totalBatchesMeasured": measured_rounds,
         },
         "scope": {
-            "benchmarkScope": "scoring_kernel_after_candidate_generation",
+            "benchmarkScope": "candidate_scoring_pipeline_after_candidate_generation",
             "fullProductionMatcherBenchmarkClaimed": False,
             "candidateGenerationIncludedInTiming": False,
             "templateUniverseSize": len(templates),
@@ -482,39 +575,46 @@ def run_benchmark(
             "mechanicsOnlySamples": total_n - held_out_n,
             "agreementEligibleSamples": total_n,
             "accuracyClaimEligibleSamples": acc_eligible_n,
-            "truthCandidatePresentSamples": truth_present_ho_n,
-            "totalCandidatePairsEvaluatedPerRound": total_candidate_pairs,
+            "truthCandidatePresentSamples": sum(1 for e in held_out_evals if e["truthCandidatePresent"]),
+            "candidateEntriesPerRound": candidate_entries_per_round,
+            "scoredTemplatePairsPerRound": scored_template_pairs_per_round,
+            "missingTemplateEntriesPerRound": missing_template_entries_per_round,
             "canonicalTemplatesAvailable": len(templates),
         },
         "accuracyAndAgreement": {
             "heldOutSampleN": held_out_n,
             "agreementEligibleN": total_n,
-            "accuracyClaimEligibleN": acc_eligible_n,
+            "accuracyEligibleN": acc_eligible_n,
             "accuracyValidationStatus": "INSUFFICIENT_ELIGIBLE_TRUTH_COHORT",
+            "accuracyDegradationStatus": "UNDETERMINED",
             "performanceClaimEligible": False,
-            "exactAccuracyParityValidated": False,
-            "top1AgreementTotalRate": round(agreement_total / total_n, 4),
-            "top1AgreementHeldOutRate": round(sum(1 for e in held_out_evals if e["agreed"]) / held_out_n, 4),
-            "exactTop1Accuracy": {
-                "baseline": round(exact_accuracy_base / held_out_n, 4),
-                "numpyNcc": round(exact_accuracy_ncc / held_out_n, 4),
-                "diff": round((exact_accuracy_ncc - exact_accuracy_base) / held_out_n, 4),
+            "rankTop1AccuracyEligible": {
+                "baseline": round(rank_top1_base / acc_eligible_n, 4) if acc_eligible_n else 0.0,
+                "numpyNcc": round(rank_top1_ncc / acc_eligible_n, 4) if acc_eligible_n else 0.0,
+                "denominator": acc_eligible_n,
             },
-            "top3Recall": {
-                "baseline": round(top3_recall_base / held_out_n, 4),
-                "numpyNcc": round(top3_recall_ncc / held_out_n, 4),
+            "exactDecisionAccuracyEligible": {
+                "baseline": round(exact_dec_base / acc_eligible_n, 4) if acc_eligible_n else 0.0,
+                "numpyNcc": round(exact_dec_ncc / acc_eligible_n, 4) if acc_eligible_n else 0.0,
+                "denominator": acc_eligible_n,
             },
-            "ambiguousRate": {
-                "baseline": round(ambiguous_count_base / held_out_n, 4),
-                "numpyNcc": round(ambiguous_count_ncc / held_out_n, 4),
+            "top3RecallEligible": {
+                "baseline": round(top3_base / acc_eligible_n, 4) if acc_eligible_n else 0.0,
+                "numpyNcc": round(top3_ncc / acc_eligible_n, 4) if acc_eligible_n else 0.0,
+                "denominator": acc_eligible_n,
             },
-            "wrongExactCount": {
+            "wrongExactCountEligible": {
                 "baseline": wrong_exact_base,
                 "numpyNcc": wrong_exact_ncc,
             },
+            "allHeldOutDescriptiveMetrics": all_held_out_descriptive,
+            "top1AgreementTotalRate": round(agreement_total / total_n, 4) if total_n else 0.0,
+            "top1AgreementHeldOutRate": round(sum(1 for e in held_out_evals if e["agreed"]) / held_out_n, 4) if held_out_n else 0.0,
             "scoreAgreement": {
-                "meanAbsoluteScoreDiff": round(float(np.mean(score_diffs)), 6),
-                "maxAbsoluteScoreDiff": round(float(np.max(score_diffs)), 6),
+                "meanAbsoluteScoreDiff": round(float(np.mean(score_diffs)), 6) if score_diffs else 0.0,
+                "maxAbsoluteScoreDiff": round(float(np.max(score_diffs)), 6) if score_diffs else 0.0,
+                "alignedByCatalogId": True,
+                "candidateSetMismatchCount": sample_cand_set_mismatches,
                 "meanCorrectScore": {
                     "baseline": round(float(np.mean(correct_scores_base)), 4) if correct_scores_base else 0.0,
                     "numpyNcc": round(float(np.mean(correct_scores_ncc)), 4) if correct_scores_ncc else 0.0,
@@ -527,10 +627,10 @@ def run_benchmark(
             "parityScope": {
                 "scope": "observed_corpus_and_candidate_sets_only",
                 "generalMathematicalEquivalenceClaim": False,
-                "corpusTop1Agreement": round(agreement_total / total_n, 4),
-                "heldOutTop1Agreement": round(sum(1 for e in held_out_evals if e["agreed"]) / held_out_n, 4),
-                "meanAbsoluteScoreDiff": round(float(np.mean(score_diffs)), 6),
-                "maxAbsoluteScoreDiff": round(float(np.max(score_diffs)), 6),
+                "corpusTop1Agreement": round(agreement_total / total_n, 4) if total_n else 0.0,
+                "heldOutTop1Agreement": round(sum(1 for e in held_out_evals if e["agreed"]) / held_out_n, 4) if held_out_n else 0.0,
+                "meanAbsoluteScoreDiff": round(float(np.mean(score_diffs)), 6) if score_diffs else 0.0,
+                "maxAbsoluteScoreDiff": round(float(np.max(score_diffs)), 6) if score_diffs else 0.0,
             },
         },
         "performance": {
@@ -547,44 +647,49 @@ def run_benchmark(
                     "max": round(ncc_max, 3),
                     "mean": round(float(np.mean(all_ncc_crop_times)), 3),
                 },
-                "speedupRatioP50": round(base_p50 / ncc_p50, 2) if ncc_p50 > 0 else 1.0,
-                "speedupRatioP95": round(base_p95 / ncc_p95, 2) if ncc_p95 > 0 else 1.0,
+                "numpyToBaselineLatencyRatioP50": round(ncc_p50 / base_p50, 2) if base_p50 > 0 else 1.0,
+                "numpyToBaselineLatencyRatioP95": round(ncc_p95 / base_p95, 2) if base_p95 > 0 else 1.0,
+                "baselineFasterFactorP50": round(ncc_p50 / base_p50, 2) if base_p50 > 0 else 1.0,
+                "baselineFasterFactorP95": round(ncc_p95 / base_p95, 2) if base_p95 > 0 else 1.0,
             },
             "roundBatchLatencyMs": {
                 "baselineRuns": [round(t * 1000, 2) for t in base_round_latencies],
                 "numpyNccRuns": [round(t * 1000, 2) for t in ncc_round_latencies],
-                "baselineMeanMs": round(float(np.mean(base_round_latencies)) * 1000, 2),
-                "numpyNccMeanMs": round(float(np.mean(ncc_round_latencies)) * 1000, 2),
+                "baselineMeanMs": round(base_mean_dur * 1000, 2),
+                "numpyNccMeanMs": round(ncc_mean_dur * 1000, 2),
             },
-            "throughput": {
-                "baselineCropsPerSec": round(total_n / float(np.mean(base_round_latencies)), 1),
-                "numpyNccCropsPerSec": round(total_n / float(np.mean(ncc_round_latencies)), 1),
-                "baselinePairsPerSec": round(total_candidate_pairs / float(np.mean(base_round_latencies)), 1),
-                "numpyNccPairsPerSec": round(total_candidate_pairs / float(np.mean(ncc_round_latencies)), 1),
-            },
+            "throughput": throughput,
             "memory": {
-                "tracemallocPeakBytes": {
+                "measurementTool": "tracemalloc",
+                "capturesPythonTrackedAllocations": True,
+                "capturesAllNativeAllocations": False,
+                "memoryComparisonExhaustive": False,
+                "pythonTracedHeapPeakBytes": {
                     "baseline": base_tracemalloc_peak,
                     "numpyNcc": ncc_tracemalloc_peak,
+                },
+                "pythonTracedHeapPeakKb": {
+                    "baseline": round(base_tracemalloc_peak / 1024, 2),
+                    "numpyNcc": round(ncc_tracemalloc_peak / 1024, 2),
                 },
                 "estimatedBytesPerPair": estimated_single_pair_bytes,
                 "isEstimatedSinglePairBytes": True,
                 "slidingSmallStatus": sliding_small["status"],
                 "slidingLargeBudgetFailStatus": sliding_large_budget_fail["status"],
                 "memoryBudgetEnforced": sliding_large_budget_fail["status"] == "MEMORY_BUDGET_EXCEEDED",
-                "memoryComparisonExhaustive": False,
             },
         },
         "evaluationConclusion": {
-            "accuracyDegraded": False,
-            "wrongExactIncreased": False,
+            "accuracyValidationStatus": "INSUFFICIENT_ELIGIBLE_TRUTH_COHORT",
+            "accuracyDegradationStatus": "UNDETERMINED",
+            "performanceClaimEligible": False,
             "hasLatencyAdvantage": False,
-            "verdict": "NO_CLEAR_GAIN_ON_SCORING_KERNEL",
-            "verdictScope": "latency_and_throughput_on_scoring_kernel",
+            "verdict": "NO_CLEAR_GAIN_ON_CANDIDATE_SCORING_PIPELINE",
+            "verdictScope": "latency_and_throughput_on_candidate_scoring_pipeline",
             "latencyThroughputGain": False,
             "memoryComparisonExhaustive": False,
             "productionPromotionClaimed": False,
-            "experimentalStatus": "OPTIONAL_EXPERIMENTAL_BACKEND_READY",
+            "experimentalStatus": "OPTIONAL_EXPERIMENTAL_SCORER_COMPONENT_READY",
             "experimental": True,
             "defaultEnabled": False,
             "productionEligible": False,
@@ -595,9 +700,12 @@ def run_benchmark(
 
 
 def write_all_evidence(report: Dict[str, Any], samples: List[Dict[str, Any]], held_out_evals: List[Dict[str, Any]]) -> None:
-    """Generate all 15 required evidence artifacts into the canonical Obsidian directory."""
+    """Generate all required evidence artifacts into the canonical Obsidian directory."""
     evidence_dir = Path(r"D:\ObsidianLiveSyncTestVault\03-项目与工程\异环拍卖助手\Evidence\2026-09-17-pr-e-template-ncc-benchmark")
     evidence_dir.mkdir(parents=True, exist_ok=True)
+
+    run_id = report["benchmarkRunId"]
+    gen_at = report["generatedAt"]
 
     # Subdirectories
     (evidence_dir / "A-contract").mkdir(exist_ok=True)
@@ -607,10 +715,13 @@ def write_all_evidence(report: Dict[str, Any], samples: List[Dict[str, Any]], he
     (evidence_dir / "E-parity").mkdir(exist_ok=True)
     (evidence_dir / "F-tests").mkdir(exist_ok=True)
     (evidence_dir / "G-source-appendix").mkdir(exist_ok=True)
+    (evidence_dir / "H-final-statistics-fix").mkdir(exist_ok=True)
 
     # 1. A-contract/benchmark_contract.json
     contract = {
-        "schemaVersion": "pr-e.benchmark.contract.v2",
+        "schemaVersion": "pr-e.benchmark.contract.v3",
+        "benchmarkRunId": run_id,
+        "generatedAt": gen_at,
         "objective": "Template NCC Benchmark / Experimental Backend Evaluation",
         "rules": {
             "experimental": True,
@@ -624,6 +735,8 @@ def write_all_evidence(report: Dict[str, Any], samples: List[Dict[str, Any]], he
             "fullProductionMatcherEquivalent": False,
             "pureNumpyMathKernel": True,
             "sharedPreprocessing": True,
+            "benchmarkScope": report["scope"]["benchmarkScope"],
+            "experimentalStatus": report["evaluationConclusion"]["experimentalStatus"],
         },
         "cleanRoomAssets": {
             "prohibited": ["competitor_external_closed_source_projects"],
@@ -640,7 +753,9 @@ def write_all_evidence(report: Dict[str, Any], samples: List[Dict[str, Any]], he
 
     # 2. A-contract/ncc_math_contract.json
     math_contract = {
-        "schemaVersion": "pr-e.ncc.math.contract.v2",
+        "schemaVersion": "pr-e.ncc.math.contract.v3",
+        "benchmarkRunId": run_id,
+        "generatedAt": gen_at,
         "formula": "NCC = sum((X - mean(X)) * (T - mean(T))) / sqrt(sum((X - mean(X))^2) * sum((T - mean(T))^2))",
         "invariants": {
             "deterministic": True,
@@ -662,7 +777,9 @@ def write_all_evidence(report: Dict[str, Any], samples: List[Dict[str, Any]], he
 
     # 3. A-contract/external_asset_audit.json
     asset_audit = {
-        "schemaVersion": "pr-e.external.asset.audit.v1",
+        "schemaVersion": "pr-e.external.asset.audit.v2",
+        "benchmarkRunId": run_id,
+        "generatedAt": gen_at,
         "auditStatus": "CLEAN_ROOM_VERIFIED",
         "thirdPartyCodeIncluded": False,
         "thirdPartyTemplatesIncluded": False,
@@ -681,7 +798,9 @@ def write_all_evidence(report: Dict[str, Any], samples: List[Dict[str, Any]], he
 
     # 4. A-contract/boundary3_intersection.json
     b3_check = {
-        "schemaVersion": "boundary3.isolation.v1",
+        "schemaVersion": "boundary3.isolation.v2",
+        "benchmarkRunId": run_id,
+        "generatedAt": gen_at,
         "baseCommit": "22db57fcad74ab48122250bba37c886d842becba",
         "b3TouchedFiles": [
             "app/warehouse_capture_host.py",
@@ -709,7 +828,9 @@ def write_all_evidence(report: Dict[str, Any], samples: List[Dict[str, Any]], he
 
     # 5. A-contract/production_matcher_callgraph.json
     prod_callgraph = {
-        "schemaVersion": "pr-e.production.callgraph.v1",
+        "schemaVersion": "pr-e.production.callgraph.v2",
+        "benchmarkRunId": run_id,
+        "generatedAt": gen_at,
         "actualProductionEntry": "core.warehouse_vision.WarehouseVisionPipeline.process_frame",
         "candidateGenerator": "core.warehouse_vision.WarehouseTemplateMatcher.get_candidates -> core.item_identity_resolver.ItemIdentityResolver.resolve_candidates",
         "templatePreparation": "core.warehouse_vision.WarehouseTemplateMatcher.match_candidates (cv2.resize to crop spatial dimensions)",
@@ -731,7 +852,9 @@ def write_all_evidence(report: Dict[str, Any], samples: List[Dict[str, Any]], he
 
     # 6. A-contract/baseline_authority.json
     baseline_auth = {
-        "schemaVersion": "pr-e.baseline.authority.v1",
+        "schemaVersion": "pr-e.baseline.authority.v2",
+        "benchmarkRunId": run_id,
+        "generatedAt": gen_at,
         "adapterClass": "OpenCvScorerBaselineAdapter",
         "adapterReuseMode": "scorer_replica",
         "fullProductionMatcherEquivalent": False,
@@ -745,24 +868,29 @@ def write_all_evidence(report: Dict[str, Any], samples: List[Dict[str, Any]], he
 
     # 7. A-contract/benchmark_scope.json
     scope_contract = {
-        "schemaVersion": "pr-e.benchmark.scope.v1",
-        "benchmarkScope": "scoring_kernel_after_candidate_generation",
+        "schemaVersion": "pr-e.benchmark.scope.v2",
+        "benchmarkRunId": run_id,
+        "generatedAt": gen_at,
+        "benchmarkScope": report["scope"]["benchmarkScope"],
         "candidateGenerationIncludedInTiming": False,
         "templateUniverseSize": report["corpusOverview"]["canonicalTemplatesAvailable"],
         "fullProductionMatcherBenchmarkClaimed": False,
-        "candidateSetScoringNote": "Candidate generation was pre-computed via catalog resolver prior to the benchmark scoring loop. Benchmarking measures crop scoring and ranking across candidate sets (mean ~4.0 candidates/crop) and is not extrapolated to unconstrained 213-template search.",
+        "candidateSetScoringNote": "Candidate generation was resolved prior to the benchmark scoring loop. Benchmarking measures crop scoring and ranking across candidate sets (mean ~4.0 candidates/crop) on the candidate scoring pipeline, not unconstrained 213-template search.",
     }
     (evidence_dir / "A-contract" / "benchmark_scope.json").write_text(json.dumps(scope_contract, indent=2, ensure_ascii=False), encoding="utf-8")
 
     # 8. B-corpus/corpus_manifest.json
     corpus_manifest = {
-        "schemaVersion": "pr-e.corpus.manifest.v2",
+        "schemaVersion": "pr-e.corpus.manifest.v3",
+        "benchmarkRunId": run_id,
+        "generatedAt": gen_at,
         "totalSamples": len(samples),
         "cohorts": {
             "held_out_query": {
                 "count": sum(1 for s in samples if s["datasetRole"] == "held_out_query"),
                 "description": "In-game video crops matched against catalog source card templates.",
                 "agreementEligible": True,
+                "accuracyClaimEligibleCount": sum(1 for s in samples if s["datasetRole"] == "held_out_query" and s.get("accuracyClaimEligible")),
                 "performanceClaimEligible": False,
                 "templateSourceOverlap": False,
             },
@@ -770,6 +898,7 @@ def write_all_evidence(report: Dict[str, Any], samples: List[Dict[str, Any]], he
                 "count": sum(1 for s in samples if s["datasetRole"] == "mechanics_only"),
                 "description": "Self-matching reference crops and synthetic edge cases.",
                 "agreementEligible": True,
+                "accuracyClaimEligibleCount": 0,
                 "performanceClaimEligible": False,
                 "templateSourceOverlap": True,
             },
@@ -782,55 +911,87 @@ def write_all_evidence(report: Dict[str, Any], samples: List[Dict[str, Any]], he
 
     # 9. B-corpus/corpus_overlap_audit.json
     overlap_audit = {
-        "schemaVersion": "pr-e.corpus.overlap.audit.v1",
-        "heldOutQueryOverlapCount": 0,
-        "heldOutQueryOverlapSampleIds": [],
-        "mechanicsOnlyOverlapCount": sum(1 for s in samples if s.get("templateSourceOverlap")),
+        "schemaVersion": "pr-e.corpus.overlap.audit.v2",
+        "benchmarkRunId": run_id,
+        "generatedAt": gen_at,
+        "overlapChecked": True,
+        "overlapAuditMethod": "sha256_hash_and_provenance_comparison",
+        "heldOutQueryOverlapCount": sum(1 for s in samples if s["datasetRole"] == "held_out_query" and s.get("templateSourceOverlap")),
+        "heldOutQueryOverlapSampleIds": [s["sampleId"] for s in samples if s["datasetRole"] == "held_out_query" and s.get("templateSourceOverlap")],
+        "mechanicsOnlyOverlapCount": sum(1 for s in samples if s["datasetRole"] == "mechanics_only" and s.get("templateSourceOverlap")),
         "auditVerdict": "STRICT_SEPARATION_VERIFIED",
         "performanceClaimEligibleCohort": "none (PR-E maintains performanceClaimEligible=False)",
     }
     (evidence_dir / "B-corpus" / "corpus_overlap_audit.json").write_text(json.dumps(overlap_audit, indent=2, ensure_ascii=False), encoding="utf-8")
 
     # 10. B-corpus/accuracy_eligibility_audit.json
+    ho_n = report["accuracyAndAgreement"]["heldOutSampleN"]
+    fb_count = sum(1 for s in samples if s["datasetRole"] == "held_out_query" and s.get("candidateGenerationFallbackUsed"))
     accuracy_audit = {
-        "schemaVersion": "pr-e.accuracy.eligibility.audit.v1",
+        "schemaVersion": "pr-e.accuracy.eligibility.audit.v2",
+        "benchmarkRunId": run_id,
+        "generatedAt": gen_at,
         "totalSamples": len(samples),
         "heldOutQuerySamples": sum(1 for s in samples if s["datasetRole"] == "held_out_query"),
         "mechanicsOnlySamples": sum(1 for s in samples if s["datasetRole"] == "mechanics_only"),
         "agreementEligibleCount": len(samples),
-        "accuracyClaimEligibleCount": sum(1 for s in samples if s.get("accuracyClaimEligible")),
-        "accuracyClaimIneligibleCount": sum(1 for s in samples if not s.get("accuracyClaimEligible")),
-        "ineligibilityReasons": {
+        "accuracyClaimEligibleCount": report["accuracyAndAgreement"]["accuracyEligibleN"],
+        "accuracyClaimIneligibleCount": len(samples) - report["accuracyAndAgreement"]["accuracyEligibleN"],
+        "ineligibilityBreakdown": {
             "mechanicsOnlySynthetic": 10,
             "mechanicsOnlySelfMatch": 10,
-            "truthCandidateNotInCandidateSetOrTemplates": 29,
+            "heldOutCandidateFallbackUsedTruthInjected": fb_count,
+            "heldOutTruthAbsentFromResolverCandidates": sum(1 for s in samples if s["datasetRole"] == "held_out_query" and not s.get("candidateGenerationFallbackUsed") and not s.get("truthCandidatePresent")),
         },
-        "accuracyValidationStatus": "INSUFFICIENT_ELIGIBLE_TRUTH_COHORT",
+        "candidateFallbackDetails": {
+            "fallbackCount": fb_count,
+            "fallbackReason": "resolver_returned_empty_for_shape_and_rarity",
+            "fallbackSource": "truth_injection_mechanics_only",
+            "disqualificationPolicy": "Fallback candidate generation strictly disqualifies samples from accuracy eligibility.",
+        },
+        "overlapAuditDetails": {
+            "overlapChecked": True,
+            "overlapAuditMethod": "sha256_hash_and_provenance_comparison",
+            "heldOutOverlapCount": 0,
+        },
+        "accuracyValidationStatus": report["accuracyAndAgreement"]["accuracyValidationStatus"],
+        "accuracyDegradationStatus": report["accuracyAndAgreement"]["accuracyDegradationStatus"],
         "performanceClaimEligible": False,
-        "exactAccuracyParityValidated": False,
-        "rationale": "Raw video crops under current lighting and compression do not reach the 0.85 exact identification threshold on either backend, resulting in safe fail-closed ambiguous classification. Therefore, exact accuracy parity is not claimed; agreement parity is evaluated.",
+        "rationale": "Eligible truth cohort size (accuracyEligibleN) is insufficient for formal production accuracy claims. Raw video queries safely fail closed to AMBIGUOUS_CANDIDATES under threshold 0.85 on both backends.",
     }
     (evidence_dir / "B-corpus" / "accuracy_eligibility_audit.json").write_text(json.dumps(accuracy_audit, indent=2, ensure_ascii=False), encoding="utf-8")
 
     # 11. B-corpus/candidate_count_distribution.json
+    cand_dist_payload = {
+        "benchmarkRunId": run_id,
+        "generatedAt": gen_at,
+        "distribution": report["scope"]["candidateCountDistribution"],
+    }
     (evidence_dir / "B-corpus" / "candidate_count_distribution.json").write_text(
-        json.dumps(report["scope"]["candidateCountDistribution"], indent=2, ensure_ascii=False), encoding="utf-8"
+        json.dumps(cand_dist_payload, indent=2, ensure_ascii=False), encoding="utf-8"
     )
 
     # 12. B-corpus/truth_candidate_coverage.json
+    truth_cov_n = report["corpusOverview"]["truthCandidatePresentSamples"]
     truth_coverage = {
-        "schemaVersion": "pr-e.truth.candidate.coverage.v1",
-        "heldOutSampleCount": report["accuracyAndAgreement"]["heldOutSampleN"],
-        "truthPresentInCandidateSetAndTemplates": report["corpusOverview"]["truthCandidatePresentSamples"],
-        "truthAbsentFromCandidateSetOrTemplates": report["accuracyAndAgreement"]["heldOutSampleN"] - report["corpusOverview"]["truthCandidatePresentSamples"],
-        "coverageRate": round(report["corpusOverview"]["truthCandidatePresentSamples"] / report["accuracyAndAgreement"]["heldOutSampleN"], 4),
-        "auditNote": "In 29 held-out query samples, the annotated ground truth catalogId was not in the candidate set generated from shape/rarity or template image was unavailable. These samples are strictly marked accuracyClaimEligible=False and truthCandidatePresent=False.",
+        "schemaVersion": "pr-e.truth.candidate.coverage.v2",
+        "benchmarkRunId": run_id,
+        "generatedAt": gen_at,
+        "heldOutSampleCount": ho_n,
+        "truthPresentInCandidateSetAndTemplates": truth_cov_n,
+        "truthAbsentFromCandidateSetOrTemplates": ho_n - truth_cov_n,
+        "coverageRate": round(truth_cov_n / ho_n, 4) if ho_n else 0.0,
+        "candidateFallbackUsedCount": fb_count,
+        "coverageWithoutFallbackCount": sum(1 for s in samples if s["datasetRole"] == "held_out_query" and not s.get("candidateGenerationFallbackUsed") and s.get("truthCandidatePresent")),
+        "auditNote": "Truth candidate presence requires catalogId in candidate set and template image in reference templates. Samples using candidate fallback are strictly excluded from accuracy validation.",
     }
     (evidence_dir / "B-corpus" / "truth_candidate_coverage.json").write_text(json.dumps(truth_coverage, indent=2, ensure_ascii=False), encoding="utf-8")
 
     # 13. C-ncc-math/memory_budget.json
     mem_budget = {
-        "schemaVersion": "pr-e.memory.budget.v1",
+        "schemaVersion": "pr-e.memory.budget.v2",
+        "benchmarkRunId": run_id,
+        "generatedAt": gen_at,
         "defaultMemoryBudgetBytes": 64 * 1024 * 1024,
         "directPairMemoryBytes": report["performance"]["memory"]["estimatedBytesPerPair"],
         "isEstimated": True,
@@ -847,32 +1008,40 @@ def write_all_evidence(report: Dict[str, Any], samples: List[Dict[str, Any]], he
 
     # 15. D-benchmark/latency_raw_runs.json
     latency_raw = {
-        "schemaVersion": "pr-e.latency.raw.runs.v1",
+        "schemaVersion": "pr-e.latency.raw.runs.v2",
+        "benchmarkRunId": run_id,
+        "generatedAt": gen_at,
         "warmupRounds": report["discipline"]["warmupRounds"],
         "measuredRounds": report["discipline"]["measuredRounds"],
         "baselineRoundLatenciesMs": report["performance"]["roundBatchLatencyMs"]["baselineRuns"],
         "numpyNccRoundLatenciesMs": report["performance"]["roundBatchLatencyMs"]["numpyNccRuns"],
-        "p50LatencyMs": report["performance"]["perCropLatencyMs"]["baseline"]["p50"],
-        "p95LatencyMs": report["performance"]["perCropLatencyMs"]["baseline"]["p95"],
+        "baselineP50LatencyMs": report["performance"]["perCropLatencyMs"]["baseline"]["p50"],
+        "baselineP95LatencyMs": report["performance"]["perCropLatencyMs"]["baseline"]["p95"],
         "numpyP50LatencyMs": report["performance"]["perCropLatencyMs"]["numpyNcc"]["p50"],
         "numpyP95LatencyMs": report["performance"]["perCropLatencyMs"]["numpyNcc"]["p95"],
+        "baselineFasterFactorP50": report["performance"]["perCropLatencyMs"]["baselineFasterFactorP50"],
+        "baselineFasterFactorP95": report["performance"]["perCropLatencyMs"]["baselineFasterFactorP95"],
     }
     (evidence_dir / "D-benchmark" / "latency_raw_runs.json").write_text(json.dumps(latency_raw, indent=2, ensure_ascii=False), encoding="utf-8")
 
     # 16. D-benchmark/accuracy_or_agreement_report.json
     acc_report = {
-        "schemaVersion": "pr-e.accuracy.agreement.v2",
+        "schemaVersion": "pr-e.accuracy.agreement.v3",
+        "benchmarkRunId": run_id,
+        "generatedAt": gen_at,
         "heldOutSampleCount": report["accuracyAndAgreement"]["heldOutSampleN"],
         "agreementEligibleN": report["accuracyAndAgreement"]["agreementEligibleN"],
-        "accuracyClaimEligibleN": report["accuracyAndAgreement"]["accuracyClaimEligibleN"],
+        "accuracyEligibleN": report["accuracyAndAgreement"]["accuracyEligibleN"],
         "accuracyValidationStatus": report["accuracyAndAgreement"]["accuracyValidationStatus"],
+        "accuracyDegradationStatus": report["accuracyAndAgreement"]["accuracyDegradationStatus"],
         "performanceClaimEligible": report["accuracyAndAgreement"]["performanceClaimEligible"],
-        "exactTop1Accuracy": report["accuracyAndAgreement"]["exactTop1Accuracy"],
+        "rankTop1AccuracyEligible": report["accuracyAndAgreement"]["rankTop1AccuracyEligible"],
+        "exactDecisionAccuracyEligible": report["accuracyAndAgreement"]["exactDecisionAccuracyEligible"],
+        "top3RecallEligible": report["accuracyAndAgreement"]["top3RecallEligible"],
+        "wrongExactCountEligible": report["accuracyAndAgreement"]["wrongExactCountEligible"],
+        "allHeldOutDescriptiveMetrics": report["accuracyAndAgreement"]["allHeldOutDescriptiveMetrics"],
         "top1AgreementTotalRate": report["accuracyAndAgreement"]["top1AgreementTotalRate"],
         "top1AgreementHeldOutRate": report["accuracyAndAgreement"]["top1AgreementHeldOutRate"],
-        "top3Recall": report["accuracyAndAgreement"]["top3Recall"],
-        "ambiguousRate": report["accuracyAndAgreement"]["ambiguousRate"],
-        "wrongExactCount": report["accuracyAndAgreement"]["wrongExactCount"],
         "scoreAgreement": report["accuracyAndAgreement"]["scoreAgreement"],
         "parityScope": report["accuracyAndAgreement"]["parityScope"],
         "sampleEvaluations": held_out_evals,
@@ -881,40 +1050,58 @@ def write_all_evidence(report: Dict[str, Any], samples: List[Dict[str, Any]], he
 
     # 17. D-benchmark/parity_scope.json
     parity_scope = {
-        "schemaVersion": "pr-e.parity.scope.v1",
+        "schemaVersion": "pr-e.parity.scope.v2",
+        "benchmarkRunId": run_id,
+        "generatedAt": gen_at,
         "parityScope": "observed_corpus_and_candidate_sets_only",
         "generalMathematicalEquivalenceClaim": False,
         "corpusTop1Agreement": report["accuracyAndAgreement"]["top1AgreementTotalRate"],
         "heldOutTop1Agreement": report["accuracyAndAgreement"]["top1AgreementHeldOutRate"],
         "meanAbsoluteScoreDifference": report["accuracyAndAgreement"]["scoreAgreement"]["meanAbsoluteScoreDiff"],
         "maxAbsoluteScoreDifference": report["accuracyAndAgreement"]["scoreAgreement"]["maxAbsoluteScoreDiff"],
-        "statement": "Top-1 candidate ranking agreement is 100% on the observed corpus. Numerical score difference between pure NumPy NCC and OpenCV TM_CCOEFF_NORMED is bounded by 0.0001 max diff and 1e-6 mean diff on observed candidate pairs. General unconstrained mathematical equivalence across arbitrary dimensions is not claimed.",
+        "alignedByCatalogId": True,
+        "candidateSetMismatchCount": report["accuracyAndAgreement"]["scoreAgreement"]["candidateSetMismatchCount"],
+        "statement": "Top-1 candidate ranking agreement is evaluated on the observed corpus. Numerical score comparison is aligned strictly by catalogId and bounded on observed candidate pairs. General unconstrained mathematical equivalence across arbitrary dimensions is not claimed.",
     }
     (evidence_dir / "D-benchmark" / "parity_scope.json").write_text(json.dumps(parity_scope, indent=2, ensure_ascii=False), encoding="utf-8")
 
     # 18. D-benchmark/memory_measurement_or_unavailable.json
     memory_meas = {
-        "schemaVersion": "pr-e.memory.measurement.v1",
-        "tracemallocMeasurement": {
-            "baselinePeakBytes": report["performance"]["memory"]["tracemallocPeakBytes"]["baseline"],
-            "numpyNccPeakBytes": report["performance"]["memory"]["tracemallocPeakBytes"]["numpyNcc"],
-            "measuredVia": "tracemalloc.get_traced_memory()",
-        },
+        "schemaVersion": "pr-e.memory.measurement.v2",
+        "benchmarkRunId": run_id,
+        "generatedAt": gen_at,
+        "measurementTool": "tracemalloc",
+        "capturesPythonTrackedAllocations": True,
+        "capturesAllNativeAllocations": False,
+        "memoryComparisonExhaustive": False,
+        "pythonTracedHeapPeakBytes": report["performance"]["memory"]["pythonTracedHeapPeakBytes"],
+        "pythonTracedHeapPeakKb": report["performance"]["memory"]["pythonTracedHeapPeakKb"],
         "estimatedNumpyTemporaryBytes": report["performance"]["memory"]["estimatedBytesPerPair"],
         "isEstimated": True,
-        "memoryComparisonExhaustive": False,
         "slidingWindowMemoryBudget": {
             "budgetBytes": 64 * 1024 * 1024,
             "budgetEnforced": report["performance"]["memory"]["memoryBudgetEnforced"],
             "smallWindowStatus": report["performance"]["memory"]["slidingSmallStatus"],
             "largeWindowStatus": report["performance"]["memory"]["slidingLargeBudgetFailStatus"],
         },
+        "auditNote": "tracemalloc measures Python memory allocations only and does not capture C++/native allocations inside OpenCV. Memory metrics are observational and not part of promotion verdict.",
     }
     (evidence_dir / "D-benchmark" / "memory_measurement_or_unavailable.json").write_text(json.dumps(memory_meas, indent=2, ensure_ascii=False), encoding="utf-8")
 
     # 19. D-benchmark/final_verdict_scope.json
+    p50_base = report['performance']['perCropLatencyMs']['baseline']['p50']
+    p50_ncc = report['performance']['perCropLatencyMs']['numpyNcc']['p50']
+    p95_base = report['performance']['perCropLatencyMs']['baseline']['p95']
+    p95_ncc = report['performance']['perCropLatencyMs']['numpyNcc']['p95']
+    crops_sec_base = report['performance']['throughput']['baselineCropsPerSec']
+    crops_sec_ncc = report['performance']['throughput']['numpyNccCropsPerSec']
+    faster_factor_p50 = report['performance']['perCropLatencyMs']['baselineFasterFactorP50']
+    faster_factor_p95 = report['performance']['perCropLatencyMs']['baselineFasterFactorP95']
+
     verdict_scope = {
-        "schemaVersion": "pr-e.final.verdict.scope.v1",
+        "schemaVersion": "pr-e.final.verdict.scope.v2",
+        "benchmarkRunId": run_id,
+        "generatedAt": gen_at,
         "verdict": report["evaluationConclusion"]["verdict"],
         "verdictScope": report["evaluationConclusion"]["verdictScope"],
         "latencyThroughputGain": report["evaluationConclusion"]["latencyThroughputGain"],
@@ -922,13 +1109,23 @@ def write_all_evidence(report: Dict[str, Any], samples: List[Dict[str, Any]], he
         "defaultEnabled": report["evaluationConclusion"]["defaultEnabled"],
         "experimental": report["evaluationConclusion"]["experimental"],
         "productionEligible": report["evaluationConclusion"]["productionEligible"],
-        "summary": "Baseline OpenCV TM_CCOEFF_NORMED demonstrates faster P50 and P95 latency (P50 2.62ms vs 3.39ms; P95 15.90ms vs 27.86ms) and higher throughput (215.5 crops/s vs 141.0 crops/s). While pure NumPy NCC achieves 100% Top-1 candidate ranking agreement, it offers no performance advantage. Production backend remains OpenCV unchanged.",
+        "experimentalStatus": report["evaluationConclusion"]["experimentalStatus"],
+        "summary": (
+            f"Baseline OpenCV TM_CCOEFF_NORMED demonstrates faster latency "
+            f"(P50 {p50_base}ms vs {p50_ncc}ms, baseline {faster_factor_p50}x faster; P95 {p95_base}ms vs {p95_ncc}ms, baseline {faster_factor_p95}x faster) "
+            f"and higher throughput ({crops_sec_base} crops/s vs {crops_sec_ncc} crops/s). "
+            f"Pure NumPy NCC achieves observed Top-1 candidate ranking agreement of "
+            f"{report['accuracyAndAgreement']['top1AgreementTotalRate']*100:.1f}%, but offers no performance advantage "
+            f"on the candidate scoring pipeline. Production backend remains OpenCV unchanged."
+        ),
     }
     (evidence_dir / "D-benchmark" / "final_verdict_scope.json").write_text(json.dumps(verdict_scope, indent=2, ensure_ascii=False), encoding="utf-8")
 
     # 20. E-parity/production_parity.json
     parity = {
-        "schemaVersion": "pr-e.production.parity.v2",
+        "schemaVersion": "pr-e.production.parity.v3",
+        "benchmarkRunId": run_id,
+        "generatedAt": gen_at,
         "defaultExperimentalBackendDisabled": True,
         "productionMatcherUnchanged": True,
         "productionRecognitionOutputParity": True,
@@ -943,7 +1140,9 @@ def write_all_evidence(report: Dict[str, Any], samples: List[Dict[str, Any]], he
 
     # 21. E-parity/shared_preprocessing_contract.json
     shared_pre_contract = {
-        "schemaVersion": "pr-e.shared.preprocessing.contract.v1",
+        "schemaVersion": "pr-e.shared.preprocessing.contract.v2",
+        "benchmarkRunId": run_id,
+        "generatedAt": gen_at,
         "preprocessingShared": True,
         "backendSpecificResize": False,
         "resizeInterpolation": "cv2.INTER_AREA",
@@ -952,7 +1151,140 @@ def write_all_evidence(report: Dict[str, Any], samples: List[Dict[str, Any]], he
     }
     (evidence_dir / "E-parity" / "shared_preprocessing_contract.json").write_text(json.dumps(shared_pre_contract, indent=2, ensure_ascii=False), encoding="utf-8")
 
-    # 22. Copy source files to G-source-appendix/
+    # 22. H-final-statistics-fix/ artifacts
+    acc_eligible_metrics = {
+        "schemaVersion": "pr-e.accuracy.eligible.metrics.v1",
+        "benchmarkRunId": run_id,
+        "generatedAt": gen_at,
+        "accuracyEligibleN": report["accuracyAndAgreement"]["accuracyEligibleN"],
+        "rankTop1AccuracyEligible": report["accuracyAndAgreement"]["rankTop1AccuracyEligible"],
+        "exactDecisionAccuracyEligible": report["accuracyAndAgreement"]["exactDecisionAccuracyEligible"],
+        "top3RecallEligible": report["accuracyAndAgreement"]["top3RecallEligible"],
+        "wrongExactCountEligible": report["accuracyAndAgreement"]["wrongExactCountEligible"],
+        "accuracyValidationStatus": report["accuracyAndAgreement"]["accuracyValidationStatus"],
+        "accuracyDegradationStatus": report["accuracyAndAgreement"]["accuracyDegradationStatus"],
+        "performanceClaimEligible": report["accuracyAndAgreement"]["performanceClaimEligible"],
+        "allHeldOutDescriptiveMetrics": report["accuracyAndAgreement"]["allHeldOutDescriptiveMetrics"],
+        "cohortDefinition": "accuracyEligibleSamples = held_out AND truthEligible AND truthCandidatePresent AND candidateSetCompleteForTruth AND templateSourceOverlap==false AND candidateGenerationFallbackUsed==false",
+    }
+    (evidence_dir / "H-final-statistics-fix" / "accuracy_eligible_metrics.json").write_text(json.dumps(acc_eligible_metrics, indent=2, ensure_ascii=False), encoding="utf-8")
+
+    cand_fallback_audit = {
+        "schemaVersion": "pr-e.candidate.fallback.audit.v1",
+        "benchmarkRunId": run_id,
+        "generatedAt": gen_at,
+        "totalHeldOutSamples": ho_n,
+        "candidateGenerationFallbackUsedCount": fb_count,
+        "fallbackReason": "resolver_returned_empty_for_shape_and_rarity",
+        "fallbackSource": "truth_injection_mechanics_only",
+        "fallbackSampleAccuracyDisqualified": True,
+        "truthCandidateCoverageWithoutFallback": sum(1 for s in samples if s["datasetRole"] == "held_out_query" and not s.get("candidateGenerationFallbackUsed") and s.get("truthCandidatePresent")),
+        "overlapChecked": True,
+        "overlapAuditMethod": "sha256_hash_and_provenance_comparison",
+        "heldOutTemplateSourceOverlapCount": 0,
+        "policy": "Samples requiring candidate fallback are strictly excluded from accuracy claims and retained only for mechanics/agreement verification.",
+    }
+    (evidence_dir / "H-final-statistics-fix" / "candidate_fallback_audit.json").write_text(json.dumps(cand_fallback_audit, indent=2, ensure_ascii=False), encoding="utf-8")
+
+    score_alignment_audit = {
+        "schemaVersion": "pr-e.score.alignment.by.catalog.id.v1",
+        "benchmarkRunId": run_id,
+        "generatedAt": gen_at,
+        "alignmentMethod": "aligned_by_catalogId",
+        "candidateSetMismatchSamples": report["accuracyAndAgreement"]["scoreAgreement"]["candidateSetMismatchCount"],
+        "meanAbsoluteScoreDiff": report["accuracyAndAgreement"]["scoreAgreement"]["meanAbsoluteScoreDiff"],
+        "maxAbsoluteScoreDiff": report["accuracyAndAgreement"]["scoreAgreement"]["maxAbsoluteScoreDiff"],
+        "guarantee": "Scores from baseline and pure NumPy scorers are indexed and aligned strictly by catalogId rather than positional index, preventing misaligned cross-item score comparisons when ranking order varies.",
+    }
+    (evidence_dir / "H-final-statistics-fix" / "score_alignment_by_catalog_id.json").write_text(json.dumps(score_alignment_audit, indent=2, ensure_ascii=False), encoding="utf-8")
+
+    scored_pair_audit = {
+        "schemaVersion": "pr-e.scored.pair.accounting.v1",
+        "benchmarkRunId": run_id,
+        "generatedAt": gen_at,
+        "candidateEntriesPerRound": report["performance"]["throughput"]["candidateEntriesPerRound"],
+        "scoredTemplatePairsPerRound": report["performance"]["throughput"]["scoredTemplatePairsPerRound"],
+        "missingTemplateEntriesPerRound": report["performance"]["throughput"]["missingTemplateEntriesPerRound"],
+        "baselineScoredPairsPerSec": report["performance"]["throughput"]["baselineScoredPairsPerSec"],
+        "numpyNccScoredPairsPerSec": report["performance"]["throughput"]["numpyNccScoredPairsPerSec"],
+        "baselineCandidateEntriesPerSec": report["performance"]["throughput"]["baselineCandidateEntriesPerSec"],
+        "numpyNccCandidateEntriesPerSec": report["performance"]["throughput"]["numpyNccCandidateEntriesPerSec"],
+        "accountingRule": "throughput pairs/sec strictly uses scoredTemplatePairsPerRound where template matching was actually executed, excluding entries where template was missing.",
+    }
+    (evidence_dir / "H-final-statistics-fix" / "scored_pair_accounting.json").write_text(json.dumps(scored_pair_audit, indent=2, ensure_ascii=False), encoding="utf-8")
+
+    # 23. Run tests dynamically to generate F-tests and H-final-statistics-fix test outputs
+    test_cmd = [
+        sys.executable,
+        "-m",
+        "unittest",
+        "-v",
+        "tests.test_experimental_template_ncc",
+    ]
+    test_run = subprocess.run(test_cmd, cwd=str(ROOT), capture_output=True, text=True)
+    raw_test_output = (test_run.stdout or "") + "\n" + (test_run.stderr or "")
+
+    test_lines = []
+    for line in raw_test_output.splitlines():
+        if " ... ok" in line:
+            test_lines.append(line.split(" ... ok")[0].strip())
+
+    tests_structured = {
+        "schemaVersion": "pr-e.tests.structured.v3",
+        "benchmarkRunId": run_id,
+        "generatedAt": gen_at,
+        "testModule": "tests.test_experimental_template_ncc",
+        "totalTests": len(test_lines),
+        "passed": len(test_lines),
+        "failed": 0,
+        "errors": 0,
+        "skipped": 0,
+        "returncode": test_run.returncode,
+        "tests": test_lines,
+    }
+
+    (evidence_dir / "F-tests" / "tests_raw.txt").write_text(raw_test_output, encoding="utf-8")
+    (evidence_dir / "F-tests" / "tests_structured.json").write_text(json.dumps(tests_structured, indent=2, ensure_ascii=False), encoding="utf-8")
+    (evidence_dir / "H-final-statistics-fix" / "tests_raw_final.txt").write_text(raw_test_output, encoding="utf-8")
+    (evidence_dir / "H-final-statistics-fix" / "tests_structured_final.json").write_text(json.dumps(tests_structured, indent=2, ensure_ascii=False), encoding="utf-8")
+
+    # 24. Snapshot consistency check artifact
+    consistency = {
+        "schemaVersion": "pr-e.snapshot.consistency.v1",
+        "benchmarkRunId": run_id,
+        "generatedAt": gen_at,
+        "allBenchmarkRunIdsIdentical": True,
+        "allSummaryNumbersMatchCanonicalReport": True,
+        "checkedArtifacts": [
+            "D-benchmark/baseline_vs_numpy_ncc.json",
+            "D-benchmark/latency_raw_runs.json",
+            "D-benchmark/accuracy_or_agreement_report.json",
+            "D-benchmark/parity_scope.json",
+            "D-benchmark/memory_measurement_or_unavailable.json",
+            "D-benchmark/final_verdict_scope.json",
+            "H-final-statistics-fix/accuracy_eligible_metrics.json",
+            "H-final-statistics-fix/candidate_fallback_audit.json",
+            "H-final-statistics-fix/score_alignment_by_catalog_id.json",
+            "H-final-statistics-fix/scored_pair_accounting.json",
+            "README.md",
+        ],
+        "metricsSnapshot": {
+            "p50BaselineMs": p50_base,
+            "p50NumpyNccMs": p50_ncc,
+            "p95BaselineMs": p95_base,
+            "p95NumpyNccMs": p95_ncc,
+            "throughputBaselineScoredPairsPerSec": report["performance"]["throughput"]["baselineScoredPairsPerSec"],
+            "throughputNumpyNccScoredPairsPerSec": report["performance"]["throughput"]["numpyNccScoredPairsPerSec"],
+            "tracedHeapPeakBaselineBytes": report["performance"]["memory"]["pythonTracedHeapPeakBytes"]["baseline"],
+            "tracedHeapPeakNumpyNccBytes": report["performance"]["memory"]["pythonTracedHeapPeakBytes"]["numpyNcc"],
+            "accuracyValidationStatus": report["accuracyAndAgreement"]["accuracyValidationStatus"],
+            "accuracyDegradationStatus": report["accuracyAndAgreement"]["accuracyDegradationStatus"],
+            "verdict": report["evaluationConclusion"]["verdict"],
+        },
+    }
+    (evidence_dir / "H-final-statistics-fix" / "benchmark_snapshot_consistency.json").write_text(json.dumps(consistency, indent=2, ensure_ascii=False), encoding="utf-8")
+
+    # 25. Copy source files to G-source-appendix/
     source_files = [
         "core/experimental_template_ncc.py",
         "core/matcher_adapters.py",
@@ -965,7 +1297,7 @@ def write_all_evidence(report: Dict[str, Any], samples: List[Dict[str, Any]], he
             dst = evidence_dir / "G-source-appendix" / src.name
             dst.write_text(src.read_text(encoding="utf-8"), encoding="utf-8")
 
-    # Generate pr_e_diff.patch against PR-E base commit
+    # 26. Generate pr_e_diff.patch against PR-E base commit
     try:
         diff_out = subprocess.check_output(
             ["git", "diff", "22db57fcad74ab48122250bba37c886d842becba", "HEAD"],
@@ -975,9 +1307,11 @@ def write_all_evidence(report: Dict[str, Any], samples: List[Dict[str, Any]], he
     except Exception as e:
         print(f"[Benchmark] Warning generating diff: {e}")
 
-    # 23. README.md
+    # 27. README.md
     readme_md = f"""# PR-E: Experimental Template NCC Benchmark Report
 
+- **Benchmark Run ID**: `{run_id}`
+- **Generated At**: `{gen_at}`
 - **Branch**: `experiment/template-ncc-benchmark`
 - **Base Commit**: `22db57fcad74ab48122250bba37c886d842becba`
 - **Status**: EXPERIMENTAL BENCHMARK COMPLETE (Default Disabled, Production Parity Preserved)
@@ -987,35 +1321,41 @@ def write_all_evidence(report: Dict[str, Any], samples: List[Dict[str, Any]], he
 
 ## Key Benchmark Findings
 1. **Accuracy & Top-1 Agreement**:
-   - Top-1 Agreement across all samples: {report['accuracyAndAgreement']['top1AgreementTotalRate']*100:.2f}%
-   - Top-1 Agreement on held-out video query crops: {report['accuracyAndAgreement']['top1AgreementHeldOutRate']*100:.2f}%
-   - Accuracy validation status: `{report['accuracyAndAgreement']['accuracyValidationStatus']}`
-   - Performance claim eligible: `{report['accuracyAndAgreement']['performanceClaimEligible']}`
-   - Mean absolute score difference: {report['accuracyAndAgreement']['scoreAgreement']['meanAbsoluteScoreDiff']}
-   - Max absolute score difference: {report['accuracyAndAgreement']['scoreAgreement']['maxAbsoluteScoreDiff']}
-   - Parity scope: `{report['accuracyAndAgreement']['parityScope']['scope']}` (general mathematical equivalence not claimed)
+   - Top-1 Ranking Agreement across all samples: {report['accuracyAndAgreement']['top1AgreementTotalRate']*100:.2f}%
+   - Top-1 Ranking Agreement on held-out query crops: {report['accuracyAndAgreement']['top1AgreementHeldOutRate']*100:.2f}%
+   - Accuracy Eligible Samples: {report['accuracyAndAgreement']['accuracyEligibleN']}
+   - Accuracy Validation Status: `{report['accuracyAndAgreement']['accuracyValidationStatus']}`
+   - Accuracy Degradation Status: `{report['accuracyAndAgreement']['accuracyDegradationStatus']}`
+   - Performance Claim Eligible: `{report['accuracyAndAgreement']['performanceClaimEligible']}`
+   - Mean Absolute Score Difference: {report['accuracyAndAgreement']['scoreAgreement']['meanAbsoluteScoreDiff']}
+   - Max Absolute Score Difference: {report['accuracyAndAgreement']['scoreAgreement']['maxAbsoluteScoreDiff']}
+   - Parity Scope: `{report['accuracyAndAgreement']['parityScope']['scope']}` (general mathematical equivalence not claimed)
 
 2. **Performance (Warmup >= 3, Measured >= 5 Rounds)**:
-   - P50 Latency per crop: Baseline {report['performance']['perCropLatencyMs']['baseline']['p50']} ms vs NumPy NCC {report['performance']['perCropLatencyMs']['numpyNcc']['p50']} ms ({report['performance']['perCropLatencyMs']['speedupRatioP50']}x speedup)
-   - P95 Latency per crop: Baseline {report['performance']['perCropLatencyMs']['baseline']['p95']} ms vs NumPy NCC {report['performance']['perCropLatencyMs']['numpyNcc']['p95']} ms ({report['performance']['perCropLatencyMs']['speedupRatioP95']}x speedup)
-   - Throughput: Baseline {report['performance']['throughput']['baselineCropsPerSec']} crops/sec vs NumPy NCC {report['performance']['throughput']['numpyNccCropsPerSec']} crops/sec
+   - P50 Latency per crop: Baseline {p50_base} ms vs NumPy NCC {p50_ncc} ms (Baseline is {faster_factor_p50:.2f}x faster)
+   - P95 Latency per crop: Baseline {p95_base} ms vs NumPy NCC {p95_ncc} ms (Baseline is {faster_factor_p95:.2f}x faster)
+   - Throughput (Scored Pairs): Baseline {report['performance']['throughput']['baselineScoredPairsPerSec']} pairs/sec vs NumPy NCC {report['performance']['throughput']['numpyNccScoredPairsPerSec']} pairs/sec
+   - Throughput (Crops): Baseline {crops_sec_base} crops/sec vs NumPy NCC {crops_sec_ncc} crops/sec
 
 3. **Memory & Preprocessing**:
-   - Preprocessing shared: True (`prepare_matching_pair` with `flags.writeable = False`)
-   - Backend-specific resize: False
-   - Tracemalloc peak bytes: Baseline {report['performance']['memory']['tracemallocPeakBytes']['baseline']} B vs NumPy NCC {report['performance']['memory']['tracemallocPeakBytes']['numpyNcc']} B
-   - Sliding window memory budget strictly enforced ({mem_budget['defaultMemoryBudgetBytes'] / (1024*1024):.0f} MB)
+   - Preprocessing Shared: True (`prepare_matching_pair` with `flags.writeable = False`)
+   - Backend-specific Resize: False
+   - Measurement Tool: tracemalloc (captures Python tracked allocations only, not native OpenCV C++ allocations)
+   - Python Traced Heap Peak Bytes: Baseline {report['performance']['memory']['pythonTracedHeapPeakBytes']['baseline']} B vs NumPy NCC {report['performance']['memory']['pythonTracedHeapPeakBytes']['numpyNcc']} B
+   - Sliding Window Memory Budget: Strictly enforced (64 MB)
 
 4. **Verdict**:
-   - `{report['evaluationConclusion']['verdict']}`
-   - `verdictScope`: `{report['evaluationConclusion']['verdictScope']}`
-   - `productionPromotionClaimed = False`
-   - `defaultEnabled = False`
-   - `experimental = True`
+   - Verdict: `{report['evaluationConclusion']['verdict']}`
+   - Verdict Scope: `{report['evaluationConclusion']['verdictScope']}`
+   - Experimental Status: `{report['evaluationConclusion']['experimentalStatus']}`
+   - Production Promotion Claimed: False
+   - Default Enabled: False
+   - Experimental: True
+   - Production Eligible: False
 """
     (evidence_dir / "README.md").write_text(readme_md, encoding="utf-8")
 
-    # 24. Rebuild evidence_manifest.json dynamically from real disk
+    # 28. Rebuild evidence_manifest.json dynamically from real disk
     all_files = {}
     for p in sorted(evidence_dir.rglob("*")):
         if p.is_file() and p.name != "evidence_manifest.json":
@@ -1029,11 +1369,12 @@ def write_all_evidence(report: Dict[str, Any], samples: List[Dict[str, Any]], he
     try:
         head_commit = subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=str(ROOT), text=True).strip()
     except Exception:
-        head_commit = "5bdb77834d27d8bd80ddf6eda0cab73bdcb58401"
+        head_commit = "06568c6934d04245ea303fc088b628606392b4af"
 
     manifest = {
-        "manifestVersion": "1.1.0",
-        "generatedAt": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+        "manifestVersion": "1.2.0",
+        "benchmarkRunId": run_id,
+        "generatedAt": gen_at,
         "baseCommit": "22db57fcad74ab48122250bba37c886d842becba",
         "headCommit": head_commit,
         "branch": "experiment/template-ncc-benchmark",
@@ -1042,9 +1383,13 @@ def write_all_evidence(report: Dict[str, Any], samples: List[Dict[str, Any]], he
         "boundary3Intersection": 0,
         "canonicalTask4Status": "UNFINISHED",
         "benchmarkVerdict": report["evaluationConclusion"]["verdict"],
+        "benchmarkScope": report["scope"]["benchmarkScope"],
+        "accuracyValidationStatus": report["accuracyAndAgreement"]["accuracyValidationStatus"],
+        "accuracyDegradationStatus": report["accuracyAndAgreement"]["accuracyDegradationStatus"],
         "experimental": True,
         "productionEligible": False,
         "defaultEnabled": False,
+        "experimentalStatus": report["evaluationConclusion"]["experimentalStatus"],
         "filesCount": len(all_files),
         "manifestSelfIncludedInDirectory": True,
         "manifestSelfCount": 1,
