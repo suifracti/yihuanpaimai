@@ -1,24 +1,244 @@
 {
   "schemaVersion": "message.catalog.v1",
   "protocolVersion": "1.0.0",
+  "title": "NTE Host-Engine IPC Message Catalog - Single Source of Truth",
   "totalMessageTypes": 14,
+  "singleSourceOfTruth": {
+    "statement": "This catalog is the single schema truth for the V2-0 Host-Engine IPC control plane. No other document, golden vector or verifier may declare a divergent message schema.",
+    "pythonAuthority": "architecture/v2/contracts/models.py (ENVELOPE_FIELD_TYPES, PAYLOAD_FIELD_TYPES, REQUIRED_PAYLOAD_FIELDS derived from it, FRAME_READY_HEADER_METADATA_FIELDS, validate_hello_fixed_geometry, validate_hello_ack_readiness, validate_state_snapshot)",
+    "dotnetAuthority": "architecture/v2/verifier/ContractModels.cs (ContractConstants, FrameHeaderV1, MessageType, EngineReadiness, ...)",
+    "machineVerification": "architecture/v2/contracts/schema_parity.py -> message_schema_parity.json (regenerated on every contract test run)",
+    "driftPolicy": "FAIL_CLOSED. Any divergence between this catalog and the Python / .NET contract sources makes message_schema_parity.json report allPassed=false and fails the contract test suites."
+  },
+  "envelopeSchema": {
+    "type": "object",
+    "additionalProperties": false,
+    "requiredFields": [
+      "protocolVersion",
+      "sessionId",
+      "messageType",
+      "requestId",
+      "correlationId",
+      "sequence",
+      "monotonicTimestampNs",
+      "payload"
+    ],
+    "properties": {
+      "protocolVersion": {
+        "type": "string",
+        "required": true,
+        "nullable": false,
+        "enum": [
+          "1.0.0"
+        ]
+      },
+      "sessionId": {
+        "type": "string",
+        "required": true,
+        "nullable": false
+      },
+      "messageType": {
+        "type": "string",
+        "required": true,
+        "nullable": false,
+        "enum": [
+          "ABORT_SCAN",
+          "COMMAND",
+          "COMMAND_RESULT",
+          "ENGINE_RESTARTING",
+          "ENGINE_SHUTDOWN",
+          "ERROR",
+          "FRAME_ACK",
+          "FRAME_READY",
+          "HEARTBEAT",
+          "HELLO",
+          "HELLO_ACK",
+          "PERCEPTION_RESULT",
+          "STATE_SNAPSHOT",
+          "STATE_SNAPSHOT_REQUEST"
+        ]
+      },
+      "requestId": {
+        "type": "string",
+        "required": true,
+        "nullable": false
+      },
+      "correlationId": {
+        "type": "string",
+        "required": true,
+        "nullable": true
+      },
+      "sequence": {
+        "type": "integer",
+        "required": true,
+        "nullable": false
+      },
+      "monotonicTimestampNs": {
+        "type": "integer",
+        "required": true,
+        "nullable": false
+      },
+      "payload": {
+        "type": "object",
+        "required": true,
+        "nullable": false
+      }
+    },
+    "notes": "Payload field validation is applied only after the envelope is fully validated; no type coercion is ever performed."
+  },
+  "ringBufferGeometry": {
+    "policy": "FIXED_V1_CONSTANTS",
+    "geometryIsNegotiated": false,
+    "derivedFrom": "protocolVersion == \"1.0.0\"",
+    "slotCount": 4,
+    "maxWidth": 1920,
+    "maxHeight": 1080,
+    "slotPayloadCapacityBytes": 8294400,
+    "headerSizeBytes": 64,
+    "slotSizeBytes": 8294464,
+    "slotAlignmentBytes": 64,
+    "mapTotalSizeBytes": 33177856,
+    "slotOffsetFormula": "slotOffset(index) = index * slotSizeBytes",
+    "validIndexRange": "0 <= bufferIndex < 4",
+    "handshakeDeclaration": "HELLO declares frameBufferName and frameBufferSize only. slotCount, slotSizeBytes and mapTotalSizeBytes are NEVER carried in HELLO or HELLO_ACK and are NEVER accepted, echoed or rejected through a negotiation message.",
+    "engineValidation": "The Engine validates HELLO.frameBufferSize == mapTotalSizeBytes (33177856). A mismatch fails closed with ERR_RING_GEOMETRY_MISMATCH (category PROTOCOL, isFatal true).",
+    "wordingRule": "No message in this catalog negotiates ring geometry. Geometry is validated against fixed v1 constants; the terms 'negotiate geometry' / 'acceptedSlotCount' / 'acceptedSlotSizeBytes' / 'acceptedMapTotalSizeBytes' do not exist in protocol 1.0.0."
+  },
+  "frameHeaderMetadataContract": {
+    "appliesTo": "FRAME_READY",
+    "validator": "architecture/v2/contracts/models.py::verify_frame_metadata_match(frame_ready_payload, header, expected_buffer_index=None)",
+    "rule": "Every field in checkedFields MUST be present in the FRAME_READY payload and MUST equal the corresponding FrameHeaderV1 value read from ring slot bufferIndex. Comparison is exact equality: no coercion, no tolerance, no defaults.",
+    "checkedFields": [
+      "bufferIndex",
+      "sequence",
+      "width",
+      "height",
+      "stride",
+      "pixelFormat",
+      "bufferLength",
+      "captureTimestampNs",
+      "cornerChecksum"
+    ],
+    "bufferIndexSemantics": "bufferIndex selects the ring slot that was read. It is bounds-checked against the fixed v1 range 0 <= bufferIndex < 4 (ERR_SLOT_INDEX_OUT_OF_BOUNDS) and, when the reader supplies the slot it actually read, must match it exactly (ERR_FRAME_METADATA_MISMATCH).",
+    "fieldNamingRule": "Payload field names are identical to FrameHeaderV1 field names. The corner checksum field is named cornerChecksum in both the payload and the shared-memory header; the bare name 'checksum' is not part of protocol 1.0.0.",
+    "pixelFormatType": "integer enum, identical in type to FrameHeaderV1.pixelFormat (int32). The value 1 means BGRA8. The string form \"BGRA8\" is NOT a valid wire value.",
+    "headerFieldsNotCarriedInPayload": [
+      "magic",
+      "headerVersion",
+      "flags",
+      "producerTimestampNs",
+      "reserved"
+    ],
+    "errorCodes": {
+      "bufferIndexBounds": "ERR_SLOT_INDEX_OUT_OF_BOUNDS",
+      "metadataMismatch": "ERR_FRAME_METADATA_MISMATCH"
+    }
+  },
+  "readinessContract": {
+    "authoritativeField": "readiness",
+    "owner": "HELLO_ACK",
+    "enumSource": "messages[messageType == HELLO_ACK].payloadSchema.properties.readiness.enum",
+    "enum": [
+      "DEGRADED",
+      "FAILED",
+      "LOADING",
+      "READY",
+      "STARTING"
+    ],
+    "businessReadyProjection": "engineBusinessReady",
+    "rule": "readiness is the single authoritative engine-readiness field. engineBusinessReady is its boolean READY-gate projection; the two may never contradict each other. HELLO_ACK status == ACCEPTED with readiness == READY requires engineBusinessReady == true; readiness in [STARTING, LOADING] or status != ACCEPTED requires engineBusinessReady == false. Violations fail closed with ERR_SCHEMA_VALIDATION_FAILED.",
+    "validator": "architecture/v2/contracts/models.py::validate_hello_ack_readiness(hello_ack_payload)",
+    "lifecycleReadyGate": {
+      "source": "architecture/v2/contracts/lifecycle_recovery_v1.json -> readyGateRequirements.gates",
+      "protocolNegotiated": "HELLO_ACK.status == ACCEPTED",
+      "capabilitiesAccepted": "All mandatory capabilities AVAILABLE",
+      "engineBusinessReady": "HELLO_ACK.engineBusinessReady == true (which per this contract implies HELLO_ACK.readiness == READY) or STATE_SNAPSHOT.businessReady == true",
+      "snapshotRequirementSatisfied": "(isColdBoot == true and noRecoverableBusinessState == true) or STATE_SNAPSHOT validated during SYNCING"
+    },
+    "modelStatusNote": "There is no separate 'modelStatus' protocol field in protocol 1.0.0. Model / catalog load state is folded into readiness (LOADING -> READY / FAILED) precisely so that two fields can never express the same state without a defined relationship."
+  },
+  "failClosedErrorCodes": [
+    "ERR_BUFFER_UNAVAILABLE",
+    "ERR_COMMAND_ID_REUSE_MISMATCH",
+    "ERR_CORRUPT_FRAME_MAGIC",
+    "ERR_DUPLICATE_COMMAND",
+    "ERR_FRAME_CAPACITY_EXCEEDED",
+    "ERR_FRAME_METADATA_MISMATCH",
+    "ERR_FRAME_PAYLOAD_TOO_SHORT",
+    "ERR_INCOMPLETE_FRAME",
+    "ERR_INVALID_STATE_TRANSITION",
+    "ERR_MALFORMED_ENVELOPE",
+    "ERR_MESSAGE_BEFORE_HANDSHAKE",
+    "ERR_MESSAGE_TOO_LARGE",
+    "ERR_MISSING_REQUIRED_FIELD",
+    "ERR_PROTOCOL_VERSION_MISMATCH",
+    "ERR_RING_GEOMETRY_MISMATCH",
+    "ERR_SCHEMA_VALIDATION_FAILED",
+    "ERR_SLOT_INDEX_OUT_OF_BOUNDS",
+    "ERR_SLOT_NOT_LOCKED",
+    "ERR_STALE_GENERATION",
+    "ERR_STALE_SEQUENCE",
+    "ERR_STALE_SESSION",
+    "ERR_UNKNOWN_FRAME_ACK",
+    "ERR_UNKNOWN_MESSAGE_TYPE",
+    "ERR_UNSUPPORTED_PIXEL_FORMAT"
+  ],
   "messages": [
     {
       "messageType": "HELLO",
       "direction": "Host -> Engine",
-      "description": "Initial handshake initiation message sent by Native Host advertising protocol, capabilities, and ring buffer parameters.",
+      "description": "Initial handshake initiation sent by the Native Host. Declares host version, supported protocol versions, session nonce, the full capability advertisement, and the fixed v1 ring buffer map name and total size. Ring geometry itself is NOT negotiated: slotCount / slotSizeBytes / mapTotalSizeBytes are derived by both peers from protocolVersion == \"1.0.0\" and are validated against fixed v1 constants.",
       "payloadSchema": {
-        "hostVersion": "string",
-        "supportedProtocols": ["string"],
-        "sessionNonce": "string",
-        "capabilities": {
-          "type": "object",
-          "additionalProperties": { "type": "string", "enum": ["AVAILABLE", "UNAVAILABLE", "EXPERIMENTAL", "NOT_MEASURED"] }
-        },
-        "frameBufferName": "string",
-        "slotCount": "integer",
-        "slotSizeBytes": "integer",
-        "mapTotalSizeBytes": "integer"
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "hostVersion": {
+            "type": "string",
+            "required": true,
+            "nullable": false
+          },
+          "supportedProtocols": {
+            "type": "array",
+            "required": true,
+            "nullable": false,
+            "items": {
+              "type": "string",
+              "required": true,
+              "nullable": false
+            }
+          },
+          "sessionNonce": {
+            "type": "string",
+            "required": true,
+            "nullable": false
+          },
+          "capabilities": {
+            "type": "object",
+            "required": true,
+            "nullable": false,
+            "additionalProperties": {
+              "type": "string",
+              "required": true,
+              "nullable": false,
+              "enum": [
+                "AVAILABLE",
+                "EXPERIMENTAL",
+                "NOT_MEASURED",
+                "UNAVAILABLE"
+              ]
+            }
+          },
+          "frameBufferName": {
+            "type": "string",
+            "required": true,
+            "nullable": false
+          },
+          "frameBufferSize": {
+            "type": "integer",
+            "required": true,
+            "nullable": false
+          }
+        }
       },
       "requiredPayloadFields": [
         "hostVersion",
@@ -26,25 +246,63 @@
         "sessionNonce",
         "capabilities",
         "frameBufferName",
-        "slotCount",
-        "slotSizeBytes",
-        "mapTotalSizeBytes"
+        "frameBufferSize"
       ]
     },
     {
       "messageType": "HELLO_ACK",
       "direction": "Engine -> Host",
-      "description": "Handshake response from Python Engine negotiating protocol version, readiness state, and confirming ring buffer geometry.",
+      "description": "Handshake response from the Python Engine. Confirms the exact v1 protocol version, the engine readiness enum, engine PID and the business-ready gate projection. Ring geometry is NOT echoed or negotiated; a peer whose declared frameBufferSize is not the fixed v1 mapTotalSizeBytes fails closed with ERR_RING_GEOMETRY_MISMATCH.",
       "payloadSchema": {
-        "engineVersion": "string",
-        "negotiatedProtocol": "string",
-        "status": { "type": "string", "enum": ["ACCEPTED", "REJECTED_VERSION", "REJECTED_CAPABILITY"] },
-        "readiness": { "type": "string", "enum": ["STARTING", "LOADING", "READY", "DEGRADED", "FAILED"] },
-        "enginePid": "integer",
-        "slotCount": "integer",
-        "slotSizeBytes": "integer",
-        "mapTotalSizeBytes": "integer",
-        "engineBusinessReady": "boolean"
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "engineVersion": {
+            "type": "string",
+            "required": true,
+            "nullable": false
+          },
+          "negotiatedProtocol": {
+            "type": "string",
+            "required": true,
+            "nullable": false,
+            "enum": [
+              "1.0.0"
+            ]
+          },
+          "status": {
+            "type": "string",
+            "required": true,
+            "nullable": false,
+            "enum": [
+              "ACCEPTED",
+              "REJECTED_CAPABILITY",
+              "REJECTED_VERSION"
+            ]
+          },
+          "readiness": {
+            "type": "string",
+            "required": true,
+            "nullable": false,
+            "enum": [
+              "DEGRADED",
+              "FAILED",
+              "LOADING",
+              "READY",
+              "STARTING"
+            ]
+          },
+          "enginePid": {
+            "type": "integer",
+            "required": true,
+            "nullable": false
+          },
+          "engineBusinessReady": {
+            "type": "boolean",
+            "required": true,
+            "nullable": false
+          }
+        }
       },
       "requiredPayloadFields": [
         "engineVersion",
@@ -52,38 +310,106 @@
         "status",
         "readiness",
         "enginePid",
-        "slotCount",
-        "slotSizeBytes",
-        "mapTotalSizeBytes",
         "engineBusinessReady"
       ]
     },
     {
       "messageType": "HEARTBEAT",
       "direction": "Bidirectional (Host <-> Engine)",
-      "description": "Periodic liveness probe exchanged every 1000ms with 3000ms timeout threshold.",
+      "description": "Periodic liveness probe exchanged every 1000ms with a 3000ms timeout threshold.",
       "payloadSchema": {
-        "timestamp": "number",
-        "state": { "type": "string", "enum": ["HEALTHY", "BUSY", "DEGRADED"] },
-        "activeMatchId": "string|null"
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "timestamp": {
+            "type": "number",
+            "required": true,
+            "nullable": false
+          },
+          "state": {
+            "type": "string",
+            "required": true,
+            "nullable": false,
+            "enum": [
+              "HEALTHY",
+              "BUSY",
+              "DEGRADED"
+            ]
+          },
+          "activeMatchId": {
+            "type": "string",
+            "required": false,
+            "nullable": true
+          }
+        }
       },
-      "requiredPayloadFields": ["timestamp", "state"]
+      "requiredPayloadFields": [
+        "timestamp",
+        "state"
+      ]
     },
     {
       "messageType": "FRAME_READY",
       "direction": "Host -> Engine",
-      "description": "Notification that a new frame has been written to ring buffer slot bufferIndex. Metadata must exact-match MMF frame header.",
+      "description": "Notification that a new frame has been written to ring buffer slot bufferIndex. Every field in frameHeaderMetadataContract.checkedFields MUST be present and MUST equal the FrameHeaderV1 value read from that slot, exactly, with no coercion.",
       "payloadSchema": {
-        "sessionId": "string",
-        "bufferIndex": "integer (0 <= bufferIndex < slotCount)",
-        "sequence": "integer (int64)",
-        "width": "integer",
-        "height": "integer",
-        "stride": "integer",
-        "pixelFormat": "integer (1=BGRA8)",
-        "bufferLength": "integer",
-        "captureTimestampNs": "integer (int64)",
-        "checksum": "integer"
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "sessionId": {
+            "type": "string",
+            "required": true,
+            "nullable": false
+          },
+          "bufferIndex": {
+            "type": "integer",
+            "required": true,
+            "nullable": false
+          },
+          "sequence": {
+            "type": "integer",
+            "required": true,
+            "nullable": false
+          },
+          "width": {
+            "type": "integer",
+            "required": true,
+            "nullable": false
+          },
+          "height": {
+            "type": "integer",
+            "required": true,
+            "nullable": false
+          },
+          "stride": {
+            "type": "integer",
+            "required": true,
+            "nullable": false
+          },
+          "pixelFormat": {
+            "type": "integer",
+            "required": true,
+            "nullable": false,
+            "enum": [
+              1
+            ]
+          },
+          "bufferLength": {
+            "type": "integer",
+            "required": true,
+            "nullable": false
+          },
+          "captureTimestampNs": {
+            "type": "integer",
+            "required": true,
+            "nullable": false
+          },
+          "cornerChecksum": {
+            "type": "integer",
+            "required": true,
+            "nullable": false
+          }
+        }
       },
       "requiredPayloadFields": [
         "sessionId",
@@ -95,105 +421,400 @@
         "pixelFormat",
         "bufferLength",
         "captureTimestampNs",
-        "checksum"
+        "cornerChecksum"
       ]
     },
     {
       "messageType": "FRAME_ACK",
       "direction": "Engine -> Host",
-      "description": "Slot release token emitted by Engine upon processing completion. Authorizes Host to transition slot back to FREE.",
+      "description": "Slot release token emitted by the Engine upon processing completion. Authorizes the Host to transition the slot back to FREE.",
       "payloadSchema": {
-        "sessionId": "string",
-        "bufferIndex": "integer (0 <= bufferIndex < slotCount)",
-        "sequence": "integer (int64)",
-        "status": { "type": "string", "enum": ["RELEASED", "CONSUMED", "SKIPPED", "CORRUPTED"] },
-        "mappingLatencyMs": "number",
-        "processingLatencyMs": "number"
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "sessionId": {
+            "type": "string",
+            "required": true,
+            "nullable": false
+          },
+          "bufferIndex": {
+            "type": "integer",
+            "required": true,
+            "nullable": false
+          },
+          "sequence": {
+            "type": "integer",
+            "required": true,
+            "nullable": false
+          },
+          "status": {
+            "type": "string",
+            "required": true,
+            "nullable": false,
+            "enum": [
+              "CONSUMED",
+              "CORRUPTED",
+              "RELEASED",
+              "SKIPPED"
+            ]
+          },
+          "mappingLatencyMs": {
+            "type": "number",
+            "required": false,
+            "nullable": false
+          },
+          "processingLatencyMs": {
+            "type": "number",
+            "required": false,
+            "nullable": false
+          }
+        }
       },
-      "requiredPayloadFields": ["sessionId", "bufferIndex", "sequence", "status"]
+      "requiredPayloadFields": [
+        "sessionId",
+        "bufferIndex",
+        "sequence",
+        "status"
+      ]
     },
     {
       "messageType": "PERCEPTION_RESULT",
       "direction": "Engine -> Host",
-      "description": "Structured visual intelligence result containing recognized bids, items, or scene classification.",
+      "description": "Structured visual intelligence result containing recognized bids, intel, or scene classification.",
       "payloadSchema": {
-        "frameSequence": "integer (int64)",
-        "scene": "string",
-        "inAuction": "boolean",
-        "bids": {
-          "type": "array",
-          "items": {
-            "seat": "integer",
-            "price": "integer",
-            "isWinning": "boolean"
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "frameSequence": {
+            "type": "integer",
+            "required": true,
+            "nullable": false
+          },
+          "scene": {
+            "type": "string",
+            "required": true,
+            "nullable": false
+          },
+          "inAuction": {
+            "type": "boolean",
+            "required": true,
+            "nullable": false
+          },
+          "bids": {
+            "type": "array",
+            "required": true,
+            "nullable": false,
+            "items": {
+              "type": "object",
+              "required": true,
+              "nullable": false,
+              "properties": {
+                "seat": {
+                  "type": "integer",
+                  "required": true,
+                  "nullable": false
+                },
+                "price": {
+                  "type": "integer",
+                  "required": true,
+                  "nullable": false
+                },
+                "isWinning": {
+                  "type": "boolean",
+                  "required": false,
+                  "nullable": false
+                }
+              },
+              "additionalProperties": false
+            }
+          },
+          "intel": {
+            "type": "array",
+            "required": false,
+            "nullable": false,
+            "items": {
+              "type": "object",
+              "required": true,
+              "nullable": false,
+              "properties": {
+                "id": {
+                  "type": "string",
+                  "required": true,
+                  "nullable": false
+                },
+                "value": {
+                  "type": "string",
+                  "required": true,
+                  "nullable": false
+                }
+              },
+              "additionalProperties": false
+            }
+          },
+          "warehouseSummary": {
+            "type": "object",
+            "required": false,
+            "nullable": true
+          },
+          "processingMs": {
+            "type": "number",
+            "required": false,
+            "nullable": false
           }
-        },
-        "intel": {
-          "type": "array",
-          "items": { "id": "string", "value": "string" }
-        },
-        "warehouseSummary": "object|null",
-        "processingMs": "number"
+        }
       },
-      "requiredPayloadFields": ["frameSequence", "scene", "inAuction", "bids"]
+      "requiredPayloadFields": [
+        "frameSequence",
+        "scene",
+        "inAuction",
+        "bids"
+      ]
     },
     {
       "messageType": "ABORT_SCAN",
       "direction": "Host -> Engine",
-      "description": "Immediate halt instruction emitted when user moves physical mouse, presses Escape, or window focus is lost.",
+      "description": "Immediate halt instruction emitted when the user moves the physical mouse, presses Escape, or the target window loses focus.",
       "payloadSchema": {
-        "reason": { "type": "string", "enum": ["USER_TAKEOVER", "FOCUS_LOST", "ESCAPE_KEY", "TARGET_CLOSED"] },
-        "triggerTimestampNs": "integer (int64)"
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "reason": {
+            "type": "string",
+            "required": true,
+            "nullable": false,
+            "enum": [
+              "ESCAPE_KEY",
+              "FOCUS_LOST",
+              "TARGET_CLOSED",
+              "USER_TAKEOVER"
+            ]
+          },
+          "triggerTimestampNs": {
+            "type": "integer",
+            "required": true,
+            "nullable": false
+          }
+        }
       },
-      "requiredPayloadFields": ["reason", "triggerTimestampNs"]
+      "requiredPayloadFields": [
+        "reason",
+        "triggerTimestampNs"
+      ]
     },
     {
       "messageType": "COMMAND",
       "direction": "Host -> Engine",
-      "description": "High-level user or UI intent submitted to Engine (deduplicated by (sessionId, commandId)).",
+      "description": "High-level user or UI intent submitted to the Engine (deduplicated by (sessionId, commandId)).",
       "payloadSchema": {
-        "commandId": "string",
-        "action": "string",
-        "parameters": "object",
-        "expiresAtNs": "integer (int64)"
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "commandId": {
+            "type": "string",
+            "required": true,
+            "nullable": false
+          },
+          "action": {
+            "type": "string",
+            "required": true,
+            "nullable": false
+          },
+          "parameters": {
+            "type": "object",
+            "required": true,
+            "nullable": false
+          },
+          "expiresAtNs": {
+            "type": "integer",
+            "required": true,
+            "nullable": false
+          }
+        }
       },
-      "requiredPayloadFields": ["commandId", "action", "parameters", "expiresAtNs"]
+      "requiredPayloadFields": [
+        "commandId",
+        "action",
+        "parameters",
+        "expiresAtNs"
+      ]
     },
     {
       "messageType": "COMMAND_RESULT",
       "direction": "Engine -> Host",
       "description": "Execution status and output of a previously submitted COMMAND.",
       "payloadSchema": {
-        "commandId": "string",
-        "status": { "type": "string", "enum": ["ACK", "REJECT", "EXPIRED", "STALE_SESSION", "DUPLICATE", "NOT_FOREGROUND", "FROZEN", "CAPABILITY_UNAVAILABLE", "FAILED"] },
-        "errorDetails": "string|null",
-        "resultData": "object|null"
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "commandId": {
+            "type": "string",
+            "required": true,
+            "nullable": false
+          },
+          "status": {
+            "type": "string",
+            "required": true,
+            "nullable": false,
+            "enum": [
+              "ACK",
+              "CAPABILITY_UNAVAILABLE",
+              "DUPLICATE",
+              "EXPIRED",
+              "FAILED",
+              "FROZEN",
+              "NOT_FOREGROUND",
+              "REJECT",
+              "STALE_SESSION"
+            ]
+          },
+          "errorDetails": {
+            "type": "string",
+            "required": false,
+            "nullable": true
+          },
+          "resultData": {
+            "type": "object",
+            "required": false,
+            "nullable": true
+          }
+        }
       },
-      "requiredPayloadFields": ["commandId", "status"]
+      "requiredPayloadFields": [
+        "commandId",
+        "status"
+      ]
     },
     {
       "messageType": "STATE_SNAPSHOT_REQUEST",
       "direction": "Host -> Engine",
-      "description": "Request from Host to retrieve authoritative business state snapshot to resync projection.",
+      "description": "Request from the Host to retrieve the authoritative business state snapshot in order to resync its projection after reconnect.",
       "payloadSchema": {
-        "sinceSequence": "integer (int64)|null",
-        "includeDrafts": "boolean",
-        "includeProjection": "boolean"
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "sinceSequence": {
+            "type": "integer",
+            "required": false,
+            "nullable": true
+          },
+          "includeDrafts": {
+            "type": "boolean",
+            "required": true,
+            "nullable": false
+          },
+          "includeProjection": {
+            "type": "boolean",
+            "required": false,
+            "nullable": false
+          }
+        }
       },
-      "requiredPayloadFields": ["includeDrafts"]
+      "requiredPayloadFields": [
+        "includeDrafts"
+      ]
     },
     {
       "messageType": "STATE_SNAPSHOT",
       "direction": "Engine -> Host",
-      "description": "Authoritative match and session projection payload sufficient to rebuild Host UI state.",
+      "description": "Authoritative match and session projection payload, sufficient to rebuild Host UI state. Validated by models.py::validate_state_snapshot(snapshot_envelope, active_session_id), which evaluates session identity (ERR_STALE_SESSION) before the projection schema so a stale snapshot can never be partially applied.",
       "payloadSchema": {
-        "snapshotSchemaVersion": "string",
-        "snapshotSessionId": "string",
-        "snapshotSequence": "integer (int64)",
-        "businessReady": "boolean",
-        "currentMatchProjection": {
-          "type": "object",
-          "required": ["matchState", "draftCount", "finalizedCount"]
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "snapshotSchemaVersion": {
+            "type": "string",
+            "required": true,
+            "nullable": false,
+            "enum": [
+              "1.0.0"
+            ]
+          },
+          "snapshotSessionId": {
+            "type": "string",
+            "required": true,
+            "nullable": false
+          },
+          "snapshotSequence": {
+            "type": "integer",
+            "required": true,
+            "nullable": false
+          },
+          "businessReady": {
+            "type": "boolean",
+            "required": true,
+            "nullable": false
+          },
+          "currentMatchProjection": {
+            "type": "object",
+            "required": true,
+            "nullable": false,
+            "properties": {
+              "matchId": {
+                "type": "string",
+                "required": true,
+                "nullable": false
+              },
+              "matchState": {
+                "type": "string",
+                "required": true,
+                "nullable": false
+              },
+              "auctionPhase": {
+                "type": "string",
+                "required": true,
+                "nullable": false
+              },
+              "draftCount": {
+                "type": "integer",
+                "required": true,
+                "nullable": false
+              },
+              "finalizedCount": {
+                "type": "integer",
+                "required": true,
+                "nullable": false
+              },
+              "activeAuctionItems": {
+                "type": "array",
+                "required": true,
+                "nullable": false,
+                "items": {
+                  "type": "integer",
+                  "required": true,
+                  "nullable": false
+                }
+              },
+              "bids": {
+                "type": "array",
+                "required": true,
+                "nullable": false,
+                "items": {
+                  "type": "object",
+                  "required": true,
+                  "nullable": false,
+                  "properties": {
+                    "seat": {
+                      "type": "integer",
+                      "required": true,
+                      "nullable": false
+                    },
+                    "price": {
+                      "type": "integer",
+                      "required": true,
+                      "nullable": false
+                    },
+                    "isWinning": {
+                      "type": "boolean",
+                      "required": false,
+                      "nullable": false
+                    }
+                  },
+                  "additionalProperties": false
+                }
+              }
+            },
+            "additionalProperties": false
+          }
         }
       },
       "requiredPayloadFields": [
@@ -207,35 +828,102 @@
     {
       "messageType": "ENGINE_SHUTDOWN",
       "direction": "Host -> Engine",
-      "description": "Graceful termination request issued by Host prior to application exit.",
+      "description": "Graceful termination request issued by the Host prior to application exit.",
       "payloadSchema": {
-        "reason": "string",
-        "timeoutMs": "integer"
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "reason": {
+            "type": "string",
+            "required": true,
+            "nullable": false
+          },
+          "timeoutMs": {
+            "type": "integer",
+            "required": true,
+            "nullable": false
+          }
+        }
       },
-      "requiredPayloadFields": ["reason", "timeoutMs"]
+      "requiredPayloadFields": [
+        "reason",
+        "timeoutMs"
+      ]
     },
     {
       "messageType": "ENGINE_RESTARTING",
       "direction": "Engine -> Host",
-      "description": "Self-diagnosed recovery signal emitted by Engine before controlled restart.",
+      "description": "Self-diagnosed recovery signal emitted by the Engine before a controlled restart.",
       "payloadSchema": {
-        "reason": "string",
-        "exitCode": "integer"
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "reason": {
+            "type": "string",
+            "required": true,
+            "nullable": false
+          },
+          "exitCode": {
+            "type": "integer",
+            "required": true,
+            "nullable": false
+          }
+        }
       },
-      "requiredPayloadFields": ["reason", "exitCode"]
+      "requiredPayloadFields": [
+        "reason",
+        "exitCode"
+      ]
     },
     {
       "messageType": "ERROR",
       "direction": "Bidirectional (Host <-> Engine)",
       "description": "Structured fail-closed error payload detailing protocol, transport, payload, authority, or capability violations.",
       "payloadSchema": {
-        "errorCode": "string",
-        "category": { "type": "string", "enum": ["PROTOCOL", "TRANSPORT", "PAYLOAD", "TIMEOUT", "AUTHORITY", "CAPABILITY"] },
-        "message": "string",
-        "faultingMessageId": "string|null",
-        "isFatal": "boolean"
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "errorCode": {
+            "type": "string",
+            "required": true,
+            "nullable": false
+          },
+          "category": {
+            "type": "string",
+            "required": true,
+            "nullable": false,
+            "enum": [
+              "AUTHORITY",
+              "CAPABILITY",
+              "PAYLOAD",
+              "PROTOCOL",
+              "TIMEOUT",
+              "TRANSPORT"
+            ]
+          },
+          "message": {
+            "type": "string",
+            "required": true,
+            "nullable": false
+          },
+          "faultingMessageId": {
+            "type": "string",
+            "required": false,
+            "nullable": true
+          },
+          "isFatal": {
+            "type": "boolean",
+            "required": true,
+            "nullable": false
+          }
+        }
       },
-      "requiredPayloadFields": ["errorCode", "category", "message", "isFatal"]
+      "requiredPayloadFields": [
+        "errorCode",
+        "category",
+        "message",
+        "isFatal"
+      ]
     }
   ]
 }

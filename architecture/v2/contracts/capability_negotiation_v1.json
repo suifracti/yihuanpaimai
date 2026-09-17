@@ -70,6 +70,7 @@
     }
   ],
   "negotiationRules": {
+    "scopeBoundary": "Capability negotiation covers capability advertisement and fallback policy ONLY. Ring buffer geometry is NOT negotiated: slotCount, slotSizeBytes and mapTotalSizeBytes are fixed v1 constants derived from protocolVersion '1.0.0' (see message_catalog_v1.json -> ringBufferGeometry).",
     "hostAdvertisement": "Host includes full dictionary of capabilities and statuses in HELLO message payload.",
     "engineAcceptance": "Engine verifies all isMandatory capabilities are AVAILABLE. If any mandatory capability is UNAVAILABLE, Engine responds HELLO_ACK with status=REJECTED_CAPABILITY.",
     "unmeasuredPolicy": "Any capability marked NOT_MEASURED (e.g. WGC) must NOT be activated by Engine; default fallback must be activated.",

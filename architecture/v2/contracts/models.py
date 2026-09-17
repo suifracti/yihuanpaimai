@@ -272,23 +272,64 @@ class FrameHeaderV1:
             )
 
 
-def verify_frame_metadata_match(frame_ready_payload: Dict[str, Any], header: FrameHeaderV1) -> None:
-    """Verifies that FRAME_READY message payload matches shared memory header exact."""
-    checks = [
-        ("sequence", frame_ready_payload.get("sequence"), header.sequence),
-        ("width", frame_ready_payload.get("width"), header.width),
-        ("height", frame_ready_payload.get("height"), header.height),
-        ("stride", frame_ready_payload.get("stride"), header.stride),
-        ("pixelFormat", frame_ready_payload.get("pixelFormat"), header.pixelFormat),
-        ("bufferLength", frame_ready_payload.get("bufferLength"), header.bufferLength),
-        ("captureTimestampNs", frame_ready_payload.get("captureTimestampNs"), header.captureTimestampNs),
-        ("checksum", frame_ready_payload.get("checksum"), header.cornerChecksum),
-    ]
-    for field_name, payload_val, header_val in checks:
+# ---------------------------------------------------------------------------
+# FRAME_READY <-> FrameHeaderV1 exact metadata contract (single source of truth)
+#
+# message_catalog_v1.json -> frameHeaderMetadataContract.checkedFields MUST list
+# exactly: FRAME_READY_BUFFER_INDEX_FIELD followed by the payload-field names of
+# FRAME_READY_HEADER_METADATA_FIELDS, in the same order.  Field names are shared
+# with FrameHeaderV1 attribute names verbatim (notably `cornerChecksum`, never
+# `checksum`) so that the wire schema and the shared-memory header cannot drift.
+# ---------------------------------------------------------------------------
+FRAME_READY_BUFFER_INDEX_FIELD: str = "bufferIndex"
+
+FRAME_READY_HEADER_METADATA_FIELDS: List[Tuple[str, str]] = [
+    ("sequence", "sequence"),
+    ("width", "width"),
+    ("height", "height"),
+    ("stride", "stride"),
+    ("pixelFormat", "pixelFormat"),
+    ("bufferLength", "bufferLength"),
+    ("captureTimestampNs", "captureTimestampNs"),
+    ("cornerChecksum", "cornerChecksum"),
+]
+
+
+def verify_frame_metadata_match(
+    frame_ready_payload: Dict[str, Any],
+    header: FrameHeaderV1,
+    expected_buffer_index: Optional[int] = None,
+) -> None:
+    """
+    Verifies that a FRAME_READY payload matches the shared memory FrameHeaderV1 exactly.
+
+    Checked metadata fields (in order): bufferIndex, then every entry of
+    FRAME_READY_HEADER_METADATA_FIELDS.  bufferIndex is the ring addressing field
+    that selects the slot the header was read from, so it is bounds-checked against
+    the fixed v1 ring geometry and, when the caller supplies the slot it actually
+    read, compared for exact equality as well.
+    """
+    buffer_index = frame_ready_payload.get(FRAME_READY_BUFFER_INDEX_FIELD)
+    if isinstance(buffer_index, bool) or not isinstance(buffer_index, int) or not (0 <= buffer_index < SLOT_COUNT):
+        raise ContractValidationError(
+            "ERR_SLOT_INDEX_OUT_OF_BOUNDS",
+            f"FRAME_READY '{FRAME_READY_BUFFER_INDEX_FIELD}'={buffer_index!r} is outside the fixed v1 range "
+            f"0 <= {FRAME_READY_BUFFER_INDEX_FIELD} < {SLOT_COUNT}"
+        )
+    if expected_buffer_index is not None and buffer_index != expected_buffer_index:
+        raise ContractValidationError(
+            "ERR_FRAME_METADATA_MISMATCH",
+            f"FRAME_READY metadata mismatch for '{FRAME_READY_BUFFER_INDEX_FIELD}': "
+            f"payload={buffer_index}, expected_slot={expected_buffer_index}"
+        )
+
+    for payload_field, header_attr in FRAME_READY_HEADER_METADATA_FIELDS:
+        payload_val = frame_ready_payload.get(payload_field)
+        header_val = getattr(header, header_attr)
         if payload_val != header_val:
             raise ContractValidationError(
                 "ERR_FRAME_METADATA_MISMATCH",
-                f"FRAME_READY metadata mismatch for '{field_name}': payload={payload_val}, header={header_val}"
+                f"FRAME_READY metadata mismatch for '{payload_field}': payload={payload_val}, header={header_val}"
             )
 
 
@@ -301,6 +342,94 @@ def verify_message_allowed_in_state(current_state: LifecycleState, message_type:
                 "ERR_MESSAGE_BEFORE_HANDSHAKE",
                 f"Message '{message_type}' is forbidden in lifecycle state '{current_state.value}' prior to handshake completion"
             )
+
+
+# ---------------------------------------------------------------------------
+# Ring buffer geometry policy: FIXED_V1_CONSTANTS (NO geometry negotiation).
+#
+# V1 geometry is a pure function of protocolVersion == "1.0.0".  Both peers derive
+# slotCount / slotSizeBytes / mapTotalSizeBytes from the constants above; HELLO only
+# declares frameBufferName + frameBufferSize and the Engine validates the declared
+# size against the fixed v1 constant.  There is no accept/reject geometry handshake.
+# ---------------------------------------------------------------------------
+RING_GEOMETRY_POLICY: str = "FIXED_V1_CONSTANTS"
+
+
+def get_fixed_v1_geometry() -> Dict[str, int]:
+    """Returns the immutable v1 ring buffer geometry implied by protocolVersion '1.0.0'."""
+    return {
+        "slotCount": SLOT_COUNT,
+        "slotSizeBytes": SLOT_SIZE_BYTES,
+        "mapTotalSizeBytes": MAP_TOTAL_SIZE_BYTES,
+    }
+
+
+def validate_hello_fixed_geometry(hello_payload: Dict[str, Any]) -> None:
+    """
+    Validates a HELLO payload against the fixed v1 ring geometry.
+
+    The declared frameBufferSize MUST equal MAP_TOTAL_SIZE_BYTES (33177856); any
+    deviation means the peer is not actually speaking v1 geometry, which is a
+    fail-closed protocol violation (ERR_RING_GEOMETRY_MISMATCH).
+    """
+    declared_size = hello_payload.get("frameBufferSize")
+    if isinstance(declared_size, bool) or not isinstance(declared_size, int):
+        raise ContractValidationError(
+            "ERR_RING_GEOMETRY_MISMATCH",
+            f"HELLO 'frameBufferSize' must be an integer equal to the fixed v1 mapTotalSizeBytes "
+            f"{MAP_TOTAL_SIZE_BYTES}, got {declared_size!r}"
+        )
+    if declared_size != MAP_TOTAL_SIZE_BYTES:
+        raise ContractValidationError(
+            "ERR_RING_GEOMETRY_MISMATCH",
+            f"HELLO 'frameBufferSize'={declared_size} does not equal the fixed v1 mapTotalSizeBytes "
+            f"{MAP_TOTAL_SIZE_BYTES}; v1 ring geometry is NOT negotiated"
+        )
+
+
+def validate_hello_ack_readiness(hello_ack_payload: Dict[str, Any]) -> None:
+    """
+    Validates the HELLO_ACK readiness contract shared with the lifecycle READY gate.
+
+    `readiness` is the single authoritative engine-readiness field; `engineBusinessReady`
+    is the boolean READY-gate projection of it and the two must agree.  There is no
+    separate `modelStatus` protocol field - model load state is folded into `readiness`
+    (LOADING -> READY / FAILED) so that two fields can never express the same state
+    without a defined relationship.
+    """
+    readiness = hello_ack_payload.get("readiness")
+    valid_readiness = {r.value for r in EngineReadiness}
+    if not isinstance(readiness, str) or readiness not in valid_readiness:
+        raise ContractValidationError(
+            "ERR_SCHEMA_VALIDATION_FAILED",
+            f"HELLO_ACK 'readiness' must be one of {sorted(valid_readiness)}, got {readiness!r}"
+        )
+
+    status = hello_ack_payload.get("status")
+    business_ready = hello_ack_payload.get("engineBusinessReady")
+    if not isinstance(business_ready, bool):
+        raise ContractValidationError(
+            "ERR_SCHEMA_VALIDATION_FAILED",
+            f"HELLO_ACK 'engineBusinessReady' must be a boolean, got {business_ready!r}"
+        )
+
+    if status == HelloAckStatus.ACCEPTED.value:
+        # ACCEPTED + READY must advertise business readiness; ACCEPTED + LOADING must not.
+        if readiness == EngineReadiness.READY.value and not business_ready:
+            raise ContractValidationError(
+                "ERR_SCHEMA_VALIDATION_FAILED",
+                "HELLO_ACK readiness == READY requires engineBusinessReady == true (lifecycle READY gate)"
+            )
+        if readiness in (EngineReadiness.STARTING.value, EngineReadiness.LOADING.value) and business_ready:
+            raise ContractValidationError(
+                "ERR_SCHEMA_VALIDATION_FAILED",
+                f"HELLO_ACK readiness == {readiness} must not advertise engineBusinessReady == true"
+            )
+    if status != HelloAckStatus.ACCEPTED.value and business_ready:
+        raise ContractValidationError(
+            "ERR_SCHEMA_VALIDATION_FAILED",
+            f"HELLO_ACK status == {status} must not advertise engineBusinessReady == true"
+        )
 
 
 @dataclass
@@ -511,22 +640,294 @@ REQUIRED_ENVELOPE_FIELDS = [
     "payload",
 ]
 
-REQUIRED_PAYLOAD_FIELDS: Dict[str, List[str]] = {
-    "HELLO": ["hostVersion", "supportedProtocols", "sessionNonce", "capabilities", "frameBufferName", "slotCount", "slotSizeBytes", "mapTotalSizeBytes"],
-    "HELLO_ACK": ["engineVersion", "negotiatedProtocol", "status", "readiness", "enginePid", "slotCount", "slotSizeBytes", "mapTotalSizeBytes", "engineBusinessReady"],
-    "HEARTBEAT": ["timestamp", "state"],
-    "FRAME_READY": ["sessionId", "bufferIndex", "sequence", "width", "height", "stride", "pixelFormat", "bufferLength", "captureTimestampNs", "checksum"],
-    "FRAME_ACK": ["sessionId", "bufferIndex", "sequence", "status"],
-    "PERCEPTION_RESULT": ["frameSequence", "scene", "inAuction", "bids"],
-    "ABORT_SCAN": ["reason", "triggerTimestampNs"],
-    "COMMAND": ["commandId", "action", "parameters", "expiresAtNs"],
-    "COMMAND_RESULT": ["commandId", "status"],
-    "STATE_SNAPSHOT_REQUEST": ["includeDrafts"],
-    "STATE_SNAPSHOT": ["snapshotSchemaVersion", "snapshotSessionId", "snapshotSequence", "businessReady", "currentMatchProjection"],
-    "ENGINE_SHUTDOWN": ["reason", "timeoutMs"],
-    "ENGINE_RESTARTING": ["reason", "exitCode"],
-    "ERROR": ["errorCode", "category", "message", "isFatal"],
+# Normalized envelope field descriptors. Mirrored verbatim by
+# protocol_v1.json -> envelope.requiredFields / envelope.fieldTypes and checked by
+# the generated message_schema_parity.json report.
+ENVELOPE_FIELD_TYPES: Dict[str, Dict[str, Any]] = {
+    "protocolVersion": {"type": "string", "required": True, "nullable": False, "enum": [PROTOCOL_VERSION]},
+    "sessionId": {"type": "string", "required": True, "nullable": False},
+    "messageType": {"type": "string", "required": True, "nullable": False, "enum": sorted(t.value for t in MessageType)},
+    "requestId": {"type": "string", "required": True, "nullable": False},
+    "correlationId": {"type": "string", "required": True, "nullable": True},
+    "sequence": {"type": "integer", "required": True, "nullable": False},
+    "monotonicTimestampNs": {"type": "integer", "required": True, "nullable": False},
+    "payload": {"type": "object", "required": True, "nullable": False},
 }
+
+
+def _field(
+    field_type: str,
+    required: bool = True,
+    nullable: bool = False,
+    enum: Optional[List[str]] = None,
+    items: Optional[Dict[str, Any]] = None,
+    properties: Optional[Dict[str, Dict[str, Any]]] = None,
+    additional_properties: Optional[Dict[str, Any]] = None,
+) -> Dict[str, Any]:
+    """Builds one normalized payload field descriptor."""
+    spec: Dict[str, Any] = {"type": field_type, "required": required, "nullable": nullable}
+    if enum is not None:
+        spec["enum"] = list(enum)
+    if items is not None:
+        spec["items"] = items
+    if properties is not None:
+        spec["properties"] = properties
+        spec["additionalProperties"] = False
+    elif additional_properties is not None:
+        spec["additionalProperties"] = additional_properties
+    return spec
+
+
+_BID_FIELD = _field(
+    "object",
+    properties={
+        "seat": _field("integer"),
+        "price": _field("integer"),
+        "isWinning": _field("boolean", required=False),
+    },
+)
+
+_CURRENT_MATCH_PROJECTION_FIELD = _field(
+    "object",
+    properties={
+        "matchId": _field("string"),
+        "matchState": _field("string"),
+        "auctionPhase": _field("string"),
+        "draftCount": _field("integer"),
+        "finalizedCount": _field("integer"),
+        "activeAuctionItems": _field("array", items=_field("integer")),
+        "bids": _field("array", items=_BID_FIELD),
+    },
+)
+
+# ---------------------------------------------------------------------------
+# PAYLOAD_FIELD_TYPES is the Python-side single source of truth for the payload
+# schema of all 14 message types.  message_catalog_v1.json -> messages[].payloadSchema
+# is a faithful, machine-verified mirror of this table (see schema_parity.py).
+# REQUIRED_PAYLOAD_FIELDS is *derived* from this table so required-ness can never
+# be declared in two places.
+# ---------------------------------------------------------------------------
+PAYLOAD_FIELD_TYPES: Dict[str, Dict[str, Dict[str, Any]]] = {
+    "HELLO": {
+        "hostVersion": _field("string"),
+        "supportedProtocols": _field("array", items=_field("string")),
+        "sessionNonce": _field("string"),
+        "capabilities": _field(
+            "object",
+            additional_properties=_field("string", enum=sorted(c.value for c in CapabilityStatus)),
+        ),
+        "frameBufferName": _field("string"),
+        "frameBufferSize": _field("integer"),
+    },
+    "HELLO_ACK": {
+        "engineVersion": _field("string"),
+        "negotiatedProtocol": _field("string", enum=[PROTOCOL_VERSION]),
+        "status": _field("string", enum=sorted(s.value for s in HelloAckStatus)),
+        "readiness": _field("string", enum=sorted(r.value for r in EngineReadiness)),
+        "enginePid": _field("integer"),
+        "engineBusinessReady": _field("boolean"),
+    },
+    "HEARTBEAT": {
+        "timestamp": _field("number"),
+        "state": _field("string", enum=["HEALTHY", "BUSY", "DEGRADED"]),
+        "activeMatchId": _field("string", required=False, nullable=True),
+    },
+    "FRAME_READY": {
+        "sessionId": _field("string"),
+        FRAME_READY_BUFFER_INDEX_FIELD: _field("integer"),
+        "sequence": _field("integer"),
+        "width": _field("integer"),
+        "height": _field("integer"),
+        "stride": _field("integer"),
+        "pixelFormat": _field("integer", enum=[DEFAULT_PIXEL_FORMAT_BGRA8]),
+        "bufferLength": _field("integer"),
+        "captureTimestampNs": _field("integer"),
+        "cornerChecksum": _field("integer"),
+    },
+    "FRAME_ACK": {
+        "sessionId": _field("string"),
+        "bufferIndex": _field("integer"),
+        "sequence": _field("integer"),
+        "status": _field("string", enum=sorted(s.value for s in FrameAckStatus)),
+        "mappingLatencyMs": _field("number", required=False),
+        "processingLatencyMs": _field("number", required=False),
+    },
+    "PERCEPTION_RESULT": {
+        "frameSequence": _field("integer"),
+        "scene": _field("string"),
+        "inAuction": _field("boolean"),
+        "bids": _field("array", items=_BID_FIELD),
+        "intel": _field(
+            "array",
+            required=False,
+            items=_field("object", properties={"id": _field("string"), "value": _field("string")}),
+        ),
+        "warehouseSummary": _field("object", required=False, nullable=True),
+        "processingMs": _field("number", required=False),
+    },
+    "ABORT_SCAN": {
+        "reason": _field("string", enum=sorted(r.value for r in AbortReason)),
+        "triggerTimestampNs": _field("integer"),
+    },
+    "COMMAND": {
+        "commandId": _field("string"),
+        "action": _field("string"),
+        "parameters": _field("object"),
+        "expiresAtNs": _field("integer"),
+    },
+    "COMMAND_RESULT": {
+        "commandId": _field("string"),
+        "status": _field("string", enum=sorted(s.value for s in CommandResultStatus)),
+        "errorDetails": _field("string", required=False, nullable=True),
+        "resultData": _field("object", required=False, nullable=True),
+    },
+    "STATE_SNAPSHOT_REQUEST": {
+        "sinceSequence": _field("integer", required=False, nullable=True),
+        "includeDrafts": _field("boolean"),
+        "includeProjection": _field("boolean", required=False),
+    },
+    "STATE_SNAPSHOT": {
+        "snapshotSchemaVersion": _field("string", enum=[PROTOCOL_VERSION]),
+        "snapshotSessionId": _field("string"),
+        "snapshotSequence": _field("integer"),
+        "businessReady": _field("boolean"),
+        "currentMatchProjection": _CURRENT_MATCH_PROJECTION_FIELD,
+    },
+    "ENGINE_SHUTDOWN": {
+        "reason": _field("string"),
+        "timeoutMs": _field("integer"),
+    },
+    "ENGINE_RESTARTING": {
+        "reason": _field("string"),
+        "exitCode": _field("integer"),
+    },
+    "ERROR": {
+        "errorCode": _field("string"),
+        "category": _field("string", enum=sorted(c.value for c in ErrorCategory)),
+        "message": _field("string"),
+        "faultingMessageId": _field("string", required=False, nullable=True),
+        "isFatal": _field("boolean"),
+    },
+}
+
+# Derived, never hand-maintained: required-ness has exactly one declaration site.
+REQUIRED_PAYLOAD_FIELDS: Dict[str, List[str]] = {
+    msg_type: [name for name, spec in fields.items() if spec.get("required")]
+    for msg_type, fields in PAYLOAD_FIELD_TYPES.items()
+}
+
+
+def _json_type_name(value: Any) -> str:
+    if isinstance(value, bool):
+        return "boolean"
+    if isinstance(value, int):
+        return "integer"
+    if isinstance(value, float):
+        return "number"
+    if isinstance(value, str):
+        return "string"
+    if isinstance(value, dict):
+        return "object"
+    if isinstance(value, list):
+        return "array"
+    if value is None:
+        return "null"
+    return type(value).__name__
+
+
+def _type_accepts(field_type: str, value: Any) -> bool:
+    if field_type == "integer":
+        return isinstance(value, int) and not isinstance(value, bool)
+    if field_type == "number":
+        return isinstance(value, (int, float)) and not isinstance(value, bool)
+    if field_type == "string":
+        return isinstance(value, str)
+    if field_type == "boolean":
+        return isinstance(value, bool)
+    if field_type == "object":
+        return isinstance(value, dict)
+    if field_type == "array":
+        return isinstance(value, list)
+    return False
+
+
+def validate_payload_field_value(field_path: str, value: Any, spec: Dict[str, Any]) -> None:
+    """Fail-closed validation of a single payload value against its descriptor."""
+    if value is None:
+        if spec.get("nullable"):
+            return
+        raise ContractValidationError(
+            "ERR_SCHEMA_VALIDATION_FAILED",
+            f"Payload field '{field_path}' must not be null",
+        )
+
+    field_type = spec.get("type", "object")
+    if not _type_accepts(field_type, value):
+        raise ContractValidationError(
+            "ERR_SCHEMA_VALIDATION_FAILED",
+            f"Payload field '{field_path}' must be {field_type}, got {_json_type_name(value)} (no coercion allowed)",
+        )
+
+    enum_values = spec.get("enum")
+    if enum_values is not None:
+        if value not in enum_values:
+            rendered = f"{value}" if not isinstance(value, str) else f"'{value}'"
+            raise ContractValidationError(
+                "ERR_SCHEMA_VALIDATION_FAILED",
+                f"Payload field '{field_path}' value {rendered} is not one of {enum_values}",
+            )
+
+    if field_type == "array":
+        item_spec = spec.get("items")
+        if item_spec is not None:
+            for index, item in enumerate(value):
+                validate_payload_field_value(f"{field_path}[{index}]", item, item_spec)
+    elif field_type == "object":
+        nested = spec.get("properties")
+        if nested is not None:
+            for nested_name, nested_spec in nested.items():
+                if nested_name not in value:
+                    if nested_spec.get("required"):
+                        raise ContractValidationError(
+                            "ERR_MISSING_REQUIRED_FIELD",
+                            f"Payload object '{field_path}' missing required field: '{nested_name}'",
+                        )
+                    continue
+                validate_payload_field_value(f"{field_path}.{nested_name}", value[nested_name], nested_spec)
+            if spec.get("additionalProperties") is False:
+                unknown = sorted(set(value) - set(nested))
+                if unknown:
+                    raise ContractValidationError(
+                        "ERR_SCHEMA_VALIDATION_FAILED",
+                        f"Payload object '{field_path}' contains undeclared fields: {unknown}",
+                    )
+        else:
+            additional = spec.get("additionalProperties")
+            if isinstance(additional, dict):
+                for map_key, map_value in value.items():
+                    validate_payload_field_value(f"{field_path}.{map_key}", map_value, additional)
+
+
+def validate_payload_fields(message_type: str, payload: Dict[str, Any]) -> None:
+    """
+    Validates a payload against PAYLOAD_FIELD_TYPES: required fields first
+    (ERR_MISSING_REQUIRED_FIELD), then type / enum / nullability
+    (ERR_SCHEMA_VALIDATION_FAILED). No coercion is ever performed.
+    """
+    field_specs = PAYLOAD_FIELD_TYPES.get(message_type)
+    if field_specs is None:
+        return
+
+    for field_name in REQUIRED_PAYLOAD_FIELDS.get(message_type, []):
+        if field_name not in payload:
+            raise ContractValidationError(
+                "ERR_MISSING_REQUIRED_FIELD",
+                f"Payload for {message_type} missing required field: '{field_name}'",
+            )
+
+    for field_name, spec in field_specs.items():
+        if field_name in payload:
+            validate_payload_field_value(f"{message_type}.{field_name}", payload[field_name], spec)
 
 
 def validate_envelope(msg_dict: Dict[str, Any]) -> Envelope:
@@ -598,14 +999,14 @@ def validate_envelope(msg_dict: Dict[str, Any]) -> Envelope:
             "Field 'payload' must be a dictionary object"
         )
 
-    # Validate required payload fields per message type
-    req_payload_fields = REQUIRED_PAYLOAD_FIELDS.get(msg_type, [])
-    for req_p in req_payload_fields:
-        if req_p not in payload:
-            raise ContractValidationError(
-                "ERR_MISSING_REQUIRED_FIELD",
-                f"Payload for {msg_type} missing required field: '{req_p}'"
-            )
+    # Validate payload schema (required fields, then type / enum / nullability)
+    validate_payload_fields(msg_type, payload)
+
+    # Handshake semantics that the message catalog declares as mandatory
+    if msg_type == MessageType.HELLO.value:
+        validate_hello_fixed_geometry(payload)
+    elif msg_type == MessageType.HELLO_ACK.value:
+        validate_hello_ack_readiness(payload)
 
     return Envelope(
         protocolVersion=proto_ver,
@@ -620,7 +1021,14 @@ def validate_envelope(msg_dict: Dict[str, Any]) -> Envelope:
 
 
 def validate_state_snapshot(snapshot_envelope: Envelope, active_session_id: str) -> None:
-    """Validates STATE_SNAPSHOT session and projection integrity."""
+    """
+    Validates STATE_SNAPSHOT session and CurrentMatch projection integrity.
+
+    Order is significant and fail-closed: session identity (ERR_STALE_SESSION) is
+    evaluated before projection schema so a stale snapshot can never be partially
+    applied. The projection schema itself is the one declared for STATE_SNAPSHOT in
+    PAYLOAD_FIELD_TYPES / message_catalog_v1.json.
+    """
     if snapshot_envelope.messageType != MessageType.STATE_SNAPSHOT.value:
         raise ContractValidationError("ERR_UNKNOWN_MESSAGE_TYPE", "Expected STATE_SNAPSHOT message")
     payload = snapshot_envelope.payload
@@ -630,6 +1038,8 @@ def validate_state_snapshot(snapshot_envelope: Envelope, active_session_id: str)
             "ERR_STALE_SESSION",
             f"STATE_SNAPSHOT snapshotSessionId '{snap_sess}' does not match active session '{active_session_id}'"
         )
+    # Resync validator and message catalog share one projection schema.
+    validate_payload_fields(MessageType.STATE_SNAPSHOT.value, payload)
 
 
 def encode_framed_message(envelope: Envelope) -> bytes:

@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using System.Runtime.InteropServices;
 using System.Text.Json;
 using ArchitectureV2.Contracts;
@@ -166,6 +167,11 @@ namespace ArchitectureV2.Verifier
             Console.WriteLine("\n--- 3. Golden Vectors Parity Tests ---");
             string goldenFile = Path.Combine(contractsDir, "golden_vectors_v1.json");
             var crossParity = VerifyGoldenVectors(goldenFile, RunTest);
+
+            Console.WriteLine("\n--- 4. Message Catalog SSOT Parity Tests ---");
+            string catalogFile = Path.Combine(contractsDir, "message_catalog_v1.json");
+            var catalogParity = VerifyMessageCatalog(catalogFile, goldenFile, RunTest);
+            crossParity["messageCatalogParity"] = catalogParity;
             File.WriteAllText(Path.Combine(outputDir, "cross_language_parity.json"), JsonSerializer.Serialize(crossParity, new JsonSerializerOptions { WriteIndented = true }));
 
             // Output overall test results
@@ -312,6 +318,234 @@ namespace ArchitectureV2.Verifier
                 { "totalVectorsTested", vectorDetails.Count },
                 { "vectors", vectorDetails }
             };
+        }
+
+        /// <summary>
+        /// Reads message_catalog_v1.json and proves the .NET side agrees with the catalog
+        /// rather than only replaying pre-baked golden framed hex.
+        /// </summary>
+        private static Dictionary<string, object> VerifyMessageCatalog(string catalogFile, string goldenFile, Action<string, Action> runTest)
+        {
+            if (!File.Exists(catalogFile))
+            {
+                throw new FileNotFoundException($"Message catalog not found: {catalogFile}");
+            }
+
+            using var catalogDoc = JsonDocument.Parse(File.ReadAllText(catalogFile));
+            var catalog = catalogDoc.RootElement;
+
+            using var goldenDoc = JsonDocument.Parse(File.ReadAllText(goldenFile));
+            var goldenRoot = goldenDoc.RootElement;
+
+            var goldenByType = new Dictionary<string, JsonElement>();
+            foreach (var vec in goldenRoot.GetProperty("messageVectors").EnumerateArray())
+            {
+                goldenByType[vec.GetProperty("messageType").GetString()!] = vec;
+            }
+
+            var catalogByType = new Dictionary<string, JsonElement>();
+            foreach (var msg in catalog.GetProperty("messages").EnumerateArray())
+            {
+                catalogByType[msg.GetProperty("messageType").GetString()!] = msg;
+            }
+
+            var results = new Dictionary<string, object>();
+            int catalogMessageCount = catalogByType.Count;
+
+            runTest("MessageCatalog_Count_14", () =>
+            {
+                if (catalog.GetProperty("totalMessageTypes").GetInt32() != 14)
+                    throw new Exception($"totalMessageTypes != 14");
+                if (catalogMessageCount != 14)
+                    throw new Exception($"Expected 14 catalog messages, got {catalogMessageCount}");
+                if (goldenByType.Count != 14)
+                    throw new Exception($"Expected 14 golden vectors, got {goldenByType.Count}");
+
+                var enumNames = Enum.GetNames<MessageType>().ToHashSet();
+                foreach (var name in catalogByType.Keys)
+                {
+                    if (!enumNames.Contains(name))
+                        throw new Exception($"catalog messageType '{name}' is not a member of the .NET MessageType enum");
+                }
+                foreach (var name in enumNames)
+                {
+                    if (!catalogByType.ContainsKey(name))
+                        throw new Exception($"MessageType.{name} is missing from the message catalog");
+                }
+            });
+
+            runTest("MessageCatalog_GoldenRequiredFields_Parity", () =>
+            {
+                foreach (var kvp in catalogByType)
+                {
+                    string messageType = kvp.Key;
+                    var message = kvp.Value;
+
+                    if (!goldenByType.TryGetValue(messageType, out var vector))
+                        throw new Exception($"No golden vector for catalog message '{messageType}'");
+
+                    var payload = vector.GetProperty("envelope").GetProperty("payload");
+
+                    var required = new List<string>();
+                    foreach (var field in message.GetProperty("requiredPayloadFields").EnumerateArray())
+                    {
+                        required.Add(field.GetString()!);
+                    }
+
+                    var declared = new HashSet<string>();
+                    var declaredRequired = new List<string>();
+                    foreach (var prop in message.GetProperty("payloadSchema").GetProperty("properties").EnumerateObject())
+                    {
+                        declared.Add(prop.Name);
+                        if (prop.Value.TryGetProperty("required", out var req) && req.GetBoolean())
+                        {
+                            declaredRequired.Add(prop.Name);
+                        }
+                    }
+
+                    foreach (var field in required)
+                    {
+                        if (!payload.TryGetProperty(field, out _))
+                            throw new Exception($"{messageType} golden payload is missing required field '{field}'");
+                        if (!declared.Contains(field))
+                            throw new Exception($"{messageType} required field '{field}' is not declared in payloadSchema.properties");
+                    }
+
+                    if (!declaredRequired.SequenceEqual(required))
+                        throw new Exception(
+                            $"{messageType} payloadSchema required flags [{string.Join(",", declaredRequired)}] " +
+                            $"disagree with requiredPayloadFields [{string.Join(",", required)}]");
+
+                    foreach (var prop in payload.EnumerateObject())
+                    {
+                        if (!declared.Contains(prop.Name))
+                            throw new Exception($"{messageType} golden payload has undeclared field '{prop.Name}'");
+                    }
+                }
+            });
+
+            runTest("MessageCatalog_FrameReady_HeaderMetadata_Parity", () =>
+            {
+                var expectedChecked = new[]
+                {
+                    "bufferIndex", "sequence", "width", "height", "stride",
+                    "pixelFormat", "bufferLength", "captureTimestampNs", "cornerChecksum"
+                };
+
+                var contract = catalog.GetProperty("frameHeaderMetadataContract");
+                var checkedFields = new List<string>();
+                foreach (var field in contract.GetProperty("checkedFields").EnumerateArray())
+                {
+                    checkedFields.Add(field.GetString()!);
+                }
+                if (!checkedFields.SequenceEqual(expectedChecked))
+                    throw new Exception(
+                        $"frameHeaderMetadataContract.checkedFields [{string.Join(",", checkedFields)}] " +
+                        $"!= [{string.Join(",", expectedChecked)}]");
+
+                if (!catalogByType.TryGetValue("FRAME_READY", out var frameReady))
+                    throw new Exception("FRAME_READY missing from catalog");
+
+                var required = new List<string>();
+                foreach (var field in frameReady.GetProperty("requiredPayloadFields").EnumerateArray())
+                {
+                    required.Add(field.GetString()!);
+                }
+
+                var properties = frameReady.GetProperty("payloadSchema").GetProperty("properties");
+                var declaredNames = properties.EnumerateObject().Select(p => p.Name).ToHashSet();
+
+                if (declaredNames.Contains("checksum"))
+                    throw new Exception("FRAME_READY declares the stale field name 'checksum'");
+                if (!declaredNames.Contains("cornerChecksum"))
+                    throw new Exception("FRAME_READY must declare 'cornerChecksum'");
+
+                string pixelFormatType = properties.GetProperty("pixelFormat").GetProperty("type").GetString()!;
+                if (pixelFormatType != "integer")
+                    throw new Exception($"FRAME_READY pixelFormat must be an integer enum, got '{pixelFormatType}'");
+
+                // Every checked metadata field must be a real FrameHeaderV1 field name.
+                var headerFieldNames = typeof(FrameHeaderV1)
+                    .GetFields(System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Instance)
+                    .Select(f => char.ToLowerInvariant(f.Name[0]) + f.Name.Substring(1))
+                    .ToHashSet();
+
+                foreach (var field in checkedFields)
+                {
+                    if (!required.Contains(field))
+                        throw new Exception($"FRAME_READY checked field '{field}' is not in requiredPayloadFields");
+                    if (!declaredNames.Contains(field))
+                        throw new Exception($"FRAME_READY checked field '{field}' is not declared in payloadSchema");
+                    if (field == "bufferIndex")
+                        continue;
+                    if (!headerFieldNames.Contains(field))
+                        throw new Exception($"FRAME_READY checked field '{field}' is not a FrameHeaderV1 field");
+                }
+
+                results["frameReadyCheckedFields"] = checkedFields;
+                results["pixelFormatType"] = pixelFormatType;
+            });
+
+            runTest("MessageCatalog_StateSnapshot_Parity", () =>
+            {
+                if (!catalogByType.TryGetValue("STATE_SNAPSHOT", out var snapshot))
+                    throw new Exception("STATE_SNAPSHOT missing from catalog");
+
+                var required = new List<string>();
+                foreach (var field in snapshot.GetProperty("requiredPayloadFields").EnumerateArray())
+                {
+                    required.Add(field.GetString()!);
+                }
+                var expectedTopLevel = new[]
+                {
+                    "snapshotSchemaVersion", "snapshotSessionId", "snapshotSequence",
+                    "businessReady", "currentMatchProjection"
+                };
+                if (!required.SequenceEqual(expectedTopLevel))
+                    throw new Exception($"STATE_SNAPSHOT requiredPayloadFields [{string.Join(",", required)}] != expected");
+
+                var projection = snapshot.GetProperty("payloadSchema").GetProperty("properties")
+                    .GetProperty("currentMatchProjection");
+
+                if (projection.GetProperty("nullable").GetBoolean())
+                    throw new Exception("currentMatchProjection must not be nullable");
+
+                var projectionRequired = projection.GetProperty("properties").EnumerateObject()
+                    .Where(p => p.Value.GetProperty("required").GetBoolean())
+                    .Select(p => p.Name)
+                    .ToList();
+                var expectedProjection = new[]
+                {
+                    "matchId", "matchState", "auctionPhase", "draftCount",
+                    "finalizedCount", "activeAuctionItems", "bids"
+                };
+                if (!projectionRequired.SequenceEqual(expectedProjection))
+                    throw new Exception(
+                        $"currentMatchProjection required [{string.Join(",", projectionRequired)}] != expected");
+
+                if (!goldenByType.TryGetValue("STATE_SNAPSHOT", out var vector))
+                    throw new Exception("No golden STATE_SNAPSHOT vector");
+                var payload = vector.GetProperty("envelope").GetProperty("payload");
+                var goldenProjection = payload.GetProperty("currentMatchProjection");
+
+                foreach (var field in expectedProjection)
+                {
+                    if (!goldenProjection.TryGetProperty(field, out _))
+                        throw new Exception($"golden currentMatchProjection is missing '{field}'");
+                }
+
+                // Session identity rule: snapshotSessionId must equal the envelope sessionId.
+                string envelopeSessionId = vector.GetProperty("envelope").GetProperty("sessionId").GetString()!;
+                string snapshotSessionId = payload.GetProperty("snapshotSessionId").GetString()!;
+                if (envelopeSessionId != snapshotSessionId)
+                    throw new Exception("golden STATE_SNAPSHOT snapshotSessionId does not match its envelope sessionId");
+
+                results["stateSnapshotProjectionRequiredFields"] = projectionRequired;
+            });
+
+            results["catalogMessageCount"] = catalogMessageCount;
+            results["catalogParityVerified"] = true;
+            return results;
         }
     }
 }

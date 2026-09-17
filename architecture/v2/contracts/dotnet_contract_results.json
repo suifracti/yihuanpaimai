@@ -1,8 +1,8 @@
 {
   "suite": "architecture.v2.verifier.ContractVerifier",
-  "timestamp": "2026-09-17T15:58:48.8517664Z",
-  "totalTests": 36,
-  "passedTests": 36,
+  "timestamp": "2026-09-17T19:24:29.7867954Z",
+  "totalTests": 40,
+  "passedTests": 40,
   "failedTests": 0,
   "allPassed": true,
   "testCases": [
@@ -148,6 +148,22 @@
     },
     {
       "name": "GoldenVector_ERROR_Fail_Closed_Error",
+      "status": "PASSED"
+    },
+    {
+      "name": "MessageCatalog_Count_14",
+      "status": "PASSED"
+    },
+    {
+      "name": "MessageCatalog_GoldenRequiredFields_Parity",
+      "status": "PASSED"
+    },
+    {
+      "name": "MessageCatalog_FrameReady_HeaderMetadata_Parity",
+      "status": "PASSED"
+    },
+    {
+      "name": "MessageCatalog_StateSnapshot_Parity",
       "status": "PASSED"
     }
   ]

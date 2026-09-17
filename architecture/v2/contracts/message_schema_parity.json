@@ -1,0 +1,741 @@
+{
+  "schemaVersion": "message.schema.parity.v1",
+  "protocolVersion": "1.0.0",
+  "sourceOfTruth": "architecture/v2/contracts/models.py",
+  "generator": "architecture/v2/contracts/schema_parity.py",
+  "totalMessages": 14,
+  "catalogModelParity": true,
+  "catalogEnvelopeParity": true,
+  "catalogGoldenParity": true,
+  "catalogLifecycleParity": true,
+  "catalogFrameMetadataParity": true,
+  "catalogStateSnapshotParity": true,
+  "catalogGeometryParity": true,
+  "catalogErrorCodeParity": true,
+  "allPassed": true,
+  "totalChecks": 144,
+  "passedChecks": 144,
+  "failures": [],
+  "checks": [
+    {
+      "check": "catalogTotalMessageTypes",
+      "passed": true,
+      "detail": "identical"
+    },
+    {
+      "check": "catalogMessageCount",
+      "passed": true,
+      "detail": "identical"
+    },
+    {
+      "check": "catalogMessageTypeSet",
+      "passed": true,
+      "detail": "identical"
+    },
+    {
+      "check": "goldenVectorCount",
+      "passed": true,
+      "detail": "identical"
+    },
+    {
+      "check": "catalogProtocolVersion",
+      "passed": true,
+      "detail": "identical"
+    },
+    {
+      "check": "catalogModelParity::ABORT_SCAN::requiredPayloadFields",
+      "passed": true,
+      "detail": "identical"
+    },
+    {
+      "check": "catalogModelParity::ABORT_SCAN::payloadSchema.properties",
+      "passed": true,
+      "detail": "identical"
+    },
+    {
+      "check": "catalogModelParity::ABORT_SCAN::requiredFlagMatchesRequiredList",
+      "passed": true,
+      "detail": "identical"
+    },
+    {
+      "check": "catalogModelParity::ABORT_SCAN::additionalPropertiesFalse",
+      "passed": true,
+      "detail": "identical"
+    },
+    {
+      "check": "catalogModelParity::COMMAND::requiredPayloadFields",
+      "passed": true,
+      "detail": "identical"
+    },
+    {
+      "check": "catalogModelParity::COMMAND::payloadSchema.properties",
+      "passed": true,
+      "detail": "identical"
+    },
+    {
+      "check": "catalogModelParity::COMMAND::requiredFlagMatchesRequiredList",
+      "passed": true,
+      "detail": "identical"
+    },
+    {
+      "check": "catalogModelParity::COMMAND::additionalPropertiesFalse",
+      "passed": true,
+      "detail": "identical"
+    },
+    {
+      "check": "catalogModelParity::COMMAND_RESULT::requiredPayloadFields",
+      "passed": true,
+      "detail": "identical"
+    },
+    {
+      "check": "catalogModelParity::COMMAND_RESULT::payloadSchema.properties",
+      "passed": true,
+      "detail": "identical"
+    },
+    {
+      "check": "catalogModelParity::COMMAND_RESULT::requiredFlagMatchesRequiredList",
+      "passed": true,
+      "detail": "identical"
+    },
+    {
+      "check": "catalogModelParity::COMMAND_RESULT::additionalPropertiesFalse",
+      "passed": true,
+      "detail": "identical"
+    },
+    {
+      "check": "catalogModelParity::ENGINE_RESTARTING::requiredPayloadFields",
+      "passed": true,
+      "detail": "identical"
+    },
+    {
+      "check": "catalogModelParity::ENGINE_RESTARTING::payloadSchema.properties",
+      "passed": true,
+      "detail": "identical"
+    },
+    {
+      "check": "catalogModelParity::ENGINE_RESTARTING::requiredFlagMatchesRequiredList",
+      "passed": true,
+      "detail": "identical"
+    },
+    {
+      "check": "catalogModelParity::ENGINE_RESTARTING::additionalPropertiesFalse",
+      "passed": true,
+      "detail": "identical"
+    },
+    {
+      "check": "catalogModelParity::ENGINE_SHUTDOWN::requiredPayloadFields",
+      "passed": true,
+      "detail": "identical"
+    },
+    {
+      "check": "catalogModelParity::ENGINE_SHUTDOWN::payloadSchema.properties",
+      "passed": true,
+      "detail": "identical"
+    },
+    {
+      "check": "catalogModelParity::ENGINE_SHUTDOWN::requiredFlagMatchesRequiredList",
+      "passed": true,
+      "detail": "identical"
+    },
+    {
+      "check": "catalogModelParity::ENGINE_SHUTDOWN::additionalPropertiesFalse",
+      "passed": true,
+      "detail": "identical"
+    },
+    {
+      "check": "catalogModelParity::ERROR::requiredPayloadFields",
+      "passed": true,
+      "detail": "identical"
+    },
+    {
+      "check": "catalogModelParity::ERROR::payloadSchema.properties",
+      "passed": true,
+      "detail": "identical"
+    },
+    {
+      "check": "catalogModelParity::ERROR::requiredFlagMatchesRequiredList",
+      "passed": true,
+      "detail": "identical"
+    },
+    {
+      "check": "catalogModelParity::ERROR::additionalPropertiesFalse",
+      "passed": true,
+      "detail": "identical"
+    },
+    {
+      "check": "catalogModelParity::FRAME_ACK::requiredPayloadFields",
+      "passed": true,
+      "detail": "identical"
+    },
+    {
+      "check": "catalogModelParity::FRAME_ACK::payloadSchema.properties",
+      "passed": true,
+      "detail": "identical"
+    },
+    {
+      "check": "catalogModelParity::FRAME_ACK::requiredFlagMatchesRequiredList",
+      "passed": true,
+      "detail": "identical"
+    },
+    {
+      "check": "catalogModelParity::FRAME_ACK::additionalPropertiesFalse",
+      "passed": true,
+      "detail": "identical"
+    },
+    {
+      "check": "catalogModelParity::FRAME_READY::requiredPayloadFields",
+      "passed": true,
+      "detail": "identical"
+    },
+    {
+      "check": "catalogModelParity::FRAME_READY::payloadSchema.properties",
+      "passed": true,
+      "detail": "identical"
+    },
+    {
+      "check": "catalogModelParity::FRAME_READY::requiredFlagMatchesRequiredList",
+      "passed": true,
+      "detail": "identical"
+    },
+    {
+      "check": "catalogModelParity::FRAME_READY::additionalPropertiesFalse",
+      "passed": true,
+      "detail": "identical"
+    },
+    {
+      "check": "catalogModelParity::HEARTBEAT::requiredPayloadFields",
+      "passed": true,
+      "detail": "identical"
+    },
+    {
+      "check": "catalogModelParity::HEARTBEAT::payloadSchema.properties",
+      "passed": true,
+      "detail": "identical"
+    },
+    {
+      "check": "catalogModelParity::HEARTBEAT::requiredFlagMatchesRequiredList",
+      "passed": true,
+      "detail": "identical"
+    },
+    {
+      "check": "catalogModelParity::HEARTBEAT::additionalPropertiesFalse",
+      "passed": true,
+      "detail": "identical"
+    },
+    {
+      "check": "catalogModelParity::HELLO::requiredPayloadFields",
+      "passed": true,
+      "detail": "identical"
+    },
+    {
+      "check": "catalogModelParity::HELLO::payloadSchema.properties",
+      "passed": true,
+      "detail": "identical"
+    },
+    {
+      "check": "catalogModelParity::HELLO::requiredFlagMatchesRequiredList",
+      "passed": true,
+      "detail": "identical"
+    },
+    {
+      "check": "catalogModelParity::HELLO::additionalPropertiesFalse",
+      "passed": true,
+      "detail": "identical"
+    },
+    {
+      "check": "catalogModelParity::HELLO_ACK::requiredPayloadFields",
+      "passed": true,
+      "detail": "identical"
+    },
+    {
+      "check": "catalogModelParity::HELLO_ACK::payloadSchema.properties",
+      "passed": true,
+      "detail": "identical"
+    },
+    {
+      "check": "catalogModelParity::HELLO_ACK::requiredFlagMatchesRequiredList",
+      "passed": true,
+      "detail": "identical"
+    },
+    {
+      "check": "catalogModelParity::HELLO_ACK::additionalPropertiesFalse",
+      "passed": true,
+      "detail": "identical"
+    },
+    {
+      "check": "catalogModelParity::PERCEPTION_RESULT::requiredPayloadFields",
+      "passed": true,
+      "detail": "identical"
+    },
+    {
+      "check": "catalogModelParity::PERCEPTION_RESULT::payloadSchema.properties",
+      "passed": true,
+      "detail": "identical"
+    },
+    {
+      "check": "catalogModelParity::PERCEPTION_RESULT::requiredFlagMatchesRequiredList",
+      "passed": true,
+      "detail": "identical"
+    },
+    {
+      "check": "catalogModelParity::PERCEPTION_RESULT::additionalPropertiesFalse",
+      "passed": true,
+      "detail": "identical"
+    },
+    {
+      "check": "catalogModelParity::STATE_SNAPSHOT::requiredPayloadFields",
+      "passed": true,
+      "detail": "identical"
+    },
+    {
+      "check": "catalogModelParity::STATE_SNAPSHOT::payloadSchema.properties",
+      "passed": true,
+      "detail": "identical"
+    },
+    {
+      "check": "catalogModelParity::STATE_SNAPSHOT::requiredFlagMatchesRequiredList",
+      "passed": true,
+      "detail": "identical"
+    },
+    {
+      "check": "catalogModelParity::STATE_SNAPSHOT::additionalPropertiesFalse",
+      "passed": true,
+      "detail": "identical"
+    },
+    {
+      "check": "catalogModelParity::STATE_SNAPSHOT_REQUEST::requiredPayloadFields",
+      "passed": true,
+      "detail": "identical"
+    },
+    {
+      "check": "catalogModelParity::STATE_SNAPSHOT_REQUEST::payloadSchema.properties",
+      "passed": true,
+      "detail": "identical"
+    },
+    {
+      "check": "catalogModelParity::STATE_SNAPSHOT_REQUEST::requiredFlagMatchesRequiredList",
+      "passed": true,
+      "detail": "identical"
+    },
+    {
+      "check": "catalogModelParity::STATE_SNAPSHOT_REQUEST::additionalPropertiesFalse",
+      "passed": true,
+      "detail": "identical"
+    },
+    {
+      "check": "catalogEnvelopeParity::requiredFields",
+      "passed": true,
+      "detail": "identical"
+    },
+    {
+      "check": "catalogEnvelopeParity::properties",
+      "passed": true,
+      "detail": "identical"
+    },
+    {
+      "check": "protocolEnvelopeParity::requiredFields",
+      "passed": true,
+      "detail": "identical"
+    },
+    {
+      "check": "catalogGoldenParity::messageTypeSet",
+      "passed": true,
+      "detail": "identical"
+    },
+    {
+      "check": "catalogGoldenParity::ABORT_SCAN::requiredFieldsPresent",
+      "passed": true,
+      "detail": "all required fields present"
+    },
+    {
+      "check": "catalogGoldenParity::ABORT_SCAN::noUndeclaredFields",
+      "passed": true,
+      "detail": "no undeclared fields"
+    },
+    {
+      "check": "catalogGoldenParity::ABORT_SCAN::envelopeValid",
+      "passed": true,
+      "detail": "validated"
+    },
+    {
+      "check": "catalogGoldenParity::COMMAND::requiredFieldsPresent",
+      "passed": true,
+      "detail": "all required fields present"
+    },
+    {
+      "check": "catalogGoldenParity::COMMAND::noUndeclaredFields",
+      "passed": true,
+      "detail": "no undeclared fields"
+    },
+    {
+      "check": "catalogGoldenParity::COMMAND::envelopeValid",
+      "passed": true,
+      "detail": "validated"
+    },
+    {
+      "check": "catalogGoldenParity::COMMAND_RESULT::requiredFieldsPresent",
+      "passed": true,
+      "detail": "all required fields present"
+    },
+    {
+      "check": "catalogGoldenParity::COMMAND_RESULT::noUndeclaredFields",
+      "passed": true,
+      "detail": "no undeclared fields"
+    },
+    {
+      "check": "catalogGoldenParity::COMMAND_RESULT::envelopeValid",
+      "passed": true,
+      "detail": "validated"
+    },
+    {
+      "check": "catalogGoldenParity::ENGINE_RESTARTING::requiredFieldsPresent",
+      "passed": true,
+      "detail": "all required fields present"
+    },
+    {
+      "check": "catalogGoldenParity::ENGINE_RESTARTING::noUndeclaredFields",
+      "passed": true,
+      "detail": "no undeclared fields"
+    },
+    {
+      "check": "catalogGoldenParity::ENGINE_RESTARTING::envelopeValid",
+      "passed": true,
+      "detail": "validated"
+    },
+    {
+      "check": "catalogGoldenParity::ENGINE_SHUTDOWN::requiredFieldsPresent",
+      "passed": true,
+      "detail": "all required fields present"
+    },
+    {
+      "check": "catalogGoldenParity::ENGINE_SHUTDOWN::noUndeclaredFields",
+      "passed": true,
+      "detail": "no undeclared fields"
+    },
+    {
+      "check": "catalogGoldenParity::ENGINE_SHUTDOWN::envelopeValid",
+      "passed": true,
+      "detail": "validated"
+    },
+    {
+      "check": "catalogGoldenParity::ERROR::requiredFieldsPresent",
+      "passed": true,
+      "detail": "all required fields present"
+    },
+    {
+      "check": "catalogGoldenParity::ERROR::noUndeclaredFields",
+      "passed": true,
+      "detail": "no undeclared fields"
+    },
+    {
+      "check": "catalogGoldenParity::ERROR::envelopeValid",
+      "passed": true,
+      "detail": "validated"
+    },
+    {
+      "check": "catalogGoldenParity::FRAME_ACK::requiredFieldsPresent",
+      "passed": true,
+      "detail": "all required fields present"
+    },
+    {
+      "check": "catalogGoldenParity::FRAME_ACK::noUndeclaredFields",
+      "passed": true,
+      "detail": "no undeclared fields"
+    },
+    {
+      "check": "catalogGoldenParity::FRAME_ACK::envelopeValid",
+      "passed": true,
+      "detail": "validated"
+    },
+    {
+      "check": "catalogGoldenParity::FRAME_READY::requiredFieldsPresent",
+      "passed": true,
+      "detail": "all required fields present"
+    },
+    {
+      "check": "catalogGoldenParity::FRAME_READY::noUndeclaredFields",
+      "passed": true,
+      "detail": "no undeclared fields"
+    },
+    {
+      "check": "catalogGoldenParity::FRAME_READY::envelopeValid",
+      "passed": true,
+      "detail": "validated"
+    },
+    {
+      "check": "catalogGoldenParity::HEARTBEAT::requiredFieldsPresent",
+      "passed": true,
+      "detail": "all required fields present"
+    },
+    {
+      "check": "catalogGoldenParity::HEARTBEAT::noUndeclaredFields",
+      "passed": true,
+      "detail": "no undeclared fields"
+    },
+    {
+      "check": "catalogGoldenParity::HEARTBEAT::envelopeValid",
+      "passed": true,
+      "detail": "validated"
+    },
+    {
+      "check": "catalogGoldenParity::HELLO::requiredFieldsPresent",
+      "passed": true,
+      "detail": "all required fields present"
+    },
+    {
+      "check": "catalogGoldenParity::HELLO::noUndeclaredFields",
+      "passed": true,
+      "detail": "no undeclared fields"
+    },
+    {
+      "check": "catalogGoldenParity::HELLO::envelopeValid",
+      "passed": true,
+      "detail": "validated"
+    },
+    {
+      "check": "catalogGoldenParity::HELLO_ACK::requiredFieldsPresent",
+      "passed": true,
+      "detail": "all required fields present"
+    },
+    {
+      "check": "catalogGoldenParity::HELLO_ACK::noUndeclaredFields",
+      "passed": true,
+      "detail": "no undeclared fields"
+    },
+    {
+      "check": "catalogGoldenParity::HELLO_ACK::envelopeValid",
+      "passed": true,
+      "detail": "validated"
+    },
+    {
+      "check": "catalogGoldenParity::PERCEPTION_RESULT::requiredFieldsPresent",
+      "passed": true,
+      "detail": "all required fields present"
+    },
+    {
+      "check": "catalogGoldenParity::PERCEPTION_RESULT::noUndeclaredFields",
+      "passed": true,
+      "detail": "no undeclared fields"
+    },
+    {
+      "check": "catalogGoldenParity::PERCEPTION_RESULT::envelopeValid",
+      "passed": true,
+      "detail": "validated"
+    },
+    {
+      "check": "catalogGoldenParity::STATE_SNAPSHOT::requiredFieldsPresent",
+      "passed": true,
+      "detail": "all required fields present"
+    },
+    {
+      "check": "catalogGoldenParity::STATE_SNAPSHOT::noUndeclaredFields",
+      "passed": true,
+      "detail": "no undeclared fields"
+    },
+    {
+      "check": "catalogGoldenParity::STATE_SNAPSHOT::envelopeValid",
+      "passed": true,
+      "detail": "validated"
+    },
+    {
+      "check": "catalogGoldenParity::STATE_SNAPSHOT_REQUEST::requiredFieldsPresent",
+      "passed": true,
+      "detail": "all required fields present"
+    },
+    {
+      "check": "catalogGoldenParity::STATE_SNAPSHOT_REQUEST::noUndeclaredFields",
+      "passed": true,
+      "detail": "no undeclared fields"
+    },
+    {
+      "check": "catalogGoldenParity::STATE_SNAPSHOT_REQUEST::envelopeValid",
+      "passed": true,
+      "detail": "validated"
+    },
+    {
+      "check": "catalogFrameMetadataParity::checkedFields",
+      "passed": true,
+      "detail": "identical"
+    },
+    {
+      "check": "catalogFrameMetadataParity::protocolCheckedFields",
+      "passed": true,
+      "detail": "identical"
+    },
+    {
+      "check": "catalogFrameMetadataParity::checkedFieldsAreRequired",
+      "passed": true,
+      "detail": "required=['sessionId', 'bufferIndex', 'sequence', 'width', 'height', 'stride', 'pixelFormat', 'bufferLength', 'captureTimestampNs', 'cornerChecksum']"
+    },
+    {
+      "check": "catalogFrameMetadataParity::cornerChecksumNaming",
+      "passed": true,
+      "detail": "FRAME_READY payload exposes cornerChecksum and never the bare name checksum"
+    },
+    {
+      "check": "catalogFrameMetadataParity::pixelFormatIsIntegerEnum",
+      "passed": true,
+      "detail": "identical"
+    },
+    {
+      "check": "catalogFrameMetadataParity::payloadNamesMatchHeaderNames",
+      "passed": true,
+      "detail": "payload/header names identical: ['bufferLength', 'captureTimestampNs', 'cornerChecksum', 'height', 'pixelFormat', 'sequence', 'stride', 'width']"
+    },
+    {
+      "check": "catalogStateSnapshotParity::requiredFields",
+      "passed": true,
+      "detail": "identical"
+    },
+    {
+      "check": "catalogStateSnapshotParity::projectionSchema",
+      "passed": true,
+      "detail": "identical"
+    },
+    {
+      "check": "catalogStateSnapshotParity::projectionRequiredFields",
+      "passed": true,
+      "detail": "identical"
+    },
+    {
+      "check": "catalogStateSnapshotParity::noLegacyTopLevelSnapshotSchema",
+      "passed": true,
+      "detail": "legacy top-level snapshot schema absent from the catalog"
+    },
+    {
+      "check": "catalogStateSnapshotParity::goldenSnapshotAccepted",
+      "passed": true,
+      "detail": "resync validator accepted"
+    },
+    {
+      "check": "catalogLifecycleParity::readinessEnum",
+      "passed": true,
+      "detail": "identical"
+    },
+    {
+      "check": "catalogLifecycleParity::readinessEnumMatchesCatalogPayload",
+      "passed": true,
+      "detail": "identical"
+    },
+    {
+      "check": "catalogLifecycleParity::lifecycleReadinessEnum",
+      "passed": true,
+      "detail": "identical"
+    },
+    {
+      "check": "catalogLifecycleParity::businessReadyProjection",
+      "passed": true,
+      "detail": "identical"
+    },
+    {
+      "check": "catalogLifecycleParity::readyGateValue",
+      "passed": true,
+      "detail": "identical"
+    },
+    {
+      "check": "catalogLifecycleParity::readyGateReferencesEngineBusinessReady",
+      "passed": true,
+      "detail": "HELLO_ACK.engineBusinessReady == true (which per message_catalog_v1.json readinessContract implies HELLO_ACK.readiness == READY) or STATE_SNAPSHOT.businessReady == true"
+    },
+    {
+      "check": "catalogLifecycleParity::readyGateRequiresReadinessReady",
+      "passed": true,
+      "detail": "READY gate ties engineBusinessReady to readiness == READY"
+    },
+    {
+      "check": "catalogLifecycleParity::goldenHelloAckAccepted",
+      "passed": true,
+      "detail": "readiness contract satisfied"
+    },
+    {
+      "check": "catalogGeometryParity::catalog::slotCount",
+      "passed": true,
+      "detail": "identical"
+    },
+    {
+      "check": "catalogGeometryParity::catalog::slotSizeBytes",
+      "passed": true,
+      "detail": "identical"
+    },
+    {
+      "check": "catalogGeometryParity::catalog::mapTotalSizeBytes",
+      "passed": true,
+      "detail": "identical"
+    },
+    {
+      "check": "catalogGeometryParity::protocol::slotCount",
+      "passed": true,
+      "detail": "identical"
+    },
+    {
+      "check": "catalogGeometryParity::protocol::slotSizeBytes",
+      "passed": true,
+      "detail": "identical"
+    },
+    {
+      "check": "catalogGeometryParity::protocol::mapTotalSizeBytes",
+      "passed": true,
+      "detail": "identical"
+    },
+    {
+      "check": "catalogGeometryParity::frameLayout::slotCount",
+      "passed": true,
+      "detail": "identical"
+    },
+    {
+      "check": "catalogGeometryParity::frameLayout::slotSizeBytes",
+      "passed": true,
+      "detail": "identical"
+    },
+    {
+      "check": "catalogGeometryParity::frameLayout::mapTotalSizeBytes",
+      "passed": true,
+      "detail": "identical"
+    },
+    {
+      "check": "catalogGeometryParity::layoutExtras",
+      "passed": true,
+      "detail": "identical"
+    },
+    {
+      "check": "catalogGeometryParity::policy",
+      "passed": true,
+      "detail": "identical"
+    },
+    {
+      "check": "catalogGeometryParity::geometryIsNegotiated",
+      "passed": true,
+      "detail": "identical"
+    },
+    {
+      "check": "catalogGeometryParity::protocolGeometryIsNegotiated",
+      "passed": true,
+      "detail": "identical"
+    },
+    {
+      "check": "catalogGeometryParity::noNegotiatedGeometryFields",
+      "passed": true,
+      "detail": "no acceptedSlot* geometry negotiation fields are declared anywhere in the catalog"
+    },
+    {
+      "check": "catalogGeometryParity::helloCarriesNoGeometryConstants",
+      "passed": true,
+      "detail": "HELLO carries ['capabilities', 'frameBufferName', 'frameBufferSize', 'hostVersion', 'sessionNonce', 'supportedProtocols']"
+    },
+    {
+      "check": "catalogGeometryParity::helloAckCarriesNoGeometryConstants",
+      "passed": true,
+      "detail": "HELLO_ACK carries ['engineBusinessReady', 'enginePid', 'engineVersion', 'negotiatedProtocol', 'readiness', 'status']"
+    },
+    {
+      "check": "catalogErrorCodeParity::catalogMatchesModelsSource",
+      "passed": true,
+      "detail": "identical"
+    },
+    {
+      "check": "catalogErrorCodeParity::allDeclaredInErrorCatalog",
+      "passed": true,
+      "detail": "all catalog error codes exist in error_catalog_v1.json"
+    }
+  ]
+}
