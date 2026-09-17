@@ -256,73 +256,144 @@ def evaluate_record_red_eligibility(
 
     match_eligible = (len(reasons) == 0)
 
-    # 5. Warehouse Completeness Gate (Fix B - delete settlement.verified fallback!)
+    # 5. Whole-Warehouse Coverage Completeness Gate (Final Fix 1)
+    # Authority must be strictly two-axis:
+    # Axis 1: Coverage Truth: whole inventory covered / all red slots observed?
+    # Axis 2: Identity Truth: observed items exact?
     qualities = record.get("qualities") if isinstance(record.get("qualities"), Mapping) else {}
     red_q = qualities.get("red") if isinstance(qualities.get("red"), Mapping) else {}
     settlement = record.get("settlement") if isinstance(record.get("settlement"), Mapping) else {}
     warehouse = record.get("warehouse") if isinstance(record.get("warehouse"), Mapping) else {}
     review_units = record.get("reviewUnits") or settlement.get("reviewUnits") or []
+    field_states = record.get("fieldStates") if isinstance(record.get("fieldStates"), Mapping) else {}
+    wh_cov = settlement.get("warehouseCoverage") if isinstance(settlement.get("warehouseCoverage"), Mapping) else {}
+    wh_rev = settlement.get("warehouseIdentityReview") if isinstance(settlement.get("warehouseIdentityReview"), Mapping) else {}
 
-    warehouse_complete_eligible = False
-    warehouse_completeness_source = "UNVERIFIED_OR_PARTIAL_WAREHOUSE"
+    coverage_complete = False
+    coverage_completeness_source = "UNVERIFIED_OR_PARTIAL_WAREHOUSE"
 
-    if red_q.get("redInventoryComplete") is True:
-        warehouse_complete_eligible = match_eligible
-        warehouse_completeness_source = "RED_INVENTORY_COMPLETE_FLAG"
-    elif _is_positive_finite(warehouse.get("itemCount")) and warehouse.get("unknownCount") == 0:
-        warehouse_complete_eligible = match_eligible
-        warehouse_completeness_source = "WAREHOUSE_SLOTS_ZERO_UNKNOWN"
-    elif isinstance(review_units, list) and len(review_units) > 0 and all(
-        isinstance(u, dict) and u.get("confirmationStatus") == "CONFIRMED" for u in review_units
-    ):
-        warehouse_complete_eligible = match_eligible
-        warehouse_completeness_source = "ALL_REVIEW_UNITS_CONFIRMED"
-    elif str(record.get("coverageStatus") or "").upper() == "COMPLETE":
-        warehouse_complete_eligible = match_eligible
-        warehouse_completeness_source = "CANONICAL_COVERAGE_STATUS_COMPLETE"
+    # Authority A: Canonical coverage status = COMPLETE (from ledger or canonical match record)
+    if str(record.get("coverageStatus") or "").strip().upper() == "COMPLETE":
+        coverage_complete = True
+        coverage_completeness_source = "CANONICAL_RECORD_COVERAGE_COMPLETE"
+    elif str(settlement.get("warehouseCoverageStatus") or "").strip().upper() == "COMPLETE":
+        coverage_complete = True
+        coverage_completeness_source = "CANONICAL_SETTLEMENT_COVERAGE_COMPLETE"
+    elif str(wh_cov.get("status") or "").strip().upper() == "COMPLETE":
+        coverage_complete = True
+        coverage_completeness_source = "CANONICAL_WAREHOUSE_COVERAGE_DOC_COMPLETE"
+    elif str(warehouse.get("coverageStatus") or "").strip().upper() == "COMPLETE":
+        coverage_complete = True
+        coverage_completeness_source = "CANONICAL_WAREHOUSE_COVERAGE_COMPLETE"
+    elif str(wh_rev.get("warehouseCoverageStatus") or "").strip().upper() == "COMPLETE":
+        coverage_complete = True
+        coverage_completeness_source = "CANONICAL_REVIEW_COVERAGE_COMPLETE"
 
-    # 6. Red Count Ground Truth Gate (Fix A - auction OCR / constraints alone cannot be truth!)
+    # Authority B: Settlement TruthEvidence with complete inventoryScope and verified post-settlement warehouse
+    if not coverage_complete:
+        truth_ev = settlement.get("truthEvidence") if isinstance(settlement.get("truthEvidence"), Mapping) else {}
+        if truth_ev:
+            inv_scope = truth_ev.get("inventoryScope") if isinstance(truth_ev.get("inventoryScope"), Mapping) else {}
+            truth_src = str(truth_ev.get("truthSource") or "").strip().lower()
+            if inv_scope.get("complete") is True and truth_src in (
+                "post_settlement_verified_warehouse",
+                "post-settlement-warehouse",
+                "canonical_coverage_complete",
+                "post-settlement verified warehouse",
+            ):
+                coverage_complete = True
+                coverage_completeness_source = "SETTLEMENT_TRUTH_EVIDENCE_WAREHOUSE_COMPLETE"
+
+    # Authority C: redInventoryComplete with explicit trusted post-settlement / canonical provenance
+    if not coverage_complete and red_q.get("redInventoryComplete") is True:
+        # Verify provenance is trusted and not manual / auction / solver / pre-settlement
+        red_field_state = field_states.get("redInventoryComplete") if isinstance(field_states.get("redInventoryComplete"), Mapping) else {}
+        red_fs_source = str(red_field_state.get("source") or "").strip().lower()
+        prov = str(
+            red_q.get("provenance")
+            or red_q.get("source")
+            or red_q.get("redInventoryCompleteSource")
+            or record.get("redInventoryCompleteProvenance")
+            or ""
+        ).strip().lower()
+
+        if red_fs_source in ("manual", "auction", "solver", "pre-settlement", "vision_pre_settlement", "legacy"):
+            coverage_complete = False
+            coverage_completeness_source = f"RED_INVENTORY_COMPLETE_DISALLOWED_FIELDSTATE_{red_fs_source.upper()}"
+        elif prov in (
+            "post_settlement_verified_warehouse",
+            "canonical_coverage_complete",
+            "post-settlement verified warehouse",
+        ):
+            coverage_complete = True
+            coverage_completeness_source = "RED_INVENTORY_COMPLETE_TRUSTED_PROVENANCE"
+        else:
+            coverage_complete = False
+            coverage_completeness_source = "RED_INVENTORY_COMPLETE_LACKS_TRUSTED_PROVENANCE"
+
+    warehouse_complete_eligible = coverage_complete and match_eligible
+    warehouse_completeness_source = coverage_completeness_source
+
+    # 6. Red Count Ground Truth Gate (Final Fix 1 - requires coverage completeness proof!)
     observed_red_count: Optional[int] = None
     red_count_eligible = False
     red_count_truth_source = "UNVERIFIED_AUCTION_OR_OCR"
 
-    # Check for settlement verified items
     st_verified_items_raw = red_q.get("settlementVerifiedRedItems")
     st_items = settlement.get("settlementItems") if isinstance(settlement.get("settlementItems"), list) else []
     red_st_items = [
         item for item in st_items
         if isinstance(item, Mapping) and str(item.get("quality") or item.get("rarity") or "").lower() in ("red", "红")
     ]
+    conf_red_units = [
+        u for u in review_units
+        if isinstance(u, dict) and str(u.get("quality") or u.get("rarity") or "").lower() in ("red", "红")
+    ]
 
-    if red_q.get("redInventoryComplete") is True and _is_finite_nonnegative_int(red_q.get("count")):
-        # Case A: Post-settlement verified complete inventory
-        observed_red_count = int(red_q.get("count"))
-        red_count_eligible = match_eligible
-        red_count_truth_source = "POST_SETTLEMENT_VERIFIED_INVENTORY"
-    elif st_verified_items_raw and isinstance(st_verified_items_raw, (str, list)):
-        # Case B: Explicit settlement verified red items
-        if isinstance(st_verified_items_raw, str):
-            items_list = [p.strip() for p in st_verified_items_raw.split("+") if p.strip()]
+    if not warehouse_complete_eligible:
+        # Without coverage completeness proof, red count cannot be certified as ground truth!
+        if st_verified_items_raw:
+            red_count_truth_source = "VERIFIED_RED_SUBSET_WITHOUT_COVERAGE_PROOF"
+            reasons.append("VERIFIED_RED_SUBSET_WITHOUT_COVERAGE_PROOF")
+        elif red_q.get("count") == 0 or (st_items and not red_st_items and not conf_red_units):
+            red_count_truth_source = "ZERO_RED_WITHOUT_COVERAGE_PROOF"
+            reasons.append("ZERO_RED_WITHOUT_COVERAGE_PROOF")
         else:
-            items_list = list(st_verified_items_raw)
-        observed_red_count = len(items_list)
-        red_count_eligible = match_eligible
-        red_count_truth_source = "SETTLEMENT_VERIFIED_RED_ITEMS"
-    elif warehouse_complete_eligible:
-        # Case C: Warehouse proven complete with zero unknown items
-        # Count confirmed red items in warehouse slots or review units
-        conf_red_count = sum(
-            1 for u in review_units
-            if isinstance(u, dict) and str(u.get("quality") or u.get("rarity") or "").lower() in ("red", "红")
-        )
-        observed_red_count = conf_red_count
-        red_count_eligible = match_eligible
-        red_count_truth_source = "WAREHOUSE_CONFIRMED_ITEMS"
+            red_count_truth_source = "UNVERIFIED_AUCTION_OR_OCR"
+            reasons.append("RED_COUNT_LACKS_VERIFIED_POST_SETTLEMENT_OR_WAREHOUSE_TRUTH")
     else:
-        # Auction OCR or unverified count alone cannot be truth!
-        reasons.append("RED_COUNT_LACKS_VERIFIED_POST_SETTLEMENT_OR_WAREHOUSE_TRUTH")
+        # Warehouse / red coverage is complete!
+        if st_verified_items_raw and isinstance(st_verified_items_raw, (str, list)):
+            if isinstance(st_verified_items_raw, str):
+                items_list = [p.strip() for p in st_verified_items_raw.split("+") if p.strip()]
+            else:
+                items_list = list(st_verified_items_raw)
+            observed_red_count = len(items_list)
+            red_count_eligible = match_eligible
+            red_count_truth_source = "SETTLEMENT_VERIFIED_RED_ITEMS_COMPLETE"
+        elif red_q.get("redInventoryComplete") is True and _is_finite_nonnegative_int(red_q.get("count")):
+            observed_red_count = int(red_q.get("count"))
+            red_count_eligible = match_eligible
+            red_count_truth_source = "POST_SETTLEMENT_VERIFIED_INVENTORY"
+        elif conf_red_units:
+            observed_red_count = len(conf_red_units)
+            red_count_eligible = match_eligible
+            red_count_truth_source = "WAREHOUSE_CONFIRMED_RED_ITEMS_COMPLETE"
+        elif red_st_items:
+            observed_red_count = len(red_st_items)
+            red_count_eligible = match_eligible
+            red_count_truth_source = "SETTLEMENT_VERIFIED_RED_ITEMS_COMPLETE"
+        elif _is_finite_nonnegative_int(red_q.get("count")) and int(red_q.get("count")) == 0:
+            observed_red_count = 0
+            red_count_eligible = match_eligible
+            red_count_truth_source = "VERIFIED_ZERO_RED_COMPLETE"
+        else:
+            observed_red_count = 0
+            red_count_eligible = match_eligible
+            red_count_truth_source = "VERIFIED_ZERO_RED_COMPLETE"
 
-    # 7. Red Item Identity & Value Truth Gate (Fix C - distinguish exact vs ambiguous vs unknown)
+    # 7. Red Item Identity & Value Truth Gate (Final Fix 1 - two-axis strict requirement)
+    # Total value truth requires: coverage complete + all observed red items exact identity & positive finite value
     known_items = red_q.get("knownItems") if isinstance(red_q.get("knownItems"), list) else []
     known_red_items = tuple(it for it in known_items if isinstance(it, dict))
 
@@ -332,22 +403,18 @@ def evaluate_record_red_eligibility(
     red_identity_truth_source = "UNVERIFIED_RED_IDENTITIES"
     red_value_truth_source = "UNVERIFIED_RED_VALUES"
 
-    if red_count_eligible and observed_red_count == 0:
-        # Zero red count: valid 0 total value ONLY IF warehouse is complete with proof of zero red!
-        if warehouse_complete_eligible:
-            observed_red_total_value = 0.0
-            red_item_identity_eligible = match_eligible
-            red_total_value_eligible = match_eligible
-            red_identity_truth_source = "VERIFIED_ZERO_RED_COMPLETE"
-            red_value_truth_source = "VERIFIED_ZERO_RED_COMPLETE"
-        else:
-            red_identity_truth_source = "ZERO_RED_WITHOUT_WAREHOUSE_COMPLETENESS"
-            red_value_truth_source = "ZERO_RED_WITHOUT_WAREHOUSE_COMPLETENESS"
+    if not warehouse_complete_eligible:
+        red_item_identity_eligible = False
+        red_total_value_eligible = False
+        red_value_truth_source = "RED_VALUES_LACK_COVERAGE_COMPLETENESS"
+    elif red_count_eligible and observed_red_count == 0:
+        observed_red_total_value = 0.0
+        red_item_identity_eligible = match_eligible
+        red_total_value_eligible = match_eligible
+        red_identity_truth_source = "VERIFIED_ZERO_RED_COMPLETE"
+        red_value_truth_source = "VERIFIED_ZERO_RED_COMPLETE"
     elif red_count_eligible and observed_red_count is not None and observed_red_count > 0:
-        # Check all observed red items for exact confirmation and positive finite value
-        candidate_items = red_st_items if red_st_items else [
-            u for u in review_units if isinstance(u, dict) and str(u.get("quality") or u.get("rarity") or "").lower() in ("red", "红")
-        ]
+        candidate_items = red_st_items if red_st_items else conf_red_units
         if len(candidate_items) == observed_red_count:
             all_exact = True
             all_valued = True
@@ -355,13 +422,8 @@ def evaluate_record_red_eligibility(
             for item in candidate_items:
                 conf_status = str(item.get("confirmationStatus") or "").upper()
                 ident_status = str(item.get("identityStatus") or "").upper()
-                name = str(item.get("name") or item.get("canonicalName") or "").strip()
-                # Check exact identity (must not be candidate-only, ambiguous, or unknown)
-                is_exact = (
-                    conf_status == "CONFIRMED"
-                    or ident_status == "EXACT_IDENTIFIED"
-                    or (item.get("confirmed") is True and name and name != "UNKNOWN")
-                )
+                # Strict exact identity: ONLY CONFIRMED or EXACT_IDENTIFIED (no generic confirmed=True fallback!)
+                is_exact = (conf_status == "CONFIRMED" or ident_status == "EXACT_IDENTIFIED")
                 if not is_exact:
                     all_exact = False
                 val = item.get("value") or item.get("price") or item.get("unitPrice")
@@ -378,9 +440,12 @@ def evaluate_record_red_eligibility(
                 red_value_truth_source = "EXACT_CONFIRMED_RED_PRICES"
             elif all_exact:
                 red_item_identity_eligible = match_eligible
+                red_total_value_eligible = False
                 red_identity_truth_source = "EXACT_CONFIRMED_RED_ITEMS"
                 red_value_truth_source = "AMBIGUOUS_OR_MISSING_RED_VALUES"
             else:
+                red_item_identity_eligible = False
+                red_total_value_eligible = False
                 red_identity_truth_source = "AMBIGUOUS_OR_CANDIDATE_RED_ITEMS"
                 red_value_truth_source = "AMBIGUOUS_OR_CANDIDATE_RED_ITEMS"
         else:
