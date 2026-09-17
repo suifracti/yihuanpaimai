@@ -45,12 +45,14 @@ from reference_catalog_auditor import (
     VALID_RECOMMENDED_EVIDENCE,
     CANONICAL_TRACKED_FILES,
     PRIOR_20260914_AUDIT_MISSING_9,
+    REGRESSION_EXPECTED_20260914_MISSING_9,
     ReferenceCatalogAuditor,
     compute_canonical_hashes,
     compute_canonical_report_sha256,
     compute_file_sha256,
     get_actual_boundary3_touched_files,
     normalize_item_name,
+    parse_nte_helper_source,
 )
 
 
@@ -177,13 +179,31 @@ class TestReferenceCatalogAuditor(unittest.TestCase):
             )
 
         reconcil_map = {r["solverName"]: r for r in report["solverGapReconciliation"]}
-        for name in aliases_to_check + same_id_conflicts_to_check:
+        for name in aliases_to_check:
             if name in reconcil_map:
                 rec = reconcil_map[name]
                 self.assertIn(
                     rec["currentClassification"],
                     (CLASSIFICATION_NAME_VARIANT, "EXACT_MATCH"),
-                    f"Item '{name}' should be resolved via ladder as variant/match, got {rec['currentClassification']}",
+                    f"Alias '{name}' should be resolved via ladder as variant/match, got {rec['currentClassification']}",
+                )
+
+        for name in same_id_conflicts_to_check:
+            if name in reconcil_map:
+                rec = reconcil_map[name]
+                self.assertEqual(
+                    rec["currentClassification"],
+                    CLASSIFICATION_ATTRIBUTE_CONFLICT,
+                    f"Same-ID conflict '{name}' must be classified as ATTRIBUTE_CONFLICT, got {rec['currentClassification']}",
+                )
+                self.assertFalse(
+                    rec.get("independentEvidenceAvailable"),
+                    f"Same-ID conflict '{name}' must not claim independent evidence available",
+                )
+                self.assertEqual(
+                    rec.get("recommendedNextEvidence"),
+                    RECOMMENDED_EVIDENCE_USER_ITEM_CARD,
+                    f"Same-ID conflict '{name}' recommended next evidence must be USER_ITEM_CARD",
                 )
 
     # 8. Known 9 regression comparison explains additions/removals (Review Item A)
@@ -574,6 +594,278 @@ class TestReferenceCatalogAuditor(unittest.TestCase):
             f"Normalization illegally altered Chinese character '一': got '{res}'"
         )
         self.assertNotIn("-", res)
+
+    # 29. Blocker 1: NTE parser includes both gold and red sections
+    def test_nte_parser_includes_gold_and_red_sections(self):
+        sample_nte = """
+# Gold section
+PRICES = [
+    100, 200
+]
+GOLD_SIZES = ["1x1", "1x2"]
+GOLD_DIMENSIONS = [
+    (1, 1), (1, 2)
+]
+GOLD_NAMES = [
+    "金物品1", "金物品2"
+]
+ERROR_MARGIN = 0.05
+
+# Red section
+RED_PRICES_ALL = [
+    300, 400, 500
+]
+RED_SIZES = ["2x2", "2x3", "3x3"]
+RED_DIMENSIONS_ALL = [
+    (2, 2), (2, 3), (3, 3)
+]
+RED_NAMES_ALL = [
+    "红物品1", "红物品2", "红物品3"
+]
+RED_PRICES = [300, 400, 500]
+"""
+        items, meta = parse_nte_helper_source(sample_nte, "test://app.py", "mocksha")
+        self.assertTrue(meta["goldSectionFound"])
+        self.assertTrue(meta["redSectionFound"])
+        self.assertEqual(meta["goldParsedCount"], 2)
+        self.assertEqual(meta["redParsedCount"], 3)
+        self.assertEqual(meta["parsedRecordCount"], 5)
+        self.assertEqual(len(items), 5)
+        self.assertTrue(meta["parseComplete"])
+        self.assertEqual(len(meta["parseWarnings"]), 0)
+
+        self.assertEqual(items[0]["name"], "金物品1")
+        self.assertEqual(items[0]["quality"], "gold")
+        self.assertEqual(items[2]["name"], "红物品1")
+        self.assertEqual(items[2]["quality"], "red")
+
+        # Also test on real NTE app.py if present
+        nte_app_path = Path(r"C:\Users\Administrator\.grok\tmp\nte-auction-helper\app.py")
+        if nte_app_path.is_file():
+            real_items, real_meta = parse_nte_helper_source(
+                nte_app_path.read_text(encoding="utf-8"),
+                str(nte_app_path),
+                compute_file_sha256(nte_app_path),
+            )
+            self.assertTrue(real_meta["goldSectionFound"])
+            self.assertTrue(real_meta["redSectionFound"])
+            self.assertEqual(real_meta["goldParsedCount"], 50)
+            self.assertEqual(real_meta["redParsedCount"], 30)
+            self.assertEqual(real_meta["parsedRecordCount"], 80)
+            self.assertTrue(real_meta["parseComplete"])
+            self.assertEqual(len(real_meta["parseWarnings"]), 0)
+
+    # 30. Blocker 1: NTE parser count is dynamic, not hardcoded
+    def test_nte_parser_count_is_dynamic(self):
+        sample_nte = """
+PRICES = [ 999 ]
+GOLD_SIZES = ["1x1"]
+GOLD_DIMENSIONS = [ (1, 1) ]
+GOLD_NAMES = [ "单金" ]
+ERROR_MARGIN = 0.05
+RED_PRICES_ALL = [ 888, 777 ]
+RED_SIZES = ["2x2", "3x3"]
+RED_DIMENSIONS_ALL = [ (2, 2), (3, 3) ]
+RED_NAMES_ALL = [ "单红1", "单红2" ]
+RED_PRICES = [ 888, 777 ]
+"""
+        items, meta = parse_nte_helper_source(sample_nte, "test://dynamic.py")
+        self.assertEqual(meta["goldParsedCount"], 1)
+        self.assertEqual(meta["redParsedCount"], 2)
+        self.assertEqual(meta["parsedRecordCount"], 3)
+        self.assertEqual(len(items), 3)
+        self.assertNotIn(meta["parsedRecordCount"], (50, 30, 80))
+
+    # 31. Blocker 1: NTE incomplete or mismatched section reports warnings safely
+    def test_nte_incomplete_section_reports_warning(self):
+        # Missing red section
+        gold_only = """
+PRICES = [ 100 ]
+GOLD_SIZES = ["1x1"]
+GOLD_DIMENSIONS = [ (1, 1) ]
+GOLD_NAMES = [ "金物品" ]
+ERROR_MARGIN = 0.05
+"""
+        items, meta = parse_nte_helper_source(gold_only, "test://gold_only.py")
+        self.assertTrue(meta["goldSectionFound"])
+        self.assertFalse(meta["redSectionFound"])
+        self.assertEqual(meta["goldParsedCount"], 1)
+        self.assertEqual(meta["redParsedCount"], 0)
+        self.assertFalse(meta["parseComplete"])
+        self.assertGreater(len(meta["parseWarnings"]), 0)
+
+        # Length mismatch in gold section (2 prices, 1 name)
+        mismatched = """
+PRICES = [ 100, 200 ]
+GOLD_SIZES = ["1x1"]
+GOLD_DIMENSIONS = [ (1, 1) ]
+GOLD_NAMES = [ "金物品" ]
+ERROR_MARGIN = 0.05
+RED_PRICES_ALL = [ 300 ]
+RED_SIZES = ["2x2"]
+RED_DIMENSIONS_ALL = [ (2, 2) ]
+RED_NAMES_ALL = [ "红物品" ]
+RED_PRICES = [ 300 ]
+"""
+        items2, meta2 = parse_nte_helper_source(mismatched, "test://mismatch.py")
+        self.assertFalse(meta2["parseComplete"])
+        self.assertTrue(any("mismatch" in w.lower() for w in meta2["parseWarnings"]))
+
+    # 32. Blocker 2: Same-ID conflict not promoted to confirmed alias
+    def test_same_id_conflict_not_promoted_to_confirmed_alias(self):
+        for name in ("条纹椰", "浅绯祈手办", "酥酥酥天丼", "梦中萤", "圣聆晶石", "鎏金盏"):
+            res = self.auditor.resolve_local_identity(name)
+            self.assertEqual(
+                res["resolutionClass"],
+                CLASSIFICATION_ATTRIBUTE_CONFLICT,
+                f"Same-ID conflict item '{name}' must resolve to ATTRIBUTE_CONFLICT, got {res['resolutionClass']}",
+            )
+            self.assertIsNone(res.get("aliasMatch"), f"Same-ID conflict '{name}' must not have aliasMatch")
+            self.assertIsNotNone(res.get("conflictCanonicalId"), f"Same-ID conflict '{name}' must have conflictCanonicalId")
+            self.assertIsNotNone(res.get("conflictCanonicalName"), f"Same-ID conflict '{name}' must have conflictCanonicalName")
+
+        # In report reconciliation, check that none are marked NAME_VARIANT or SOLVER_NAMED_VISUAL_UNNAMED
+        report = self.auditor.audit()
+        reconcil_map = {r["solverName"]: r for r in report["solverGapReconciliation"]}
+        for name in ("条纹椰", "浅绯祈手办", "酥酥酥天丼"):
+            rec = reconcil_map.get(name)
+            self.assertIsNotNone(rec)
+            self.assertEqual(rec["currentClassification"], CLASSIFICATION_ATTRIBUTE_CONFLICT)
+            self.assertFalse(rec["independentEvidenceAvailable"])
+            self.assertEqual(rec["recommendedNextEvidence"], RECOMMENDED_EVIDENCE_USER_ITEM_CARD)
+            self.assertNotEqual(rec["currentClassification"], CLASSIFICATION_NAME_VARIANT)
+            self.assertNotEqual(rec["currentClassification"], CLASSIFICATION_SOLVER_NAMED_VISUAL_UNNAMED)
+
+    # 33. Blocker 2: Same-ID conflict in external observation not emitted as REFERENCE_ONLY_UNVERIFIED
+    def test_same_id_conflict_not_external_only(self):
+        report = self.auditor.audit()
+        ref_only_names = {
+            d.get("referenceObservedName")
+            for d in report["discrepancies"]
+            if d["classification"] == CLASSIFICATION_REFERENCE_ONLY_UNVERIFIED
+        }
+        for name in ("条纹椰", "浅绯祈手办", "酥酥酥天丼", "梦中萤", "圣聆晶石", "鎏金盏"):
+            self.assertNotIn(
+                name, ref_only_names,
+                f"Same-ID conflict '{name}' was illegally emitted as REFERENCE_ONLY_UNVERIFIED!",
+            )
+
+        conflict_discs = [
+            d for d in report["discrepancies"]
+            if d["classification"] == CLASSIFICATION_ATTRIBUTE_CONFLICT
+        ]
+        conflict_names = {d.get("referenceObservedName") for d in conflict_discs}
+        self.assertIn("条纹椰", conflict_names)
+        self.assertIn("浅绯祈手办", conflict_names)
+        self.assertIn("酥酥酥天丼", conflict_names)
+        for cd in conflict_discs:
+            self.assertFalse(cd["autoWriteAllowed"])
+            self.assertFalse(cd["independentVerificationAvailable"])
+            self.assertEqual(cd["recommendedNextEvidence"], RECOMMENDED_EVIDENCE_USER_ITEM_CARD)
+
+    # 34. Blocker 2: Verified registry alias resolves when real authority exists
+    def test_verified_registry_alias_can_resolve_when_real_authority_exists(self):
+        # 1. Authority from solver/registry alias
+        res_hammer = self.auditor.resolve_local_identity("咚咚锤")
+        self.assertEqual(res_hammer["resolutionClass"], CLASSIFICATION_NAME_VARIANT)
+        self.assertIsNotNone(res_hammer.get("aliasMatch"))
+        self.assertIn("吨吨锤", res_hammer["aliasMatch"].get("aliasTarget", ""))
+
+        # 2. Authority from verified card registry alternate names
+        self.auditor._ensure_indexes_built()
+        self.auditor._indexes["card_reg_by_alt_name"]["权威别名测试项"] = [{
+            "name": "权威正名测试项",
+            "catalogId": "test-authority-id",
+        }]
+        res_reg = self.auditor.resolve_local_identity("权威别名测试项")
+        self.assertEqual(res_reg["resolutionClass"], CLASSIFICATION_NAME_VARIANT)
+        self.assertIsNotNone(res_reg.get("aliasMatch"))
+        self.assertEqual(res_reg["aliasMatch"].get("source"), "verified_source_card_registry.alternateNames")
+        self.assertEqual(res_reg["aliasMatch"].get("canonicalId"), "test-authority-id")
+
+        # 3. Same-ID conflict does NOT resolve as alias authority
+        res_conflict = self.auditor.resolve_local_identity("条纹椰")
+        self.assertEqual(res_conflict["resolutionClass"], CLASSIFICATION_ATTRIBUTE_CONFLICT)
+        self.assertIsNone(res_conflict.get("aliasMatch"))
+
+    # 35. Blocker 3: Prior missing set dynamically derived from prior audit rows
+    def test_prior_missing_set_derived_from_prior_audit_rows(self):
+        report = self.auditor.audit()
+        gaps = report["inventorySummary"]["solverGaps"]
+        self.assertTrue(gaps["priorAuditAvailable"])
+        self.assertEqual(gaps["priorConfirmedMissingDerivedCount"], 9)
+        self.assertEqual(len(gaps["priorConfirmedMissingDerivedNames"]), 9)
+        self.assertEqual(gaps["regressionExpectedCount"], 9)
+        self.assertTrue(gaps["regressionSetMatches"])
+
+        expected_names = set(REGRESSION_EXPECTED_20260914_MISSING_9.keys())
+        derived_names = set(gaps["priorConfirmedMissingDerivedNames"])
+        self.assertEqual(derived_names, expected_names)
+
+        reconcil_map = {r["solverName"]: r for r in report["solverGapReconciliation"]}
+        for name in derived_names:
+            self.assertIn(name, reconcil_map)
+            self.assertEqual(reconcil_map[name]["currentClassification"], CLASSIFICATION_SOLVER_NAMED_VISUAL_UNNAMED)
+            self.assertEqual(reconcil_map[name]["priorAuditClassification"], "确实缺运行时条目")
+
+    # 36. Blocker 3: Prior audit unavailable fails closed without falling back to hardcoded 9
+    def test_prior_audit_unavailable_does_not_fallback_to_hardcoded_truth(self):
+        nonexistent = _PROJECT_ROOT / "docs/reports/nonexistent_audit.json"
+        auditor_no_prior = ReferenceCatalogAuditor(_PROJECT_ROOT, prior_audit_path=nonexistent)
+        report = auditor_no_prior.audit()
+        gaps = report["inventorySummary"]["solverGaps"]
+
+        self.assertFalse(gaps["priorAuditAvailable"])
+        self.assertEqual(gaps["priorConfirmedMissingDerivedCount"], 0)
+        self.assertEqual(len(gaps["priorConfirmedMissingDerivedNames"]), 0)
+        self.assertFalse(gaps["regressionSetMatches"])
+
+        # Fail-closed: unmapped visual gaps must NOT fall back to 9
+        self.assertEqual(
+            gaps["unmappedVisualGapsCount"], 0,
+            "Without prior audit authority, unmapped visual gaps must not fall back to hardcoded 9!",
+        )
+
+        reconcil_map = {r["solverName"]: r for r in report["solverGapReconciliation"]}
+        for name in REGRESSION_EXPECTED_20260914_MISSING_9.keys():
+            self.assertIn(name, reconcil_map)
+            self.assertEqual(
+                reconcil_map[name]["currentClassification"],
+                CLASSIFICATION_INDEPENDENT_VERIFICATION_REQUIRED,
+                f"Item '{name}' should fail closed to INDEPENDENT_VERIFICATION_REQUIRED when prior audit unavailable",
+            )
+
+    # 37. Blocker 3: REGRESSION_EXPECTED_20260914_MISSING_9 is strictly check-only, not authority
+    def test_regression_constant_is_check_only_not_authority(self):
+        import tempfile
+        mock_data = {
+            "rows": [
+                {"theirsName": "崭新限量排球", "theirsId": "theirs-1", "conclusion": "确实缺运行时条目", "recommendedResolution": "RECOVER_CANDIDATE"},
+                {"theirsName": "曜目权柄", "theirsId": "theirs-2", "conclusion": "确实缺运行时条目", "recommendedResolution": "RECOVER_CANDIDATE"},
+                {"theirsName": "碧波天垂", "theirsId": "theirs-3", "conclusion": "证据不足，暂不处理", "recommendedResolution": "VERIFY_USER_CARD"},
+            ]
+        }
+        with tempfile.NamedTemporaryFile("w", suffix=".json", delete=False, encoding="utf-8") as f:
+            json.dump(mock_data, f, ensure_ascii=False)
+            tmp_path = Path(f.name)
+
+        try:
+            custom_auditor = ReferenceCatalogAuditor(_PROJECT_ROOT, prior_audit_path=tmp_path)
+            report = custom_auditor.audit()
+            gaps = report["inventorySummary"]["solverGaps"]
+
+            self.assertTrue(gaps["priorAuditAvailable"])
+            self.assertEqual(gaps["priorConfirmedMissingDerivedCount"], 2)
+            self.assertEqual(sorted(gaps["priorConfirmedMissingDerivedNames"]), ["崭新限量排球", "曜目权柄"])
+            self.assertFalse(gaps["regressionSetMatches"])
+            self.assertEqual(gaps["regressionExpectedCount"], 9)
+
+            unmapped = gaps["unmappedNames"]
+            self.assertEqual(len(unmapped), 2)
+            self.assertEqual(sorted(unmapped), ["崭新限量排球", "曜目权柄"])
+        finally:
+            if tmp_path.exists():
+                tmp_path.unlink()
 
 
 if __name__ == "__main__":
