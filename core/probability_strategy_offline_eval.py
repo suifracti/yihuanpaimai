@@ -429,8 +429,10 @@ def run_probability_strategy_comparison(
         "metadata": {
             "datasetKind": dataset_kind,
             "harnessVerification": harness_verification,
-            "performanceClaimEligible": (not harness_verification) and (dataset_kind == "live"),
-            "formalCohortAdmitted": (not harness_verification) or (dataset_kind == "live"),
+            "performanceClaimEligible": False,
+            "formalCohortMode": not harness_verification,
+            "formalEligibleRecordCount": evaluated_count if not harness_verification else 0,
+            "formalCohortAdmitted": (not harness_verification) and (evaluated_count > 0),
             "recordIdSelfLeakageGuard": True,
             "potentialDuplicateGuard": "exclude_all",
             "temporalPriorGuard": "strict",
@@ -452,13 +454,19 @@ def run_probability_strategy_comparison(
 def format_comparison_markdown(report: Dict[str, Any]) -> str:
     """Render comparative report as human-readable Markdown for external review."""
     meta = report.get("metadata", {})
+    perf_claim = meta.get("performanceClaimEligible", False)
+    formal_mode = meta.get("formalCohortMode", False)
+    formal_count = meta.get("formalEligibleRecordCount", 0)
+
     lines = [
         "# PR-C: Comparative Probability & Strategy Lab Evaluation Report",
         "",
         f"- **Status**: `{report.get('status')}`",
         f"- **Dataset Kind**: `{meta.get('datasetKind')}`",
         f"- **Harness Verification**: `{meta.get('harnessVerification')}`",
-        f"- **Performance Claim Eligible**: `{meta.get('performanceClaimEligible')}`",
+        f"- **Formal Cohort Mode**: `{formal_mode}`",
+        f"- **Formal Eligible Record Count**: `{formal_count}`",
+        f"- **Performance Claim Eligible**: `{perf_claim}`",
         f"- **Leakage Proof Level**: `{meta.get('leakageProofLevel')}`",
         f"- **Stable Physical Match Identity Available**: `{meta.get('stablePhysicalMatchIdentityAvailable')}`",
         f"- **Candidate Records**: `{report.get('candidateCount')}`",
