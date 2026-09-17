@@ -541,6 +541,128 @@ class ReferenceCatalogAuditor:
             "prior_attribute_conflicts": prior_audit_meta.get("priorAttributeConflicts", set()),
         }
 
+    def _arbitrate_same_id_conflict(
+        self,
+        observed_name: str,
+        observed_id: str,
+        canonical_item: Mapping[str, Any],
+        norm_name: str,
+    ) -> Optional[Dict[str, Any]]:
+        """Arbitrate an exact-catalog-ID / different-name observation (PR-F blocker).
+
+        A matching catalog ID alone must NEVER decide NAME_VARIANT. Evidence is
+        checked in strict priority order and the first genuine authority wins:
+
+          1. Verified source card registry ``alternateNames`` / ``aliases`` bound to
+             this exact catalog ID, or a formal solver ``CATALOG_NAME_ALIASES`` entry
+             whose target is the canonical name at this exact catalog ID
+             -> NAME_VARIANT (genuine verified alias authority).
+          2. prior 2026-09-14 audit row for this exact ID concluding
+             '属性冲突，待源卡裁定' -> ATTRIBUTE_CONFLICT.
+          3. ``KNOWN_SAME_ID_CONFLICTS`` entry for this name whose recorded ID equals
+             this exact catalog ID -> ATTRIBUTE_CONFLICT.
+
+        Returns ``None`` when no same-ID conflict evidence exists, in which case the
+        caller keeps the plain lexical ``NAME_VARIANT`` fallback. This guarantees one
+        truth cannot be classified differently depending on the entry point.
+        """
+        idx = self._indexes
+        solver_match = idx["solver_by_norm_name"].get(norm_name)
+        alt_index = idx.get("card_reg_by_alt_name", {})
+
+        # --- 1a. Genuine verified card-registry alias authority scoped to this same ID ---
+        for card in list(alt_index.get(observed_name, [])) + list(alt_index.get(norm_name, [])):
+            if card.get("catalogId") != observed_id:
+                continue
+            alias_match = {
+                "aliasTarget": f"{card.get('catalogId')} ({card.get('name')})",
+                "canonicalId": card.get("catalogId"),
+                "canonicalName": card.get("name"),
+                "source": "verified_source_card_registry.alternateNames",
+            }
+            return {
+                "canonicalMatch": canonical_item, "visualMatch": None, "registryMatch": card,
+                "manifestMatch": None, "solverMatch": solver_match, "aliasMatch": alias_match,
+                "priorAuditMatch": None, "conflictMatch": None,
+                "conflictCanonicalId": None, "conflictCanonicalName": None,
+                "independentEvidenceAvailable": True,
+                "recommendedNextEvidence": RECOMMENDED_EVIDENCE_NONE,
+                "resolutionClass": CLASSIFICATION_NAME_VARIANT,
+                "resolutionReason": (
+                    f"Verified source card registry declares '{observed_name}' as an alternate name of "
+                    f"'{card.get('name')}' ({card.get('catalogId')}); same-ID alias authority confirmed"
+                ),
+            }
+
+        # --- 1b. Formal solver alias authority bound to this same ID ---
+        alias_target = idx.get("solver_aliases", {}).get(observed_name) or idx.get("solver_aliases", {}).get(norm_name)
+        if alias_target and normalize_item_name(canonical_item.get("Name")) == normalize_item_name(alias_target):
+            alias_match = {
+                "aliasTarget": alias_target,
+                "canonicalId": observed_id,
+                "canonicalName": canonical_item.get("Name"),
+                "source": "solver_aliases",
+            }
+            return {
+                "canonicalMatch": canonical_item, "visualMatch": None, "registryMatch": None,
+                "manifestMatch": None, "solverMatch": solver_match, "aliasMatch": alias_match,
+                "priorAuditMatch": None, "conflictMatch": None,
+                "conflictCanonicalId": None, "conflictCanonicalName": None,
+                "independentEvidenceAvailable": True,
+                "recommendedNextEvidence": RECOMMENDED_EVIDENCE_NONE,
+                "resolutionClass": CLASSIFICATION_NAME_VARIANT,
+                "resolutionReason": (
+                    f"Authoritative solver CATALOG_NAME_ALIASES entry binds '{observed_name}' to "
+                    f"'{alias_target}' at the same catalog ID {observed_id}"
+                ),
+            }
+
+        # --- 2. prior audit same-ID classification ---
+        pa = (
+            idx["prior_audit_entries"].get(observed_name)
+            or idx["prior_audit_entries"].get(norm_name)
+            or idx["prior_audit_entries"].get(observed_id)
+        )
+        prior_same_id_conflict = bool(
+            pa
+            and pa.get("conclusion") == "属性冲突，待源卡裁定"
+            and observed_id in (pa.get("oursId"), pa.get("theirsId"))
+        )
+
+        # --- 3. KNOWN_SAME_ID_CONFLICTS bound to this exact ID ---
+        known = KNOWN_SAME_ID_CONFLICTS.get(observed_name) or KNOWN_SAME_ID_CONFLICTS.get(norm_name)
+        known_same_id_conflict = bool(known and known[0] == observed_id)
+
+        if not (prior_same_id_conflict or known_same_id_conflict):
+            return None
+
+        if known_same_id_conflict:
+            conflict_id, conflict_name, reason = known
+        else:
+            conflict_id = pa.get("oursId") or pa.get("theirsId") or observed_id
+            conflict_name = pa.get("oursName") or pa.get("theirsName") or canonical_item.get("Name")
+            reason = pa.get("suggestedAction") or "Prior audit 2026-09-14 marked a same-ID attribute conflict"
+
+        return {
+            "canonicalMatch": None, "visualMatch": None, "registryMatch": None,
+            "manifestMatch": None, "solverMatch": solver_match, "aliasMatch": None,
+            "priorAuditMatch": pa,
+            "conflictMatch": {
+                "conflictCanonicalId": conflict_id,
+                "conflictCanonicalName": conflict_name,
+                "reason": reason,
+            },
+            "conflictCanonicalId": conflict_id, "conflictCanonicalName": conflict_name,
+            "independentEvidenceAvailable": False,
+            "recommendedNextEvidence": RECOMMENDED_EVIDENCE_USER_ITEM_CARD,
+            "resolutionClass": CLASSIFICATION_ATTRIBUTE_CONFLICT,
+            "resolutionReason": (
+                f"Same-ID conflict: '{observed_name}' shares ID {conflict_id} with canonical "
+                f"'{conflict_name}' ({reason}); observed_id grants no alias authority, "
+                f"pending independent user item card evidence"
+            ),
+        }
+
     def resolve_local_identity(self, observed_name: str, observed_id: Optional[str] = None) -> Dict[str, Any]:
         """Unified local authority identity resolution ladder.
 
@@ -566,6 +688,14 @@ class ReferenceCatalogAuditor:
             c = idx["cat065_by_id"][observed_id]
             canonical_match = c
             is_exact = (c["Name"] == observed_name)
+            if not is_exact:
+                # PR-F blocker: an exact catalog ID must not auto-decide NAME_VARIANT.
+                # Same-ID conflict evidence (verified alias authority / prior audit /
+                # KNOWN_SAME_ID_CONFLICTS) is arbitrated first so that the same truth
+                # cannot be classified differently depending on the entry point.
+                arbitrated = self._arbitrate_same_id_conflict(observed_name, observed_id, c, norm_name)
+                if arbitrated is not None:
+                    return arbitrated
             res_class = "EXACT_MATCH" if is_exact else CLASSIFICATION_NAME_VARIANT
             res_reason = f"Exact ID match in catalog_065: {observed_id}" if is_exact else f"Matched ID in catalog_065 ({observed_id}), name variant '{observed_name}' vs '{c['Name']}'"
             return {
@@ -655,6 +785,8 @@ class ReferenceCatalogAuditor:
                 },
                 "conflictCanonicalId": cid,
                 "conflictCanonicalName": cname,
+                "independentEvidenceAvailable": False,
+                "recommendedNextEvidence": RECOMMENDED_EVIDENCE_USER_ITEM_CARD,
                 "resolutionClass": CLASSIFICATION_ATTRIBUTE_CONFLICT,
                 "resolutionReason": f"Same-ID conflict: '{observed_name}' shares ID {cid} with canonical '{cname}' ({reason}); pending independent user item card evidence",
             }
@@ -749,6 +881,8 @@ class ReferenceCatalogAuditor:
                 "conflictMatch": {"conflictCanonicalId": cid, "conflictCanonicalName": cname, "reason": pa.get("suggestedAction") or "Prior audit 2026-09-14 marked attribute conflict"},
                 "conflictCanonicalId": cid,
                 "conflictCanonicalName": cname,
+                "independentEvidenceAvailable": False,
+                "recommendedNextEvidence": RECOMMENDED_EVIDENCE_USER_ITEM_CARD,
                 "resolutionClass": CLASSIFICATION_ATTRIBUTE_CONFLICT,
                 "resolutionReason": f"Prior audit 2026-09-14 concluded '属性冲突，待源卡裁定' for '{observed_name}'; pending independent user item card evidence",
             }
@@ -1082,6 +1216,43 @@ class ReferenceCatalogAuditor:
                     continue
 
                 ident = self.resolve_local_identity(ap_name, ap_id)
+
+                # PR-F blocker: a same-ID conflict observed through AuctionPilot must reuse
+                # ATTRIBUTE_CONFLICT. It must never be emitted as NAME_VARIANT (the ID match
+                # alone is not alias authority) nor as REFERENCE_ONLY_UNVERIFIED (the item is
+                # known locally, just unresolved).
+                if (
+                    ident["resolutionClass"] == CLASSIFICATION_ATTRIBUTE_CONFLICT
+                    and ident.get("conflictCanonicalId")
+                ):
+                    disc = DiscrepancyRecord(
+                        discrepancyId=f"disc-ap-same-id-conflict-{ap_id}",
+                        canonicalId=ident.get("conflictCanonicalId"),
+                        canonicalName=ident.get("conflictCanonicalName"),
+                        referenceSource="AuctionPilot",
+                        referenceVersion=ap_meta.get("sourceVersion", "v0.12.7"),
+                        referenceObservedId=ap_id,
+                        referenceObservedName=ap_name,
+                        field="name_same_id_conflict",
+                        canonicalValue=ident.get("conflictCanonicalName"),
+                        referenceValue=ap_name,
+                        classification=CLASSIFICATION_ATTRIBUTE_CONFLICT,
+                        evidenceLevel="EVIDENCE_INSUFFICIENT",
+                        independentVerificationAvailable=False,
+                        runtimeImpact=(
+                            f"Same-ID conflict between AuctionPilot '{ap_name}' ({ap_id}) and local canonical "
+                            f"'{ident.get('conflictCanonicalName')}'; requires user item card to verify"
+                        ),
+                        autoWriteAllowed=False,
+                        recommendedNextEvidence=RECOMMENDED_EVIDENCE_USER_ITEM_CARD,
+                        notes=(
+                            f"Same catalog ID '{ap_id}' carries AuctionPilot name '{ap_name}' and local canonical name "
+                            f"'{ident.get('conflictCanonicalName')}'. The shared ID alone is NOT alias authority; "
+                            f"not a confirmed alias, awaiting independent user item card evidence."
+                        ),
+                    )
+                    discrepancies.append(disc)
+                    continue
 
                 if ident["canonicalMatch"]:
                     cat_item = ident["canonicalMatch"]

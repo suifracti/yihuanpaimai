@@ -44,6 +44,7 @@ from reference_catalog_auditor import (
     VALID_CLASSIFICATIONS,
     VALID_RECOMMENDED_EVIDENCE,
     CANONICAL_TRACKED_FILES,
+    KNOWN_SAME_ID_CONFLICTS,
     PRIOR_20260914_AUDIT_MISSING_9,
     REGRESSION_EXPECTED_20260914_MISSING_9,
     ReferenceCatalogAuditor,
@@ -866,6 +867,134 @@ RED_PRICES = [ 300 ]
         finally:
             if tmp_path.exists():
                 tmp_path.unlink()
+
+    # 38. Blocker: same-ID conflict + observed_id precedence (one truth, one classification)
+    def test_same_id_conflict_with_observed_id_remains_attribute_conflict(self):
+        # Explicit assertions required by the review: passing the observed_id must NOT
+        # change the classification of a same-ID conflict into NAME_VARIANT.
+        self.assertEqual(
+            self.auditor.resolve_local_identity("条纹椰", "image26-1-1")["resolutionClass"],
+            CLASSIFICATION_ATTRIBUTE_CONFLICT,
+        )
+        self.assertEqual(
+            self.auditor.resolve_local_identity("浅绯祈手办", "image27-1-0")["resolutionClass"],
+            CLASSIFICATION_ATTRIBUTE_CONFLICT,
+        )
+
+        same_id_cases = [
+            ("条纹椰", "image26-1-1"),
+            ("浅绯祈手办", "image27-1-0"),
+            ("酥酥酥天丼", "image36-0-1"),
+            ("梦中萤", "image7-1-2"),
+            ("圣聆晶石", "image22-0-0"),
+            ("鎏金盏", "image9-1-2"),
+        ]
+        for name, observed_id in same_id_cases:
+            with_id = self.auditor.resolve_local_identity(name, observed_id)
+            name_only = self.auditor.resolve_local_identity(name)
+
+            self.assertEqual(
+                with_id["resolutionClass"],
+                CLASSIFICATION_ATTRIBUTE_CONFLICT,
+                f"Same-ID conflict '{name}' with observed_id '{observed_id}' must stay ATTRIBUTE_CONFLICT, "
+                f"got {with_id['resolutionClass']}",
+            )
+            self.assertEqual(
+                with_id["resolutionClass"],
+                name_only["resolutionClass"],
+                f"Same truth '{name}' must not classify differently by entry point: "
+                f"observed_id -> {with_id['resolutionClass']} vs name-only -> {name_only['resolutionClass']}",
+            )
+            self.assertNotEqual(with_id["resolutionClass"], CLASSIFICATION_NAME_VARIANT)
+            self.assertNotEqual(with_id["resolutionClass"], CLASSIFICATION_REFERENCE_ONLY_UNVERIFIED)
+
+            # No alias authority is granted by the shared catalog ID alone
+            self.assertIsNone(with_id.get("aliasMatch"))
+            self.assertEqual(with_id.get("conflictCanonicalId"), observed_id)
+            self.assertIsNotNone(with_id.get("conflictCanonicalName"))
+
+            # Conflict rows fail closed: no independent evidence, user item card required
+            self.assertFalse(with_id.get("independentEvidenceAvailable"))
+            self.assertEqual(with_id.get("recommendedNextEvidence"), RECOMMENDED_EVIDENCE_USER_ITEM_CARD)
+
+    # 39. Blocker: AuctionPilot same-ID conflict reuses ATTRIBUTE_CONFLICT at report level
+    def test_auctionpilot_same_id_conflict_reuses_attribute_conflict(self):
+        report = self.auditor.audit()
+
+        ap_conflicts = [
+            d for d in report["discrepancies"]
+            if d["referenceSource"] == "AuctionPilot"
+            and d["classification"] == CLASSIFICATION_ATTRIBUTE_CONFLICT
+        ]
+        ap_conflict_names = {d.get("referenceObservedName") for d in ap_conflicts}
+        self.assertIn("条纹椰", ap_conflict_names)
+        self.assertIn("浅绯祈手办", ap_conflict_names)
+        for d in ap_conflicts:
+            self.assertFalse(d["autoWriteAllowed"])
+            self.assertFalse(d["independentVerificationAvailable"])
+            self.assertEqual(d["recommendedNextEvidence"], RECOMMENDED_EVIDENCE_USER_ITEM_CARD)
+
+        # The same-ID conflicts must never surface as NAME_VARIANT or REFERENCE_ONLY_UNVERIFIED
+        for d in report["discrepancies"]:
+            if d.get("referenceObservedName") in ("条纹椰", "浅绯祈手办"):
+                self.assertNotEqual(
+                    d["classification"], CLASSIFICATION_NAME_VARIANT,
+                    f"AuctionPilot same-ID conflict '{d.get('referenceObservedName')}' must not be NAME_VARIANT",
+                )
+                self.assertNotEqual(
+                    d["classification"], CLASSIFICATION_REFERENCE_ONLY_UNVERIFIED,
+                    f"AuctionPilot same-ID conflict '{d.get('referenceObservedName')}' must not be REFERENCE_ONLY_UNVERIFIED",
+                )
+
+        # A lexical/OCR variant with no conflict evidence anywhere must still fall back to
+        # NAME_VARIANT. The ID is derived dynamically so the assertion stays tied to real data.
+        self.auditor._ensure_indexes_built()
+        idx = self.auditor._indexes
+        known_conflict_ids = {v[0] for v in KNOWN_SAME_ID_CONFLICTS.values()}
+        probe_id = None
+        for cid in sorted(idx["cat065_by_id"]):
+            if cid in known_conflict_ids:
+                continue
+            name = idx["cat065_by_id"][cid]["Name"]
+            prior_rows = [
+                idx["prior_audit_entries"].get(cid),
+                idx["prior_audit_entries"].get(name),
+                idx["prior_audit_entries"].get(normalize_item_name(name)),
+            ]
+            if any(r and r.get("conclusion") == "属性冲突，待源卡裁定" for r in prior_rows):
+                continue
+            probe_id = cid
+            break
+        self.assertIsNotNone(probe_id, "Expected at least one canonical ID without same-ID conflict evidence")
+        probe_name = idx["cat065_by_id"][probe_id]["Name"] + "·异体字"
+        res_variant = self.auditor.resolve_local_identity(probe_name, probe_id)
+        self.assertEqual(
+            res_variant["resolutionClass"], CLASSIFICATION_NAME_VARIANT,
+            f"Exact ID + different name without conflict evidence must stay NAME_VARIANT, got {res_variant['resolutionClass']}",
+        )
+        self.assertIsNotNone(res_variant.get("canonicalMatch"))
+        self.assertIsNone(res_variant.get("conflictCanonicalId"))
+
+    # 40. Blocker: genuine verified same-ID alias authority still allows NAME_VARIANT
+    def test_verified_same_id_alias_authority_still_allows_name_variant(self):
+        self.auditor._ensure_indexes_built()
+        # Inject a genuine verified source-card registry alternate name bound to the SAME catalog ID
+        self.auditor._indexes["card_reg_by_alt_name"]["权威同ID别名测试项"] = [{
+            "name": "权威同ID正名",
+            "catalogId": "image26-1-1",
+        }]
+        res = self.auditor.resolve_local_identity("权威同ID别名测试项", "image26-1-1")
+        self.assertEqual(res["resolutionClass"], CLASSIFICATION_NAME_VARIANT)
+        self.assertIsNotNone(res.get("aliasMatch"))
+        self.assertEqual(res["aliasMatch"].get("source"), "verified_source_card_registry.alternateNames")
+        self.assertEqual(res["aliasMatch"].get("canonicalId"), "image26-1-1")
+        self.assertIsNone(res.get("conflictCanonicalId"))
+
+        # The real same-ID conflict is unaffected: authority must be explicit, not inferred from the ID
+        self.assertEqual(
+            self.auditor.resolve_local_identity("条纹椰", "image26-1-1")["resolutionClass"],
+            CLASSIFICATION_ATTRIBUTE_CONFLICT,
+        )
 
 
 if __name__ == "__main__":
