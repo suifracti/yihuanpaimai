@@ -4229,7 +4229,7 @@ class HudJsApi:
             payload = {}
 
         profile_id = str(payload.get("profileId", ""))
-        enabled = bool(payload.get("enabled", False))
+        raw_enabled = payload.get("enabled")
 
         from experimental_probability_strategy import (
             ALLOWED_EXPERIMENTAL_PROFILES,
@@ -4237,6 +4237,14 @@ class HudJsApi:
         )
 
         reg = get_global_strategy_registry()
+        if type(raw_enabled) is not bool:
+            log_stage("STRATEGY_EXP", f"Rejected non-bool enabled: {type(raw_enabled).__name__}")
+            return {
+                "success": False,
+                "error": f"Invalid type for 'enabled': expected bool, got {type(raw_enabled).__name__}",
+                "activeProfiles": reg.get_active_profile_ids(),
+            }
+        enabled = raw_enabled
         if profile_id not in ALLOWED_EXPERIMENTAL_PROFILES or profile_id == "baseline":
             log_stage("STRATEGY_EXP", f"Rejected profile mutation: '{profile_id}'")
             return {

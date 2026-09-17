@@ -286,3 +286,80 @@ def validate_warehouse_occupancy(occupancy: Any) -> Tuple[bool, List[str]]:
             reasons.append(f"TRACK_{idx}_INVALID_IDENTITY_STATUS")
 
     return len(reasons) == 0, reasons
+
+
+def extract_canonical_footprint_dimensions(raw_item: Any) -> Tuple[Optional[int], Optional[int]]:
+    """Extract canonical (width_cells, height_cells) from warehouse occupancy or item records.
+
+    Canonical sources in priority order:
+    1. Mapping with footprint: {"widthCells": w, "heightCells": h}
+    2. Mapping with grid: {"w": w, "h": h}
+    3. Mapping with width/height: {"width": w, "height": h}
+    4. Tuple/List of 2 integers: (w, h)
+    5. String format: 'WxH' or 'W*H' (e.g. '2x3', '1x2')
+    6. Mapping with cells / integer cell count: (cells, 1) or None
+    """
+    if isinstance(raw_item, Mapping):
+        fp = raw_item.get("footprint")
+        if isinstance(fp, Mapping):
+            w = fp.get("widthCells")
+            h = fp.get("heightCells")
+            if isinstance(w, (int, float)) and isinstance(h, (int, float)) and not isinstance(w, bool) and not isinstance(h, bool) and w > 0 and h > 0:
+                return int(w), int(h)
+
+        grid = raw_item.get("grid")
+        if isinstance(grid, Mapping):
+            w = grid.get("w")
+            h = grid.get("h")
+            if isinstance(w, (int, float)) and isinstance(h, (int, float)) and not isinstance(w, bool) and not isinstance(h, bool) and w > 0 and h > 0:
+                return int(w), int(h)
+
+        w = raw_item.get("width") or raw_item.get("widthCells")
+        h = raw_item.get("height") or raw_item.get("heightCells")
+        if isinstance(w, (int, float)) and isinstance(h, (int, float)) and not isinstance(w, bool) and not isinstance(h, bool) and w > 0 and h > 0:
+            return int(w), int(h)
+
+        if isinstance(fp, str):
+            parts = fp.lower().replace("*", "x").split("x")
+            if len(parts) == 2:
+                try:
+                    w_int, h_int = int(parts[0].strip()), int(parts[1].strip())
+                    if w_int > 0 and h_int > 0:
+                        return w_int, h_int
+                except Exception:
+                    pass
+
+        cells = raw_item.get("cells") or raw_item.get("size")
+        if isinstance(cells, (int, float)) and not isinstance(cells, bool) and cells > 0:
+            return int(cells), 1
+
+    if isinstance(raw_item, (list, tuple)) and len(raw_item) == 2:
+        try:
+            w, h = int(raw_item[0]), int(raw_item[1])
+            if w > 0 and h > 0:
+                return w, h
+        except Exception:
+            pass
+
+    if isinstance(raw_item, str):
+        parts = raw_item.lower().replace("*", "x").split("x")
+        if len(parts) == 2:
+            try:
+                w, h = int(parts[0].strip()), int(parts[1].strip())
+                if w > 0 and h > 0:
+                    return w, h
+            except Exception:
+                pass
+
+    if isinstance(raw_item, (int, float)) and not isinstance(raw_item, bool) and raw_item > 0:
+        return int(raw_item), 1
+
+    return None, None
+
+
+def extract_canonical_footprint_cells(raw_item: Any) -> Optional[int]:
+    """Extract total cell area from any canonical item or footprint representation."""
+    w, h = extract_canonical_footprint_dimensions(raw_item)
+    if w is not None and h is not None:
+        return w * h
+    return None
