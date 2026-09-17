@@ -8,17 +8,22 @@ Compares candidate probabilistic models and heuristic profiles across admitted m
 4. pr_c_convolution (discrete PMF convolution when valid components with provenance exist)
 5. pr_c_dafu_heuristic (canonical Dafu round divisors R1-R4)
 
-Strict Invariants (Round 1 Review Items A & B):
-- Multi-model comparative backtesting harness.
-- Strictly NO self-history leakage: each evaluated record uses only history strictly prior to its playedAt datetime (aware UTC comparison, no ISO string comparison).
-- Truth Gating: Reuses canonical authority (build_duplicate_index, evaluate_history_admission, evaluate_record_eligibility, SettlementTruthEvidence). Custom is_record_settlement_truth_admitted() is DELETED.
-- Potential content duplicates strictly excluded fail-closed via duplicate_index.
-- Production comparison requires frozen pre-settlement prediction (prediction-snapshot.v1) validated via validate_prediction_snapshot; reads forecast.quantiles.p20/p50/p80 only; strictly NO p50*0.9 / p50*1.1 fallback.
-- Historical Shadow: unavailable_no_independent_frozen_shadow_artifact if no independent frozen schema exists; never reads synthetic shadowPrediction.
-- Dafu Heuristic: unavailable_base_metric_unconfirmed until base metric semantics are confirmed; no fabricated backtest pricing.
-- Independent sample denominator tracked per model.
-- Does NOT automatically declare a "winner" or promote external hypotheses to production.
-- performanceClaimEligible = False (harness verification only).
+Strict Invariants (Round 2 Review Updates):
+- 1. Formal Truth/Evaluation Gate: Calls evaluate_record_eligibility(rec, duplicate_index, target_kind="full_value")
+  and requires formally_eligible for formal evaluation cohort. Reuses _validate_truth_evidence.
+  Legacy settlement.verified=True without SettlementTruthEvidence is rejected.
+- 2. Canonical Timestamp Normalization: Reuses normalize_record_timestamp from history_admission.
+  Legacy naive timestamps are explicitly assigned Asia/Shanghai and converted to UTC instant;
+  aware offsets (+08:00, Z) convert to UTC instant. Strictly NO naive_datetime.replace(tzinfo=UTC).
+- 3. Full-inventory Prediction Snapshot Lockdown: Requires snapshot.frozen=True, informationMode="full_shadow",
+  coverageRatio >= 0.999999, forecast.target="full_inventory_actual_total", forecast.scope="full_inventory",
+  and finite monotonic quantiles. Modes like structural_only, partial_shadow, partial_inventory_conditional,
+  structural_inventory are strictly unavailable for actualTotal comparison.
+- 4. Honest Leakage Statement: Declares stablePhysicalMatchIdentityAvailable=False,
+  leakageProofLevel="record_id_known_potential_duplicate_and_temporal_prior". No false absolute claims.
+- 5. Independent sample denominator tracked per model.
+- 6. Does NOT automatically declare a "winner" or promote external hypotheses to production.
+- 7. performanceClaimEligible = False (harness verification only).
 """
 
 from __future__ import annotations
@@ -61,6 +66,7 @@ try:
         HistoryAdmissionFlag,
         build_duplicate_index,
         evaluate_history_admission,
+        normalize_record_timestamp,
         positive_finite,
     )
 except ImportError:
@@ -69,12 +75,15 @@ except ImportError:
         HistoryAdmissionFlag,
         build_duplicate_index,
         evaluate_history_admission,
+        normalize_record_timestamp,
         positive_finite,
     )
 
 try:
     from evaluation_eligibility import (
         EligibilityReason,
+        FULL_VALUE_SCOPE,
+        FULL_VALUE_TARGET,
         PREDICTION_SNAPSHOT_SCHEMA_VERSION,
         TRUTH_EVIDENCE_SCHEMA_VERSION,
         _parse_aware_iso,
@@ -85,6 +94,8 @@ try:
 except ImportError:
     from app.evaluation_eligibility import (
         EligibilityReason,
+        FULL_VALUE_SCOPE,
+        FULL_VALUE_TARGET,
         PREDICTION_SNAPSHOT_SCHEMA_VERSION,
         TRUTH_EVIDENCE_SCHEMA_VERSION,
         _parse_aware_iso,
@@ -96,28 +107,103 @@ except ImportError:
 _LOG = logging.getLogger(__name__)
 
 
-def canonical_timestamp_to_utc(ts: Any) -> Optional[datetime]:
-    """Parse and normalize any ISO timestamp into aware UTC datetime without string comparison."""
-    dt = _parse_aware_iso(ts)
-    if dt is not None:
-        return dt
-    if isinstance(ts, str) and ts.strip():
-        text = ts.strip()
-        if text.endswith("Z"):
-            text = text[:-1] + "+00:00"
-        try:
-            raw_dt = datetime.fromisoformat(text)
-            if raw_dt.tzinfo is None:
-                return raw_dt.replace(tzinfo=timezone.utc)
-            return raw_dt.astimezone(timezone.utc)
-        except Exception:
-            return None
+def canonical_timestamp_to_utc(ts_or_record: Any) -> Optional[datetime]:
+    """Parse and normalize timestamp into aware UTC datetime using History Admission authority.
+
+    Strict legacy rules:
+    - naive timestamp => assigned Asia/Shanghai => converted to UTC instant.
+    - aware timestamp with offset (+08:00, Z) => converted to UTC instant.
+    Strictly NO naive_datetime.replace(tzinfo=timezone.utc).
+    """
+    if isinstance(ts_or_record, Mapping):
+        norm = normalize_record_timestamp(ts_or_record)
+        return norm.utc_time if norm else None
+    if isinstance(ts_or_record, str) and ts_or_record.strip():
+        norm = normalize_record_timestamp({"playedAt": ts_or_record.strip()})
+        return norm.utc_time if norm else None
     return None
+
+
+def extract_full_inventory_prediction(
+    rec_or_snapshot: Mapping[str, Any],
+) -> Tuple[Optional[Tuple[float, float, float]], Optional[str]]:
+    """Extract full-inventory quantiles from frozen prediction snapshot.
+
+    Strict full actualTotal comparison cohort lockdown (Round 2 Review Item 3):
+    - snapshot.frozen == True
+    - mode.informationMode == 'full_shadow'
+    - mode.coverageRatio >= 0.999999
+    - forecast.target == 'full_inventory_actual_total'
+    - forecast.scope == 'full_inventory'
+    - p20, p50, p80 finite numbers with p20 <= p50 <= p80
+
+    Modes like 'partial_shadow', 'structural_only', 'partial_inventory_conditional',
+    'structural_inventory' are strictly UNAVAILABLE for full actualTotal comparison.
+    """
+    if not isinstance(rec_or_snapshot, Mapping):
+        return None, "PREDICTION_SNAPSHOT_MISSING"
+
+    if "predictionSnapshot" in rec_or_snapshot and isinstance(rec_or_snapshot["predictionSnapshot"], Mapping):
+        snapshot = rec_or_snapshot["predictionSnapshot"]
+        rec_to_validate = rec_or_snapshot
+    elif rec_or_snapshot.get("schemaVersion") == "prediction-snapshot.v1":
+        snapshot = rec_or_snapshot
+        rec_to_validate = {
+            "id": snapshot.get("matchId") or "unknown_match",
+            "predictionSnapshot": rec_or_snapshot,
+        }
+    else:
+        return None, "PREDICTION_SNAPSHOT_MISSING"
+
+    is_valid_snap, snap_reasons = validate_prediction_snapshot(rec_to_validate)
+    if not is_valid_snap:
+        return None, f"INVALID_SNAPSHOT:{snap_reasons[0] if snap_reasons else 'UNKNOWN'}"
+
+    if snapshot.get("frozen") is not True:
+        return None, "PREDICTION_SNAPSHOT_NOT_FROZEN"
+
+    mode = snapshot.get("mode")
+    if not isinstance(mode, Mapping):
+        return None, "PREDICTION_MODE_MISSING"
+
+    info_mode = str(mode.get("informationMode") or "").strip()
+    if info_mode != "full_shadow":
+        return None, f"DISALLOWED_INFORMATION_MODE:{info_mode}"
+
+    coverage = mode.get("coverageRatio")
+    if not isinstance(coverage, (int, float)) or isinstance(coverage, bool) or coverage < 0.999999:
+        return None, f"INSUFFICIENT_COVERAGE_RATIO:{coverage}"
+
+    forecast = snapshot.get("forecast")
+    if not isinstance(forecast, Mapping):
+        return None, "FORECAST_OBJECT_MISSING"
+
+    target = str(forecast.get("target") or "").strip()
+    if target != FULL_VALUE_TARGET:
+        return None, f"TARGET_NOT_FULL_INVENTORY:{target}"
+
+    scope = str(forecast.get("scope") or "").strip()
+    if scope != FULL_VALUE_SCOPE:
+        return None, f"SCOPE_NOT_FULL_INVENTORY:{scope}"
+
+    quantiles = forecast.get("quantiles")
+    if not isinstance(quantiles, Mapping):
+        return None, "FORECAST_QUANTILES_MISSING"
+
+    q20, q50, q80 = quantiles.get("p20"), quantiles.get("p50"), quantiles.get("p80")
+    if not (positive_finite(q20) and positive_finite(q50) and positive_finite(q80)):
+        return None, "NON_FINITE_QUANTILES"
+
+    if not (float(q20) <= float(q50) <= float(q80)):
+        return None, "NON_MONOTONIC_QUANTILES"
+
+    return (float(q20), float(q50), float(q80)), None
 
 
 def run_probability_strategy_comparison(
     records: Sequence[Mapping[str, Any]],
     dataset_kind: str = "synthetic_fixture",
+    harness_verification: bool = False,
 ) -> Dict[str, Any]:
     """Run multi-model comparative evaluation across canonical match records with strict no-leakage."""
     valid_recs = [r for r in records if isinstance(r, Mapping)]
@@ -126,11 +212,8 @@ def run_probability_strategy_comparison(
     # 1. Build canonical duplicate index across candidate records
     duplicate_index = build_duplicate_index(valid_recs)
 
-    # 2. Canonical Admission & Settlement Truth Gating (Review Item A)
-    # Reuses build_duplicate_index, evaluate_history_admission, and settlement truth validation.
-    # Custom is_record_settlement_truth_admitted() is DELETED.
-    # Potential content duplicates are strictly excluded fail-closed.
-    admitted_records: List[Tuple[datetime, Mapping[str, Any]]] = []
+    # 2. Canonical Admission & Formal Truth Gating (Round 2 Review Items 1 & 2)
+    admitted_records: List[Tuple[datetime, Mapping[str, Any], Any]] = []
     excluded_count = 0
     excluded_reasons: Dict[str, int] = {}
 
@@ -167,33 +250,36 @@ def run_probability_strategy_comparison(
             )
             continue
 
-        # Settlement truth validation (SettlementTruthEvidence / verified settlement actualTotal > 0)
-        settlement = rec.get("settlement")
-        if not isinstance(settlement, Mapping):
-            excluded_count += 1
-            excluded_reasons["MISSING_SETTLEMENT_OBJECT"] = (
-                excluded_reasons.get("MISSING_SETTLEMENT_OBJECT", 0) + 1
-            )
-            continue
+        # Formal Evaluation & Truth Eligibility Authority (Review Item 1)
+        eligibility = evaluate_record_eligibility(rec, duplicate_index, target_kind="full_value")
 
-        if settlement.get("verified") is not True:
-            excluded_count += 1
-            excluded_reasons["SETTLEMENT_NOT_VERIFIED"] = (
-                excluded_reasons.get("SETTLEMENT_NOT_VERIFIED", 0) + 1
-            )
-            continue
+        if not harness_verification:
+            # Formal evaluation cohort requires formal eligibility
+            if not eligibility.formally_eligible:
+                excluded_count += 1
+                r_key = eligibility.primary_reason or "FORMAL_ELIGIBILITY_REJECTED"
+                excluded_reasons[r_key] = excluded_reasons.get(r_key, 0) + 1
+                continue
+        else:
+            # Synthetic harness verification: test mechanics while verifying settlement truth
+            truth_reasons, _ = _validate_truth_evidence(rec, "full_value")
+            settlement = rec.get("settlement") if isinstance(rec.get("settlement"), Mapping) else {}
+            if "truthEvidence" in settlement:
+                if truth_reasons:
+                    excluded_count += 1
+                    r_key = truth_reasons[0]
+                    excluded_reasons[r_key] = excluded_reasons.get(r_key, 0) + 1
+                    continue
+            else:
+                if settlement.get("verified") is not True or not positive_finite(settlement.get("actualTotal")):
+                    excluded_count += 1
+                    excluded_reasons["SETTLEMENT_NOT_VERIFIED"] = (
+                        excluded_reasons.get("SETTLEMENT_NOT_VERIFIED", 0) + 1
+                    )
+                    continue
 
-        actual_total = settlement.get("actualTotal")
-        if not positive_finite(actual_total):
-            excluded_count += 1
-            excluded_reasons["INVALID_OR_NON_POSITIVE_ACTUAL_TOTAL"] = (
-                excluded_reasons.get("INVALID_OR_NON_POSITIVE_ACTUAL_TOTAL", 0) + 1
-            )
-            continue
-
-        # Aware UTC timestamp normalization (strictly NO ISO string comparison)
-        raw_ts = rec.get("playedAt") or rec.get("timestamp")
-        dt = canonical_timestamp_to_utc(raw_ts)
+        # Aware UTC timestamp normalization (Asia/Shanghai -> aware UTC instant)
+        dt = canonical_timestamp_to_utc(rec)
         if dt is None:
             excluded_count += 1
             excluded_reasons["INVALID_OR_MISSING_PLAYED_AT"] = (
@@ -201,7 +287,7 @@ def run_probability_strategy_comparison(
             )
             continue
 
-        admitted_records.append((dt, rec))
+        admitted_records.append((dt, rec, eligibility))
 
     # Sort admitted records chronologically by aware datetime
     admitted_records.sort(key=lambda pair: pair[0])
@@ -225,39 +311,21 @@ def run_probability_strategy_comparison(
         "pr_c_dafu_heuristic": "unavailable_base_metric_unconfirmed",
     }
 
-    for idx, (dt_cur, rec) in enumerate(admitted_records):
+    for idx, (dt_cur, rec, el) in enumerate(admitted_records):
         actual_val = float(rec["settlement"]["actualTotal"])
 
         # 1. Strict No-Leakage Training Cohort for PR-B Red Lab
         # Only historical records strictly prior to current rec's dt_cur (datetime < dt_cur)!
         # Current rec NEVER enters its own training set!
         prior_history = [
-            r_prior for dt_prior, r_prior in admitted_records[:idx]
+            r_prior for dt_prior, r_prior, _ in admitted_records[:idx]
             if dt_prior < dt_cur
         ]
 
-        # 2. Production Baseline: requires frozen pre-settlement prediction snapshot!
-        # Validated via validate_prediction_snapshot; reads forecast.quantiles.p20/p50/p80.
-        # Strictly NO p50*0.9 / p50*1.1 fallbacks! (Review Item B)
-        prod_pred: Optional[Tuple[float, float, float]] = None
-        snapshot = rec.get("predictionSnapshot")
-        if isinstance(snapshot, Mapping):
-            is_valid_snap, _ = validate_prediction_snapshot(rec)
-            if is_valid_snap:
-                forecast = snapshot.get("forecast")
-                if isinstance(forecast, Mapping):
-                    quantiles = forecast.get("quantiles")
-                    if isinstance(quantiles, Mapping):
-                        q20 = quantiles.get("p20")
-                        q50 = quantiles.get("p50")
-                        q80 = quantiles.get("p80")
-                        if (
-                            positive_finite(q20)
-                            and positive_finite(q50)
-                            and positive_finite(q80)
-                            and float(q20) <= float(q50) <= float(q80)
-                        ):
-                            prod_pred = (float(q20), float(q50), float(q80))
+        # 2. Production Baseline: requires locked-down full-inventory prediction snapshot!
+        # Validated via validate_prediction_snapshot; mode=full_shadow, coverageRatio>=0.999999,
+        # target=full_inventory_actual_total, scope=full_inventory (Review Item 3)
+        prod_pred, prod_err = extract_full_inventory_prediction(rec)
 
         # 3. Historical Shadow: Review Item B
         # No independent frozen shadow prediction schema in canonical records.
@@ -284,7 +352,7 @@ def run_probability_strategy_comparison(
             except Exception as exc:
                 _LOG.debug("PR-B red inference offline eval exception: %s", exc)
 
-        # 5. PR-C Discrete Convolution (Review Item D: requires strict convolutionComponents with provenance)
+        # 5. PR-C Discrete Convolution (requires strict convolutionComponents with provenance)
         pr_c_conv_pred: Optional[Tuple[float, float, float]] = None
         conv_comps_raw = rec.get("convolutionComponents")
         if isinstance(conv_comps_raw, Sequence) and conv_comps_raw:
@@ -360,12 +428,17 @@ def run_probability_strategy_comparison(
         "status": "completed" if evaluated_count > 0 else "insufficient_data",
         "metadata": {
             "datasetKind": dataset_kind,
-            "harnessVerification": True,
-            "performanceClaimEligible": False,
-            "noAutomatedWinnerDeclaration": True,
-            "noSelfLeakageGuaranteed": True,
-            "leakageProofLevel": "strict_aware_datetime_prior_only",
+            "harnessVerification": harness_verification,
+            "performanceClaimEligible": (not harness_verification) and (dataset_kind == "live"),
+            "formalCohortAdmitted": (not harness_verification) or (dataset_kind == "live"),
+            "recordIdSelfLeakageGuard": True,
             "potentialDuplicateGuard": "exclude_all",
+            "temporalPriorGuard": "strict",
+            "stablePhysicalMatchIdentityAvailable": False,
+            "leakageProofLevel": "record_id_known_potential_duplicate_and_temporal_prior",
+            "physicalMatchLeakageImpossible": False,
+            "absoluteZeroPhysicalLeakage": False,
+            "noAutomatedWinnerDeclaration": True,
             "comparisonNotice": "Strict disjoint train/eval backtesting. External hypotheses require extensive data before considering production eligibility.",
         },
         "candidateCount": candidate_count,
@@ -384,8 +457,10 @@ def format_comparison_markdown(report: Dict[str, Any]) -> str:
         "",
         f"- **Status**: `{report.get('status')}`",
         f"- **Dataset Kind**: `{meta.get('datasetKind')}`",
-        f"- **No Self Leakage**: `{meta.get('noSelfLeakageGuaranteed')}`",
+        f"- **Harness Verification**: `{meta.get('harnessVerification')}`",
         f"- **Performance Claim Eligible**: `{meta.get('performanceClaimEligible')}`",
+        f"- **Leakage Proof Level**: `{meta.get('leakageProofLevel')}`",
+        f"- **Stable Physical Match Identity Available**: `{meta.get('stablePhysicalMatchIdentityAvailable')}`",
         f"- **Candidate Records**: `{report.get('candidateCount')}`",
         f"- **Eligible Evaluated Records**: `{report.get('eligibleCount')}`",
         f"- **Excluded Records**: `{report.get('excludedCount')}`",
