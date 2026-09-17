@@ -179,7 +179,7 @@ class ReferenceCatalogAuditor:
         # 2. Get current git revision
         try:
             head_commit = subprocess.check_output(
-                ["git", "rev-parse", "HEAD"], cwd=str(self.root), text=True
+                "git rev-parse HEAD", cwd=str(self.root), text=True, encoding="utf-8", shell=True
             ).strip()
         except Exception:
             head_commit = "95b8d3c9db84e91ad4f914dceba9f22cddf94189"
@@ -968,12 +968,14 @@ def generate_pr_f_evidence(repo_root: Path, out_dir: Path) -> Dict[str, Any]:
     base_commit = "95b8d3c9db84e91ad4f914dceba9f22cddf94189"
     try:
         diff_text = subprocess.check_output(
-            ["git", "diff", f"{base_commit}..HEAD"],
+            f"git diff {base_commit}..HEAD",
             cwd=str(repo_root),
             text=True,
+            encoding="utf-8",
+            shell=True,
         )
-    except Exception:
-        diff_text = "# git diff unavailable\n"
+    except Exception as exc:
+        diff_text = f"# git diff error: {exc}\n"
     (out_dir / "pr_f_diff.patch").write_text(diff_text, encoding="utf-8")
 
     # 9. README.md
