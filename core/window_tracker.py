@@ -27,6 +27,9 @@ HUD_TITLE_MARKERS = (
 GAME_PROCESS_MARKERS = ("htgame", "neverness", "nte-win64", "hotta", "projectnte", "client-win64", "nte")
 GAME_CLASS_MARKERS = ("unrealwindow",)
 GAME_TITLE_MARKERS = ("异环", "neverness", "projectnte", "nte")
+CLOUD_GAME_PROCESS_MARKERS = ("ntecloudgame", "ntecloud", "cloudgame", "cg_game", "yihuan_cloud", "yihuancloud")
+CLOUD_GAME_TITLE_MARKERS = ("云·异环", "云异环", "异环云游戏", "异环 云游戏", "ntecloudgame", "nte cloud")
+CLOUD_GAME_CLASS_MARKERS = ("ntecloudwindow", "cloudgamewindow")
 EXCLUDE_CLASS_PREFIXES = ("qt", "chrome", "windowsforms", "applicationframewindow")
 
 
@@ -99,6 +102,7 @@ def score_window_candidate(
         "rect": (0, 0, 0, 0),
         "score": 0,
         "rejectReason": None,
+        "clientType": "unknown",
     }
     if not hwnd:
         meta["rejectReason"] = "NULL_HWND"
@@ -165,15 +169,42 @@ def score_window_candidate(
             meta["rejectReason"] = "ASSISTANT_PROCESS"
             return 0, "ASSISTANT_PROCESS", meta
 
+        # Cloud game vs local game classification
+        is_cloud_proc = any(mark in exe for mark in CLOUD_GAME_PROCESS_MARKERS)
+        is_cloud_title = any(mark in title_lower for mark in CLOUD_GAME_TITLE_MARKERS)
+        is_cloud_class = any(mark in cls_lower for mark in CLOUD_GAME_CLASS_MARKERS)
+        is_cloud = is_cloud_proc or is_cloud_title or is_cloud_class
+
+        is_local_proc = any(mark in exe for mark in GAME_PROCESS_MARKERS)
+        is_local_class = any(mark in cls_lower for mark in GAME_CLASS_MARKERS)
+
+        if is_cloud:
+            meta["clientType"] = "cloud"
+        elif is_local_proc or is_local_class:
+            meta["clientType"] = "local"
+        else:
+            meta["clientType"] = "unknown"
+
         # Positive scoring
         score = 0
-        if any(mark in cls_lower for mark in GAME_CLASS_MARKERS):
-            score += 35
-
-        if any(mark in exe for mark in GAME_PROCESS_MARKERS):
-            score += 40
+        if is_cloud:
+            if is_cloud_class:
+                score += 35
+            elif any(mark in cls_lower for mark in GAME_CLASS_MARKERS):
+                score += 35
+            if is_cloud_proc:
+                score += 45
+            if is_cloud_title:
+                score += 45
+        else:
+            if any(mark in cls_lower for mark in GAME_CLASS_MARKERS):
+                score += 35
+            if any(mark in exe for mark in GAME_PROCESS_MARKERS):
+                score += 40
 
         title_markers = set(GAME_TITLE_MARKERS)
+        if is_cloud:
+            title_markers.update(CLOUD_GAME_TITLE_MARKERS)
         if target_titles:
             for t in target_titles:
                 clean_t = str(t).strip().lower()
@@ -207,7 +238,20 @@ def is_real_game_window(hwnd) -> bool:
 
 
 class GameWindowTracker:
-    def __init__(self, target_titles=("异环", "NevernessToEverness", "NTE", "ProjectNTE", "UnrealWindow", "Hotta")):
+    def __init__(
+        self,
+        target_titles=(
+            "异环",
+            "NevernessToEverness",
+            "NTE",
+            "ProjectNTE",
+            "UnrealWindow",
+            "Hotta",
+            "云·异环",
+            "云异环",
+            "NTECloudGame",
+        ),
+    ):
         self.target_titles = tuple(str(t).lower() for t in (target_titles or ()))
         self.own_pid = os.getpid()
 
