@@ -7,7 +7,7 @@
       "name": "Host Handshake Hello",
       "messageType": "HELLO",
       "envelopeValid": true,
-      "lengthPrefixBytes": 645,
+      "lengthPrefixBytes": 605,
       "lengthPrefixMatch": true,
       "framedHexMatch": true
     },
@@ -15,7 +15,7 @@
       "name": "Engine Handshake Ack",
       "messageType": "HELLO_ACK",
       "envelopeValid": true,
-      "lengthPrefixBytes": 411,
+      "lengthPrefixBytes": 344,
       "lengthPrefixMatch": true,
       "framedHexMatch": true
     },
@@ -31,7 +31,7 @@
       "name": "Frame Available Notification",
       "messageType": "FRAME_READY",
       "envelopeValid": true,
-      "lengthPrefixBytes": 391,
+      "lengthPrefixBytes": 397,
       "lengthPrefixMatch": true,
       "framedHexMatch": true
     },
@@ -115,5 +115,30 @@
       "lengthPrefixMatch": true,
       "framedHexMatch": true
     }
-  ]
+  ],
+  "messageCatalogParity": {
+    "frameReadyCheckedFields": [
+      "bufferIndex",
+      "sequence",
+      "width",
+      "height",
+      "stride",
+      "pixelFormat",
+      "bufferLength",
+      "captureTimestampNs",
+      "cornerChecksum"
+    ],
+    "pixelFormatType": "integer",
+    "stateSnapshotProjectionRequiredFields": [
+      "matchId",
+      "matchState",
+      "auctionPhase",
+      "draftCount",
+      "finalizedCount",
+      "activeAuctionItems",
+      "bids"
+    ],
+    "catalogMessageCount": 14,
+    "catalogParityVerified": true
+  }
 }

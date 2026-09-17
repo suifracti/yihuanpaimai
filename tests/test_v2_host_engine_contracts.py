@@ -22,12 +22,19 @@ import unittest
 from pathlib import Path
 
 from architecture.v2.contracts.models import (
+    ENVELOPE_FIELD_TYPES,
     FRAME_HEADER_MAGIC,
     FRAME_HEADER_SIZE,
     FRAME_HEADER_VERSION,
+    FRAME_READY_BUFFER_INDEX_FIELD,
+    FRAME_READY_HEADER_METADATA_FIELDS,
     MAP_TOTAL_SIZE_BYTES,
     MAX_MESSAGE_BYTES,
+    PAYLOAD_FIELD_TYPES,
     PROTOCOL_VERSION,
+    REQUIRED_ENVELOPE_FIELDS,
+    REQUIRED_PAYLOAD_FIELDS,
+    RING_GEOMETRY_POLICY,
     SLOT_COUNT,
     SLOT_PAYLOAD_CAPACITY_BYTES,
     SLOT_SIZE_BYTES,
@@ -44,12 +51,16 @@ from architecture.v2.contracts.models import (
     SlotState,
     decode_framed_message,
     encode_framed_message,
+    get_fixed_v1_geometry,
     get_slot_offset,
     validate_envelope,
+    validate_hello_ack_readiness,
+    validate_hello_fixed_geometry,
     validate_state_snapshot,
     verify_frame_metadata_match,
     verify_message_allowed_in_state,
 )
+from architecture.v2.contracts.schema_parity import write_parity_report
 
 
 class TestV2HostEngineContracts(unittest.TestCase):
@@ -225,9 +236,11 @@ class TestV2HostEngineContracts(unittest.TestCase):
         )
         # Mismatched sequence in payload
         mismatched_payload = {
+            "sessionId": "test-session-001",
+            "bufferIndex": 0,
             "sequence": 999,  # Mismatch: header has 101
             "width": 1920, "height": 1080, "stride": 7680, "pixelFormat": 1,
-            "bufferLength": 8294400, "captureTimestampNs": 1000000000, "checksum": 0x12345678
+            "bufferLength": 8294400, "captureTimestampNs": 1000000000, "cornerChecksum": 0x12345678
         }
         with self.assertRaises(ContractValidationError) as ctx:
             verify_frame_metadata_match(mismatched_payload, header)
@@ -486,7 +499,16 @@ class TestV2HostEngineContracts(unittest.TestCase):
             data = json.load(f)
         self.assertTrue(data["allPassed"])
         self.assertEqual(data["totalTests"], data["passedTests"])
-        self.assertGreaterEqual(data["totalTests"], 36)
+        self.assertGreaterEqual(data["totalTests"], 40)
+        # The verifier must read the message catalog itself, not only golden framed hex.
+        catalog_tests = [c["name"] for c in data["testCases"] if c["name"].startswith("MessageCatalog_")]
+        for required in (
+            "MessageCatalog_Count_14",
+            "MessageCatalog_GoldenRequiredFields_Parity",
+            "MessageCatalog_FrameReady_HeaderMetadata_Parity",
+            "MessageCatalog_StateSnapshot_Parity",
+        ):
+            self.assertIn(required, catalog_tests)
 
     def test_36_neg_frame_ready_before_handshake(self):
         # FRAME_READY before completing handshake is strictly forbidden
@@ -550,6 +572,315 @@ class TestV2HostEngineContracts(unittest.TestCase):
         res = mgr.process_command("sess-1", "cmd-late", "DO_VALUATION", {"id": 1}, 5000, 6000)
         self.assertIsNotNone(res)
         self.assertEqual(res["status"], "EXPIRED")
+
+    # ------------------------------------------------------------------
+    # MESSAGE CATALOG SSOT CONSISTENCY (single schema truth enforcement)
+    # ------------------------------------------------------------------
+    def _load_json(self, filename):
+        with open(self.contracts_dir / filename, "r", encoding="utf-8") as handle:
+            return json.load(handle)
+
+    def _catalog_messages(self):
+        catalog = self._load_json("message_catalog_v1.json")
+        return catalog, {msg["messageType"]: msg for msg in catalog["messages"]}
+
+    def test_message_catalog_matches_python_models(self):
+        """The catalog must be a byte-faithful mirror of models.PAYLOAD_FIELD_TYPES."""
+        catalog, catalog_messages = self._catalog_messages()
+
+        self.assertEqual(catalog["totalMessageTypes"], 14)
+        self.assertEqual(len(catalog["messages"]), 14)
+        self.assertEqual(sorted(catalog_messages), sorted(t.value for t in MessageType))
+
+        for message_type, field_specs in PAYLOAD_FIELD_TYPES.items():
+            message = catalog_messages[message_type]
+            declared = message["payloadSchema"]["properties"]
+
+            self.assertEqual(message["requiredPayloadFields"], REQUIRED_PAYLOAD_FIELDS[message_type])
+            self.assertEqual(declared, field_specs, f"{message_type} payloadSchema drifted from models")
+            self.assertFalse(message["payloadSchema"]["additionalProperties"])
+            self.assertEqual(
+                [name for name, spec in declared.items() if spec["required"]],
+                message["requiredPayloadFields"],
+                f"{message_type} required flags disagree with requiredPayloadFields",
+            )
+
+        # Envelope schema is part of the same single truth.
+        self.assertEqual(catalog["envelopeSchema"]["requiredFields"], REQUIRED_ENVELOPE_FIELDS)
+        self.assertEqual(catalog["envelopeSchema"]["properties"], ENVELOPE_FIELD_TYPES)
+
+        # Ring geometry is FIXED v1 constants - HELLO declares only name + size.
+        geometry = catalog["ringBufferGeometry"]
+        self.assertEqual(geometry["policy"], RING_GEOMETRY_POLICY)
+        self.assertFalse(geometry["geometryIsNegotiated"])
+        self.assertEqual(
+            get_fixed_v1_geometry(),
+            {
+                "slotCount": SLOT_COUNT,
+                "slotSizeBytes": SLOT_SIZE_BYTES,
+                "mapTotalSizeBytes": MAP_TOTAL_SIZE_BYTES,
+            },
+        )
+        for constant in ("slotCount", "slotSizeBytes", "mapTotalSizeBytes"):
+            self.assertNotIn(constant, PAYLOAD_FIELD_TYPES["HELLO"])
+            self.assertNotIn(constant, PAYLOAD_FIELD_TYPES["HELLO_ACK"])
+        self.assertIn("frameBufferSize", PAYLOAD_FIELD_TYPES["HELLO"])
+        self.assertEqual(geometry["mapTotalSizeBytes"], MAP_TOTAL_SIZE_BYTES)
+
+        golden = self._load_json("golden_vectors_v1.json")
+        golden_hello = next(v for v in golden["messageVectors"] if v["messageType"] == "HELLO")
+        validate_hello_fixed_geometry(golden_hello["envelope"]["payload"])
+        with self.assertRaises(ContractValidationError) as ctx:
+            validate_hello_fixed_geometry({"frameBufferSize": MAP_TOTAL_SIZE_BYTES + 64})
+        self.assertEqual(ctx.exception.error_code, "ERR_RING_GEOMETRY_MISMATCH")
+
+        # Fail-closed error codes declared by the catalog must exist in the error catalog.
+        error_catalog = self._load_json("error_catalog_v1.json")
+        known = {entry["errorCode"] for entry in error_catalog["errors"]}
+        self.assertTrue(set(catalog["failClosedErrorCodes"]).issubset(known))
+
+    def test_all_golden_vectors_satisfy_catalog_schema(self):
+        """Every golden vector payload must satisfy the catalog schema for its type."""
+        catalog, catalog_messages = self._catalog_messages()
+        golden = self._load_json("golden_vectors_v1.json")
+
+        self.assertEqual(len(golden["messageVectors"]), 14)
+        self.assertEqual(
+            sorted(v["messageType"] for v in golden["messageVectors"]),
+            sorted(catalog_messages),
+        )
+
+        for vector in golden["messageVectors"]:
+            message_type = vector["messageType"]
+            envelope = vector["envelope"]
+            payload = envelope["payload"]
+
+            # Envelope + payload schema must validate fail-closed.
+            validated = validate_envelope(envelope)
+            self.assertEqual(validated.messageType, message_type)
+
+            required = catalog_messages[message_type]["requiredPayloadFields"]
+            missing = [name for name in required if name not in payload]
+            self.assertEqual(missing, [], f"{message_type} golden payload misses catalog required fields")
+
+            declared = set(catalog_messages[message_type]["payloadSchema"]["properties"])
+            undeclared = sorted(set(payload) - declared)
+            self.assertEqual(undeclared, [], f"{message_type} golden payload has undeclared fields")
+
+            # Required-ness must never be satisfiable by a null value.
+            for name in required:
+                spec = catalog_messages[message_type]["payloadSchema"]["properties"][name]
+                self.assertFalse(spec["nullable"], f"{message_type}.{name} is required but nullable")
+
+    def test_state_snapshot_catalog_matches_resync_validator(self):
+        """STATE_SNAPSHOT catalog schema must equal the projection the resync validator enforces."""
+        catalog, catalog_messages = self._catalog_messages()
+        snapshot = catalog_messages["STATE_SNAPSHOT"]
+        properties = snapshot["payloadSchema"]["properties"]
+        projection = properties["currentMatchProjection"]
+
+        self.assertEqual(
+            snapshot["requiredPayloadFields"],
+            ["snapshotSchemaVersion", "snapshotSessionId", "snapshotSequence", "businessReady", "currentMatchProjection"],
+        )
+        self.assertEqual(projection, PAYLOAD_FIELD_TYPES["STATE_SNAPSHOT"]["currentMatchProjection"])
+        self.assertEqual(
+            [name for name, spec in projection["properties"].items() if spec["required"]],
+            ["matchId", "matchState", "auctionPhase", "draftCount", "finalizedCount", "activeAuctionItems", "bids"],
+        )
+        self.assertFalse(projection["nullable"])
+        self.assertFalse(projection["additionalProperties"])
+        # The legacy, conflicting top-level snapshot schema must be gone.
+        self.assertNotIn("snapshotSchema", catalog)
+        self.assertNotIn("stateSnapshotSchema", catalog)
+
+        golden = self._load_json("golden_vectors_v1.json")
+        golden_snapshot = next(v for v in golden["messageVectors"] if v["messageType"] == "STATE_SNAPSHOT")
+        session_id = golden_snapshot["envelope"]["sessionId"]
+        envelope = Envelope(**golden_snapshot["envelope"])
+
+        # Golden snapshot is accepted by the resync validator.
+        validate_state_snapshot(envelope, session_id)
+
+        # Stale session wins over projection schema (fail-closed ordering).
+        with self.assertRaises(ContractValidationError) as ctx1:
+            validate_state_snapshot(envelope, "stale-session-999")
+        self.assertEqual(ctx1.exception.error_code, "ERR_STALE_SESSION")
+
+        # Missing required projection field is rejected.
+        broken_projection = dict(golden_snapshot["envelope"]["payload"])
+        broken_projection["currentMatchProjection"] = {"matchState": "IN_PROGRESS", "draftCount": 0}
+        with self.assertRaises(ContractValidationError) as ctx2:
+            validate_state_snapshot(Envelope(**{**golden_snapshot["envelope"], "payload": broken_projection}), session_id)
+        self.assertEqual(ctx2.exception.error_code, "ERR_MISSING_REQUIRED_FIELD")
+
+        # Wrong projection value type is rejected without coercion.
+        coerced_projection = dict(golden_snapshot["envelope"]["payload"])
+        coerced_projection["currentMatchProjection"] = dict(
+            golden_snapshot["envelope"]["payload"]["currentMatchProjection"]
+        )
+        coerced_projection["currentMatchProjection"]["draftCount"] = "0"
+        with self.assertRaises(ContractValidationError) as ctx3:
+            validate_state_snapshot(Envelope(**{**golden_snapshot["envelope"], "payload": coerced_projection}), session_id)
+        self.assertEqual(ctx3.exception.error_code, "ERR_SCHEMA_VALIDATION_FAILED")
+
+    def test_hello_ack_catalog_matches_ready_gate(self):
+        """HELLO_ACK readiness must be the single authority behind the lifecycle READY gate."""
+        catalog, catalog_messages = self._catalog_messages()
+        ack = catalog_messages["HELLO_ACK"]["payloadSchema"]["properties"]
+
+        self.assertIn("readiness", catalog_messages["HELLO_ACK"]["requiredPayloadFields"])
+        self.assertIn("engineBusinessReady", catalog_messages["HELLO_ACK"]["requiredPayloadFields"])
+        self.assertEqual(ack["readiness"]["type"], "string")
+        self.assertEqual(ack["readiness"]["enum"], PAYLOAD_FIELD_TYPES["HELLO_ACK"]["readiness"]["enum"])
+        self.assertEqual(ack["engineBusinessReady"]["type"], "boolean")
+        self.assertFalse(ack["readiness"]["nullable"])
+        self.assertFalse(ack["engineBusinessReady"]["nullable"])
+
+        readiness_contract = catalog["readinessContract"]
+        self.assertEqual(readiness_contract["authoritativeField"], "readiness")
+        self.assertEqual(readiness_contract["owner"], "HELLO_ACK")
+        self.assertEqual(readiness_contract["businessReadyProjection"], "engineBusinessReady")
+        self.assertEqual(sorted(readiness_contract["enum"]), sorted(ack["readiness"]["enum"]))
+
+        lifecycle = self._load_json("lifecycle_recovery_v1.json")
+        gate_field = lifecycle["readyGateRequirements"]["readinessField"]
+        self.assertEqual(sorted(gate_field["enum"]), sorted(ack["readiness"]["enum"]))
+        self.assertEqual(gate_field["readyGateValue"], "READY")
+        self.assertEqual(gate_field["projectionField"], "engineBusinessReady")
+        gates = {gate["gate"]: gate["condition"] for gate in lifecycle["readyGateRequirements"]["gates"]}
+        self.assertEqual(len(gates), 4)
+        self.assertIn("engineBusinessReady", gates["engineBusinessReady"])
+
+        golden = self._load_json("golden_vectors_v1.json")
+        golden_ack = next(v for v in golden["messageVectors"] if v["messageType"] == "HELLO_ACK")["envelope"]["payload"]
+        validate_hello_ack_readiness(golden_ack)
+
+        # readiness == READY must imply engineBusinessReady == true
+        with self.assertRaises(ContractValidationError) as ctx1:
+            validate_hello_ack_readiness({**golden_ack, "engineBusinessReady": False})
+        self.assertEqual(ctx1.exception.error_code, "ERR_SCHEMA_VALIDATION_FAILED")
+
+        # readiness in [STARTING, LOADING] must not advertise business readiness
+        for early in ("STARTING", "LOADING"):
+            with self.assertRaises(ContractValidationError) as ctx2:
+                validate_hello_ack_readiness({**golden_ack, "readiness": early, "engineBusinessReady": True})
+            self.assertEqual(ctx2.exception.error_code, "ERR_SCHEMA_VALIDATION_FAILED")
+
+        # A rejected handshake must never advertise business readiness
+        with self.assertRaises(ContractValidationError) as ctx3:
+            validate_hello_ack_readiness({**golden_ack, "status": "REJECTED_VERSION"})
+        self.assertEqual(ctx3.exception.error_code, "ERR_SCHEMA_VALIDATION_FAILED")
+
+        # Readiness outside the enum is rejected
+        with self.assertRaises(ContractValidationError) as ctx4:
+            validate_hello_ack_readiness({**golden_ack, "readiness": "BUSINESS_READY"})
+        self.assertEqual(ctx4.exception.error_code, "ERR_SCHEMA_VALIDATION_FAILED")
+
+        # No second field may express engine readiness: modelStatus is not a protocol field.
+        declared_field_names = set(ENVELOPE_FIELD_TYPES)
+        for message_type, fields in PAYLOAD_FIELD_TYPES.items():
+            self.assertNotIn("modelStatus", fields, f"{message_type} must not declare modelStatus")
+            declared_field_names |= set(fields)
+        for message in catalog["messages"]:
+            self.assertNotIn("modelStatus", message["payloadSchema"]["properties"])
+        self.assertNotIn("modelStatus", declared_field_names)
+        # ... and the catalog must say so explicitly rather than leave it ambiguous.
+        self.assertIn("modelStatus", readiness_contract["modelStatusNote"])
+
+    def test_frame_ready_catalog_matches_header_metadata(self):
+        """FRAME_READY must declare exactly what verify_frame_metadata_match() checks."""
+        catalog, catalog_messages = self._catalog_messages()
+        frame_ready = catalog_messages["FRAME_READY"]
+        properties = frame_ready["payloadSchema"]["properties"]
+
+        expected_checked = [FRAME_READY_BUFFER_INDEX_FIELD] + [
+            payload_field for payload_field, _ in FRAME_READY_HEADER_METADATA_FIELDS
+        ]
+        self.assertEqual(catalog["frameHeaderMetadataContract"]["checkedFields"], expected_checked)
+        self.assertEqual(
+            frame_ready["requiredPayloadFields"],
+            REQUIRED_PAYLOAD_FIELDS["FRAME_READY"],
+        )
+        for name in expected_checked:
+            self.assertIn(name, frame_ready["requiredPayloadFields"])
+            self.assertIn(name, properties)
+
+        # Naming / typing rules that the reviewer flagged as blockers.
+        self.assertIn("cornerChecksum", properties)
+        self.assertNotIn("checksum", properties)
+        self.assertEqual(properties["pixelFormat"]["type"], "integer")
+        self.assertEqual(properties["pixelFormat"]["enum"], [1])
+        self.assertEqual(properties["cornerChecksum"]["type"], "integer")
+        # Header field names must match payload field names one-to-one.
+        for payload_field, header_attr in FRAME_READY_HEADER_METADATA_FIELDS:
+            self.assertEqual(payload_field, header_attr)
+            self.assertIn(payload_field, properties)
+        header_fields = set(FrameHeaderV1.__dataclass_fields__)
+        for payload_field, _ in FRAME_READY_HEADER_METADATA_FIELDS:
+            self.assertIn(payload_field, header_fields)
+
+        # Behavioural parity: a golden-consistent payload passes, every mutation fails.
+        golden = self._load_json("golden_vectors_v1.json")
+        payload = next(v for v in golden["messageVectors"] if v["messageType"] == "FRAME_READY")["envelope"]["payload"]
+        header = FrameHeaderV1(
+            magic=FRAME_HEADER_MAGIC, headerVersion=FRAME_HEADER_VERSION, sequence=payload["sequence"],
+            width=payload["width"], height=payload["height"], stride=payload["stride"],
+            pixelFormat=payload["pixelFormat"], bufferLength=payload["bufferLength"], flags=0,
+            captureTimestampNs=payload["captureTimestampNs"], producerTimestampNs=0,
+            cornerChecksum=payload["cornerChecksum"], reserved=0,
+        )
+        verify_frame_metadata_match(payload, header, expected_buffer_index=payload["bufferIndex"])
+
+        for field_name in expected_checked:
+            mutated = dict(payload)
+            if field_name == FRAME_READY_BUFFER_INDEX_FIELD:
+                mutated[field_name] = payload[field_name] + 1
+            else:
+                mutated[field_name] = payload[field_name] + 1
+            with self.assertRaises(ContractValidationError) as ctx:
+                verify_frame_metadata_match(mutated, header, expected_buffer_index=payload["bufferIndex"])
+            self.assertEqual(
+                ctx.exception.error_code,
+                "ERR_FRAME_METADATA_MISMATCH",
+                f"mutation of '{field_name}' was not detected as a metadata mismatch",
+            )
+
+        # bufferIndex bounds are enforced even without an expected slot.
+        with self.assertRaises(ContractValidationError) as ctx_bounds:
+            verify_frame_metadata_match({**payload, "bufferIndex": SLOT_COUNT}, header)
+        self.assertEqual(ctx_bounds.exception.error_code, "ERR_SLOT_INDEX_OUT_OF_BOUNDS")
+
+        # A correct payload read from the wrong slot is rejected.
+        with self.assertRaises(ContractValidationError) as ctx_slot:
+            verify_frame_metadata_match(payload, header, expected_buffer_index=1)
+        self.assertEqual(ctx_slot.exception.error_code, "ERR_FRAME_METADATA_MISMATCH")
+
+    def test_message_schema_parity_report_is_generated_and_green(self):
+        """message_schema_parity.json is machine-generated and must be fully green."""
+        report = write_parity_report(self.contracts_dir)
+
+        report_path = self.contracts_dir / "message_schema_parity.json"
+        self.assertTrue(report_path.exists(), "message_schema_parity.json must be generated")
+        with open(report_path, "r", encoding="utf-8") as handle:
+            on_disk = json.load(handle)
+
+        self.assertEqual(on_disk, report)
+        self.assertEqual(on_disk["totalMessages"], 14)
+        for key in (
+            "catalogModelParity",
+            "catalogEnvelopeParity",
+            "catalogGoldenParity",
+            "catalogLifecycleParity",
+            "catalogFrameMetadataParity",
+            "catalogStateSnapshotParity",
+            "catalogGeometryParity",
+            "catalogErrorCodeParity",
+            "allPassed",
+        ):
+            self.assertTrue(on_disk[key], f"{key} must be true, failures={on_disk['failures']}")
+        self.assertEqual(on_disk["passedChecks"], on_disk["totalChecks"])
+        self.assertEqual(on_disk["failures"], [])
 
 
 if __name__ == "__main__":

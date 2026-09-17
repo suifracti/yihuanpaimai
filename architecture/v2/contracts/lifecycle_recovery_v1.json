@@ -5,9 +5,9 @@
   "operationalPhases": [
     { "phase": "PROCESS_ALIVE", "check": "OS Process ID exists and Process.HasExited == false" },
     { "phase": "IPC_CONNECTED", "check": "Named Pipe client and server handles connected and streamable" },
-    { "phase": "ENGINE_INITIALIZED", "check": "HELLO / HELLO_ACK negotiation completed with status == ACCEPTED and readiness in [READY, LOADING]" },
-    { "phase": "STATE_RESYNCED", "check": "STATE_SNAPSHOT received, validated, and applied by Host projection" },
-    { "phase": "BUSINESS_READY", "check": "engineBusinessReady == true, CV models loaded, visual catalog initialized, ready for FRAME_READY processing" }
+    { "phase": "ENGINE_INITIALIZED", "check": "HELLO / HELLO_ACK handshake completed with status == ACCEPTED and readiness in [READY, LOADING]; engineBusinessReady must equal (readiness == READY)" },
+    { "phase": "STATE_RESYNCED", "check": "STATE_SNAPSHOT received, validated against the catalog projection schema, and applied by Host projection" },
+    { "phase": "BUSINESS_READY", "check": "engineBusinessReady == true (readiness == READY), CV models loaded, visual catalog initialized, ready for FRAME_READY processing" }
   ],
   "states": [
     {
@@ -45,10 +45,20 @@
   ],
   "readyGateRequirements": {
     "rule": "State machine transition to READY requires all 4 gates evaluated true simultaneously",
+    "readinessAuthority": "HELLO_ACK.readiness is the single authoritative engine-readiness field; HELLO_ACK.engineBusinessReady is its boolean READY-gate projection. The two must agree, and there is no separate 'modelStatus' protocol field in protocol 1.0.0 - model / catalog load state is folded into readiness (LOADING -> READY / FAILED).",
+    "readinessField": {
+      "name": "readiness",
+      "owner": "HELLO_ACK",
+      "enum": ["STARTING", "LOADING", "READY", "DEGRADED", "FAILED"],
+      "readyGateValue": "READY",
+      "projectionField": "engineBusinessReady",
+      "consistencyRule": "HELLO_ACK.status == ACCEPTED with readiness == READY requires engineBusinessReady == true; readiness in [STARTING, LOADING] or status != ACCEPTED requires engineBusinessReady == false. Enforced fail-closed by models.py::validate_hello_ack_readiness with ERR_SCHEMA_VALIDATION_FAILED.",
+      "schemaSourceOfTruth": "message_catalog_v1.json -> readinessContract"
+    },
     "gates": [
       { "gate": "protocolNegotiated", "condition": "HELLO_ACK status == ACCEPTED" },
       { "gate": "capabilitiesAccepted", "condition": "All mandatory capabilities AVAILABLE; WGC and WebView2 handled per fallback" },
-      { "gate": "engineBusinessReady", "condition": "HELLO_ACK.engineBusinessReady == true or STATE_SNAPSHOT.businessReady == true" },
+      { "gate": "engineBusinessReady", "condition": "HELLO_ACK.engineBusinessReady == true (which per message_catalog_v1.json readinessContract implies HELLO_ACK.readiness == READY) or STATE_SNAPSHOT.businessReady == true" },
       { "gate": "snapshotRequirementSatisfied", "condition": "Either (isColdBoot == true and noRecoverableBusinessState == true) OR (STATE_SNAPSHOT validated during SYNCING)" }
     ]
   },
@@ -56,7 +66,7 @@
     "step1_detection": "Host Process.Exited event fires (typically 8-15ms); Host UI preserves overlay and displays 'Reconnecting engine...'.",
     "step2_drain": "Host drains and closes stale Named Pipe handles; discards pending in-flight control messages.",
     "step3_restart": "Host supervisor spawns replacement Python process with fresh session nonce; transition to STARTING.",
-    "step4_handshake": "Host initiates HELLO with sessionNonce and capability advertisement; transition to HANDSHAKING.",
+    "step4_handshake": "Host initiates HELLO with sessionNonce, capability advertisement, frameBufferName and frameBufferSize (fixed v1 geometry - nothing about ring geometry is negotiated); transition to HANDSHAKING.",
     "step5_sync_mandatory": "On reconnect, Host transitions to SYNCING (direct transition to READY is forbidden) and emits STATE_SNAPSHOT_REQUEST.",
     "step6_resync_verification": "Engine serializes CurrentMatch projection in STATE_SNAPSHOT; Host verifies snapshotSequence and businessReady == true.",
     "step7_ready": "Host transitions to READY; frame streaming and perception resumes."
