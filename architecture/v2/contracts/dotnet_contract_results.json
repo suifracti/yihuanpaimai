@@ -1,0 +1,134 @@
+{
+  "suite": "architecture.v2.verifier.ContractVerifier",
+  "timestamp": "2026-09-17T15:37:20.4730393Z",
+  "totalTests": 31,
+  "passedTests": 31,
+  "failedTests": 0,
+  "allPassed": true,
+  "testCases": [
+    {
+      "name": "FrameHeader_Size_Is_64_Bytes",
+      "status": "PASSED"
+    },
+    {
+      "name": "FrameHeader_Offset_magic_Is_0",
+      "status": "PASSED"
+    },
+    {
+      "name": "FrameHeader_Offset_headerVersion_Is_4",
+      "status": "PASSED"
+    },
+    {
+      "name": "FrameHeader_Offset_sequence_Is_8",
+      "status": "PASSED"
+    },
+    {
+      "name": "FrameHeader_Offset_width_Is_16",
+      "status": "PASSED"
+    },
+    {
+      "name": "FrameHeader_Offset_height_Is_20",
+      "status": "PASSED"
+    },
+    {
+      "name": "FrameHeader_Offset_stride_Is_24",
+      "status": "PASSED"
+    },
+    {
+      "name": "FrameHeader_Offset_pixelFormat_Is_28",
+      "status": "PASSED"
+    },
+    {
+      "name": "FrameHeader_Offset_bufferLength_Is_32",
+      "status": "PASSED"
+    },
+    {
+      "name": "FrameHeader_Offset_flags_Is_36",
+      "status": "PASSED"
+    },
+    {
+      "name": "FrameHeader_Offset_captureTimestampNs_Is_40",
+      "status": "PASSED"
+    },
+    {
+      "name": "FrameHeader_Offset_producerTimestampNs_Is_48",
+      "status": "PASSED"
+    },
+    {
+      "name": "FrameHeader_Offset_cornerChecksum_Is_56",
+      "status": "PASSED"
+    },
+    {
+      "name": "FrameHeader_Offset_reserved_Is_60",
+      "status": "PASSED"
+    },
+    {
+      "name": "RingBuffer_Geometry_Parameters",
+      "status": "PASSED"
+    },
+    {
+      "name": "RingBuffer_Slot_0_Offset_Calculation",
+      "status": "PASSED"
+    },
+    {
+      "name": "RingBuffer_Slot_1_Offset_Calculation",
+      "status": "PASSED"
+    },
+    {
+      "name": "RingBuffer_Slot_2_Offset_Calculation",
+      "status": "PASSED"
+    },
+    {
+      "name": "RingBuffer_Slot_3_Offset_Calculation",
+      "status": "PASSED"
+    },
+    {
+      "name": "GoldenVector_FrameHeader_Packing",
+      "status": "PASSED"
+    },
+    {
+      "name": "GoldenVector_HELLO_Host_Handshake_Hello",
+      "status": "PASSED"
+    },
+    {
+      "name": "GoldenVector_HELLO_ACK_Engine_Handshake_Ack",
+      "status": "PASSED"
+    },
+    {
+      "name": "GoldenVector_HEARTBEAT_Liveness_Heartbeat",
+      "status": "PASSED"
+    },
+    {
+      "name": "GoldenVector_FRAME_READY_Frame_Available_Notification",
+      "status": "PASSED"
+    },
+    {
+      "name": "GoldenVector_FRAME_ACK_Frame_Slot_Release_Acknowledgment",
+      "status": "PASSED"
+    },
+    {
+      "name": "GoldenVector_PERCEPTION_RESULT_Auction_Perception_Result",
+      "status": "PASSED"
+    },
+    {
+      "name": "GoldenVector_ABORT_SCAN_User_Takeover_Abort_Scan",
+      "status": "PASSED"
+    },
+    {
+      "name": "GoldenVector_COMMAND_Refresh_Valuation_Command",
+      "status": "PASSED"
+    },
+    {
+      "name": "GoldenVector_COMMAND_RESULT_Command_Execution_Result",
+      "status": "PASSED"
+    },
+    {
+      "name": "GoldenVector_STATE_SNAPSHOT_State_Snapshot_Sync",
+      "status": "PASSED"
+    },
+    {
+      "name": "GoldenVector_ERROR_Fail_Closed_Error",
+      "status": "PASSED"
+    }
+  ]
+}

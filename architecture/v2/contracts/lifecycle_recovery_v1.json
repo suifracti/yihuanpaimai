@@ -5,9 +5,9 @@
   "operationalPhases": [
     { "phase": "PROCESS_ALIVE", "check": "OS Process ID exists and Process.HasExited == false" },
     { "phase": "IPC_CONNECTED", "check": "Named Pipe client and server handles connected and streamable" },
-    { "phase": "ENGINE_INITIALIZED", "check": "HELLO / HELLO_ACK negotiation completed with status == ACCEPTED" },
+    { "phase": "ENGINE_INITIALIZED", "check": "HELLO / HELLO_ACK negotiation completed with status == ACCEPTED and readiness in [READY, LOADING]" },
     { "phase": "STATE_RESYNCED", "check": "STATE_SNAPSHOT received, validated, and applied by Host projection" },
-    { "phase": "BUSINESS_READY", "check": "CV models loaded, visual catalog initialized, ready for FRAME_READY processing" }
+    { "phase": "BUSINESS_READY", "check": "engineBusinessReady == true, CV models loaded, visual catalog initialized, ready for FRAME_READY processing" }
   ],
   "states": [
     {
@@ -22,17 +22,19 @@
     },
     {
       "name": "HANDSHAKING",
-      "description": "Named Pipe connected; Host emitted HELLO; awaiting HELLO_ACK.",
-      "validTransitions": ["SYNCING", "READY", "DEGRADED", "ENGINE_DOWN"]
+      "description": "Named Pipe connected; Host emitted HELLO; awaiting HELLO_ACK. On reconnect/crash recovery, DIRECT transition to READY is STRICTLY FORBIDDEN.",
+      "validTransitions": ["SYNCING", "READY", "DEGRADED", "ENGINE_DOWN"],
+      "readyTransitionGuard": "Direct transition from HANDSHAKING to READY is strictly restricted to cold boot where noRecoverableBusinessState == true AND engineBusinessReady == true. On any reconnect or recovery, transition MUST proceed through SYNCING."
     },
     {
       "name": "SYNCING",
-      "description": "Handshake accepted; Host issued STATE_SNAPSHOT_REQUEST to rebuild match state after restart.",
-      "validTransitions": ["READY", "DEGRADED", "ENGINE_DOWN"]
+      "description": "Handshake accepted; Host issued STATE_SNAPSHOT_REQUEST to rebuild match state after restart/reconnect.",
+      "validTransitions": ["READY", "DEGRADED", "ENGINE_DOWN"],
+      "readyTransitionGuard": "Transition to READY requires STATE_SNAPSHOT validated and businessReady == true."
     },
     {
       "name": "READY",
-      "description": "Normal operating state. Heartbeat active, frames streaming, perception processing.",
+      "description": "Normal operating state. Heartbeat active, frames streaming, perception processing. Must simultaneously satisfy: 1. protocol negotiated, 2. capabilities accepted, 3. engine business ready, 4. snapshot requirement satisfied.",
       "validTransitions": ["DEGRADED", "ENGINE_DOWN"]
     },
     {
@@ -41,13 +43,22 @@
       "validTransitions": ["READY", "SYNCING", "ENGINE_DOWN"]
     }
   ],
+  "readyGateRequirements": {
+    "rule": "State machine transition to READY requires all 4 gates evaluated true simultaneously",
+    "gates": [
+      { "gate": "protocolNegotiated", "condition": "HELLO_ACK status == ACCEPTED" },
+      { "gate": "capabilitiesAccepted", "condition": "All mandatory capabilities AVAILABLE; WGC and WebView2 handled per fallback" },
+      { "gate": "engineBusinessReady", "condition": "HELLO_ACK.engineBusinessReady == true or STATE_SNAPSHOT.businessReady == true" },
+      { "gate": "snapshotRequirementSatisfied", "condition": "Either (isColdBoot == true and noRecoverableBusinessState == true) OR (STATE_SNAPSHOT validated during SYNCING)" }
+    ]
+  },
   "recoveryWorkflow": {
     "step1_detection": "Host Process.Exited event fires (typically 8-15ms); Host UI preserves overlay and displays 'Reconnecting engine...'.",
     "step2_drain": "Host drains and closes stale Named Pipe handles; discards pending in-flight control messages.",
-    "step3_restart": "Host supervisor spawns replacement Python process with unique session nonce; transition to STARTING.",
+    "step3_restart": "Host supervisor spawns replacement Python process with fresh session nonce; transition to STARTING.",
     "step4_handshake": "Host initiates HELLO with sessionNonce and capability advertisement; transition to HANDSHAKING.",
-    "step5_snapshot_request": "Upon HELLO_ACK, Host transitions to SYNCING and emits STATE_SNAPSHOT_REQUEST.",
-    "step6_resync_verification": "Engine serializes CurrentMatch DRAFT/FINALIZED ledger in STATE_SNAPSHOT; Host verifies snapshotSequence and sessionNonce.",
+    "step5_sync_mandatory": "On reconnect, Host transitions to SYNCING (direct transition to READY is forbidden) and emits STATE_SNAPSHOT_REQUEST.",
+    "step6_resync_verification": "Engine serializes CurrentMatch projection in STATE_SNAPSHOT; Host verifies snapshotSequence and businessReady == true.",
     "step7_ready": "Host transitions to READY; frame streaming and perception resumes."
   },
   "spikeAcknowledge": {

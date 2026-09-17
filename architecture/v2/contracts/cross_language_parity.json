@@ -7,7 +7,7 @@
       "name": "Host Handshake Hello",
       "messageType": "HELLO",
       "envelopeValid": true,
-      "lengthPrefixBytes": 604,
+      "lengthPrefixBytes": 645,
       "lengthPrefixMatch": true,
       "framedHexMatch": true
     },
@@ -15,7 +15,7 @@
       "name": "Engine Handshake Ack",
       "messageType": "HELLO_ACK",
       "envelopeValid": true,
-      "lengthPrefixBytes": 319,
+      "lengthPrefixBytes": 411,
       "lengthPrefixMatch": true,
       "framedHexMatch": true
     },
@@ -31,15 +31,15 @@
       "name": "Frame Available Notification",
       "messageType": "FRAME_READY",
       "envelopeValid": true,
-      "lengthPrefixBytes": 343,
+      "lengthPrefixBytes": 391,
       "lengthPrefixMatch": true,
       "framedHexMatch": true
     },
     {
-      "name": "Frame Processing Acknowledgment",
+      "name": "Frame Slot Release Acknowledgment",
       "messageType": "FRAME_ACK",
       "envelopeValid": true,
-      "lengthPrefixBytes": 297,
+      "lengthPrefixBytes": 328,
       "lengthPrefixMatch": true,
       "framedHexMatch": true
     },
@@ -79,7 +79,7 @@
       "name": "State Snapshot Sync",
       "messageType": "STATE_SNAPSHOT",
       "envelopeValid": true,
-      "lengthPrefixBytes": 345,
+      "lengthPrefixBytes": 524,
       "lengthPrefixMatch": true,
       "framedHexMatch": true
     },
