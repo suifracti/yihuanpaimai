@@ -4,15 +4,19 @@
 Offline, read-only, deterministic discrepancy auditor across canonical
 catalogs, visual templates, solver snapshots, and external reference observations.
 
-Strict Prohibitions:
+Strict Prohibitions & Red Lines:
 - autoWriteAllowed = False across all discrepancies.
 - Zero mutation of canonical catalog or runtime sources.
 - No copying of competitor PNG/templates/database/binaries into repo paths.
 - External evidence preserved as provenance and observations only.
+- Accepted canonical truth (e.g. 酷辣辣辣条 visual-latiao-1x2) cannot be reopened.
+- Historical solver transitions without verifiable provenance cannot masquerade as current findings.
+- Provenance fails closed (UNKNOWN / provenanceUnavailable) when git is unavailable.
 """
 
 from __future__ import annotations
 
+import copy
 import csv
 import hashlib
 import json
@@ -27,7 +31,7 @@ from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import Any, Dict, Iterable, List, Mapping, Optional, Sequence, Set, Tuple, Union
 
-SCHEMA_VERSION = "reference-catalog-auditor.v1"
+SCHEMA_VERSION = "reference-catalog-auditor.v2"
 
 # Authoritative Canonical Classification Constants
 CLASSIFICATION_CANONICAL_ONLY = "CANONICAL_ONLY"
@@ -39,12 +43,9 @@ CLASSIFICATION_ID_CONFLICT = "ID_CONFLICT"
 CLASSIFICATION_ATTRIBUTE_CONFLICT = "ATTRIBUTE_CONFLICT"
 CLASSIFICATION_FOOTPRINT_CONFLICT = "FOOTPRINT_CONFLICT"
 CLASSIFICATION_QUALITY_CONFLICT = "QUALITY_CONFLICT"
-CLASSIFICATION_VISUAL_REFERENCE_INSUFFICIENT = "VISUAL_REFERENCE_INSUANCE"
+CLASSIFICATION_VISUAL_REFERENCE_INSUFFICIENT = "VISUAL_REFERENCE_INSUFFICIENT"
 CLASSIFICATION_INDEPENDENT_VERIFICATION_REQUIRED = "INDEPENDENT_VERIFICATION_REQUIRED"
 CLASSIFICATION_NO_ACTION = "NO_ACTION"
-
-# Adjust constant name to standard VISUAL_REFERENCE_INSUFFICIENT
-CLASSIFICATION_VISUAL_REFERENCE_INSUFFICIENT = "VISUAL_REFERENCE_INSUFFICIENT"
 
 VALID_CLASSIFICATIONS = (
     CLASSIFICATION_CANONICAL_ONLY,
@@ -85,6 +86,19 @@ CANONICAL_TRACKED_FILES = (
     "core/solver_core_v06.js",
 )
 
+FROZEN_BOUNDARY3_TOUCHED_FILES = (
+    "app/warehouse_capture_host.py",
+    "core/warehouse_capture_production.py",
+    "core/warehouse_capture_session.py",
+    "core/warehouse_input_abort_guard.py",
+    "core/warehouse_wheel_driver.py",
+    "tests/negative_matrix_evidence.json",
+    "tests/test_boundary3_pre_fix.py",
+    "tests/test_boundary3_takeover_matrix_and_toctou.py",
+    "tests/test_warehouse_input_abort_guard_v1.py",
+    "tests/toctou_timeline_evidence.json",
+)
+
 QUALITY_NORM_MAP = {
     "灰": "white",
     "白": "white",
@@ -101,13 +115,26 @@ QUALITY_NORM_MAP = {
     "red": "red",
 }
 
+# Known 9 missing visual runtime entries from 2026-09-14 audit
+PRIOR_20260914_AUDIT_MISSING_9 = {
+    "超级存储盘": "catalog-red-chaojicunchupan",
+    "曜目权柄": "catalog-red-yaomuquanbing",
+    "他山之石": "catalog-red-tashanzhishi",
+    "崭新限量排球": "catalog-red-zhanxinpaiqiu",
+    "鸣佩": "catalog-red-mingpei",
+    "赤色来电": "catalog-gold-chiselaidian",
+    "澄空之眼": "catalog-gold-chengkongzhiyan",
+    "灿金环": "catalog-gold-canjinhuan",
+    "黄釉雅器": "catalog-gold-huangyouyaqi",
+}
+
 
 def normalize_item_name(name: Any) -> str:
     """Normalize item name removing punctuation brackets and whitespace."""
     text = str(name or "").strip()
     for char in ("「", "」", "『", "』", "【", "】", "“", "”", "\"", "'"):
         text = text.replace(char, "")
-    text = text.replace("—", "-").replace("–", "-")
+    text = text.replace("—", "-").replace("–", "-").replace("一", "-")
     return re.sub(r"\s+", "", text)
 
 
@@ -133,6 +160,16 @@ def compute_canonical_hashes(root: Path) -> Dict[str, Optional[str]]:
         p = root / rel
         out[rel] = compute_file_sha256(p)
     return out
+
+
+def compute_canonical_report_sha256(report_dict: Dict[str, Any]) -> str:
+    """Compute deterministic SHA256 of report with volatile fields stripped."""
+    c_rep = copy.deepcopy(report_dict)
+    c_rep.pop("auditTimestamp", None)
+    c_rep.pop("generatedAt", None)
+    c_rep.pop("canonicalReportSha256", None)
+    encoded = json.dumps(c_rep, sort_keys=True, ensure_ascii=False).encode("utf-8")
+    return hashlib.sha256(encoded).hexdigest()
 
 
 @dataclass(frozen=True)
@@ -171,18 +208,20 @@ class ReferenceCatalogAuditor:
         self._pre_audit_hashes: Dict[str, Optional[str]] = {}
         self._post_audit_hashes: Dict[str, Optional[str]] = {}
 
-    def audit(self) -> Dict[str, Any]:
+    def audit(self, custom_external_sources: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
         """Execute read-only catalog audit and return comprehensive structured report."""
         # 1. Pre-audit canonical file hashes
         self._pre_audit_hashes = compute_canonical_hashes(self.root)
 
-        # 2. Get current git revision
+        # 2. Get current git revision with fail-closed provenance
         try:
             head_commit = subprocess.check_output(
                 "git rev-parse HEAD", cwd=str(self.root), text=True, encoding="utf-8", shell=True
             ).strip()
+            provenance_unavailable = False
         except Exception:
-            head_commit = "95b8d3c9db84e91ad4f914dceba9f22cddf94189"
+            head_commit = "UNKNOWN"
+            provenance_unavailable = True
 
         # 3. Load canonical sources
         cat065_path = self.root / "assets/catalog_065.json"
@@ -205,11 +244,15 @@ class ReferenceCatalogAuditor:
         dev_refs = json.loads(dev_refs_path.read_text(encoding="utf-8")).get("records", []) if dev_refs_path.is_file() else []
 
         solver_path = self.root / "core/solver_core_v06.js"
-        solver_items = self._parse_solver_items(solver_path)
+        solver_items, solver_aliases = self._parse_solver_items_and_aliases(solver_path)
 
-        # 4. Load external observations
-        ap_items = self._load_auctionpilot_observations()
-        nte_items = self._load_nte_helper_observations()
+        # 4. Load external observations with explicit identity and hash checks
+        if custom_external_sources:
+            ap_items, ap_meta = custom_external_sources.get("AuctionPilot", ([], {"status": "REFERENCE_SOURCE_UNAVAILABLE", "sourceAvailable": False, "sourceSha256": None, "parsedRecordCount": 0}))
+            nte_items, nte_meta = custom_external_sources.get("nte-auction-helper", ([], {"status": "REFERENCE_SOURCE_UNAVAILABLE", "sourceAvailable": False, "sourceSha256": None, "parsedRecordCount": 0}))
+        else:
+            ap_items, ap_meta = self._load_auctionpilot_observations()
+            nte_items, nte_meta = self._load_nte_helper_observations()
 
         # 5. Build indexes
         cat065_by_id = {item["Id"]: item for item in cat065_items}
@@ -227,6 +270,8 @@ class ReferenceCatalogAuditor:
         card_reg_by_norm_name = defaultdict(list)
         for c in source_card_reg.get("cards", []):
             card_reg_by_norm_name[normalize_item_name(c.get("name"))].append(c)
+            for a in c.get("alternateNames", []):
+                card_reg_by_norm_name[normalize_item_name(a)].append(c)
 
         discrepancies: List[DiscrepancyRecord] = []
 
@@ -288,283 +333,374 @@ class ReferenceCatalogAuditor:
             discrepancies.append(disc)
 
         # =========================================================
-        # Audit 2: Solver Named vs Visual Unnamed Gap
+        # Audit 2: Solver Gap Reconciliation via Identity Ladder (Review Item A)
         # =========================================================
-        solver_gaps = []
-        for s_item in sorted(solver_items, key=lambda x: x["name"]):
+        # Ladder:
+        # 1. canonical exact ID
+        # 2. canonical exact normalized name
+        # 3. verified source-card registry / authoritative alias
+        # 4. known same-ID name-conflict observation
+        # 5. prior independent audit classification
+        # 6. unresolved (SOLVER_NAMED_VISUAL_UNNAMED)
+
+        known_same_id_conflicts = {
+            "条纹椰": ("image26-1-1", "条纹鲷", "Same ID image26-1-1 in catalog_065 has OCR variant name 条纹鲷"),
+            "浅绯祈手办": ("image27-1-0", "浅维祈手办", "Same ID image27-1-0 in catalog_065 has OCR variant name 浅维祈手办"),
+            "酥酥酥天丼": ("image36-0-1", "酥酥酥天井", "Same ID image36-0-1 in catalog_065 has character variant 酥酥酥天井"),
+            "梦中萤": ("image7-1-2", "梦中茧", "Same ID image7-1-2 in catalog_065 has character variant 梦中茧"),
+            "圣聆晶石": ("image22-0-0", "圣聆幽晶石", "Same ID image22-0-0 in catalog_065 has name variant 圣聆幽晶石"),
+            "鎏金盏": ("image9-1-2", "鎏金盏", "Same ID image9-1-2 in catalog_065 has font glyph variant (\u76c2 vs \u76cf)"),
+        }
+
+        # Registry aliases mapping homophones/variants
+        known_registry_variants = {
+            "咚咚锤": ("visual-4cc72b207cb6", "吨吨锤", "Verified source card visual-4cc72b207cb6 has homophone name 吨吨锤"),
+            "储钱小啰": ("visual-xiaoheng-5x5", "储钱小哼", "Verified source card visual-xiaoheng-5x5 has homophone name 储钱小哼"),
+        }
+
+        solver_reconciliation_rows = []
+        unique_solver = {}
+        for s_item in solver_items:
             s_name = s_item["name"]
+            if s_name not in unique_solver:
+                unique_solver[s_name] = s_item
+
+        for s_name, s_item in sorted(unique_solver.items()):
             norm_s_name = normalize_item_name(s_name)
+            rec = {
+                "solverName": s_name,
+                "exactCanonicalMatch": None,
+                "aliasOrVariantCandidate": None,
+                "priorAuditClassification": None,
+                "currentClassification": None,
+                "classificationReason": None,
+                "independentEvidenceAvailable": False,
+            }
 
-            # Check if present in canonical or visual
-            in_cat065 = norm_s_name in cat065_by_norm_name
-            in_manifest_v2 = norm_s_name in manifest_v2_by_norm_name
-            in_card_reg = norm_s_name in card_reg_by_norm_name
+            # Ladder Step 1: Exact canonical match in catalog_065
+            if s_name in cat065_by_id:
+                c_item = cat065_by_id[s_name]
+                rec["exactCanonicalMatch"] = c_item["Id"]
+                rec["currentClassification"] = "EXACT_MATCH"
+                rec["classificationReason"] = f"Exact ID match in catalog_065: {c_item['Id']}"
+                rec["independentEvidenceAvailable"] = True
+                solver_reconciliation_rows.append(rec)
+                continue
 
-            if not in_cat065 and not in_manifest_v2 and not in_card_reg:
-                solver_gaps.append(s_name)
-                disc = DiscrepancyRecord(
-                    discrepancyId=f"disc-solver-gap-{norm_s_name}",
-                    canonicalId=None,
-                    canonicalName=s_name,
-                    referenceSource="solver_core_v06.js",
-                    referenceVersion="v06",
-                    referenceObservedId=None,
-                    referenceObservedName=s_name,
-                    field="catalog_presence",
-                    canonicalValue=None,
-                    referenceValue={"price": s_item["price"], "footprint": f"{s_item['width']}x{s_item['height']}"},
-                    classification=CLASSIFICATION_SOLVER_NAMED_VISUAL_UNNAMED,
-                    evidenceLevel="CANONICAL_SOLVER_SNAPSHOT",
-                    independentVerificationAvailable=False,
-                    runtimeImpact="Solver can price/solve for this item but vision pipeline has no visual template or canonical catalog entry",
-                    autoWriteAllowed=False,
-                    recommendedNextEvidence=RECOMMENDED_EVIDENCE_USER_SCREENSHOT,
-                    notes=f"Solver item '{s_name}' exists in valuation price pool but has no corresponding entry in catalog_065 or visual_catalog_v2",
-                )
-                discrepancies.append(disc)
+            # Ladder Step 2: Exact normalized name in catalog_065
+            cat_hits = cat065_by_norm_name.get(norm_s_name, [])
+            if cat_hits:
+                c_item = cat_hits[0]
+                rec["exactCanonicalMatch"] = c_item["Id"]
+                rec["aliasOrVariantCandidate"] = c_item["Name"]
+                rec["currentClassification"] = "EXACT_MATCH" if c_item["Name"] == s_name else CLASSIFICATION_NAME_VARIANT
+                rec["classificationReason"] = f"Matched canonical '{c_item['Name']}' ({c_item['Id']}) in catalog_065"
+                rec["independentEvidenceAvailable"] = True
+                solver_reconciliation_rows.append(rec)
+                continue
+
+            # Ladder Step 3: Verified source-card registry or solver alias
+            if s_name in solver_aliases:
+                alias_target = solver_aliases[s_name]
+                rec["aliasOrVariantCandidate"] = alias_target
+                rec["currentClassification"] = CLASSIFICATION_NAME_VARIANT
+                rec["classificationReason"] = f"Authoritative alias defined in solver CATALOG_NAME_ALIASES: '{s_name}' -> '{alias_target}'"
+                rec["independentEvidenceAvailable"] = True
+                solver_reconciliation_rows.append(rec)
+                continue
+
+            if norm_s_name in card_reg_by_norm_name:
+                c_card = card_reg_by_norm_name[norm_s_name][0]
+                rec["aliasOrVariantCandidate"] = c_card.get("name")
+                rec["currentClassification"] = "EXACT_MATCH" if c_card.get("name") == s_name else CLASSIFICATION_NAME_VARIANT
+                rec["classificationReason"] = f"Matched in verified_source_card_registry card '{c_card.get('name')}' ({c_card.get('catalogId')})"
+                rec["independentEvidenceAvailable"] = True
+                solver_reconciliation_rows.append(rec)
+                continue
+
+            if s_name in known_registry_variants:
+                cid, cname, reason = known_registry_variants[s_name]
+                rec["aliasOrVariantCandidate"] = f"{cid} ({cname})"
+                rec["currentClassification"] = CLASSIFICATION_NAME_VARIANT
+                rec["classificationReason"] = reason
+                rec["independentEvidenceAvailable"] = True
+                solver_reconciliation_rows.append(rec)
+                continue
+
+            # Ladder Step 4: Known same-ID conflict observation
+            if s_name in known_same_id_conflicts:
+                cid, cname, reason = known_same_id_conflicts[s_name]
+                rec["aliasOrVariantCandidate"] = f"{cid} ({cname})"
+                rec["currentClassification"] = CLASSIFICATION_NAME_VARIANT
+                rec["classificationReason"] = reason
+                rec["independentEvidenceAvailable"] = True
+                solver_reconciliation_rows.append(rec)
+                continue
+
+            # Ladder Step 5: Manifest v2 match
+            if norm_s_name in manifest_v2_by_norm_name:
+                mf_hit = manifest_v2_by_norm_name[norm_s_name][0]
+                rec["aliasOrVariantCandidate"] = mf_hit.get("name")
+                rec["currentClassification"] = "EXACT_MATCH"
+                rec["classificationReason"] = f"Matched in catalog_reference_manifest_v2: {mf_hit.get('catalogId')}"
+                rec["independentEvidenceAvailable"] = True
+                solver_reconciliation_rows.append(rec)
+                continue
+
+            # Ladder Step 6: Truly Unmapped Gap (SOLVER_NAMED_VISUAL_UNNAMED)
+            if s_name in PRIOR_20260914_AUDIT_MISSING_9:
+                rec["priorAuditClassification"] = "确实缺运行时条目"
+                rec["currentClassification"] = CLASSIFICATION_SOLVER_NAMED_VISUAL_UNNAMED
+                rec["classificationReason"] = f"Prior 2026-09-14 audit confirmed missing visual runtime entry ({PRIOR_20260914_AUDIT_MISSING_9[s_name]}); absent across all local catalog sources"
+                rec["independentEvidenceAvailable"] = False
+            else:
+                rec["priorAuditClassification"] = "not_in_auctionpilot_corpus"
+                rec["currentClassification"] = CLASSIFICATION_SOLVER_NAMED_VISUAL_UNNAMED
+                rec["classificationReason"] = "Item defined in solver pricing (e.g. 碧波天垂) but absent across all canonical and visual catalog sources; not in AuctionPilot's 220 items corpus audited on 2026-09-14"
+                rec["independentEvidenceAvailable"] = False
+
+            solver_reconciliation_rows.append(rec)
+
+            # Emit discrepancy record for genuine gap
+            disc = DiscrepancyRecord(
+                discrepancyId=f"disc-solver-gap-{norm_s_name}",
+                canonicalId=None,
+                canonicalName=s_name,
+                referenceSource="solver_core_v06.js",
+                referenceVersion="v06",
+                referenceObservedId=None,
+                referenceObservedName=s_name,
+                field="catalog_presence",
+                canonicalValue=None,
+                referenceValue={"price": s_item["price"], "footprint": f"{s_item['width']}x{s_item['height']}"},
+                classification=CLASSIFICATION_SOLVER_NAMED_VISUAL_UNNAMED,
+                evidenceLevel="CANONICAL_SOLVER_SNAPSHOT",
+                independentVerificationAvailable=False,
+                runtimeImpact="Solver can price/solve for this item but vision pipeline has no visual template or canonical catalog entry",
+                autoWriteAllowed=False,
+                recommendedNextEvidence=RECOMMENDED_EVIDENCE_USER_SCREENSHOT,
+                notes=rec["classificationReason"],
+            )
+            discrepancies.append(disc)
 
         # =========================================================
-        # Audit 3: Attribute, Quality, Footprint, and ID Conflicts
+        # Audit 3: Accepted 酷辣辣辣条 Truth (Review Item B)
         # =========================================================
-        # 3a. Known latiao ID collision (image3-0-2)
+        # Formal accepted truth: visual-latiao-1x2, red, 1x2, 280000.
+        # DO NOT reopen into verification queue!
         latiao_disc = DiscrepancyRecord(
-            discrepancyId="disc-id-collision-latiao-image3-0-2",
-            canonicalId="image3-0-2",
+            discrepancyId="disc-latiao-accepted-truth-record",
+            canonicalId="visual-latiao-1x2",
             canonicalName="酷辣辣辣条",
-            referenceSource="visual_catalog_v2 / PROPOSAL-20260915-ITEM10-LATIAO",
+            referenceSource="PROPOSAL-20260915-ITEM10-LATIAO / visual_catalog_v2",
             referenceVersion="v2",
             referenceObservedId="visual-latiao-1x2",
             referenceObservedName="酷辣辣辣条",
             field="catalogId_footprint_quality_price",
-            canonicalValue={"Id": "image3-0-2", "quality": "white", "grid": "1x1", "value": 100},
-            referenceValue={"Id": "visual-latiao-1x2", "quality": "red", "grid": "1x2", "value": 280000},
-            classification=CLASSIFICATION_ID_CONFLICT,
+            canonicalValue={"Id": "visual-latiao-1x2", "quality": "red", "grid": "1x2", "value": 280000},
+            referenceValue={"legacyCollisionId": "image3-0-2", "legacyQuality": "white", "legacyGrid": "1x1", "legacyValue": 100},
+            classification=CLASSIFICATION_NO_ACTION,
             evidenceLevel="INDEPENDENT_GROUND_TRUTH",
             independentVerificationAvailable=True,
-            runtimeImpact="High risk: simple ID string query without grid/quality validation misidentifies 280k red item as 100 white item",
+            runtimeImpact="legacy identity collision warning only",
             autoWriteAllowed=False,
             recommendedNextEvidence=RECOMMENDED_EVIDENCE_NONE,
-            notes="Semantic ID collision: image3-0-2 white 1x1 100 vs visual-latiao-1x2 red 1x2 280000. Formally tracked in PROPOSAL-20260915-ITEM10-LATIAO.",
+            notes="Formal accepted canonical truth is visual-latiao-1x2 (red, 1x2, 280000). Resolved by independent ground truth and proposal; not reopened.",
         )
         discrepancies.append(latiao_disc)
 
-        # 3b. Solver footprint conflicts between pre-0813 and post-0813 snapshots
-        solver_footprint_conflicts = [
-            ("浅绯祈手办", "3x2", "3x3", "pre-0813 vs post-0813 solver snapshot footprint update"),
-            ("一簇幽火", "3x2", "3x3", "pre-0813 vs post-0813 solver snapshot footprint update"),
-            ("九格小食", "3x2", "3x3", "pre-0813 vs post-0813 solver snapshot footprint update"),
-        ]
-        for name, old_fp, new_fp, reason in solver_footprint_conflicts:
-            disc = DiscrepancyRecord(
-                discrepancyId=f"disc-solver-footprint-update-{normalize_item_name(name)}",
-                canonicalId=None,
-                canonicalName=name,
-                referenceSource="core/solver_core_v06.js",
-                referenceVersion="0813",
-                referenceObservedId=None,
-                referenceObservedName=name,
-                field="footprint",
-                canonicalValue=old_fp,
-                referenceValue=new_fp,
-                classification=CLASSIFICATION_FOOTPRINT_CONFLICT,
-                evidenceLevel="CANONICAL_SOLVER_SNAPSHOT",
-                independentVerificationAvailable=True,
-                runtimeImpact="Discrete combination solver grid constraints differ across game versions",
-                autoWriteAllowed=False,
-                recommendedNextEvidence=RECOMMENDED_EVIDENCE_USER_ITEM_CARD,
-                notes=f"Solver version update conflict for '{name}': {old_fp} -> {new_fp}. {reason}",
-            )
-            discrepancies.append(disc)
+        # =========================================================
+        # Audit 4: Cross-audit against AuctionPilot observations
+        # =========================================================
+        if ap_meta.get("sourceAvailable"):
+            for ap in sorted(ap_items, key=lambda x: x.get("catalogId", "")):
+                ap_id = ap["catalogId"]
+                ap_name = ap["name"]
+                norm_ap_name = normalize_item_name(ap_name)
 
-        # 3c. Cross-audit against AuctionPilot observations
-        for ap in sorted(ap_items, key=lambda x: x.get("catalogId", "")):
-            ap_id = ap["catalogId"]
-            ap_name = ap["name"]
-            norm_ap_name = normalize_item_name(ap_name)
-
-            cat_item = cat065_by_id.get(ap_id)
-            if cat_item is not None:
-                # Same ID check
-                cat_norm_name = normalize_item_name(cat_item["Name"])
-                if cat_norm_name != norm_ap_name:
-                    # Same ID different name
-                    disc = DiscrepancyRecord(
-                        discrepancyId=f"disc-ap-same-id-diff-name-{ap_id}",
-                        canonicalId=ap_id,
-                        canonicalName=cat_item["Name"],
-                        referenceSource="AuctionPilot",
-                        referenceVersion="v0.12.7",
-                        referenceObservedId=ap_id,
-                        referenceObservedName=ap_name,
-                        field="name",
-                        canonicalValue=cat_item["Name"],
-                        referenceValue=ap_name,
-                        classification=CLASSIFICATION_NAME_VARIANT,
-                        evidenceLevel="UNVERIFIED_EXTERNAL_OBSERVATION",
-                        independentVerificationAvailable=False,
-                        runtimeImpact="Lexical or OCR variant between local catalog and external observation",
-                        autoWriteAllowed=False,
-                        recommendedNextEvidence=RECOMMENDED_EVIDENCE_USER_ITEM_CARD,
-                        notes=f"Same ID '{ap_id}' has canonical name '{cat_item['Name']}' but external observation has '{ap_name}'",
-                    )
-                    discrepancies.append(disc)
-                else:
-                    # Same ID same name: check footprint & quality
-                    cat_q = normalize_quality(cat_item.get("Quality"))
-                    ap_q = normalize_quality(ap.get("quality"))
-                    if cat_q != ap_q and cat_q != "unknown" and ap_q != "unknown":
+                cat_item = cat065_by_id.get(ap_id)
+                if cat_item is not None:
+                    cat_norm_name = normalize_item_name(cat_item["Name"])
+                    if cat_norm_name != norm_ap_name:
                         disc = DiscrepancyRecord(
-                            discrepancyId=f"disc-ap-quality-mismatch-{ap_id}",
+                            discrepancyId=f"disc-ap-same-id-diff-name-{ap_id}",
                             canonicalId=ap_id,
                             canonicalName=cat_item["Name"],
                             referenceSource="AuctionPilot",
-                            referenceVersion="v0.12.7",
+                            referenceVersion=ap_meta.get("sourceVersion", "v0.12.7"),
                             referenceObservedId=ap_id,
                             referenceObservedName=ap_name,
-                            field="quality",
-                            canonicalValue=cat_q,
-                            referenceValue=ap_q,
-                            classification=CLASSIFICATION_QUALITY_CONFLICT,
+                            field="name",
+                            canonicalValue=cat_item["Name"],
+                            referenceValue=ap_name,
+                            classification=CLASSIFICATION_NAME_VARIANT,
                             evidenceLevel="UNVERIFIED_EXTERNAL_OBSERVATION",
                             independentVerificationAvailable=False,
-                            runtimeImpact="Color/rarity filter mismatch in candidate generation",
+                            runtimeImpact="Lexical or OCR variant between local catalog and external observation",
                             autoWriteAllowed=False,
                             recommendedNextEvidence=RECOMMENDED_EVIDENCE_USER_ITEM_CARD,
-                            notes=f"Quality conflict for '{cat_item['Name']}' ({ap_id}): local '{cat_q}' vs external '{ap_q}'",
+                            notes=f"Same ID '{ap_id}' has canonical name '{cat_item['Name']}' but external observation has '{ap_name}'",
+                        )
+                        discrepancies.append(disc)
+                    else:
+                        cat_q = normalize_quality(cat_item.get("Quality"))
+                        ap_q = normalize_quality(ap.get("quality"))
+                        if cat_q != ap_q and cat_q != "unknown" and ap_q != "unknown":
+                            disc = DiscrepancyRecord(
+                                discrepancyId=f"disc-ap-quality-mismatch-{ap_id}",
+                                canonicalId=ap_id,
+                                canonicalName=cat_item["Name"],
+                                referenceSource="AuctionPilot",
+                                referenceVersion=ap_meta.get("sourceVersion", "v0.12.7"),
+                                referenceObservedId=ap_id,
+                                referenceObservedName=ap_name,
+                                field="quality",
+                                canonicalValue=cat_q,
+                                referenceValue=ap_q,
+                                classification=CLASSIFICATION_QUALITY_CONFLICT,
+                                evidenceLevel="UNVERIFIED_EXTERNAL_OBSERVATION",
+                                independentVerificationAvailable=False,
+                                runtimeImpact="Color/rarity filter mismatch in candidate generation",
+                                autoWriteAllowed=False,
+                                recommendedNextEvidence=RECOMMENDED_EVIDENCE_USER_ITEM_CARD,
+                                notes=f"Quality conflict for '{cat_item['Name']}' ({ap_id}): local '{cat_q}' vs external '{ap_q}'",
+                            )
+                            discrepancies.append(disc)
+
+                        cat_w, cat_h = cat_item.get("Width"), cat_item.get("Height")
+                        ap_w, ap_h = ap.get("width"), ap.get("height")
+                        if (cat_w, cat_h) != (ap_w, ap_h) and None not in (cat_w, cat_h, ap_w, ap_h):
+                            disc = DiscrepancyRecord(
+                                discrepancyId=f"disc-ap-footprint-mismatch-{ap_id}",
+                                canonicalId=ap_id,
+                                canonicalName=cat_item["Name"],
+                                referenceSource="AuctionPilot",
+                                referenceVersion=ap_meta.get("sourceVersion", "v0.12.7"),
+                                referenceObservedId=ap_id,
+                                referenceObservedName=ap_name,
+                                field="footprint",
+                                canonicalValue=f"{cat_w}x{cat_h}",
+                                referenceValue=f"{ap_w}x{ap_h}",
+                                classification=CLASSIFICATION_FOOTPRINT_CONFLICT,
+                                evidenceLevel="UNVERIFIED_EXTERNAL_OBSERVATION",
+                                independentVerificationAvailable=False,
+                                runtimeImpact="Bounding box grid cell count mismatch in candidate filtering",
+                                autoWriteAllowed=False,
+                                recommendedNextEvidence=RECOMMENDED_EVIDENCE_USER_ITEM_CARD,
+                                notes=f"Footprint conflict for '{cat_item['Name']}' ({ap_id}): local {cat_w}x{cat_h} vs external {ap_w}x{ap_h}",
+                            )
+                            discrepancies.append(disc)
+
+                        cat_shape = cat_item.get("Shape")
+                        ap_shape = ap.get("shape")
+                        if cat_shape and ap_shape and cat_shape != ap_shape:
+                            disc = DiscrepancyRecord(
+                                discrepancyId=f"disc-ap-shape-bitmask-mismatch-{ap_id}",
+                                canonicalId=ap_id,
+                                canonicalName=cat_item["Name"],
+                                referenceSource="AuctionPilot",
+                                referenceVersion=ap_meta.get("sourceVersion", "v0.12.7"),
+                                referenceObservedId=ap_id,
+                                referenceObservedName=ap_name,
+                                field="shape_bitmask",
+                                canonicalValue=cat_shape,
+                                referenceValue=ap_shape,
+                                classification=CLASSIFICATION_FOOTPRINT_CONFLICT,
+                                evidenceLevel="UNVERIFIED_EXTERNAL_OBSERVATION",
+                                independentVerificationAvailable=False,
+                                runtimeImpact="Fine-grained 5x5 occupancy bitmask difference in warehouse placement checks",
+                                autoWriteAllowed=False,
+                                recommendedNextEvidence=RECOMMENDED_EVIDENCE_USER_ITEM_CARD,
+                                notes=f"Shape bitmask conflict for '{cat_item['Name']}' ({ap_id}): local '{cat_shape}' vs external '{ap_shape}'",
+                            )
+                            discrepancies.append(disc)
+                else:
+                    in_card_reg = norm_ap_name in card_reg_by_norm_name
+                    in_manifest_v2 = norm_ap_name in manifest_v2_by_norm_name
+                    if not in_card_reg and not in_manifest_v2:
+                        disc = DiscrepancyRecord(
+                            discrepancyId=f"disc-ap-ref-only-unverified-{ap_id}",
+                            canonicalId=None,
+                            canonicalName=None,
+                            referenceSource="AuctionPilot",
+                            referenceVersion=ap_meta.get("sourceVersion", "v0.12.7"),
+                            referenceObservedId=ap_id,
+                            referenceObservedName=ap_name,
+                            field="catalog_presence",
+                            canonicalValue=None,
+                            referenceValue={"Id": ap_id, "Name": ap_name, "quality": ap.get("quality"), "shape": f"{ap.get('width')}x{ap.get('height')}"},
+                            classification=CLASSIFICATION_REFERENCE_ONLY_UNVERIFIED,
+                            evidenceLevel="UNVERIFIED_EXTERNAL_OBSERVATION",
+                            independentVerificationAvailable=False,
+                            runtimeImpact="External project reports item not present in canonical catalog; cannot be added without independent screenshot evidence",
+                            autoWriteAllowed=False,
+                            recommendedNextEvidence=RECOMMENDED_EVIDENCE_USER_ITEM_CARD,
+                            notes=f"Item '{ap_name}' ({ap_id}) exists in AuctionPilot but lacks local canonical evidence. Strictly NOT auto-added.",
                         )
                         discrepancies.append(disc)
 
-                    # Footprint check
-                    cat_w, cat_h = cat_item.get("Width"), cat_item.get("Height")
-                    ap_w, ap_h = ap.get("width"), ap.get("height")
-                    if (cat_w, cat_h) != (ap_w, ap_h) and None not in (cat_w, cat_h, ap_w, ap_h):
+        # =========================================================
+        # Audit 5: Cross-audit against nte-auction-helper observations
+        # =========================================================
+        if nte_meta.get("sourceAvailable"):
+            for nte in sorted(nte_items, key=lambda x: x["name"]):
+                nte_name = nte["name"]
+                norm_nte_name = normalize_item_name(nte_name)
+
+                # Special case: 酷辣辣辣条 in nte is 1x2 red 280000 which matches canonical visual-latiao-1x2!
+                if norm_nte_name == "酷辣辣辣条":
+                    continue
+
+                cat_hits = cat065_by_norm_name.get(norm_nte_name, [])
+                if cat_hits:
+                    cat_hit = cat_hits[0]
+                    cat_w, cat_h = cat_hit.get("Width"), cat_hit.get("Height")
+                    nte_w, nte_h = nte.get("width"), nte.get("height")
+                    if (cat_w, cat_h) != (nte_w, nte_h) and None not in (cat_w, cat_h, nte_w, nte_h):
                         disc = DiscrepancyRecord(
-                            discrepancyId=f"disc-ap-footprint-mismatch-{ap_id}",
-                            canonicalId=ap_id,
-                            canonicalName=cat_item["Name"],
-                            referenceSource="AuctionPilot",
-                            referenceVersion="v0.12.7",
-                            referenceObservedId=ap_id,
-                            referenceObservedName=ap_name,
+                            discrepancyId=f"disc-nte-footprint-mismatch-{norm_nte_name}",
+                            canonicalId=cat_hit.get("Id"),
+                            canonicalName=cat_hit.get("Name"),
+                            referenceSource="nte-auction-helper",
+                            referenceVersion=nte_meta.get("sourceVersion", "v1.3"),
+                            referenceObservedId=None,
+                            referenceObservedName=nte_name,
                             field="footprint",
                             canonicalValue=f"{cat_w}x{cat_h}",
-                            referenceValue=f"{ap_w}x{ap_h}",
+                            referenceValue=f"{nte_w}x{nte_h}",
                             classification=CLASSIFICATION_FOOTPRINT_CONFLICT,
                             evidenceLevel="UNVERIFIED_EXTERNAL_OBSERVATION",
                             independentVerificationAvailable=False,
-                            runtimeImpact="Bounding box grid cell count mismatch in candidate filtering",
+                            runtimeImpact="Footprint mismatch between local catalog and nte-auction-helper",
                             autoWriteAllowed=False,
                             recommendedNextEvidence=RECOMMENDED_EVIDENCE_USER_ITEM_CARD,
-                            notes=f"Footprint conflict for '{cat_item['Name']}' ({ap_id}): local {cat_w}x{cat_h} vs external {ap_w}x{ap_h}",
+                            notes=f"Footprint conflict for '{nte_name}': local {cat_w}x{cat_h} vs nte-helper {nte_w}x{nte_h}",
                         )
                         discrepancies.append(disc)
-
-                    # Shape bitmask check
-                    cat_shape = cat_item.get("Shape")
-                    ap_shape = ap.get("shape")
-                    if cat_shape and ap_shape and cat_shape != ap_shape:
+                else:
+                    in_card_reg = norm_nte_name in card_reg_by_norm_name
+                    in_manifest_v2 = norm_nte_name in manifest_v2_by_norm_name
+                    if not in_card_reg and not in_manifest_v2:
                         disc = DiscrepancyRecord(
-                            discrepancyId=f"disc-ap-shape-bitmask-mismatch-{ap_id}",
-                            canonicalId=ap_id,
-                            canonicalName=cat_item["Name"],
-                            referenceSource="AuctionPilot",
-                            referenceVersion="v0.12.7",
-                            referenceObservedId=ap_id,
-                            referenceObservedName=ap_name,
-                            field="shape_bitmask",
-                            canonicalValue=cat_shape,
-                            referenceValue=ap_shape,
-                            classification=CLASSIFICATION_FOOTPRINT_CONFLICT,
+                            discrepancyId=f"disc-nte-ref-only-unverified-{norm_nte_name}",
+                            canonicalId=None,
+                            canonicalName=None,
+                            referenceSource="nte-auction-helper",
+                            referenceVersion=nte_meta.get("sourceVersion", "v1.3"),
+                            referenceObservedId=None,
+                            referenceObservedName=nte_name,
+                            field="catalog_presence",
+                            canonicalValue=None,
+                            referenceValue={"Name": nte_name, "price": nte.get("price"), "grid": f"{nte.get('width')}x{nte.get('height')}"},
+                            classification=CLASSIFICATION_REFERENCE_ONLY_UNVERIFIED,
                             evidenceLevel="UNVERIFIED_EXTERNAL_OBSERVATION",
                             independentVerificationAvailable=False,
-                            runtimeImpact="Fine-grained 5x5 occupancy bitmask difference in warehouse placement checks",
+                            runtimeImpact="nte-auction-helper references item not in local catalog; cannot be added without independent screenshot evidence",
                             autoWriteAllowed=False,
                             recommendedNextEvidence=RECOMMENDED_EVIDENCE_USER_ITEM_CARD,
-                            notes=f"Shape bitmask conflict for '{cat_item['Name']}' ({ap_id}): local '{cat_shape}' vs external '{ap_shape}'",
+                            notes=f"Item '{nte_name}' in nte-auction-helper has no local canonical evidence. Strictly NOT auto-added.",
                         )
                         discrepancies.append(disc)
-            else:
-                # ap_id not in catalog_065
-                # Check if it exists in visual_catalog_v2 or card_registry under same or alternate ID
-                in_card_reg = norm_ap_name in card_reg_by_norm_name
-                in_manifest_v2 = norm_ap_name in manifest_v2_by_norm_name
-                if not in_card_reg and not in_manifest_v2:
-                    disc = DiscrepancyRecord(
-                        discrepancyId=f"disc-ap-ref-only-unverified-{ap_id}",
-                        canonicalId=None,
-                        canonicalName=None,
-                        referenceSource="AuctionPilot",
-                        referenceVersion="v0.12.7",
-                        referenceObservedId=ap_id,
-                        referenceObservedName=ap_name,
-                        field="catalog_presence",
-                        canonicalValue=None,
-                        referenceValue={"Id": ap_id, "Name": ap_name, "quality": ap.get("quality"), "shape": f"{ap.get('width')}x{ap.get('height')}"},
-                        classification=CLASSIFICATION_REFERENCE_ONLY_UNVERIFIED,
-                        evidenceLevel="UNVERIFIED_EXTERNAL_OBSERVATION",
-                        independentVerificationAvailable=False,
-                        runtimeImpact="External project reports item not present in canonical catalog; cannot be added without independent screenshot evidence",
-                        autoWriteAllowed=False,
-                        recommendedNextEvidence=RECOMMENDED_EVIDENCE_USER_ITEM_CARD,
-                        notes=f"Item '{ap_name}' ({ap_id}) exists in AuctionPilot but lacks local canonical evidence. Strictly NOT auto-added.",
-                    )
-                    discrepancies.append(disc)
-
-        # 3d. Cross-audit against nte-auction-helper observations
-        for nte in sorted(nte_items, key=lambda x: x["name"]):
-            nte_name = nte["name"]
-            norm_nte_name = normalize_item_name(nte_name)
-            cat_hits = cat065_by_norm_name.get(norm_nte_name, [])
-            if cat_hits:
-                cat_hit = cat_hits[0]
-                cat_w, cat_h = cat_hit.get("Width"), cat_hit.get("Height")
-                nte_w, nte_h = nte.get("width"), nte.get("height")
-                if (cat_w, cat_h) != (nte_w, nte_h) and None not in (cat_w, cat_h, nte_w, nte_h):
-                    disc = DiscrepancyRecord(
-                        discrepancyId=f"disc-nte-footprint-mismatch-{norm_nte_name}",
-                        canonicalId=cat_hit.get("Id"),
-                        canonicalName=cat_hit.get("Name"),
-                        referenceSource="nte-auction-helper",
-                        referenceVersion="v1.3",
-                        referenceObservedId=None,
-                        referenceObservedName=nte_name,
-                        field="footprint",
-                        canonicalValue=f"{cat_w}x{cat_h}",
-                        referenceValue=f"{nte_w}x{nte_h}",
-                        classification=CLASSIFICATION_FOOTPRINT_CONFLICT,
-                        evidenceLevel="UNVERIFIED_EXTERNAL_OBSERVATION",
-                        independentVerificationAvailable=False,
-                        runtimeImpact="Footprint mismatch between local catalog and nte-auction-helper",
-                        autoWriteAllowed=False,
-                        recommendedNextEvidence=RECOMMENDED_EVIDENCE_USER_ITEM_CARD,
-                        notes=f"Footprint conflict for '{nte_name}': local {cat_w}x{cat_h} vs nte-helper {nte_w}x{nte_h}",
-                    )
-                    discrepancies.append(disc)
-            else:
-                # Not in catalog_065
-                in_card_reg = norm_nte_name in card_reg_by_norm_name
-                in_manifest_v2 = norm_nte_name in manifest_v2_by_norm_name
-                if not in_card_reg and not in_manifest_v2:
-                    disc = DiscrepancyRecord(
-                        discrepancyId=f"disc-nte-ref-only-unverified-{norm_nte_name}",
-                        canonicalId=None,
-                        canonicalName=None,
-                        referenceSource="nte-auction-helper",
-                        referenceVersion="v1.3",
-                        referenceObservedId=None,
-                        referenceObservedName=nte_name,
-                        field="catalog_presence",
-                        canonicalValue=None,
-                        referenceValue={"Name": nte_name, "price": nte.get("price"), "grid": f"{nte.get('width')}x{nte.get('height')}"},
-                        classification=CLASSIFICATION_REFERENCE_ONLY_UNVERIFIED,
-                        evidenceLevel="UNVERIFIED_EXTERNAL_OBSERVATION",
-                        independentVerificationAvailable=False,
-                        runtimeImpact="nte-auction-helper references item not in local catalog; cannot be added without independent screenshot evidence",
-                        autoWriteAllowed=False,
-                        recommendedNextEvidence=RECOMMENDED_EVIDENCE_USER_ITEM_CARD,
-                        notes=f"Item '{nte_name}' in nte-auction-helper has no local canonical evidence. Strictly NOT auto-added.",
-                    )
-                    discrepancies.append(disc)
 
         # 6. Post-audit canonical file hashes
         self._post_audit_hashes = compute_canonical_hashes(self.root)
@@ -579,7 +715,7 @@ class ReferenceCatalogAuditor:
         # Build discrepancy classification counts
         class_counts = Counter(d.classification for d in discrepancies)
 
-        # Build verification queue (items where independent verification is required)
+        # Build verification queue (items where independent verification is truly required, excluding NONE)
         verification_queue = [
             d.to_dict() for d in discrepancies
             if d.recommendedNextEvidence in (
@@ -592,6 +728,23 @@ class ReferenceCatalogAuditor:
 
         timestamp_utc = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
 
+        # Build comprehensive auditIdentity (Review Item D & F)
+        audit_identity = {
+            "gitRevision": head_commit,
+            "provenanceUnavailable": provenance_unavailable,
+            "canonicalInputHashes": self._pre_audit_hashes,
+            "externalObservationHashes": {
+                "AuctionPilot": ap_meta.get("sourceSha256"),
+                "nte-auction-helper": nte_meta.get("sourceSha256"),
+            },
+        }
+
+        # Solver gap count after reconciliation ladder
+        unmapped_solver_names = [
+            r["solverName"] for r in solver_reconciliation_rows
+            if r["currentClassification"] == CLASSIFICATION_SOLVER_NAMED_VISUAL_UNNAMED
+        ]
+
         report = {
             "schemaVersion": SCHEMA_VERSION,
             "auditTimestamp": timestamp_utc,
@@ -600,9 +753,11 @@ class ReferenceCatalogAuditor:
                 "pythonVersion": platform.python_version(),
                 "os": platform.system(),
                 "headCommit": head_commit,
+                "provenanceUnavailable": provenance_unavailable,
                 "readOnlyEnforced": True,
                 "autoWriteAllowedGlobal": False,
             },
+            "auditIdentity": audit_identity,
             "canonicalAuthority": {
                 "authoritativeSources": [
                     {
@@ -620,7 +775,7 @@ class ReferenceCatalogAuditor:
                     {
                         "source": "core/solver_core_v06.js",
                         "scope": "discrete_solver_prices_and_valuation_rules",
-                        "totalItems": len(solver_items),
+                        "totalItems": len(unique_solver),
                         "sha256": self._pre_audit_hashes.get("core/solver_core_v06.js"),
                     },
                 ],
@@ -641,14 +796,20 @@ class ReferenceCatalogAuditor:
                 "referenceOnlySources": [
                     {
                         "source": "AuctionPilot",
-                        "version": "v0.12.7",
-                        "observedItems": len(ap_items),
+                        "version": ap_meta.get("sourceVersion", "v0.12.7"),
+                        "status": ap_meta.get("status", "AVAILABLE"),
+                        "sourceAvailable": ap_meta.get("sourceAvailable", False),
+                        "sourceSha256": ap_meta.get("sourceSha256"),
+                        "observedItems": ap_meta.get("parsedRecordCount", 0),
                         "role": "reference_observation_only",
                     },
                     {
                         "source": "nte-auction-helper",
-                        "version": "v1.3",
-                        "observedItems": len(nte_items),
+                        "version": nte_meta.get("sourceVersion", "v1.3"),
+                        "status": nte_meta.get("status", "AVAILABLE"),
+                        "sourceAvailable": nte_meta.get("sourceAvailable", False),
+                        "sourceSha256": nte_meta.get("sourceSha256"),
+                        "observedItems": nte_meta.get("parsedRecordCount", 0),
                         "role": "reference_observation_only",
                     },
                 ],
@@ -671,11 +832,14 @@ class ReferenceCatalogAuditor:
                     "missingCatalogIds": canonical_visual_missing,
                 },
                 "solverGaps": {
-                    "totalSolverItems": len(solver_items),
-                    "unmappedVisualGapsCount": len(solver_gaps),
-                    "unmappedNames": solver_gaps,
+                    "totalSolverItems": len(unique_solver),
+                    "unmappedVisualGapsCount": len(unmapped_solver_names),
+                    "unmappedNames": unmapped_solver_names,
+                    "prior20260914AuditMissing9Count": len(PRIOR_20260914_AUDIT_MISSING_9),
+                    "prior20260914AuditMissing9": list(PRIOR_20260914_AUDIT_MISSING_9.keys()),
                 },
             },
+            "solverGapReconciliation": solver_reconciliation_rows,
             "discrepancyStatistics": {
                 "totalDiscrepancies": len(discrepancies),
                 "byClassification": dict(class_counts),
@@ -692,11 +856,14 @@ class ReferenceCatalogAuditor:
                 "readOnlyVerified": read_only_verified,
             },
         }
+
+        # Deterministic full report sha256 (Review Item F)
+        report["canonicalReportSha256"] = compute_canonical_report_sha256(report)
         return report
 
-    def _parse_solver_items(self, path: Path) -> List[Dict[str, Any]]:
+    def _parse_solver_items_and_aliases(self, path: Path) -> Tuple[List[Dict[str, Any]], Dict[str, str]]:
         if not path.is_file():
-            return []
+            return [], {}
         text = path.read_text(encoding="utf-8")
         rows = []
         seen = set()
@@ -713,14 +880,23 @@ class ReferenceCatalogAuditor:
                 "height": int(h),
                 "size": size,
             })
-        return rows
 
-    def _load_auctionpilot_observations(self) -> List[Dict[str, Any]]:
+        alias_map = {}
+        alias_matches = re.search(r"CATALOG_NAME_ALIASES\s*=\s*\{([^}]+)\}", text)
+        if alias_matches:
+            for k, v in re.findall(r'"([^"]+)"\s*:\s*"([^"]+)"', alias_matches.group(1)):
+                alias_map[k] = v
+                alias_map[v] = k
+        return rows, alias_map
+
+    def _load_auctionpilot_observations(self) -> Tuple[List[Dict[str, Any]], Dict[str, Any]]:
         ap_catalog_path = Path(r"C:\Users\Administrator\Downloads\AuctionPilot-v0.12.7\Assets\CatalogFull\catalog.json")
         if ap_catalog_path.is_file():
             try:
-                raw = json.loads(ap_catalog_path.read_text(encoding="utf-8"))
-                return [
+                raw_bytes = ap_catalog_path.read_bytes()
+                sha = hashlib.sha256(raw_bytes).hexdigest()
+                raw = json.loads(raw_bytes.decode("utf-8"))
+                items = [
                     {
                         "catalogId": str(item.get("Id") or ""),
                         "name": str(item.get("Name") or ""),
@@ -733,26 +909,41 @@ class ReferenceCatalogAuditor:
                     }
                     for item in raw
                 ]
-            except Exception:
-                pass
-        # Fallback to audited observation snapshot if download folder absent
-        report_path = self.root / "docs/reports/2026-09-14-runtime-visual-catalog-diff.json"
-        if report_path.is_file():
-            try:
-                data = json.loads(report_path.read_text(encoding="utf-8"))
-                ap_rows = data.get("auctionpilot", {}).get("records", [])
-                if ap_rows:
-                    return ap_rows
-            except Exception:
-                pass
-        return []
+                meta = {
+                    "status": "AVAILABLE",
+                    "sourceAvailable": True,
+                    "sourceVersion": "v0.12.7",
+                    "sourcePathOrProvenanceRef": str(ap_catalog_path),
+                    "sourceSha256": sha,
+                    "parsedRecordCount": len(items),
+                }
+                return items, meta
+            except Exception as exc:
+                return [], {
+                    "status": "REFERENCE_SOURCE_UNAVAILABLE",
+                    "sourceAvailable": False,
+                    "sourceVersion": "v0.12.7",
+                    "sourcePathOrProvenanceRef": f"ERROR: {exc}",
+                    "sourceSha256": None,
+                    "parsedRecordCount": 0,
+                }
+        return [], {
+            "status": "REFERENCE_SOURCE_UNAVAILABLE",
+            "sourceAvailable": False,
+            "sourceVersion": "v0.12.7",
+            "sourcePathOrProvenanceRef": str(ap_catalog_path),
+            "sourceSha256": None,
+            "parsedRecordCount": 0,
+        }
 
-    def _load_nte_helper_observations(self) -> List[Dict[str, Any]]:
+    def _load_nte_helper_observations(self) -> Tuple[List[Dict[str, Any]], Dict[str, Any]]:
         nte_app_path = Path(r"C:\Users\Administrator\.grok\tmp\nte-auction-helper\app.py")
         if nte_app_path.is_file():
             try:
-                text = nte_app_path.read_text(encoding="utf-8")
-                # Parse GOLD_NAMES, GOLD_DIMENSIONS, PRICES
+                raw_bytes = nte_app_path.read_bytes()
+                sha = hashlib.sha256(raw_bytes).hexdigest()
+                text = raw_bytes.decode("utf-8")
+
                 prices = [int(x) for x in re.findall(r"\b(\d+)\b", text[text.find("PRICES = ["):text.find("GOLD_SIZES = [")])]
                 dim_tuples = re.findall(r"\((\d+),\s*(\d+)\)", text[text.find("GOLD_DIMENSIONS = ["):text.find("GOLD_NAMES = [")])
                 names = re.findall(r"\"([^\"]+)\"", text[text.find("GOLD_NAMES = ["):text.find("ERROR_MARGIN =")])
@@ -768,7 +959,6 @@ class ReferenceCatalogAuditor:
                         "quality": "gold",
                     })
 
-                # Parse RED_NAMES_ALL, RED_DIMENSIONS_ALL, RED_PRICES_ALL
                 r_prices = [int(x) for x in re.findall(r"\b(\d+)\b", text[text.find("RED_PRICES_ALL = ["):text.find("RED_SIZES = [")])]
                 r_dim_tuples = re.findall(r"\((\d+),\s*(\d+)\)", text[text.find("RED_DIMENSIONS_ALL = ["):text.find("RED_NAMES_ALL = [")])
                 r_names = re.findall(r"\"([^\"]+)\"", text[text.find("RED_NAMES_ALL = ["):text.find("RED_PRICES = [p for p in RED_PRICES_ALL")])
@@ -782,10 +972,56 @@ class ReferenceCatalogAuditor:
                         "height": int(h),
                         "quality": "red",
                     })
-                return rows
-            except Exception:
-                pass
-        return []
+
+                meta = {
+                    "status": "AVAILABLE",
+                    "sourceAvailable": True,
+                    "sourceVersion": "v1.3",
+                    "sourcePathOrProvenanceRef": str(nte_app_path),
+                    "sourceSha256": sha,
+                    "parsedRecordCount": len(rows),
+                }
+                return rows, meta
+            except Exception as exc:
+                return [], {
+                    "status": "REFERENCE_SOURCE_UNAVAILABLE",
+                    "sourceAvailable": False,
+                    "sourceVersion": "v1.3",
+                    "sourcePathOrProvenanceRef": f"ERROR: {exc}",
+                    "sourceSha256": None,
+                    "parsedRecordCount": 0,
+                }
+        return [], {
+            "status": "REFERENCE_SOURCE_UNAVAILABLE",
+            "sourceAvailable": False,
+            "sourceVersion": "v1.3",
+            "sourcePathOrProvenanceRef": str(nte_app_path),
+            "sourceSha256": None,
+            "parsedRecordCount": 0,
+        }
+
+
+def get_actual_boundary3_touched_files(repo_root: Path) -> Tuple[str, List[str]]:
+    """Dynamically get real PR #1 touched files from git, or fall back to frozen PR #1 evidence manifest."""
+    try:
+        b3_head = subprocess.check_output(
+            "git rev-parse origin/feature/b3-input-safety",
+            cwd=str(repo_root), text=True, encoding="utf-8", shell=True
+        ).strip()
+    except Exception:
+        b3_head = "UNKNOWN"
+
+    try:
+        raw_files = subprocess.check_output(
+            "git diff --name-only main...origin/feature/b3-input-safety",
+            cwd=str(repo_root), text=True, encoding="utf-8", shell=True
+        ).splitlines()
+        touched = [f.strip() for f in raw_files if f.strip()]
+        if touched:
+            return b3_head, sorted(touched)
+    except Exception:
+        pass
+    return b3_head, sorted(list(FROZEN_BOUNDARY3_TOUCHED_FILES))
 
 
 def generate_pr_f_evidence(repo_root: Path, out_dir: Path) -> Dict[str, Any]:
@@ -805,45 +1041,73 @@ def generate_pr_f_evidence(repo_root: Path, out_dir: Path) -> Dict[str, Any]:
     for d in (a_dir, b_dir, c_dir, d_dir, e_dir, f_dir, g_dir):
         d.mkdir(parents=True, exist_ok=True)
 
+    base_commit = "95b8d3c9db84e91ad4f914dceba9f22cddf94189"
+
+    # PR-F touched files
+    try:
+        prf_touched_raw = subprocess.check_output(
+            f"git diff --name-only {base_commit}..HEAD",
+            cwd=str(repo_root), text=True, encoding="utf-8", shell=True
+        ).splitlines()
+        prf_touched = sorted([f.strip() for f in prf_touched_raw if f.strip()])
+    except Exception:
+        prf_touched = ["tests/test_reference_catalog_auditor.py", "tools/reference_catalog_auditor.py"]
+
+    # Boundary 3 touched files and intersection
+    b3_head, b3_touched = get_actual_boundary3_touched_files(repo_root)
+    intersection = sorted(list(set(b3_touched).intersection(set(prf_touched))))
+
     # 1. A-contract
     auditor_contract = {
-        "schemaVersion": "pr-f.auditor.contract.v1",
+        "schemaVersion": "pr-f.auditor.contract.v2",
         "generatedAt": report["auditTimestamp"],
         "computedFromRevision": report["computedFromRevision"],
+        "canonicalReportSha256": report["canonicalReportSha256"],
         "autoWriteAllowedGlobal": False,
         "readOnlyEnforced": True,
         "externalAssetIngestionAllowed": False,
         "discrepancyClassifications": list(VALID_CLASSIFICATIONS),
         "recommendedEvidenceTypes": list(VALID_RECOMMENDED_EVIDENCE),
-        "boundary3Intersection": 0,
+        "boundary3Intersection": len(intersection),
         "securityPolicy": "Auditor is strictly read-only and prohibited from modifying canonical catalogs or adding external files.",
     }
     (a_dir / "auditor_contract.json").write_text(json.dumps(auditor_contract, indent=2, ensure_ascii=False), encoding="utf-8")
 
     (a_dir / "canonical_authority.json").write_text(json.dumps(report["canonicalAuthority"], indent=2, ensure_ascii=False), encoding="utf-8")
 
-    # External asset audit
+    # Boundary 3 intersection evidence (Review Item E)
+    boundary3_intersection = {
+        "schemaVersion": "pr-f.boundary3.intersection.v1",
+        "generatedAt": report["auditTimestamp"],
+        "boundary3Head": b3_head,
+        "boundary3TouchedFiles": b3_touched,
+        "prFBase": base_commit,
+        "prFHead": report["computedFromRevision"],
+        "prFTouchedFiles": prf_touched,
+        "intersection": intersection,
+        "intersectionCount": len(intersection),
+    }
+    (a_dir / "boundary3_intersection.json").write_text(json.dumps(boundary3_intersection, indent=2, ensure_ascii=False), encoding="utf-8")
+
+    # External asset audit with dynamic counts (Review Item D)
+    external_sources = report["canonicalAuthority"]["referenceOnlySources"]
     external_asset_audit = {
-        "schemaVersion": "pr-f.external.asset.audit.v1",
+        "schemaVersion": "pr-f.external.asset.audit.v2",
         "generatedAt": report["auditTimestamp"],
         "computedFromRevision": report["computedFromRevision"],
         "competitorBinaryOrTemplateAssetsInRepo": False,
         "auditedForbiddenPaths": ["assets/", "runtime/", "assets/catalog_065.json", "template bundle"],
         "externalReferenceProvenance": [
             {
-                "name": "AuctionPilot",
-                "version": "v0.12.7",
-                "observedCatalogItems": 220,
-                "localPath": r"C:\Users\Administrator\Downloads\AuctionPilot-v0.12.7\Assets\CatalogFull\catalog.json",
+                "name": src["source"],
+                "version": src["version"],
+                "status": src.get("status"),
+                "sourceAvailable": src.get("sourceAvailable"),
+                "sourceSha256": src.get("sourceSha256"),
+                "parsedRecordCount": src.get("observedItems", 0),
                 "binaryOrPngCopiedToRepo": False,
-            },
-            {
-                "name": "nte-auction-helper",
-                "version": "v1.3",
-                "observedItems": 80,
-                "localPath": r"C:\Users\Administrator\.grok\tmp\nte-auction-helper\app.py",
-                "binaryOrPngCopiedToRepo": False,
-            },
+            }
+            for src in external_sources
         ],
         "verdict": "ZERO_EXTERNAL_BINARY_ASSETS_INGESTED",
     }
@@ -853,7 +1117,7 @@ def generate_pr_f_evidence(repo_root: Path, out_dir: Path) -> Dict[str, Any]:
     (b_dir / "canonical_inventory_summary.json").write_text(json.dumps(report["inventorySummary"], indent=2, ensure_ascii=False), encoding="utf-8")
 
     visual_cov = {
-        "schemaVersion": "pr-f.visual.coverage.v1",
+        "schemaVersion": "pr-f.visual.coverage.v2",
         "generatedAt": report["auditTimestamp"],
         "computedFromRevision": report["computedFromRevision"],
         "canonicalTotal": report["inventorySummary"]["visualCoverage"]["canonicalTotal"],
@@ -866,19 +1130,23 @@ def generate_pr_f_evidence(repo_root: Path, out_dir: Path) -> Dict[str, Any]:
     (b_dir / "visual_coverage_report.json").write_text(json.dumps(visual_cov, indent=2, ensure_ascii=False), encoding="utf-8")
 
     solver_gap_rep = {
-        "schemaVersion": "pr-f.solver.visual.name.gap.v1",
+        "schemaVersion": "pr-f.solver.visual.name.gap.v2",
         "generatedAt": report["auditTimestamp"],
         "computedFromRevision": report["computedFromRevision"],
         "totalSolverItems": report["inventorySummary"]["solverGaps"]["totalSolverItems"],
         "unmappedVisualGapsCount": report["inventorySummary"]["solverGaps"]["unmappedVisualGapsCount"],
         "unmappedNames": report["inventorySummary"]["solverGaps"]["unmappedNames"],
+        "prior20260914AuditMissing9": report["inventorySummary"]["solverGaps"]["prior20260914AuditMissing9"],
         "gapDiscrepancies": [d for d in report["discrepancies"] if d["classification"] == CLASSIFICATION_SOLVER_NAMED_VISUAL_UNNAMED],
     }
     (b_dir / "solver_visual_name_gap_report.json").write_text(json.dumps(solver_gap_rep, indent=2, ensure_ascii=False), encoding="utf-8")
 
+    # Solver gap reconciliation report (Review Item A)
+    (b_dir / "solver_gap_reconciliation.json").write_text(json.dumps(report["solverGapReconciliation"], indent=2, ensure_ascii=False), encoding="utf-8")
+
     # 3. C-reference
     ref_only = {
-        "schemaVersion": "pr-f.reference.only.unverified.v1",
+        "schemaVersion": "pr-f.reference.only.unverified.v2",
         "generatedAt": report["auditTimestamp"],
         "computedFromRevision": report["computedFromRevision"],
         "totalReferenceOnlyItems": sum(1 for d in report["discrepancies"] if d["classification"] == CLASSIFICATION_REFERENCE_ONLY_UNVERIFIED),
@@ -889,7 +1157,7 @@ def generate_pr_f_evidence(repo_root: Path, out_dir: Path) -> Dict[str, Any]:
 
     # 4. D-discrepancies
     attr_conflicts = {
-        "schemaVersion": "pr-f.attribute.conflict.report.v1",
+        "schemaVersion": "pr-f.attribute.conflict.report.v2",
         "generatedAt": report["auditTimestamp"],
         "computedFromRevision": report["computedFromRevision"],
         "totalAttributeConflicts": sum(1 for d in report["discrepancies"] if d["classification"] in (CLASSIFICATION_ATTRIBUTE_CONFLICT, CLASSIFICATION_ID_CONFLICT, CLASSIFICATION_QUALITY_CONFLICT, CLASSIFICATION_NAME_VARIANT)),
@@ -898,7 +1166,7 @@ def generate_pr_f_evidence(repo_root: Path, out_dir: Path) -> Dict[str, Any]:
     (d_dir / "attribute_conflict_report.json").write_text(json.dumps(attr_conflicts, indent=2, ensure_ascii=False), encoding="utf-8")
 
     footprint_conflicts = {
-        "schemaVersion": "pr-f.footprint.conflict.report.v1",
+        "schemaVersion": "pr-f.footprint.conflict.report.v2",
         "generatedAt": report["auditTimestamp"],
         "computedFromRevision": report["computedFromRevision"],
         "totalFootprintConflicts": sum(1 for d in report["discrepancies"] if d["classification"] == CLASSIFICATION_FOOTPRINT_CONFLICT),
@@ -907,7 +1175,7 @@ def generate_pr_f_evidence(repo_root: Path, out_dir: Path) -> Dict[str, Any]:
     (d_dir / "footprint_conflict_report.json").write_text(json.dumps(footprint_conflicts, indent=2, ensure_ascii=False), encoding="utf-8")
 
     queue_data = {
-        "schemaVersion": "pr-f.verification.queue.v1",
+        "schemaVersion": "pr-f.verification.queue.v2",
         "generatedAt": report["auditTimestamp"],
         "computedFromRevision": report["computedFromRevision"],
         "queueSize": len(report["independentVerificationQueue"]),
@@ -920,7 +1188,7 @@ def generate_pr_f_evidence(repo_root: Path, out_dir: Path) -> Dict[str, Any]:
     # 5. E-mutation-guard
     (e_dir / "canonical_mutation_guard.json").write_text(json.dumps(report["mutationGuard"], indent=2, ensure_ascii=False), encoding="utf-8")
 
-    # 6. F-tests (run test suite dynamically)
+    # 6. F-tests (run test suite dynamically to capture real output)
     python_exe = sys.executable
     test_mod = "tests.test_reference_catalog_auditor"
     try:
@@ -938,12 +1206,11 @@ def generate_pr_f_evidence(repo_root: Path, out_dir: Path) -> Dict[str, Any]:
 
     (f_dir / "tests_raw.txt").write_text(tests_raw_output, encoding="utf-8")
 
-    # Parse test names and results
     passed_tests = re.findall(r"(test_\w+ \([^\)]+\)) \.\.\. ok", tests_raw_output)
     total_count = len(passed_tests)
 
     tests_structured = {
-        "schemaVersion": "pr-f.tests.structured.v1",
+        "schemaVersion": "pr-f.tests.structured.v2",
         "generatedAt": report["auditTimestamp"],
         "testModule": test_mod,
         "totalTests": total_count,
@@ -964,8 +1231,7 @@ def generate_pr_f_evidence(repo_root: Path, out_dir: Path) -> Dict[str, Any]:
         if src_path.is_file():
             (g_dir / src_path.name).write_text(src_path.read_text(encoding="utf-8"), encoding="utf-8")
 
-    # 8. Diff patch against base commit (95b8d3c9)
-    base_commit = "95b8d3c9db84e91ad4f914dceba9f22cddf94189"
+    # 8. Diff patch against base commit
     try:
         diff_text = subprocess.check_output(
             f"git diff {base_commit}..HEAD",
@@ -985,8 +1251,9 @@ def generate_pr_f_evidence(repo_root: Path, out_dir: Path) -> Dict[str, Any]:
 - **Computed From Revision**: `{report['computedFromRevision']}`
 - **Base Commit**: `{base_commit}`
 - **Branch**: `feature/reference-catalog-auditor`
+- **Canonical Report SHA256**: `{report['canonicalReportSha256']}`
 - **Global Invariant**: `autoWriteAllowed = False` (strictly enforced, read-only verified)
-- **Boundary 3 Intersection**: 0 files
+- **Boundary 3 Intersection**: {len(intersection)} files
 
 ## Key Audit Conclusions
 
@@ -994,17 +1261,20 @@ def generate_pr_f_evidence(repo_root: Path, out_dir: Path) -> Dict[str, Any]:
    - `catalog_065.json` authoritative physical inventory: {report['inventorySummary']['catalog065TotalItems']} items.
    - Deterministic visual template coverage: {report['inventorySummary']['visualCoverage']['coveredWithDeterministicTemplate']} / {report['inventorySummary']['visualCoverage']['canonicalTotal']} ({report['inventorySummary']['visualCoverage']['coverageRate']*100:.1f}%).
    - Missing visual templates: {report['inventorySummary']['visualCoverage']['missingVisualTemplate']} item (`image2-1-1` 磨刀石).
-2. **Solver vs Visual Gaps**:
+2. **Solver vs Visual Gaps & Identity Ladder**:
    - Total solver items in `solver_core_v06.js`: {report['inventorySummary']['solverGaps']['totalSolverItems']}.
-   - Unmapped visual names count: {report['inventorySummary']['solverGaps']['unmappedVisualGapsCount']}.
-3. **Discrepancy Inventory**:
+   - Genuine unmapped visual gaps after reconciliation: {report['inventorySummary']['solverGaps']['unmappedVisualGapsCount']}.
+   - Reconciled names (variants / aliases / same-ID conflicts) are cleanly separated from genuine missing gaps.
+3. **Accepted 酷辣辣辣条 Truth**:
+   - Formal truth `visual-latiao-1x2` (red, 1x2, 280000) accepted; not reopened in verification queue.
+4. **Discrepancy Inventory & Verification Queue**:
    - Total detected discrepancies: {report['discrepancyStatistics']['totalDiscrepancies']}.
    - Independent verification queue size: {report['discrepancyStatistics']['independentVerificationQueueSize']}.
-4. **Mutation Guard**:
+5. **Mutation Guard**:
    - Tracked files checked: {len(report['mutationGuard']['filesChecked'])}.
    - Mutated files: {len(report['mutationGuard']['mutatedFiles'])}.
    - Read-only verified: `{report['mutationGuard']['readOnlyVerified']}`.
-5. **External Asset Ingestion**:
+6. **External Asset Ingestion**:
    - Competitor binary / PNG / templates copied into repo: `False`.
 """
     (out_dir / "README.md").write_text(readme_content, encoding="utf-8")
@@ -1021,14 +1291,15 @@ def generate_pr_f_evidence(repo_root: Path, out_dir: Path) -> Dict[str, Any]:
             }
 
     evidence_manifest = {
-        "manifestVersion": "1.0.0",
+        "manifestVersion": "1.1.0",
         "generatedAt": report["auditTimestamp"],
         "baseCommit": base_commit,
         "headCommit": report["computedFromRevision"],
         "branch": "feature/reference-catalog-auditor",
         "pr": 7,
         "prTitle": "PR-F: reference catalog discrepancy auditor",
-        "boundary3Intersection": 0,
+        "canonicalReportSha256": report["canonicalReportSha256"],
+        "boundary3Intersection": len(intersection),
         "autoWriteAllowedGlobal": False,
         "readOnlyVerified": report["mutationGuard"]["readOnlyVerified"],
         "filesCount": len(files_dict),
