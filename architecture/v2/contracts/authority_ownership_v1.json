@@ -1,0 +1,100 @@
+{
+  "schemaVersion": "authority.ownership.v1",
+  "protocolVersion": "1.0.0",
+  "governingPrinciple": "Strict Single Source of Truth (SSOT). Subsystems have mutually exclusive domain authority. Host UI is strictly a projection view.",
+  "authorities": {
+    "nativeHost": {
+      "domain": "Operating System, Hardware I/O, Windowing & Process Lifetime",
+      "exclusiveResponsibilities": [
+        {
+          "area": "HWND Identity & Window Geometry",
+          "authority": "SOLE_AUTHORITY",
+          "description": "Enumerates, tracks, and bounds the target game client window (htgame.exe / 异环)."
+        },
+        {
+          "area": "Foreground & Focus Transition",
+          "authority": "SOLE_AUTHORITY",
+          "description": "Detects active window focus via SetWinEventHook; emits authoritative FOCUS_LOST / FOCUS_GAINED signals."
+        },
+        {
+          "area": "Physical Input Observation & Takeover Guard",
+          "authority": "SOLE_AUTHORITY",
+          "description": "Intercepts global mouse/keyboard events on dedicated Win32 thread; enforces SSOT active scan freeze."
+        },
+        {
+          "area": "Capture Frame Acquisition & Timing",
+          "authority": "SOLE_AUTHORITY",
+          "description": "Controls frame capture clock, assigns monotonic sequence numbers, timestamps acquisition in nanoseconds."
+        },
+        {
+          "area": "Process Supervision & Child Lifecycle",
+          "authority": "SOLE_AUTHORITY",
+          "description": "Spawns, monitors, and restarts child Python process; manages Named Pipe and MMF lifetime."
+        },
+        {
+          "area": "Native Host Capabilities",
+          "authority": "SOLE_AUTHORITY",
+          "description": "Authoritatively advertises available Win32 and Direct3D capabilities."
+        }
+      ],
+      "prohibitions": [
+        "Host SHALL NOT arbitrate item identity, canonical item names, or catalog ID mappings.",
+        "Host SHALL NOT calculate valuation distributions, price estimates, or profit margins.",
+        "Host SHALL NOT create, mutate, or finalize MatchRecord v7 or draft records.",
+        "Host SHALL NOT determine winner attribution or auction resolution."
+      ]
+    },
+    "pythonEngine": {
+      "domain": "Computer Vision, Domain Semantics, Valuation Mathematics & Canonical State",
+      "exclusiveResponsibilities": [
+        {
+          "area": "CurrentMatch Authority",
+          "authority": "SOLE_AUTHORITY",
+          "description": "Holds the sole in-memory authority for current match lifecycle (DRAFT -> FINALIZED), zero ghost drafts, and field status."
+        },
+        {
+          "area": "Canonical History Store & Ledger",
+          "authority": "SOLE_AUTHORITY",
+          "description": "Manages permanent match persistence, manifest checksums, export zip creation, and audit trails."
+        },
+        {
+          "area": "Item Identity & Visual Catalog",
+          "authority": "SOLE_AUTHORITY",
+          "description": "Arbitrates resolve_local_identity, 214-item catalog, verified source card registry, and same-ID conflict rules."
+        },
+        {
+          "area": "Valuation Solver & Historical Shadow",
+          "authority": "SOLE_AUTHORITY",
+          "description": "Executes six-quality joint valuation model, historical shadow algorithms, and sell-all profit optimizations."
+        },
+        {
+          "area": "Bids & Intel Structuring",
+          "authority": "SOLE_AUTHORITY",
+          "description": "Parses raw text tokens into structured bids, seller seats, winner roster, and free intel chains."
+        },
+        {
+          "area": "Winner Business Attribution",
+          "authority": "SOLE_AUTHORITY",
+          "description": "Evaluates final transaction receipts and resolves winner identity against local player profile."
+        }
+      ],
+      "prohibitions": [
+        "Python SHALL NOT directly invoke Win32 EnumWindows or SetWindowsHookEx in production.",
+        "Python SHALL NOT directly manage OS HWND placement or DirectComposition transparency.",
+        "Python SHALL NOT directly inject hardware SendInput events without Host TOCTOU verification."
+      ]
+    },
+    "hostUiOverlay": {
+      "domain": "Presentation & User Interaction Projection",
+      "role": "PROJECTION_VIEW_ONLY",
+      "rules": [
+        "Host UI overlay is strictly a read-only projection view of CurrentMatch and PerceptionResult.",
+        "Host UI SHALL NOT maintain an independent business truth state.",
+        "User clicks, button toggles, or hotkeys in the UI are emitted to Python Engine as COMMAND intent messages with unique commandId.",
+        "Host UI SHALL NOT declare a match finalized or item identified until authoritative Python confirmation is received.",
+        "If a disconnection occurs, Host UI renders a 'Reconnecting...' state projection without discarding active HUD layout."
+      ]
+    }
+  },
+  "conflictResolutionPolicy": "In any scenario where Host UI projection contradicts Python Engine state, Python Engine state is the immutable Single Source of Truth. Host UI must re-sync via STATE_SNAPSHOT."
+}

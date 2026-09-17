@@ -1,0 +1,41 @@
+{
+  "schemaVersion": "security.boundary.v1",
+  "protocolVersion": "1.0.0",
+  "title": "NTE Host-Engine Security Boundary & Isolation Specification",
+  "description": "Defines cryptographic naming derivation, access control lists (ACLs), process boundary protections, and input takeover safety guards.",
+  "namingDerivation": {
+    "pipeName": {
+      "template": "\\\\.\\pipe\\nte_engine_ipc_{sessionId}_{nonce}",
+      "sessionIdFormat": "RFC 4122 UUIDv4 (e.g. 'c3b9e4a1-8d2f-4a0b-9c7e-123456789abc')",
+      "nonceFormat": "128-bit (32-character) cryptographically secure random hex string",
+      "generationRule": "Host generates unique sessionId on application startup, and a new unique nonce on each child process spawn."
+    },
+    "sharedMemoryName": {
+      "template": "Local\\NteFrameBuffer_v1_{sessionId}_{nonce}",
+      "namespace": "Local\\ (session-isolated, non-global)",
+      "generationRule": "Uses identical sessionId and nonce as active control plane pipe."
+    }
+  },
+  "accessControl": {
+    "namedPipe": {
+      "pipeMode": "PIPE_TYPE_BYTE | PIPE_READMODE_BYTE | PIPE_REJECT_REMOTE_CLIENTS",
+      "maxInstances": 1,
+      "securityDescriptor": "D:(A;;GA;;;OW)",
+      "aclPolicy": "Restricted strictly to Owner / Current User SID (OW). Denies NETWORK, REMOTE, and cross-session accounts."
+    },
+    "sharedMemory": {
+      "hostProtection": "PAGE_READWRITE (0x04)",
+      "engineProtection": "FILE_MAP_READ (0x0004)",
+      "rule": "Native Host creates MMF with read-write backing; Python Engine maps view with read-only semantics to enforce immutable buffer guarantees."
+    }
+  },
+  "lifecycleIsolation": {
+    "restartInvalidation": "Upon child process crash or restart, Host supervisor terminates existing pipe handles and issues a fresh session nonce. Stale or orphaned child processes cannot connect to the replacement pipe.",
+    "processIntegrity": "Child Python process is spawned with inherited standard handles explicitly disabled or restricted to redirected stdio."
+  },
+  "inputTakeoverSafety": {
+    "takeoverHookThread": "Dedicated Win32 message pump thread running WH_MOUSE_LL and WH_KEYBOARD_LL.",
+    "abortTriggerLatency": "< 1ms from OS raw input event to active scan abort flag assertion.",
+    "toctouGuard": "Before any potential input dispatch, Host verifies that GetForegroundWindow() == targetGameHwnd at the instant of execution. If focus has shifted, operation is aborted fail-closed."
+  }
+}

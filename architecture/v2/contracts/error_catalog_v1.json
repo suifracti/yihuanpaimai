@@ -1,0 +1,185 @@
+{
+  "schemaVersion": "error.catalog.v1",
+  "protocolVersion": "1.0.0",
+  "title": "NTE Host-Engine IPC Error Catalog Specification",
+  "description": "Standardized categorized error codes, severities, and fail-closed recovery policies across the Native Host and Python Intelligence Engine boundary.",
+  "categories": ["PROTOCOL", "TRANSPORT", "PAYLOAD", "TIMEOUT", "AUTHORITY", "CAPABILITY"],
+  "errors": [
+    {
+      "errorCode": "ERR_PROTOCOL_VERSION_MISMATCH",
+      "category": "PROTOCOL",
+      "description": "Host and Engine negotiate incompatible major or minor protocol versions.",
+      "isFatal": true,
+      "recoveryAction": "TERMINATE_SESSION",
+      "httpEquiv": 505
+    },
+    {
+      "errorCode": "ERR_UNKNOWN_MESSAGE_TYPE",
+      "category": "PROTOCOL",
+      "description": "Received a messageType string not present in message_catalog_v1.json.",
+      "isFatal": false,
+      "recoveryAction": "FAIL_CLOSED_DROP_MESSAGE",
+      "httpEquiv": 400
+    },
+    {
+      "errorCode": "ERR_MALFORMED_ENVELOPE",
+      "category": "PROTOCOL",
+      "description": "JSON message payload is missing one or more required envelope fields (protocolVersion, sessionId, messageType, requestId, sequence, monotonicTimestampNs, payload).",
+      "isFatal": false,
+      "recoveryAction": "FAIL_CLOSED_DROP_MESSAGE",
+      "httpEquiv": 400
+    },
+    {
+      "errorCode": "ERR_STALE_SEQUENCE",
+      "category": "PROTOCOL",
+      "description": "Received message sequence number is less than or equal to previous high-water mark for the session.",
+      "isFatal": false,
+      "recoveryAction": "LOG_AND_IGNORE",
+      "httpEquiv": 409
+    },
+    {
+      "errorCode": "ERR_PIPE_DISCONNECTED",
+      "category": "TRANSPORT",
+      "description": "Named Pipe peer closed handle or crashed unexpectedly.",
+      "isFatal": true,
+      "recoveryAction": "DRAIN_AND_RESTART_ENGINE",
+      "httpEquiv": 503
+    },
+    {
+      "errorCode": "ERR_PIPE_BROKEN",
+      "category": "TRANSPORT",
+      "description": "IO exception occurred during pipe read or write operation (ERROR_BROKEN_PIPE 109).",
+      "isFatal": true,
+      "recoveryAction": "DRAIN_AND_RESTART_ENGINE",
+      "httpEquiv": 503
+    },
+    {
+      "errorCode": "ERR_MESSAGE_TOO_LARGE",
+      "category": "TRANSPORT",
+      "description": "Frame length prefix exceeds maxMessageBytes (1048576 bytes / 1 MB).",
+      "isFatal": true,
+      "recoveryAction": "DISCONNECT_AND_RECONNECT",
+      "httpEquiv": 413
+    },
+    {
+      "errorCode": "ERR_STREAM_EOF",
+      "category": "TRANSPORT",
+      "description": "Unexpected end of stream encountered before reading declared length prefix.",
+      "isFatal": true,
+      "recoveryAction": "DRAIN_AND_RESTART_ENGINE",
+      "httpEquiv": 500
+    },
+    {
+      "errorCode": "ERR_SCHEMA_VALIDATION_FAILED",
+      "category": "PAYLOAD",
+      "description": "Message payload schema does not match declared schema in message catalog.",
+      "isFatal": false,
+      "recoveryAction": "FAIL_CLOSED_DROP_MESSAGE",
+      "httpEquiv": 422
+    },
+    {
+      "errorCode": "ERR_MISSING_REQUIRED_FIELD",
+      "category": "PAYLOAD",
+      "description": "Message payload lacks one of requiredPayloadFields defined in message catalog.",
+      "isFatal": false,
+      "recoveryAction": "FAIL_CLOSED_DROP_MESSAGE",
+      "httpEquiv": 422
+    },
+    {
+      "errorCode": "ERR_CORRUPT_FRAME_MAGIC",
+      "category": "PAYLOAD",
+      "description": "Shared memory frame header magic does not equal 0x4246544E ('NTFB').",
+      "isFatal": false,
+      "recoveryAction": "DISCARD_FRAME_INCREMENT_CORRUPT_COUNTER",
+      "httpEquiv": 422
+    },
+    {
+      "errorCode": "ERR_FRAME_CHECKSUM_FAILED",
+      "category": "PAYLOAD",
+      "description": "Frame corner pixel checksum does not match expected header cornerChecksum.",
+      "isFatal": false,
+      "recoveryAction": "DISCARD_FRAME_INCREMENT_CORRUPT_COUNTER",
+      "httpEquiv": 422
+    },
+    {
+      "errorCode": "ERR_UNSUPPORTED_PIXEL_FORMAT",
+      "category": "PAYLOAD",
+      "description": "Shared memory pixelFormat != 1 (BGRA8).",
+      "isFatal": false,
+      "recoveryAction": "DISCARD_FRAME_LOG_ERROR",
+      "httpEquiv": 415
+    },
+    {
+      "errorCode": "ERR_HANDSHAKE_TIMEOUT",
+      "category": "TIMEOUT",
+      "description": "Engine did not reply with HELLO_ACK within helloNegotiationTimeoutMs (5000ms).",
+      "isFatal": true,
+      "recoveryAction": "KILL_AND_RESTART_ENGINE",
+      "httpEquiv": 504
+    },
+    {
+      "errorCode": "ERR_HEARTBEAT_TIMEOUT",
+      "category": "TIMEOUT",
+      "description": "No HEARTBEAT message received within heartbeatTimeoutMs (3000ms).",
+      "isFatal": true,
+      "recoveryAction": "MARK_DEGRADED_OR_RECONNECT",
+      "httpEquiv": 504
+    },
+    {
+      "errorCode": "ERR_FRAME_ACK_TIMEOUT",
+      "category": "TIMEOUT",
+      "description": "Engine did not acknowledge frame within frameAckTimeoutMs (100ms).",
+      "isFatal": false,
+      "recoveryAction": "INCREMENT_CONSUMER_TIMEOUT_COUNTER",
+      "httpEquiv": 504
+    },
+    {
+      "errorCode": "ERR_COMMAND_TIMEOUT",
+      "category": "TIMEOUT",
+      "description": "Engine did not complete COMMAND before expiresAtNs or commandExecutionTimeoutMs.",
+      "isFatal": false,
+      "recoveryAction": "EMIT_COMMAND_EXPIRED",
+      "httpEquiv": 504
+    },
+    {
+      "errorCode": "ERR_AUTHORITY_VIOLATION",
+      "category": "AUTHORITY",
+      "description": "Host attempted to assert business truth, or Engine attempted direct OS window/input manipulation.",
+      "isFatal": true,
+      "recoveryAction": "ABORT_OPERATION_LOG_SECURITY_INCIDENT",
+      "httpEquiv": 403
+    },
+    {
+      "errorCode": "ERR_UNAUTHORIZED_STATE_MUTATION",
+      "category": "AUTHORITY",
+      "description": "Host UI attempted to mutate CurrentMatch state directly without Python COMMAND roundtrip.",
+      "isFatal": false,
+      "recoveryAction": "REJECT_MUTATION_TRIGGER_RESYNC",
+      "httpEquiv": 403
+    },
+    {
+      "errorCode": "ERR_CAPABILITY_UNSUPPORTED",
+      "category": "CAPABILITY",
+      "description": "Action requested a capability marked UNAVAILABLE during handshake negotiation.",
+      "isFatal": false,
+      "recoveryAction": "REJECT_COMMAND_WITH_CAPABILITY_ERROR",
+      "httpEquiv": 501
+    },
+    {
+      "errorCode": "ERR_WGC_NOT_MEASURED",
+      "category": "CAPABILITY",
+      "description": "Attempted to activate Windows.Graphics.Capture which is strictly NOT_MEASURED in production.",
+      "isFatal": false,
+      "recoveryAction": "FALLBACK_TO_BITBLT",
+      "httpEquiv": 501
+    },
+    {
+      "errorCode": "ERR_WEBVIEW2_UNAVAILABLE",
+      "category": "CAPABILITY",
+      "description": "CoreWebView2Controller failed to attach to host HWND visual tree.",
+      "isFatal": false,
+      "recoveryAction": "FALLBACK_TO_STATIC_NATIVE_HUD",
+      "httpEquiv": 503
+    }
+  ]
+}
