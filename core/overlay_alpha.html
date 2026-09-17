@@ -875,6 +875,18 @@
               <div id="expProbExternalWarning" style="display: none; font-size: 10px; color: #f59e0b; background: rgba(245, 158, 11, 0.08); padding: 2px 4px; border-radius: 2px; margin-bottom: 4px; border: 1px solid rgba(245, 158, 11, 0.25);">
                 外部经验参数 · 未经我方真实历史验证
               </div>
+              <!-- Profile Toggle Controls -->
+              <div style="margin-bottom: 6px; padding: 4px 6px; background: rgba(255,255,255,0.02); border-radius: 3px; border: 1px solid rgba(255,255,255,0.06);">
+                <div style="font-size: 10px; color: var(--muted); margin-bottom: 4px; font-weight: 600;">实验性 Profile 开关 (默认全部关闭 · 仅供科研探索):</div>
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 4px 6px; font-size: 10px;">
+                  <label style="cursor: pointer; display: flex; align-items: center; gap: 4px;"><input type="checkbox" id="chk_dafu_round" data-profile="dafu_round_heuristic_v1" onchange="toggleExperimentalProfile(this)"> 达芙 R1-R4 轮次</label>
+                  <label style="cursor: pointer; display: flex; align-items: center; gap: 4px;"><input type="checkbox" id="chk_dafu_color" data-profile="external_color_prior_dafu_v1" onchange="toggleExperimentalProfile(this)"> 达芙颜色先验 (紫:金:红)</label>
+                  <label style="cursor: pointer; display: flex; align-items: center; gap: 4px;"><input type="checkbox" id="chk_structural_fit" data-profile="structural_fit_v1" onchange="toggleExperimentalProfile(this)"> 内部结构几何诊断</label>
+                  <label style="cursor: pointer; display: flex; align-items: center; gap: 4px;"><input type="checkbox" id="chk_dafu_cell" data-profile="dafu_cell_fit_reference_v1" onchange="toggleExperimentalProfile(this)"> 达芙 CELL_FIT 参考</label>
+                  <label style="cursor: pointer; display: flex; align-items: center; gap: 4px;"><input type="checkbox" id="chk_conv" data-profile="convolution_v1" onchange="toggleExperimentalProfile(this)"> 离散卷积引擎</label>
+                  <label style="cursor: pointer; display: flex; align-items: center; gap: 4px;"><input type="checkbox" id="chk_special_rule" data-profile="special_rule_reference_v1" onchange="toggleExperimentalProfile(this)"> 特殊规则实验假设</label>
+                </div>
+              </div>
               <div style="display: flex; justify-content: space-between; margin-bottom: 4px; color: var(--muted);">
                 <span>当前启用 Profile:</span>
                 <span id="expProbActiveProfiles" style="color: var(--text); font-weight: 600;">baseline</span>
@@ -894,12 +906,16 @@
                 </div>
               </div>
               <div style="display: flex; justify-content: space-between; margin-bottom: 4px; font-size: 10px;">
-                <span style="color: var(--muted);">实验保留价 / 保守价:</span>
-                <span id="expProbReserve" style="color: #34d399;">— / —</span>
+                <span style="color: var(--muted);">结构诊断 (StructuralFit):</span>
+                <span id="expProbStructuralFit" style="color: var(--text);">未启用</span>
               </div>
               <div style="display: flex; justify-content: space-between; margin-bottom: 4px; font-size: 10px;">
-                <span style="color: var(--muted);">CELL_FIT 空间诊断:</span>
-                <span id="expProbCellFit" style="color: var(--text);">—</span>
+                <span style="color: var(--muted);">外部 CELL_FIT 参考:</span>
+                <span id="expProbDafuCellFit" style="color: var(--muted);">未启用</span>
+              </div>
+              <div style="display: flex; justify-content: space-between; margin-bottom: 4px; font-size: 10px;">
+                <span style="color: var(--muted);">外部假设输出 (Hypotheses):</span>
+                <span id="expProbHypotheses" style="color: #34d399;">—</span>
               </div>
               <div style="display: flex; justify-content: space-between; margin-bottom: 4px; font-size: 10px;">
                 <span style="color: var(--muted);">Δ vs Prod / Δ vs Red:</span>
@@ -1386,45 +1402,100 @@
       }
     }
 
+    function toggleExperimentalProfile(el) {
+      if (!el) return;
+      const profileId = el.getAttribute("data-profile");
+      const enabled = !!el.checked;
+      if (window.pywebview && window.pywebview.api) {
+        if (typeof window.pywebview.api.experimental_profile_set === "function") {
+          window.pywebview.api.experimental_profile_set({ profileId: profileId, enabled: enabled });
+        } else if (typeof window.pywebview.api.invoke_action === "function") {
+          window.pywebview.api.invoke_action("experimental_profile_set", { profileId: profileId, enabled: enabled });
+        }
+      }
+    }
+
     function updateExperimentalProbabilityStrategyUI(expStrat) {
       if (!expStrat) return;
       const actEl = document.getElementById("expProbActiveProfiles");
       const p20El = document.getElementById("expProbP20");
       const p50El = document.getElementById("expProbP50");
       const p80El = document.getElementById("expProbP80");
-      const resEl = document.getElementById("expProbReserve");
-      const cfEl = document.getElementById("expProbCellFit");
+      const sfEl = document.getElementById("expProbStructuralFit");
+      const dcfEl = document.getElementById("expProbDafuCellFit");
+      const hypEl = document.getElementById("expProbHypotheses");
       const deltaEl = document.getElementById("expProbDeltas");
       const warnEl = document.getElementById("expProbWarnings");
       const extWarnEl = document.getElementById("expProbExternalWarning");
 
+      const profs = expStrat.activeProfiles || ["baseline"];
       if (actEl) {
-        const profs = expStrat.activeProfiles || ["baseline"];
         actEl.textContent = profs.join(", ");
         const hasExternal = profs.some(p => p !== "baseline");
         if (extWarnEl) extWarnEl.style.display = hasExternal ? "block" : "none";
+      }
+
+      // Sync checkbox states with active profiles
+      const chkMap = {
+        "dafu_round_heuristic_v1": "chk_dafu_round",
+        "external_color_prior_dafu_v1": "chk_dafu_color",
+        "structural_fit_v1": "chk_structural_fit",
+        "dafu_cell_fit_reference_v1": "chk_dafu_cell",
+        "convolution_v1": "chk_conv",
+        "special_rule_reference_v1": "chk_special_rule",
+      };
+      for (const [pid, chkId] of Object.entries(chkMap)) {
+        const chk = document.getElementById(chkId);
+        if (chk) {
+          chk.checked = profs.includes(pid);
+        }
       }
 
       if (p20El) p20El.textContent = expStrat.p20 != null ? fmtWan(expStrat.p20) : "—";
       if (p50El) p50El.textContent = expStrat.p50 != null ? fmtWan(expStrat.p50) : "—";
       if (p80El) p80El.textContent = expStrat.p80 != null ? fmtWan(expStrat.p80) : "—";
 
-      if (resEl) {
-        const rStr = expStrat.experimentalReservePrice != null ? fmtWan(expStrat.experimentalReservePrice) : "—";
-        const cStr = expStrat.experimentalConservativePrice != null ? fmtWan(expStrat.experimentalConservativePrice) : "—";
-        resEl.textContent = `${rStr} / ${cStr}`;
+      if (sfEl) {
+        const sf = expStrat.structuralFit;
+        if (sf && sf.status === "evaluated") {
+          const score = sf.qualityScore != null ? (sf.qualityScore * 100).toFixed(0) + "%" : "—";
+          const statusStr = sf.feasible ? `可行 (得分 ${score})` : `冲突 (${sf.conflicts?.[0] || "不可行"})`;
+          sfEl.textContent = statusStr;
+          sfEl.style.color = sf.feasible ? "var(--text)" : "#ef4444";
+        } else if (sf && sf.status === "unavailable") {
+          sfEl.textContent = `不可用 (${sf.reason || "缺少网格数据"})`;
+          sfEl.style.color = "var(--muted)";
+        } else {
+          sfEl.textContent = "未启用";
+          sfEl.style.color = "var(--muted)";
+        }
       }
 
-      if (cfEl) {
-        const cf = expStrat.cellFit;
-        if (cf) {
-          const score = (cf.fitScore * 100).toFixed(0);
-          const statusStr = cf.feasible ? `可行 (${score}%)` : `冲突 (${cf.conflicts?.[0] || "不可行"})`;
-          cfEl.textContent = statusStr;
-          cfEl.style.color = cf.feasible ? "var(--text)" : "#ef4444";
+      if (dcfEl) {
+        const dcf = expStrat.dafuCellFitReference;
+        if (dcf) {
+          dcfEl.textContent = `${dcf.status || "unavailable"} (${dcf.reason || "N未确认"})`;
         } else {
-          cfEl.textContent = "未启用";
-          cfEl.style.color = "var(--muted)";
+          dcfEl.textContent = "未启用";
+        }
+      }
+
+      if (hypEl) {
+        const hyp = expStrat.externalHypotheses;
+        if (hyp) {
+          const parts = [];
+          if (hyp.dafuRoundHeuristic) {
+            parts.push(`${hyp.dafuRoundHeuristic.round}: ${hyp.dafuRoundHeuristic.calculatedBiddingPrice ? fmtWan(hyp.dafuRoundHeuristic.calculatedBiddingPrice) : "—"}`);
+          }
+          if (hyp.colorPrior) {
+            parts.push("颜色先验 2.2:1.85:1");
+          }
+          if (hyp.specialRuleReference) {
+            parts.push("特殊规则(仅记录)");
+          }
+          hypEl.textContent = parts.join(" | ") || "—";
+        } else {
+          hypEl.textContent = "—";
         }
       }
 
