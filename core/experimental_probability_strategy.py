@@ -13,11 +13,13 @@ Strict Invariants:
 5. In baseline state (all external profiles disabled), production output is byte-for-byte identical.
 6. Baseline adapter consumes production_metrics / shadow_profile references ONLY; does NOT fabricate fake distributions.
 7. Discrete convolution engine enforces probability normalization (tolerance 1e-5) and quantile monotonicity.
-8. State-space budget limits prevent memory/CPU explosion; supportSize <= max_states strictly guaranteed.
-9. Structural fit (structural_fit_v1) performs geometry checks only; never uses q as item count, never defaults totalGrid.
-10. External Dafu CELL_FIT marks status unavailable when external N semantics are unconfirmed.
-11. Runtime calls are fail-isolated: experimental exceptions never crash production solve or HUD.
-12. Cross-match reset returns active profiles strictly to baseline.
+8. Convolution components require strict provenance schema (componentId, source, evidenceLevel, validatedByOurData, distribution).
+9. State-space budget limits prevent memory/CPU explosion; supportSize <= max_states strictly guaranteed.
+10. Structural fit (structural_fit_v1) reuses canonical footprint parser authority; never uses q as item count; missing totalGrid => unavailable.
+11. External Dafu CELL_FIT marks status unavailable when external N semantics are unconfirmed.
+12. Dafu round divisors output baseMetricSemanticsConfirmed = False; no invented base metrics or calculated bidding prices.
+13. Runtime cache stores pure experimental core; production/shadow references and deltas are dynamically attached per call.
+14. Cross-match reset returns active profiles strictly to baseline.
 """
 
 from __future__ import annotations
@@ -32,6 +34,15 @@ import sys
 from dataclasses import asdict, dataclass, field
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Mapping, Optional, Sequence, Set, Tuple
+
+_CORE_DIR = os.path.dirname(os.path.abspath(__file__))
+_PROJECT_ROOT = os.path.abspath(os.path.join(_CORE_DIR, ".."))
+_APP_DIR = os.path.join(_PROJECT_ROOT, "app")
+for _p in (_PROJECT_ROOT, _CORE_DIR, _APP_DIR):
+    if _p not in sys.path:
+        sys.path.insert(0, _p)
+
+from warehouse_occupancy_adapter import extract_canonical_footprint_cells
 
 _LOG = logging.getLogger(__name__)
 
@@ -210,6 +221,90 @@ class DiscreteDistribution:
         }
 
 
+@dataclass(frozen=True)
+class ConvolutionComponentProvenance:
+    """Strict provenance metadata required for any distribution entering convolution."""
+    component_id: str
+    source: str
+    evidence_level: str
+    validated_by_our_data: bool = False
+    description: Optional[str] = None
+
+    def to_dict(self) -> Dict[str, Any]:
+        return asdict(self)
+
+
+def parse_convolution_component(
+    raw: Any,
+) -> Tuple[Optional[DiscreteDistribution], Optional[ConvolutionComponentProvenance], Optional[str]]:
+    """Strictly validate and parse a provenance-backed convolution component.
+
+    Requires:
+    - componentId: str
+    - source: str
+    - evidenceLevel: str
+    - validatedByOurData: bool
+    - distribution: mapping with points [{'value': ..., 'probability': ...}] or Mapping[float, float]
+    """
+    if not isinstance(raw, Mapping):
+        return None, None, "COMPONENT_NOT_A_MAPPING"
+
+    cid = str(raw.get("componentId") or "").strip()
+    src = str(raw.get("source") or "").strip()
+    ev_level = str(raw.get("evidenceLevel") or "").strip()
+    val_data = raw.get("validatedByOurData")
+
+    if not cid:
+        return None, None, "COMPONENT_ID_MISSING"
+    if not src:
+        return None, None, "SOURCE_MISSING"
+    if not ev_level:
+        return None, None, "EVIDENCE_LEVEL_MISSING"
+    if not isinstance(val_data, bool):
+        return None, None, "VALIDATED_BY_OUR_DATA_MUST_BE_BOOL"
+
+    prov = ConvolutionComponentProvenance(
+        component_id=cid,
+        source=src,
+        evidence_level=ev_level,
+        validated_by_our_data=val_data,
+        description=raw.get("description"),
+    )
+
+    dist_raw = raw.get("distribution")
+    if not isinstance(dist_raw, Mapping):
+        return None, None, "DISTRIBUTION_MISSING_OR_NOT_MAPPING"
+
+    pmf_dict: Dict[float, float] = {}
+    if "points" in dist_raw and isinstance(dist_raw["points"], Sequence):
+        for pt in dist_raw["points"]:
+            if isinstance(pt, Mapping) and "value" in pt and "probability" in pt:
+                try:
+                    v = float(pt["value"])
+                    p = float(pt["probability"])
+                    pmf_dict[v] = pmf_dict.get(v, 0.0) + p
+                except Exception:
+                    return None, None, "INVALID_POINT_VALUES"
+            else:
+                return None, None, "POINTS_FORMAT_INVALID"
+    else:
+        for k, v in dist_raw.items():
+            if k == "points":
+                continue
+            try:
+                pmf_dict[float(k)] = float(v)
+            except Exception:
+                return None, None, "INVALID_PMF_MAPPING"
+
+    try:
+        dist = DiscreteDistribution(pmf_dict, tolerance=INPUT_NORMALIZATION_TOLERANCE)
+        if not dist.is_valid:
+            return None, None, f"DISTRIBUTION_NORMALIZATION_FAILED:err={dist.normalization_error}"
+        return dist, prov, None
+    except Exception as exc:
+        return None, None, f"DISTRIBUTION_CONSTRUCTION_ERROR:{exc}"
+
+
 def convolve_discrete_distributions(
     distributions: Sequence[DiscreteDistribution],
     max_states: int = DEFAULT_MAX_CONVOLUTION_STATES,
@@ -255,7 +350,6 @@ def convolve_discrete_distributions(
             budget_exceeded = True
             sorted_items = sorted(next_pmf.items(), key=lambda p: p[0])
             total_items = len(sorted_items)
-            # Partition sorted items into at most max_states contiguous chunks
             chunk_size = math.ceil(total_items / max_states)
             compressed_pmf: Dict[float, float] = {}
             for i in range(0, total_items, chunk_size):
@@ -265,7 +359,6 @@ def convolve_discrete_distributions(
                     weighted_val = round(sum(v * p for v, p in chunk) / chunk_prob, 2)
                     compressed_pmf[weighted_val] = compressed_pmf.get(weighted_val, 0.0) + chunk_prob
 
-            # Ensure strict bound
             if len(compressed_pmf) > max_states:
                 sorted_comp = sorted(compressed_pmf.items(), key=lambda p: p[0])
                 trimmed = sorted_comp[:max_states]
@@ -298,8 +391,8 @@ class StructuralFitDiagnostic:
     - totalGrid
     - totalItems
     - quality counts and grids
-    - item footprint areas
-    Never uses q as item count. Never defaults totalGrid to 54.
+    - item footprint areas via canonical authority
+    Never uses q as item count. Never defaults totalGrid.
     """
     status: str = "evaluated"
     feasible: bool = True
@@ -327,33 +420,13 @@ class StructuralFitDiagnostic:
         }
 
 
-def parse_footprint_cells(footprint: Any) -> Optional[int]:
-    """Parse footprint into cell area using standard canonical format (e.g. '1x2', (2, 3), 4)."""
-    if isinstance(footprint, (int, float)) and footprint > 0:
-        return int(footprint)
-    if isinstance(footprint, (list, tuple)) and len(footprint) == 2:
-        try:
-            return int(footprint[0]) * int(footprint[1])
-        except Exception:
-            return None
-    if isinstance(footprint, str):
-        parts = footprint.lower().replace("*", "x").split("x")
-        if len(parts) == 2:
-            try:
-                w, h = int(parts[0].strip()), int(parts[1].strip())
-                return w * h
-            except Exception:
-                return None
-    return None
-
-
 def compute_structural_fit(session_ctx: Mapping[str, Any]) -> StructuralFitDiagnostic:
     """Compute internal structural fit diagnostic against canonical inventory intel."""
     public_intel = session_ctx.get("publicIntel") or {}
     total_grid = session_ctx.get("totalGrid") or public_intel.get("totalGrid")
 
     # If totalGrid is missing, diagnostic is unavailable (strict no default 54!)
-    if total_grid is None or not isinstance(total_grid, (int, float)) or total_grid <= 0:
+    if total_grid is None or not isinstance(total_grid, (int, float)) or isinstance(total_grid, bool) or total_grid <= 0:
         return StructuralFitDiagnostic(
             status="unavailable",
             feasible=True,
@@ -369,23 +442,18 @@ def compute_structural_fit(session_ctx: Mapping[str, Any]) -> StructuralFitDiagn
 
     # Canonical totalItems (NOT q!)
     total_items = session_ctx.get("totalItems") or public_intel.get("totalItems")
-    if isinstance(total_items, (int, float)) and total_items > 0:
+    if isinstance(total_items, (int, float)) and not isinstance(total_items, bool) and total_items > 0:
         evidence_used.append("totalItems")
         if total_items > total_grid:
             conflicts.append("TOTAL_ITEMS_EXCEEDS_GRID_CAPACITY")
 
-    # Known items footprint parsing
+    # Known items footprint parsing via canonical authority
     known_items = session_ctx.get("knownItems") or []
     item_areas: List[int] = []
     if isinstance(known_items, list) and known_items:
         evidence_used.append("knownItems")
         for item in known_items:
-            area = None
-            if isinstance(item, dict):
-                fp = item.get("cells") or item.get("footprint") or item.get("gridFootprint") or item.get("size")
-                area = parse_footprint_cells(fp)
-            else:
-                area = parse_footprint_cells(item)
+            area = extract_canonical_footprint_cells(item)
             if area is not None and area > 0:
                 item_areas.append(area)
 
@@ -400,7 +468,7 @@ def compute_structural_fit(session_ctx: Mapping[str, Any]) -> StructuralFitDiagn
         for q_name in ("white", "green", "blue", "purple", "gold", "red"):
             g_cells = quality_grids.get(q_name)
             cnt = quality_counts.get(q_name)
-            if isinstance(g_cells, (int, float)) and isinstance(cnt, (int, float)):
+            if isinstance(g_cells, (int, float)) and isinstance(cnt, (int, float)) and not isinstance(g_cells, bool) and not isinstance(cnt, bool):
                 evidence_used.append(f"quality_{q_name}")
                 if cnt > 0 and g_cells < cnt:
                     conflicts.append(f"{q_name.upper()}_GRID_LESS_THAN_ITEM_COUNT")
@@ -413,7 +481,6 @@ def compute_structural_fit(session_ctx: Mapping[str, Any]) -> StructuralFitDiagn
         variance_area = 0.0
 
     feasible = (len(conflicts) == 0)
-    # Quality score heuristic in [0.0, 1.0]
     if not feasible:
         quality_score = 0.0
     else:
@@ -521,6 +588,7 @@ class ExperimentalStrategyRegistry:
                 evidence_level="unverified_external_heuristic",
                 parameters={
                     "round_divisors": copy.deepcopy(DAFU_CANONICAL_ROUND_DIVISORS),
+                    "baseMetricSemanticsConfirmed": False,
                 },
                 experimental=True,
                 production_eligible=False,
@@ -692,22 +760,31 @@ def get_global_strategy_registry() -> ExperimentalStrategyRegistry:
     return _GLOBAL_REGISTRY
 
 
-# Global calculation cache: (profileGeneration, contextFingerprint, pr_b_historyGeneration) -> payload
-_CALC_CACHE: Dict[Tuple[int, str, int], Dict[str, Any]] = {}
+# Global calculation cache: (profileGeneration, contextFingerprint, pr_b_historyGeneration) -> PureExperimentalCore
+_EXPERIMENTAL_CORE_CACHE: Dict[Tuple[int, str, int], Dict[str, Any]] = {}
 
 
-def _compute_context_fingerprint(session_ctx: Mapping[str, Any]) -> str:
-    """Deterministic hash of input session context."""
-    h = hashlib.sha256()
-    sorted_items = sorted(
-        (str(k), str(v))
-        for k, v in session_ctx.items()
-        if k not in ("timestamp", "now", "nowUtc")
-    )
-    for k, v in sorted_items:
-        h.update(k.encode("utf-8"))
-        h.update(v.encode("utf-8"))
-    return h.hexdigest()[:16]
+def _clean_for_canonical_json(obj: Any) -> Any:
+    """Recursively clean dict to remove dynamic keys and prepare for sorted JSON serialization."""
+    if isinstance(obj, Mapping):
+        cleaned = {}
+        for k, v in obj.items():
+            if str(k).lower() in ("timestamp", "now", "nowutc", "time"):
+                continue
+            cleaned[str(k)] = _clean_for_canonical_json(v)
+        return cleaned
+    elif isinstance(obj, (list, tuple)):
+        return [_clean_for_canonical_json(x) for x in obj]
+    elif isinstance(obj, (int, float, str, bool)) or obj is None:
+        return obj
+    return str(obj)
+
+
+def _compute_canonical_context_fingerprint(session_ctx: Mapping[str, Any]) -> str:
+    """Deterministic canonical JSON hash of input session context."""
+    cleaned = _clean_for_canonical_json(session_ctx)
+    canonical_str = json.dumps(cleaned, sort_keys=True, ensure_ascii=False)
+    return hashlib.sha256(canonical_str.encode("utf-8")).hexdigest()[:16]
 
 
 @dataclass
@@ -773,6 +850,146 @@ class ExperimentalProbabilityStrategyReport:
         }
 
 
+def _evaluate_pure_experimental_core(
+    session_ctx: Mapping[str, Any],
+    registry: ExperimentalStrategyRegistry,
+) -> Dict[str, Any]:
+    """Evaluate pure experimental core outputs (independent of production metrics / references)."""
+    warnings: List[str] = []
+    disclaimers: List[str] = ["实验结果 · 不参与正式出价"]
+
+    active_ids = registry.get_active_profile_ids()
+    has_external_active = any(pid != "baseline" for pid in active_ids)
+    if has_external_active:
+        disclaimers.append("外部经验参数 · 未经我方真实历史验证")
+
+    # 1. Discrete Convolution Component Building with Provenance Schema
+    components: List[DiscreteDistribution] = []
+    provenances: List[Dict[str, Any]] = []
+
+    # Strict provenance check: components must come with schema
+    conv_components_raw = session_ctx.get("convolutionComponents")
+    if isinstance(conv_components_raw, Sequence):
+        for raw_c in conv_components_raw:
+            dist, prov, err_reason = parse_convolution_component(raw_c)
+            if dist is not None and prov is not None:
+                components.append(dist)
+                provenances.append(prov.to_dict())
+            else:
+                warnings.append(f"Rejected convolution component: {err_reason}")
+    elif "candidatePmfs" in session_ctx:
+        # Bare candidatePmfs without provenance schema are rejected
+        warnings.append("Bare candidatePmfs rejected: components require strict provenance schema.")
+
+    convolved_dist: Optional[DiscreteDistribution] = None
+    conv_meta: Optional[Dict[str, Any]] = None
+
+    if registry.is_profile_enabled("convolution_v1"):
+        if components:
+            convolved_dist, conv_meta = convolve_discrete_distributions(
+                components, max_states=DEFAULT_MAX_CONVOLUTION_STATES
+            )
+            conv_meta["provenances"] = provenances
+            if conv_meta.get("budgetExceeded"):
+                warnings.append("State-space budget exceeded: distribution downsampled to budget limit.")
+        else:
+            conv_meta = {
+                "status": "unavailable",
+                "reason": "NO_VALID_DISTRIBUTION_COMPONENTS",
+                "budgetExceeded": False,
+                "approximationApplied": False,
+                "originalStateCount": 0,
+                "finalStateCount": 0,
+                "normalizationError": 0.0,
+                "approximationMethod": "none",
+                "provenances": [],
+            }
+            warnings.append("Convolution unavailable: no valid discrete PMF components with provenance provided.")
+
+    p20 = convolved_dist.quantiles.p20 if convolved_dist else None
+    p50 = convolved_dist.quantiles.p50 if convolved_dist else None
+    p80 = convolved_dist.quantiles.p80 if convolved_dist else None
+    mean_val = convolved_dist.mean if convolved_dist else None
+
+    # 2. Dafu Round Divisors Heuristic (R1-R4)
+    # Canonical: R1 / 2.0, R2 / 1.6, R3 / 1.3, R4 / 1.1.
+    # Base metric semantics unconfirmed -> baseMetricSemanticsConfirmed = False, NO calculatedBiddingPrice!
+    external_hypotheses: Dict[str, Any] = {}
+
+    if registry.is_profile_enabled("dafu_round_heuristic_v1"):
+        round_idx = session_ctx.get("round") or session_ctx.get("currentRound") or 1
+        r_str = f"R{min(4, max(1, int(round_idx)))}"
+        divisor = DAFU_CANONICAL_ROUND_DIVISORS.get(r_str, 1.0)
+        multiplier = 1.0 / divisor
+
+        external_hypotheses["dafuRoundHeuristic"] = {
+            "profileId": "dafu_round_heuristic_v1",
+            "round": r_str,
+            "canonicalDivisor": divisor,
+            "calculatedMultiplier": round(multiplier, 4),
+            "baseMetricSemanticsConfirmed": False,
+            "note": "Canonical Dafu divisors (R1:2.0, R2:1.6, R3:1.3, R4:1.1). Base metric semantics unconfirmed; calculatedBiddingPrice eliminated.",
+        }
+
+    # 3. Color Prior Profile (Purple:Gold:Red = 2.2:1.85:1)
+    if registry.is_profile_enabled("external_color_prior_dafu_v1"):
+        p_cp = registry.get_profile("external_color_prior_dafu_v1")
+        external_hypotheses["colorPrior"] = {
+            "profileId": "external_color_prior_dafu_v1",
+            "sourceProject": p_cp.source_project if p_cp else "dafu_calculator",
+            "evidenceLevel": p_cp.evidence_level if p_cp else "unverified_external_prior",
+            "validatedByOurData": False,
+            "samplingAssumption": "explicit_external_ratio",
+            "weights": {
+                "purple_weight": 2.2,
+                "gold_weight": 1.85,
+                "red_weight": 1.0,
+            },
+            "ratioString": "Purple : Gold : Red = 2.2 : 1.85 : 1.0",
+        }
+
+    # 4. Special Rule Profile
+    if registry.is_profile_enabled("special_rule_reference_v1"):
+        external_hypotheses["specialRuleReference"] = {
+            "profileId": "special_rule_reference_v1",
+            "sourceProject": "dafu_calculator",
+            "evidenceLevel": "unverified_external_hypothesis",
+            "validatedByOurData": False,
+            "effectEnabled": False,
+            "recordedRules": ["shining_heart", "no_heart", "no_pig", "no_large_items"],
+            "status": "已记录外部规则假设 · 当前无已验证可执行 effect",
+        }
+
+    # 5. Structural Fit (internal structural_fit_v1)
+    structural_fit_report = None
+    if registry.is_profile_enabled("structural_fit_v1"):
+        s_fit = compute_structural_fit(session_ctx)
+        structural_fit_report = s_fit.to_payload()
+        if s_fit.conflicts:
+            warnings.extend([f"StructuralFit: {c}" for c in s_fit.conflicts])
+
+    # 6. Dafu CELL_FIT Reference (external dafu_cell_fit_reference_v1)
+    dafu_cell_fit_report = None
+    if registry.is_profile_enabled("dafu_cell_fit_reference_v1"):
+        dafu_cell_fit_report = compute_dafu_cell_fit_reference(session_ctx)
+
+    return {
+        "experimental_distribution": convolved_dist.to_payload() if convolved_dist else None,
+        "p20": p20,
+        "p50": p50,
+        "p80": p80,
+        "mean": mean_val,
+        "experimental_reserve_price": None,
+        "experimental_conservative_price": None,
+        "structural_fit": structural_fit_report,
+        "dafu_cell_fit_reference": dafu_cell_fit_report,
+        "external_hypotheses": external_hypotheses if external_hypotheses else None,
+        "convolution_metrics": conv_meta,
+        "warnings": warnings,
+        "disclaimers": disclaimers,
+    }
+
+
 def evaluate_experimental_probability_strategy(
     session_ctx: Mapping[str, Any],
     production_metrics: Optional[Mapping[str, Any]] = None,
@@ -785,15 +1002,7 @@ def evaluate_experimental_probability_strategy(
     active_ids = reg.get_active_profile_ids()
     generation = reg.profile_generation
 
-    warnings: List[str] = []
-    disclaimers: List[str] = ["实验结果 · 不参与正式出价"]
-
-    has_external_active = any(pid != "baseline" for pid in active_ids)
-    if has_external_active:
-        disclaimers.append("外部经验参数 · 未经我方真实历史验证")
-
     # 1. Baseline Reference Adapter: consumes passed-in references only!
-    # Does NOT fabricate fake distributions (q*goldAvg PMF is strictly deleted).
     prod_ref = None
     if production_metrics and isinstance(production_metrics, dict):
         prod_ref = {
@@ -811,6 +1020,8 @@ def evaluate_experimental_probability_strategy(
             "p80": shadow_profile.get("p80"),
             "conservativeEstimate": shadow_profile.get("conservativeEstimate"),
         }
+
+    has_external_active = any(pid != "baseline" for pid in active_ids)
 
     # If ONLY baseline is enabled: early return O(1) side-by-side reference payload!
     if not has_external_active:
@@ -839,122 +1050,15 @@ def evaluate_experimental_probability_strategy(
             delta_vs_production=None,
             delta_vs_pr_b_red=None,
             sample_n=session_ctx.get("sampleN", 0),
-            warnings=warnings,
-            disclaimers=disclaimers,
+            warnings=[],
+            disclaimers=["实验结果 · 不参与正式出价"],
         )
 
-    # 2. Discrete Convolution Component Building
-    # Strict Rule: Quantiles cannot be fabricated into PMFs!
-    # PR-B quantiles (p20/p50/p80) are NOT converted into {p20:0.2, p50:0.6, p80:0.2}.
-    # Real independent PMFs can be provided via session_ctx["candidatePmfs"].
-    components: List[DiscreteDistribution] = []
-    candidate_pmfs = session_ctx.get("candidatePmfs")
-    if isinstance(candidate_pmfs, list):
-        for c_pmf in candidate_pmfs:
-            if isinstance(c_pmf, dict):
-                try:
-                    d = DiscreteDistribution(c_pmf, tolerance=INPUT_NORMALIZATION_TOLERANCE)
-                    if d.is_valid:
-                        components.append(d)
-                except Exception:
-                    pass
+    # 2. Evaluate or retrieve pure experimental core
+    core = _evaluate_pure_experimental_core(session_ctx, reg)
 
-    convolved_dist: Optional[DiscreteDistribution] = None
-    conv_meta: Optional[Dict[str, Any]] = None
-
-    if reg.is_profile_enabled("convolution_v1"):
-        if components:
-            convolved_dist, conv_meta = convolve_discrete_distributions(
-                components, max_states=DEFAULT_MAX_CONVOLUTION_STATES
-            )
-            if conv_meta.get("budgetExceeded"):
-                warnings.append("State-space budget exceeded: distribution downsampled to budget limit.")
-        else:
-            conv_meta = {
-                "status": "unavailable",
-                "reason": "NO_VALID_DISTRIBUTION_COMPONENTS",
-                "budgetExceeded": False,
-                "approximationApplied": False,
-                "originalStateCount": 0,
-                "finalStateCount": 0,
-                "normalizationError": 0.0,
-                "approximationMethod": "none",
-            }
-            warnings.append("Convolution unavailable: no valid discrete PMF components provided.")
-
-    p20 = convolved_dist.quantiles.p20 if convolved_dist else None
-    p50 = convolved_dist.quantiles.p50 if convolved_dist else None
-    p80 = convolved_dist.quantiles.p80 if convolved_dist else None
-    mean_val = convolved_dist.mean if convolved_dist else None
-
-    # 3. Dafu Round Divisors Heuristic (R1-R4)
-    # Canonical: R1 / 2.0, R2 / 1.6, R3 / 1.3, R4 / 1.1.
-    # No invented constants (0.92, 0.88 deleted!).
-    external_hypotheses: Dict[str, Any] = {}
-    exp_reserve = None
-    exp_conservative = None
-
-    if reg.is_profile_enabled("dafu_round_heuristic_v1"):
-        round_idx = session_ctx.get("round") or session_ctx.get("currentRound") or 1
-        r_str = f"R{min(4, max(1, int(round_idx)))}"
-        divisor = DAFU_CANONICAL_ROUND_DIVISORS.get(r_str, 1.0)
-        multiplier = 1.0 / divisor
-
-        # Base reference price for heuristic: use convolved p50 or production reference p50
-        ref_p50 = p50 or (prod_ref.get("valP50") if prod_ref else None)
-        calculated_bidding_price = (ref_p50 * multiplier) if ref_p50 is not None else None
-
-        external_hypotheses["dafuRoundHeuristic"] = {
-            "round": r_str,
-            "canonicalDivisor": divisor,
-            "calculatedMultiplier": round(multiplier, 4),
-            "calculatedBiddingPrice": round(calculated_bidding_price, 2) if calculated_bidding_price is not None else None,
-            "note": "Canonical Dafu divisors (R1:2.0, R2:1.6, R3:1.3, R4:1.1). Experimental only.",
-        }
-
-    # 4. Color Prior Profile (Purple:Gold:Red = 2.2:1.85:1)
-    if reg.is_profile_enabled("external_color_prior_dafu_v1"):
-        p_cp = reg.get_profile("external_color_prior_dafu_v1")
-        external_hypotheses["colorPrior"] = {
-            "profileId": "external_color_prior_dafu_v1",
-            "sourceProject": p_cp.source_project if p_cp else "dafu_calculator",
-            "evidenceLevel": p_cp.evidence_level if p_cp else "unverified_external_prior",
-            "validatedByOurData": False,
-            "samplingAssumption": "explicit_external_ratio",
-            "weights": {
-                "purple_weight": 2.2,
-                "gold_weight": 1.85,
-                "red_weight": 1.0,
-            },
-            "ratioString": "Purple : Gold : Red = 2.2 : 1.85 : 1.0",
-        }
-
-    # 5. Special Rule Profile
-    if reg.is_profile_enabled("special_rule_reference_v1"):
-        external_hypotheses["specialRuleReference"] = {
-            "profileId": "special_rule_reference_v1",
-            "sourceProject": "dafu_calculator",
-            "evidenceLevel": "unverified_external_hypothesis",
-            "validatedByOurData": False,
-            "effectEnabled": False,
-            "recordedRules": ["shining_heart", "no_heart", "no_pig", "no_large_items"],
-            "status": "已记录外部规则假设 · 当前无已验证可执行 effect",
-        }
-
-    # 6. Structural Fit (internal structural_fit_v1)
-    structural_fit_report = None
-    if reg.is_profile_enabled("structural_fit_v1"):
-        s_fit = compute_structural_fit(session_ctx)
-        structural_fit_report = s_fit.to_payload()
-        if s_fit.conflicts:
-            warnings.extend([f"StructuralFit: {c}" for c in s_fit.conflicts])
-
-    # 7. Dafu CELL_FIT Reference (external dafu_cell_fit_reference_v1)
-    dafu_cell_fit_report = None
-    if reg.is_profile_enabled("dafu_cell_fit_reference_v1"):
-        dafu_cell_fit_report = compute_dafu_cell_fit_reference(session_ctx)
-
-    # 8. Deltas vs Production and PR-B Red
+    # 3. Dynamically compute deltas against current production_metrics and experimental_red
+    p50 = core.get("p50")
     delta_prod = None
     if prod_ref and prod_ref.get("valP50") is not None and p50 is not None:
         delta_prod = {
@@ -969,8 +1073,6 @@ def evaluate_experimental_probability_strategy(
                 "deltaVsRedMedian": round(p50 - float(red_p50), 2),
             }
 
-    sample_n = session_ctx.get("sampleN", 0)
-
     return ExperimentalProbabilityStrategyReport(
         schema_version=1,
         experimental=True,
@@ -982,22 +1084,22 @@ def evaluate_experimental_probability_strategy(
         conditioning_mode="observational_only",
         production_reference=prod_ref,
         historical_shadow_reference=shadow_ref,
-        experimental_distribution=convolved_dist.to_payload() if convolved_dist else None,
-        p20=p20,
-        p50=p50,
-        p80=p80,
-        mean=mean_val,
-        experimental_reserve_price=exp_reserve,
-        experimental_conservative_price=exp_conservative,
-        structural_fit=structural_fit_report,
-        dafu_cell_fit_reference=dafu_cell_fit_report,
-        external_hypotheses=external_hypotheses if external_hypotheses else None,
-        convolution_metrics=conv_meta,
+        experimental_distribution=core.get("experimental_distribution"),
+        p20=core.get("p20"),
+        p50=core.get("p50"),
+        p80=core.get("p80"),
+        mean=core.get("mean"),
+        experimental_reserve_price=core.get("experimental_reserve_price"),
+        experimental_conservative_price=core.get("experimental_conservative_price"),
+        structural_fit=core.get("structural_fit"),
+        dafu_cell_fit_reference=core.get("dafu_cell_fit_reference"),
+        external_hypotheses=core.get("external_hypotheses"),
+        convolution_metrics=core.get("convolution_metrics"),
         delta_vs_production=delta_prod,
         delta_vs_pr_b_red=delta_red,
-        sample_n=sample_n,
-        warnings=warnings,
-        disclaimers=disclaimers,
+        sample_n=session_ctx.get("sampleN", 0),
+        warnings=core.get("warnings", []),
+        disclaimers=core.get("disclaimers", []),
     )
 
 
@@ -1010,14 +1112,13 @@ def safe_evaluate_experimental_probability_strategy(
 ) -> Dict[str, Any]:
     """Fail-isolated and cached wrapper around experimental probability strategy inference.
 
-    Guarantees:
-    - Never raises an unhandled exception.
-    - Never mutates session_ctx, production_metrics, or shadow_profile.
-    - Completely isolated from production solver execution paths.
-    - Caches evaluations across (profileGeneration, contextFingerprint, pr_b_historyGeneration).
-    - O(1) early return when only baseline is enabled.
+    Cache correctness guarantees:
+    - Pure experimental core is cached across (profileGeneration, contextFingerprint, pr_b_historyGeneration).
+    - Production and shadow references, along with deltas, are attached dynamically on every call.
+    - If production_metrics change for the same session_ctx and profileGeneration, returned references update immediately!
+    - O(1) early return when only baseline is active.
     """
-    global _CALC_CACHE
+    global _EXPERIMENTAL_CORE_CACHE
     reg = registry or get_global_strategy_registry()
     active_ids = reg.get_active_profile_ids()
     generation = reg.profile_generation
@@ -1037,30 +1138,89 @@ def safe_evaluate_experimental_probability_strategy(
             _LOG.warning("Baseline adapter failure: %s", exc, exc_info=True)
             return _make_fallback_payload(generation, str(exc))
 
-    # Check cache for complex calculations
-    ctx_fp = _compute_context_fingerprint(session_ctx)
+    # Context fingerprint using canonical recursive sorted JSON
+    ctx_fp = _compute_canonical_context_fingerprint(session_ctx)
     pr_b_gen = int((experimental_red or {}).get("historyGeneration", 0))
     cache_key = (generation, ctx_fp, pr_b_gen)
 
-    if cache_key in _CALC_CACHE:
-        return copy.deepcopy(_CALC_CACHE[cache_key])
+    if cache_key in _EXPERIMENTAL_CORE_CACHE:
+        core = copy.deepcopy(_EXPERIMENTAL_CORE_CACHE[cache_key])
+    else:
+        try:
+            core = _evaluate_pure_experimental_core(session_ctx, reg)
+            if len(_EXPERIMENTAL_CORE_CACHE) > 500:
+                _EXPERIMENTAL_CORE_CACHE.clear()
+            _EXPERIMENTAL_CORE_CACHE[cache_key] = copy.deepcopy(core)
+        except Exception as exc:
+            _LOG.warning("Experimental probability strategy core failure: %s", exc, exc_info=True)
+            return _make_fallback_payload(generation, str(exc))
 
+    # Dynamically attach fresh production/shadow references and deltas
     try:
-        report = evaluate_experimental_probability_strategy(
-            session_ctx=session_ctx,
-            production_metrics=production_metrics,
-            shadow_profile=shadow_profile,
-            experimental_red=experimental_red,
-            registry=reg,
+        prod_ref = None
+        if production_metrics and isinstance(production_metrics, dict):
+            prod_ref = {
+                "valP50": production_metrics.get("valP50") or production_metrics.get("medianEstimate"),
+                "valRange": production_metrics.get("valRange"),
+                "targetProfitLine": production_metrics.get("targetProfitLine"),
+                "actionDirective": production_metrics.get("actionDirective"),
+            }
+
+        shadow_ref = None
+        if shadow_profile and isinstance(shadow_profile, dict):
+            shadow_ref = {
+                "p20": shadow_profile.get("p20"),
+                "p50": shadow_profile.get("p50"),
+                "p80": shadow_profile.get("p80"),
+                "conservativeEstimate": shadow_profile.get("conservativeEstimate"),
+            }
+
+        p50 = core.get("p50")
+        delta_prod = None
+        if prod_ref and prod_ref.get("valP50") is not None and p50 is not None:
+            delta_prod = {
+                "medianDelta": round(p50 - float(prod_ref["valP50"]), 2),
+            }
+
+        delta_red = None
+        if experimental_red and isinstance(experimental_red, dict) and p50 is not None:
+            red_p50 = experimental_red.get("redTotalMedian")
+            if isinstance(red_p50, (int, float)):
+                delta_red = {
+                    "deltaVsRedMedian": round(p50 - float(red_p50), 2),
+                }
+
+        report = ExperimentalProbabilityStrategyReport(
+            schema_version=1,
+            experimental=True,
+            production_eligible=False,
+            status="evaluated",
+            active_profiles=active_ids,
+            profile_generation=generation,
+            sampling_assumption="unknown",
+            conditioning_mode="observational_only",
+            production_reference=prod_ref,
+            historical_shadow_reference=shadow_ref,
+            experimental_distribution=core.get("experimental_distribution"),
+            p20=core.get("p20"),
+            p50=core.get("p50"),
+            p80=core.get("p80"),
+            mean=core.get("mean"),
+            experimental_reserve_price=core.get("experimental_reserve_price"),
+            experimental_conservative_price=core.get("experimental_conservative_price"),
+            structural_fit=core.get("structural_fit"),
+            dafu_cell_fit_reference=core.get("dafu_cell_fit_reference"),
+            external_hypotheses=core.get("external_hypotheses"),
+            convolution_metrics=core.get("convolution_metrics"),
+            delta_vs_production=delta_prod,
+            delta_vs_pr_b_red=delta_red,
+            sample_n=session_ctx.get("sampleN", 0),
+            warnings=core.get("warnings", []),
+            disclaimers=core.get("disclaimers", []),
         )
-        payload = report.to_payload()
-        # Cap cache size to prevent memory leak
-        if len(_CALC_CACHE) > 500:
-            _CALC_CACHE.clear()
-        _CALC_CACHE[cache_key] = payload
-        return payload
+        return report.to_payload()
     except Exception as exc:
-        _LOG.warning("Experimental probability strategy isolated failure: %s", exc, exc_info=True)
+        _LOG.warning("Experimental probability strategy reference attachment failure: %s", exc, exc_info=True)
         return _make_fallback_payload(generation, str(exc))
 
 

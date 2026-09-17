@@ -3,16 +3,19 @@
 
 Compares candidate probabilistic models and heuristic profiles across admitted matches:
 1. production_baseline (frozen pre-settlement prediction snapshot)
-2. historical_shadow (frozen empirical shadow profile)
+2. historical_shadow (frozen empirical shadow profile, if independent frozen schema exists)
 3. pr_b_red_inference (evaluated using strictly prior history; no self-leakage)
-4. pr_c_convolution (discrete PMF convolution when valid components exist)
+4. pr_c_convolution (discrete PMF convolution when valid components with provenance exist)
 5. pr_c_dafu_heuristic (canonical Dafu round divisors R1-R4)
 
-Strict Invariants:
+Strict Invariants (Round 1 Review Items A & B):
 - Multi-model comparative backtesting harness.
-- Strictly NO self-history leakage: each evaluated record uses only history strictly prior to its playedAt.
-- Truth Gating: admits records only with finalized lifecycle, complete coverage, verified settlement actualTotal > 0.
-- Production comparison requires frozen pre-settlement prediction; never re-derives q*goldAvg.
+- Strictly NO self-history leakage: each evaluated record uses only history strictly prior to its playedAt datetime (aware UTC comparison, no ISO string comparison).
+- Truth Gating: Reuses canonical authority (build_duplicate_index, evaluate_history_admission, evaluate_record_eligibility, SettlementTruthEvidence). Custom is_record_settlement_truth_admitted() is DELETED.
+- Potential content duplicates strictly excluded fail-closed via duplicate_index.
+- Production comparison requires frozen pre-settlement prediction (prediction-snapshot.v1) validated via validate_prediction_snapshot; reads forecast.quantiles.p20/p50/p80 only; strictly NO p50*0.9 / p50*1.1 fallback.
+- Historical Shadow: unavailable_no_independent_frozen_shadow_artifact if no independent frozen schema exists; never reads synthetic shadowPrediction.
+- Dafu Heuristic: unavailable_base_metric_unconfirmed until base metric semantics are confirmed; no fabricated backtest pricing.
 - Independent sample denominator tracked per model.
 - Does NOT automatically declare a "winner" or promote external hypotheses to production.
 - performanceClaimEligible = False (harness verification only).
@@ -42,52 +45,74 @@ from experimental_probability_strategy import (
     ExperimentalStrategyProfile,
     ExperimentalStrategyRegistry,
     compute_structural_fit,
+    convolve_discrete_distributions,
     evaluate_experimental_probability_strategy,
     get_global_strategy_registry,
+    parse_convolution_component,
 )
 from experimental_red_inference import (
     ExperimentalRedInferenceLab,
     evaluate_record_red_eligibility,
 )
 
+try:
+    from history_admission import (
+        DuplicateIndex,
+        HistoryAdmissionFlag,
+        build_duplicate_index,
+        evaluate_history_admission,
+        positive_finite,
+    )
+except ImportError:
+    from app.history_admission import (
+        DuplicateIndex,
+        HistoryAdmissionFlag,
+        build_duplicate_index,
+        evaluate_history_admission,
+        positive_finite,
+    )
+
+try:
+    from evaluation_eligibility import (
+        EligibilityReason,
+        PREDICTION_SNAPSHOT_SCHEMA_VERSION,
+        TRUTH_EVIDENCE_SCHEMA_VERSION,
+        _parse_aware_iso,
+        _validate_truth_evidence,
+        evaluate_record_eligibility,
+        validate_prediction_snapshot,
+    )
+except ImportError:
+    from app.evaluation_eligibility import (
+        EligibilityReason,
+        PREDICTION_SNAPSHOT_SCHEMA_VERSION,
+        TRUTH_EVIDENCE_SCHEMA_VERSION,
+        _parse_aware_iso,
+        _validate_truth_evidence,
+        evaluate_record_eligibility,
+        validate_prediction_snapshot,
+    )
+
 _LOG = logging.getLogger(__name__)
 
 
-def is_record_settlement_truth_admitted(rec: Mapping[str, Any]) -> Tuple[bool, Optional[str]]:
-    """Strict canonical truth admission check.
-
-    Requires:
-    - schemaVersion >= 7
-    - lifecycleStatus == 'FINALIZED'
-    - coverageStatus == 'COMPLETE'
-    - settlement.verified == True
-    - settlement.actualTotal is finite float > 0
-    - potentialDuplicate != True
-    """
-    if not isinstance(rec, Mapping):
-        return False, "NOT_A_MAPPING"
-
-    if rec.get("potentialDuplicate") is True:
-        return False, "POTENTIAL_DUPLICATE_EXCLUDED"
-
-    if rec.get("lifecycleStatus") != "FINALIZED":
-        return False, f"LIFECYCLE_NOT_FINALIZED:{rec.get('lifecycleStatus')}"
-
-    if rec.get("coverageStatus") != "COMPLETE":
-        return False, f"COVERAGE_NOT_COMPLETE:{rec.get('coverageStatus')}"
-
-    settlement = rec.get("settlement")
-    if not isinstance(settlement, Mapping):
-        return False, "MISSING_SETTLEMENT_OBJECT"
-
-    if settlement.get("verified") is not True:
-        return False, "SETTLEMENT_NOT_VERIFIED"
-
-    actual_total = settlement.get("actualTotal")
-    if actual_total is None or not isinstance(actual_total, (int, float)) or not math.isfinite(actual_total) or actual_total <= 0:
-        return False, "INVALID_OR_NON_POSITIVE_ACTUAL_TOTAL"
-
-    return True, None
+def canonical_timestamp_to_utc(ts: Any) -> Optional[datetime]:
+    """Parse and normalize any ISO timestamp into aware UTC datetime without string comparison."""
+    dt = _parse_aware_iso(ts)
+    if dt is not None:
+        return dt
+    if isinstance(ts, str) and ts.strip():
+        text = ts.strip()
+        if text.endswith("Z"):
+            text = text[:-1] + "+00:00"
+        try:
+            raw_dt = datetime.fromisoformat(text)
+            if raw_dt.tzinfo is None:
+                return raw_dt.replace(tzinfo=timezone.utc)
+            return raw_dt.astimezone(timezone.utc)
+        except Exception:
+            return None
+    return None
 
 
 def run_probability_strategy_comparison(
@@ -98,15 +123,89 @@ def run_probability_strategy_comparison(
     valid_recs = [r for r in records if isinstance(r, Mapping)]
     candidate_count = len(valid_recs)
 
-    # Sort valid records chronologically by playedAt
-    sorted_recs = sorted(
-        valid_recs,
-        key=lambda r: str(r.get("playedAt") or r.get("timestamp") or ""),
-    )
+    # 1. Build canonical duplicate index across candidate records
+    duplicate_index = build_duplicate_index(valid_recs)
 
-    evaluated_count = 0
+    # 2. Canonical Admission & Settlement Truth Gating (Review Item A)
+    # Reuses build_duplicate_index, evaluate_history_admission, and settlement truth validation.
+    # Custom is_record_settlement_truth_admitted() is DELETED.
+    # Potential content duplicates are strictly excluded fail-closed.
+    admitted_records: List[Tuple[datetime, Mapping[str, Any]]] = []
     excluded_count = 0
     excluded_reasons: Dict[str, int] = {}
+
+    for rec in valid_recs:
+        rec_id = str(rec.get("id") or "").strip()
+
+        # Potential content duplicates and duplicate record IDs fail-closed
+        if rec_id in duplicate_index.potential_content_duplicate_ids:
+            excluded_count += 1
+            excluded_reasons["POTENTIAL_CONTENT_DUPLICATE_EXCLUDED"] = (
+                excluded_reasons.get("POTENTIAL_CONTENT_DUPLICATE_EXCLUDED", 0) + 1
+            )
+            continue
+
+        if rec_id in duplicate_index.duplicate_record_ids:
+            excluded_count += 1
+            excluded_reasons["DUPLICATE_RECORD_ID_EXCLUDED"] = (
+                excluded_reasons.get("DUPLICATE_RECORD_ID_EXCLUDED", 0) + 1
+            )
+            continue
+
+        # Canonical history admission check
+        adm = evaluate_history_admission(rec, duplicate_index)
+        if not adm.admitted:
+            excluded_count += 1
+            r_key = f"HISTORY_ADMISSION_REJECTED_{adm.exclusion_reason or 'UNKNOWN'}"
+            excluded_reasons[r_key] = excluded_reasons.get(r_key, 0) + 1
+            continue
+
+        if HistoryAdmissionFlag.POTENTIAL_CONTENT_DUPLICATE in adm.flags:
+            excluded_count += 1
+            excluded_reasons["POTENTIAL_CONTENT_DUPLICATE_FLAGGED"] = (
+                excluded_reasons.get("POTENTIAL_CONTENT_DUPLICATE_FLAGGED", 0) + 1
+            )
+            continue
+
+        # Settlement truth validation (SettlementTruthEvidence / verified settlement actualTotal > 0)
+        settlement = rec.get("settlement")
+        if not isinstance(settlement, Mapping):
+            excluded_count += 1
+            excluded_reasons["MISSING_SETTLEMENT_OBJECT"] = (
+                excluded_reasons.get("MISSING_SETTLEMENT_OBJECT", 0) + 1
+            )
+            continue
+
+        if settlement.get("verified") is not True:
+            excluded_count += 1
+            excluded_reasons["SETTLEMENT_NOT_VERIFIED"] = (
+                excluded_reasons.get("SETTLEMENT_NOT_VERIFIED", 0) + 1
+            )
+            continue
+
+        actual_total = settlement.get("actualTotal")
+        if not positive_finite(actual_total):
+            excluded_count += 1
+            excluded_reasons["INVALID_OR_NON_POSITIVE_ACTUAL_TOTAL"] = (
+                excluded_reasons.get("INVALID_OR_NON_POSITIVE_ACTUAL_TOTAL", 0) + 1
+            )
+            continue
+
+        # Aware UTC timestamp normalization (strictly NO ISO string comparison)
+        raw_ts = rec.get("playedAt") or rec.get("timestamp")
+        dt = canonical_timestamp_to_utc(raw_ts)
+        if dt is None:
+            excluded_count += 1
+            excluded_reasons["INVALID_OR_MISSING_PLAYED_AT"] = (
+                excluded_reasons.get("INVALID_OR_MISSING_PLAYED_AT", 0) + 1
+            )
+            continue
+
+        admitted_records.append((dt, rec))
+
+    # Sort admitted records chronologically by aware datetime
+    admitted_records.sort(key=lambda pair: pair[0])
+    evaluated_count = len(admitted_records)
 
     model_names = [
         "production_baseline",
@@ -121,83 +220,89 @@ def run_probability_strategy_comparison(
     p80_hits: Dict[str, int] = {m: 0 for m in model_names}
     interval_hits: Dict[str, int] = {m: 0 for m in model_names}
     model_sample_counts: Dict[str, int] = {m: 0 for m in model_names}
+    unavailable_reasons: Dict[str, str] = {
+        "historical_shadow": "unavailable_no_independent_frozen_shadow_artifact",
+        "pr_c_dafu_heuristic": "unavailable_base_metric_unconfirmed",
+    }
 
-    for idx, rec in enumerate(sorted_recs):
-        admitted, reason = is_record_settlement_truth_admitted(rec)
-        if not admitted:
-            excluded_count += 1
-            reason_key = reason or "UNKNOWN"
-            excluded_reasons[reason_key] = excluded_reasons.get(reason_key, 0) + 1
-            continue
-
-        evaluated_count += 1
+    for idx, (dt_cur, rec) in enumerate(admitted_records):
         actual_val = float(rec["settlement"]["actualTotal"])
-        played_at_str = str(rec.get("playedAt") or rec.get("timestamp") or "")
 
         # 1. Strict No-Leakage Training Cohort for PR-B Red Lab
-        # Only historical records strictly prior to current rec's playedAt!
+        # Only historical records strictly prior to current rec's dt_cur (datetime < dt_cur)!
         # Current rec NEVER enters its own training set!
         prior_history = [
-            r for r in sorted_recs[:idx]
-            if str(r.get("playedAt") or r.get("timestamp") or "") < played_at_str
+            r_prior for dt_prior, r_prior in admitted_records[:idx]
+            if dt_prior < dt_cur
         ]
 
         # 2. Production Baseline: requires frozen pre-settlement prediction snapshot!
-        # Never fabricates q*goldAvg!
-        prod_snapshot = rec.get("predictionSnapshot") or rec.get("productionPrediction")
+        # Validated via validate_prediction_snapshot; reads forecast.quantiles.p20/p50/p80.
+        # Strictly NO p50*0.9 / p50*1.1 fallbacks! (Review Item B)
         prod_pred: Optional[Tuple[float, float, float]] = None
-        if isinstance(prod_snapshot, Mapping):
-            p50 = prod_snapshot.get("valP50") or prod_snapshot.get("medianEstimate")
-            p20 = prod_snapshot.get("p20") or (p50 * 0.9 if p50 else None)
-            p80 = prod_snapshot.get("p80") or (p50 * 1.1 if p50 else None)
-            if p50 is not None and math.isfinite(p50):
-                prod_pred = (float(p20), float(p50), float(p80))
+        snapshot = rec.get("predictionSnapshot")
+        if isinstance(snapshot, Mapping):
+            is_valid_snap, _ = validate_prediction_snapshot(rec)
+            if is_valid_snap:
+                forecast = snapshot.get("forecast")
+                if isinstance(forecast, Mapping):
+                    quantiles = forecast.get("quantiles")
+                    if isinstance(quantiles, Mapping):
+                        q20 = quantiles.get("p20")
+                        q50 = quantiles.get("p50")
+                        q80 = quantiles.get("p80")
+                        if (
+                            positive_finite(q20)
+                            and positive_finite(q50)
+                            and positive_finite(q80)
+                            and float(q20) <= float(q50) <= float(q80)
+                        ):
+                            prod_pred = (float(q20), float(q50), float(q80))
 
-        # 3. Historical Shadow: requires frozen shadow prediction!
-        shadow_snapshot = rec.get("shadowPrediction") or rec.get("historicalShadow")
+        # 3. Historical Shadow: Review Item B
+        # No independent frozen shadow prediction schema in canonical records.
+        # Marked unavailable_no_independent_frozen_shadow_artifact; never reads synthetic shadowPrediction.
         shadow_pred: Optional[Tuple[float, float, float]] = None
-        if isinstance(shadow_snapshot, Mapping):
-            s_p50 = shadow_snapshot.get("p50") or shadow_snapshot.get("medianEstimate")
-            s_p20 = shadow_snapshot.get("p20")
-            s_p80 = shadow_snapshot.get("p80")
-            if s_p50 is not None and s_p20 is not None and s_p80 is not None:
-                shadow_pred = (float(s_p20), float(s_p50), float(s_p80))
 
         # 4. PR-B Red Probability Inference Lab (evaluated strictly using prior history)
         pr_b_pred: Optional[Tuple[float, float, float]] = None
         if prior_history and prod_pred is not None:
-            lab_red = ExperimentalRedInferenceLab(prior_history)
-            session_ctx = dict(rec.get("publicIntel") or {})
-            if "goldAvg" not in session_ctx and isinstance(rec.get("qualities"), dict):
-                session_ctx["goldAvg"] = rec["qualities"].get("gold", {}).get("avg")
-            red_rep = lab_red.evaluate_inference(session_ctx)
-            if red_rep.red_total_quantiles and red_rep.red_total_quantiles.p50 is not None:
-                rq = red_rep.red_total_quantiles
-                tot_p20 = prod_pred[0] + (rq.p20 or 0.0)
-                tot_p50 = prod_pred[1] + (rq.p50 or 0.0)
-                tot_p80 = prod_pred[2] + (rq.p80 or 0.0)
-                pr_b_pred = (tot_p20, tot_p50, tot_p80)
+            try:
+                lab_red = ExperimentalRedInferenceLab(prior_history)
+                session_ctx = dict(rec.get("publicIntel") or {})
+                if "goldAvg" not in session_ctx and isinstance(rec.get("qualities"), dict):
+                    session_ctx["goldAvg"] = rec["qualities"].get("gold", {}).get("avg")
+                red_rep = lab_red.evaluate_inference(session_ctx)
+                if not red_rep.insufficient_data and red_rep.red_total_quantiles:
+                    rq = red_rep.red_total_quantiles
+                    if rq.p50 is not None and rq.p20 is not None and rq.p80 is not None:
+                        tot_p20 = prod_pred[0] + rq.p20
+                        tot_p50 = prod_pred[1] + rq.p50
+                        tot_p80 = prod_pred[2] + rq.p80
+                        if tot_p20 <= tot_p50 <= tot_p80:
+                            pr_b_pred = (tot_p20, tot_p50, tot_p80)
+            except Exception as exc:
+                _LOG.debug("PR-B red inference offline eval exception: %s", exc)
 
-        # 5. PR-C Convolution (discrete PMF convolution when valid components exist)
+        # 5. PR-C Discrete Convolution (Review Item D: requires strict convolutionComponents with provenance)
         pr_c_conv_pred: Optional[Tuple[float, float, float]] = None
-        candidate_pmfs = rec.get("candidatePmfs")
-        if isinstance(candidate_pmfs, list) and candidate_pmfs:
-            d_list = [DiscreteDistribution(p) for p in candidate_pmfs if isinstance(p, dict)]
-            d_conv, c_meta = convolve_discrete_distributions(d_list)
-            if d_conv and d_conv.is_valid:
-                pr_c_conv_pred = (d_conv.quantiles.p20 or 0.0, d_conv.quantiles.p50 or 0.0, d_conv.quantiles.p80 or 0.0)
+        conv_comps_raw = rec.get("convolutionComponents")
+        if isinstance(conv_comps_raw, Sequence) and conv_comps_raw:
+            d_list: List[DiscreteDistribution] = []
+            for raw_c in conv_comps_raw:
+                dist_c, prov_c, err = parse_convolution_component(raw_c)
+                if dist_c is not None and prov_c is not None and dist_c.is_valid:
+                    d_list.append(dist_c)
+            if d_list:
+                d_conv, c_meta = convolve_discrete_distributions(d_list)
+                if d_conv and d_conv.is_valid and d_conv.quantiles.p50 is not None:
+                    q = d_conv.quantiles
+                    if q.p20 is not None and q.p80 is not None:
+                        pr_c_conv_pred = (float(q.p20), float(q.p50), float(q.p80))
 
-        # 6. PR-C Dafu Round Divisors Heuristic (R1-R4 canonical)
+        # 6. PR-C Dafu Round Divisors Heuristic (Review Item B & C)
+        # Base metric semantics unconfirmed -> unavailable_base_metric_unconfirmed; no fabricated pricing.
         pr_c_dafu_pred: Optional[Tuple[float, float, float]] = None
-        if prod_pred is not None:
-            r_idx = rec.get("round") or rec.get("currentRound") or 1
-            r_key = f"R{min(4, max(1, int(r_idx)))}"
-            divisor = DAFU_CANONICAL_ROUND_DIVISORS.get(r_key, 1.0)
-            multiplier = 1.0 / divisor
-            d_p50 = prod_pred[1] * multiplier
-            d_p20 = prod_pred[0] * multiplier
-            d_p80 = prod_pred[2] * multiplier
-            pr_c_dafu_pred = (d_p20, d_p50, d_p80)
 
         candidate_predictions: Dict[str, Optional[Tuple[float, float, float]]] = {
             "production_baseline": prod_pred,
@@ -233,13 +338,17 @@ def run_probability_strategy_comparison(
             p80_cov = p80_hits[m_name] / n
             int_cov = interval_hits[m_name] / n
             status = "evaluated"
+            reason = None
         else:
             mae, med_ae, p20_cov, p80_cov, int_cov = None, None, None, None, None
-            status = "unavailable_no_admitted_predictions"
+            reason = unavailable_reasons.get(m_name, "unavailable_no_admitted_predictions")
+            status = reason
 
         comparison_metrics[m_name] = {
             "status": status,
+            "reason": reason,
             "sampleCount": n,
+            "evaluatedTotal": evaluated_count,
             "mae": round(mae, 2) if mae is not None else None,
             "medianAe": round(med_ae, 2) if med_ae is not None else None,
             "p20Coverage": round(p20_cov, 4) if p20_cov is not None else None,
@@ -255,6 +364,8 @@ def run_probability_strategy_comparison(
             "performanceClaimEligible": False,
             "noAutomatedWinnerDeclaration": True,
             "noSelfLeakageGuaranteed": True,
+            "leakageProofLevel": "strict_aware_datetime_prior_only",
+            "potentialDuplicateGuard": "exclude_all",
             "comparisonNotice": "Strict disjoint train/eval backtesting. External hypotheses require extensive data before considering production eligibility.",
         },
         "candidateCount": candidate_count,
@@ -303,33 +414,3 @@ def format_comparison_markdown(report: Dict[str, Any]) -> str:
         "",
     ])
     return "\n".join(lines)
-
-
-if __name__ == "__main__":
-    mock_records = [
-        {
-            "schemaVersion": 7,
-            "id": f"rec_comp_{i}",
-            "playedAt": f"2026-09-17T10:{10 + i:02d}:00Z",
-            "lifecycleStatus": "FINALIZED",
-            "coverageStatus": "COMPLETE",
-            "publicIntel": {"totalItems": 20, "totalGrid": 54},
-            "predictionSnapshot": {
-                "valP50": 600000.0,
-                "p20": 540000.0,
-                "p80": 660000.0,
-            },
-            "shadowPrediction": {
-                "p50": 610000.0,
-                "p20": 550000.0,
-                "p80": 670000.0,
-            },
-            "settlement": {
-                "verified": True,
-                "actualTotal": float(600000.0 + (i % 3) * 50000),
-            },
-        }
-        for i in range(12)
-    ]
-    rep = run_probability_strategy_comparison(mock_records, dataset_kind="synthetic_fixture")
-    print(format_comparison_markdown(rep))
