@@ -30,7 +30,7 @@ from strategy_ux_metrics import (
     get_authoritative_strategy_store,
     validate_estimate_mode_request,
 )
-from experimental_red_inference import get_authoritative_red_inference_lab
+from experimental_red_inference import safe_evaluate_experimental_red
 
 class AuctionBrain:
     def __init__(
@@ -95,7 +95,7 @@ class AuctionBrain:
                 can_undo=self.strategy_history.can_undo,
                 can_redo=self.strategy_history.can_redo,
             )
-            red_report = get_authoritative_red_inference_lab().evaluate_inference(
+            experimental_red = safe_evaluate_experimental_red(
                 session_ctx,
                 production_metrics=metrics_summary.to_payload(),
             )
@@ -115,7 +115,7 @@ class AuctionBrain:
                 "estimateMode": active_mode.value,
                 "strategyMetrics": metrics_summary.to_payload(),
                 "strategyPanel": strategy_panel.to_payload(),
-                "experimentalRed": red_report.to_payload(),
+                "experimentalRed": experimental_red,
             }
 
         # 2. 状态与基础成本解析
@@ -202,7 +202,7 @@ class AuctionBrain:
             can_redo=self.strategy_history.can_redo,
         )
 
-        red_report = get_authoritative_red_inference_lab().evaluate_inference(
+        experimental_red = safe_evaluate_experimental_red(
             session_ctx,
             production_metrics=metrics_summary.to_payload(),
         )
@@ -225,7 +225,7 @@ class AuctionBrain:
             "estimateMode": active_mode.value,
             "strategyMetrics": metrics_summary.to_payload(),
             "strategyPanel": strategy_panel.to_payload(),
-            "experimentalRed": red_report.to_payload(),
+            "experimentalRed": experimental_red,
         }
 
     def process_observation(self, obs: VisionObservation) -> Dict[str, Any]:
