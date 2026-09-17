@@ -31,6 +31,10 @@ from strategy_ux_metrics import (
     validate_estimate_mode_request,
 )
 from experimental_red_inference import safe_evaluate_experimental_red
+from experimental_probability_strategy import (
+    get_global_strategy_registry,
+    safe_evaluate_experimental_probability_strategy,
+)
 
 class AuctionBrain:
     def __init__(
@@ -99,6 +103,11 @@ class AuctionBrain:
                 session_ctx,
                 production_metrics=metrics_summary.to_payload(),
             )
+            experimental_probability_strategy = safe_evaluate_experimental_probability_strategy(
+                session_ctx,
+                production_metrics=metrics_summary.to_payload(),
+                experimental_red=experimental_red,
+            )
             return {
                 "solverStatus": status,
                 "diagnosticOnly": diagnostic_only,
@@ -116,6 +125,7 @@ class AuctionBrain:
                 "strategyMetrics": metrics_summary.to_payload(),
                 "strategyPanel": strategy_panel.to_payload(),
                 "experimentalRed": experimental_red,
+                "experimentalProbabilityStrategy": experimental_probability_strategy,
             }
 
         # 2. 状态与基础成本解析
@@ -206,6 +216,11 @@ class AuctionBrain:
             session_ctx,
             production_metrics=metrics_summary.to_payload(),
         )
+        experimental_probability_strategy = safe_evaluate_experimental_probability_strategy(
+            session_ctx,
+            production_metrics=metrics_summary.to_payload(),
+            experimental_red=experimental_red,
+        )
 
         return {
             "solverStatus": status,
@@ -226,6 +241,7 @@ class AuctionBrain:
             "strategyMetrics": metrics_summary.to_payload(),
             "strategyPanel": strategy_panel.to_payload(),
             "experimentalRed": experimental_red,
+            "experimentalProbabilityStrategy": experimental_probability_strategy,
         }
 
     def process_observation(self, obs: VisionObservation) -> Dict[str, Any]:
@@ -235,10 +251,11 @@ class AuctionBrain:
         # 1. 驱动有限状态机 (FSM)
         fsm_res = self.fsm.handle_observation(obs)
 
-        # Fix E: Only reset strategy history when a new match lifecycle begins
+        # Fix E & PR-C: Reset strategy history and experimental registry when a new match begins
         current_sid = self.fsm.session_id
         if current_sid and current_sid != self._active_session_id:
             self.strategy_history.reset_for_new_match(match_id=current_sid)
+            get_global_strategy_registry().reset_for_new_match()
             self._active_session_id = current_sid
 
         # 2. 增量更新流
@@ -323,6 +340,7 @@ class AuctionBrain:
             "strategyMetrics": decision.get("strategyMetrics"),
             "strategyPanel": decision.get("strategyPanel"),
             "experimentalRed": decision.get("experimentalRed"),
+            "experimentalProbabilityStrategy": decision.get("experimentalProbabilityStrategy"),
         }
 
         return payload
