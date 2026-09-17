@@ -85,7 +85,7 @@ class OpenCvScorerBaselineAdapter:
         self.full_production_matcher_equivalent = False
         self.preprocessing_shared = True
         self.backend_specific_resize = False
-        self.scorer_parity_scope = "scoring_kernel_after_candidate_generation"
+        self.scorer_parity_scope = "candidate_scoring_pipeline_after_candidate_generation"
         self.experimental = False
         self.production_eligible = True
         self.default_enabled = True
@@ -252,10 +252,11 @@ class NumpyNccMatcherAdapter:
         self.preprocessing_shared = True
         self.backend_specific_resize = False
         self.crop_geometry_mode = "cell_aligned_or_source_bbox"
-        self.scorer_parity_scope = "scoring_kernel_after_candidate_generation"
+        self.scorer_parity_scope = "candidate_scoring_pipeline_after_candidate_generation"
         self.experimental = True
         self.production_eligible = False
         self.default_enabled = False
+        self.experimental_status = "OPTIONAL_EXPERIMENTAL_SCORER_COMPONENT_READY"
 
     def get_metadata(self) -> Dict[str, Any]:
         return {
@@ -284,6 +285,7 @@ class NumpyNccMatcherAdapter:
             "experimental": self.experimental,
             "productionEligible": self.production_eligible,
             "defaultEnabled": self.default_enabled,
+            "experimentalStatus": self.experimental_status,
         }
 
     def score_single_pair(
