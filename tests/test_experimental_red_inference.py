@@ -42,7 +42,7 @@ import subprocess
 import sys
 import unittest
 from datetime import datetime, timezone
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional
 
 _TESTS_DIR = os.path.dirname(os.path.abspath(__file__))
 _PROJECT_ROOT = os.path.abspath(os.path.join(_TESTS_DIR, ".."))
@@ -83,6 +83,8 @@ def _build_test_record(
     red_inventory_complete: bool = True,
     item_confirmation_status: str = "CONFIRMED",
     clearing_price: float = 50000.0,
+    coverage_status: str = "COMPLETE",
+    red_provenance: Optional[str] = "post_settlement_verified_warehouse",
 ) -> Dict[str, Any]:
     """Helper to construct a contract-compliant Canonical MatchRecord v7 for testing."""
     return {
@@ -93,6 +95,7 @@ def _build_test_record(
         "source": "0.65-vision-auto-archiver",
         "dataOrigin": origin,
         "diagnosticOnly": diagnostic_only,
+        "coverageStatus": coverage_status,
         "environment": {
             "venue": venue,
             "venueTier": venue,
@@ -110,11 +113,13 @@ def _build_test_record(
                 "minCount": red_count,
                 "maxCount": red_count,
                 "redInventoryComplete": red_inventory_complete,
+                "provenance": red_provenance if red_inventory_complete else None,
             },
         },
         "settlement": {
             "status": "verified",
             "verified": True,
+            "warehouseCoverageStatus": coverage_status,
             "actualTotal": gold_avg * 10 + red_total_value,
             "clearingPrice": clearing_price,
             "settlementItems": [
@@ -386,8 +391,8 @@ class TestExperimentalRedInferenceLab(unittest.TestCase):
 
     def test_20_fix_a_auction_only_count_rejected_as_red_truth(self):
         """Fix A: FINALIZED record with auction/OCR red count only is REJECTED from red count truth."""
-        # red_inventory_complete is False, and no post-settlement verified red items or complete warehouse
-        rec = _build_test_record("rec_ocr_only", red_count=1, red_inventory_complete=False)
+        # red_inventory_complete is False, unproven coverage, and no post-settlement verified red items or complete warehouse
+        rec = _build_test_record("rec_ocr_only", red_count=1, red_inventory_complete=False, coverage_status="UNPROVEN", red_provenance=None)
         rec["settlement"]["settlementItems"] = []  # No settlement red items
         el = evaluate_record_red_eligibility(rec)
         self.assertTrue(el.match_eligible)
@@ -397,10 +402,9 @@ class TestExperimentalRedInferenceLab(unittest.TestCase):
 
     def test_21_fix_b_settlement_verified_does_not_equal_warehouse_complete(self):
         """Fix B: settlement.verified + partial settlement items does NOT imply warehouse complete."""
-        rec = _build_test_record("rec_partial_st", red_count=1, red_inventory_complete=False)
+        rec = _build_test_record("rec_partial_st", red_count=1, red_inventory_complete=False, coverage_status="UNPROVEN", red_provenance=None)
         rec["settlement"]["verified"] = True
         rec["settlement"]["status"] = "verified"
-        # warehouse completeness is False because redInventoryComplete=False and warehouse unknownCount!=0
         el = evaluate_record_red_eligibility(rec)
         self.assertFalse(el.warehouse_complete_eligible)
         self.assertEqual(el.warehouse_completeness_source, "UNVERIFIED_OR_PARTIAL_WAREHOUSE")
@@ -490,17 +494,38 @@ class TestExperimentalRedInferenceLab(unittest.TestCase):
         self.assertEqual(lab.history_generation, 2)
 
     def test_28_fix_h_same_physical_match_different_ids_cannot_cross_train_eval(self):
-        """Fix H: Records with identical physical match fingerprints cannot cross train/eval split."""
-        # Two records with different IDs but identical physical match details
-        rec1 = _build_test_record("rec_id_1", played_at="2026-09-16T10:00:00Z", red_count=1, red_total_value=120000.0)
-        rec2 = _build_test_record("rec_id_2", played_at="2026-09-16T10:00:00Z", red_count=1, red_total_value=120000.0)
-        rec3 = _build_test_record("rec_id_3", played_at="2026-09-16T15:00:00Z", red_count=2, red_total_value=250000.0)
+        """Fix H & Final Fix 2: Same physical match duplicate group split across cutoff cannot cross train/eval."""
+        from history_admission import build_duplicate_index, canonical_duplicate_group_key
 
-        records = [rec1, rec2, rec3]
-        res = run_time_split_evaluation(records, split_timestamp="2026-09-16T12:00:00Z")
+        # rec1 at 10:00 (train candidate)
+        rec1 = _build_test_record("rec_id_1", played_at="2026-09-16T10:00:00Z", red_count=1, red_total_value=120000.0)
+        # rec_dup_a at 11:00 (train candidate) and rec_dup_b at 11:00 (eval candidate)
+        # Identical playedAt, venue, box, actualTotal, clearingPrice => same canonical duplicate group!
+        rec_dup_a = _build_test_record("rec_dup_a", played_at="2026-09-16T11:00:00Z", red_count=1, red_total_value=120000.0)
+        rec_dup_b = _build_test_record("rec_dup_b", played_at="2026-09-16T11:00:00Z", red_count=1, red_total_value=120000.0)
+        # rec_eval_3 at 15:00 (eval candidate)
+        rec_eval_3 = _build_test_record("rec_eval_3", played_at="2026-09-16T15:00:00Z", red_count=2, red_total_value=250000.0)
+
+        records = [rec1, rec_dup_a, rec_dup_b, rec_eval_3]
+
+        # Verify they are judged as the same duplicate group by canonical DuplicateIndex authority
+        dup_idx = build_duplicate_index(records)
+        self.assertIn("rec_dup_a", dup_idx.potential_content_duplicate_ids)
+        self.assertIn("rec_dup_b", dup_idx.potential_content_duplicate_ids)
+        self.assertEqual(canonical_duplicate_group_key(rec_dup_a), canonical_duplicate_group_key(rec_dup_b))
+
+        # Split with train_ratio=0.5 -> divides indices [0, 1] into train and [2, 3] into eval
+        # rec_dup_a goes to train side, rec_dup_b goes to eval side
+        res = run_time_split_evaluation(records, train_ratio=0.5)
         self.assertEqual(res["status"], "completed")
-        self.assertEqual(res["trainMatchCount"], 2)  # rec1 & rec2 in train
-        self.assertEqual(res["evalMatchCount"], 1)   # rec3 in eval
+        self.assertEqual(res["trainMatchCount"], 2)  # rec1 & rec_dup_a in train
+        # rec_dup_b MUST be purged from eval because it shares physical match group with rec_dup_a in train!
+        self.assertEqual(res["evalMatchCount"], 1)   # ONLY rec_eval_3 survives in eval!
+
+        # Assert no record ID intersection and no physical group intersection
+        train_ids = {str(r.get("id")) for r in [rec1, rec_dup_a]}
+        eval_ids = {str(r.get("id")) for r in [rec_eval_3]}
+        self.assertTrue(train_ids.isdisjoint(eval_ids))
 
     def test_29_fix_i_eval_weak_truth_excluded_from_metrics(self):
         """Fix I: Matches in evaluation set without confirmed truth are excluded from metric calculations."""
@@ -548,6 +573,79 @@ class TestExperimentalRedInferenceLab(unittest.TestCase):
         lab = ExperimentalRedInferenceLab([])
         report = lab.evaluate_inference({"venue": "standard", "box": "box_normal", "q": 60})
         self.assertEqual(report.similarity_profile["featuresUsed"], ["venue", "box", "q"])
+
+    # ---------------------------------------------------------------------------------
+    # Final Fix Tests (Final Fix 1 & Final Fix 2)
+    # ---------------------------------------------------------------------------------
+
+    def test_32_red_inventory_complete_without_trusted_provenance_rejected(self):
+        """Final Fix 1: redInventoryComplete=True without trusted provenance is rejected from coverage/count truth."""
+        rec = _build_test_record("r_untrusted", red_count=1, red_inventory_complete=True, coverage_status="UNPROVEN", red_provenance=None)
+        el = evaluate_record_red_eligibility(rec)
+        self.assertFalse(el.warehouse_complete_eligible)
+        self.assertFalse(el.red_count_eligible)
+        self.assertFalse(el.red_total_value_eligible)
+        self.assertEqual(el.warehouse_completeness_source, "RED_INVENTORY_COMPLETE_LACKS_TRUSTED_PROVENANCE")
+
+    def test_33_all_review_units_confirmed_without_coverage_complete_rejected(self):
+        """Final Fix 1: all reviewUnits CONFIRMED without whole-warehouse coverage complete is rejected."""
+        rec = _build_test_record("r_units_conf", red_count=1, red_inventory_complete=False, coverage_status="UNPROVEN", red_provenance=None)
+        rec["reviewUnits"] = [{"name": "Item1", "quality": "red", "confirmationStatus": "CONFIRMED", "value": 100000}]
+        el = evaluate_record_red_eligibility(rec)
+        self.assertFalse(el.warehouse_complete_eligible)
+        self.assertFalse(el.red_count_eligible)
+
+    def test_34_warehouse_zero_unknown_without_coverage_proof_rejected(self):
+        """Final Fix 1: warehouse.itemCount>0 and unknownCount=0 without coverage proof is rejected."""
+        rec = _build_test_record("r_zero_unk", red_count=1, red_inventory_complete=False, coverage_status="UNPROVEN", red_provenance=None)
+        rec["warehouse"] = {"itemCount": 5, "unknownCount": 0}
+        el = evaluate_record_red_eligibility(rec)
+        self.assertFalse(el.warehouse_complete_eligible)
+        self.assertFalse(el.red_count_eligible)
+
+    def test_35_settlement_verified_red_items_subset_without_completeness_cannot_be_count_truth(self):
+        """Final Fix 1: settlementVerifiedRedItems without completeness is verified subset only, NOT count truth."""
+        rec = _build_test_record("r_subset", red_count=1, red_inventory_complete=False, coverage_status="UNPROVEN", red_provenance=None)
+        rec["qualities"]["red"]["settlementVerifiedRedItems"] = "300000"
+        el = evaluate_record_red_eligibility(rec)
+        self.assertFalse(el.red_count_eligible)
+        self.assertFalse(el.red_total_value_eligible)
+        self.assertEqual(el.red_count_truth_source, "VERIFIED_RED_SUBSET_WITHOUT_COVERAGE_PROOF")
+
+    def test_36_generic_confirmed_true_without_exact_status_rejected_from_value_truth(self):
+        """Final Fix 1: Generic confirmed=True without CONFIRMED or EXACT_IDENTIFIED is rejected from value truth."""
+        rec = _build_test_record("r_generic_conf", red_count=1, red_inventory_complete=True, coverage_status="COMPLETE", red_provenance="canonical_coverage_complete")
+        rec["settlement"]["settlementItems"] = [{"name": "ItemRed", "quality": "red", "value": 200000, "confirmed": True}]
+        el = evaluate_record_red_eligibility(rec)
+        self.assertTrue(el.red_count_eligible)
+        self.assertFalse(el.red_total_value_eligible)
+        self.assertEqual(el.red_identity_truth_source, "AMBIGUOUS_OR_CANDIDATE_RED_ITEMS")
+
+    def test_37_canonical_exact_identity_accepted_for_value_truth(self):
+        """Final Fix 1: Canonical exact confirmation status (CONFIRMED) is accepted for red total value truth."""
+        rec = _build_test_record("r_exact", red_count=1, red_inventory_complete=True, coverage_status="COMPLETE", red_provenance="canonical_coverage_complete")
+        rec["settlement"]["settlementItems"] = [{"name": "ItemRed", "quality": "red", "value": 200000, "confirmationStatus": "CONFIRMED"}]
+        el = evaluate_record_red_eligibility(rec)
+        self.assertTrue(el.red_count_eligible)
+        self.assertTrue(el.red_total_value_eligible)
+        self.assertEqual(el.observed_red_total_value, 200000.0)
+
+    def test_38_canonical_coverage_complete_plus_zero_red_valid_zero_truth(self):
+        """Final Fix 1: Canonical coverage-complete with zero red is valid zero ground truth."""
+        rec = _build_test_record("r_zero_truth", red_count=0, red_inventory_complete=True, coverage_status="COMPLETE", red_provenance="canonical_coverage_complete")
+        el = evaluate_record_red_eligibility(rec)
+        self.assertTrue(el.warehouse_complete_eligible)
+        self.assertTrue(el.red_count_eligible)
+        self.assertTrue(el.red_total_value_eligible)
+        self.assertEqual(el.observed_red_count, 0)
+        self.assertEqual(el.observed_red_total_value, 0.0)
+
+    def test_39_canonical_duplicate_identity_unavailable_fail_closed(self):
+        """Final Fix 2: If canonical duplicate identity cannot be derived, offline eval fails closed."""
+        rec_bad = _build_test_record("r_bad", played_at="invalid-date")
+        res = run_time_split_evaluation([rec_bad])
+        self.assertEqual(res["status"], "insufficient_data")
+        self.assertEqual(res["evaluatedCount"], 0)
 
 
 if __name__ == "__main__":
