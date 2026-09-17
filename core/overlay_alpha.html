@@ -1485,7 +1485,12 @@
         if (hyp) {
           const parts = [];
           if (hyp.dafuRoundHeuristic) {
-            parts.push(`${hyp.dafuRoundHeuristic.round}: ${hyp.dafuRoundHeuristic.calculatedBiddingPrice ? fmtWan(hyp.dafuRoundHeuristic.calculatedBiddingPrice) : "—"}`);
+            const dh = hyp.dafuRoundHeuristic;
+            const rName = dh.round || "R?";
+            const div = dh.canonicalDivisor != null ? `÷${dh.canonicalDivisor}` : "";
+            const mult = dh.calculatedMultiplier != null ? `(×${dh.calculatedMultiplier})` : "";
+            const statusStr = dh.baseMetricSemanticsConfirmed ? "" : " 基准量语义未确认";
+            parts.push(`${rName} ${div} ${mult}${statusStr}`.trim());
           }
           if (hyp.colorPrior) {
             parts.push("颜色先验 2.2:1.85:1");

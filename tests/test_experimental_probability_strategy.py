@@ -861,6 +861,51 @@ class TestExperimentalProbabilityStrategyLab(unittest.TestCase):
         except Exception as e:
             self.fail(f"Boundary 3 intersection check failed: {e}")
 
+    def test_25_live_formal_dataset_still_performance_claim_ineligible(self):
+        """25. performanceClaimEligible strictly False even if datasetKind == 'live'."""
+        rec = _make_valid_test_record("rec_live_test")
+        res = run_probability_strategy_comparison([rec], dataset_kind="live", harness_verification=False)
+        self.assertFalse(res["metadata"]["performanceClaimEligible"])
+
+    def test_26_harness_verification_true_formal_cohort_mode_false(self):
+        """26. harness_verification=True can never claim formal cohort mode or admission."""
+        rec = _make_valid_test_record("rec_harness_test")
+        res = run_probability_strategy_comparison([rec], dataset_kind="live", harness_verification=True)
+        self.assertFalse(res["metadata"]["formalCohortMode"])
+        self.assertFalse(res["metadata"]["formalCohortAdmitted"])
+        self.assertEqual(res["metadata"]["formalEligibleRecordCount"], 0)
+
+    def test_27_zero_eligible_formal_run_count_zero(self):
+        """27. When formal run has 0 eligible records, formalEligibleRecordCount is 0 and formalCohortAdmitted is False."""
+        rec_bad = _make_valid_test_record("rec_bad", include_truth_evidence=False)
+        res = run_probability_strategy_comparison([rec_bad], dataset_kind="live", harness_verification=False)
+        self.assertTrue(res["metadata"]["formalCohortMode"])
+        self.assertEqual(res["metadata"]["formalEligibleRecordCount"], 0)
+        self.assertFalse(res["metadata"]["formalCohortAdmitted"])
+
+    def test_28_markdown_metadata_parity(self):
+        """28. format_comparison_markdown reads metadata fields and renders Performance Claim Eligible: False."""
+        rec = _make_valid_test_record("rec_md_test")
+        res = run_probability_strategy_comparison([rec], dataset_kind="live", harness_verification=False)
+        md = format_comparison_markdown(res)
+        self.assertIn("- **Performance Claim Eligible**: `False`", md)
+        self.assertIn("- **Formal Cohort Mode**: `True`", md)
+        self.assertIn("- **Formal Eligible Record Count**: `1`", md)
+
+    def test_29_dafu_ui_contains_divisor_multiplier_and_no_calculated_bidding_price(self):
+        """29. Overlay UI displays round divisor/multiplier and semantics warning; no calculatedBiddingPrice."""
+        overlay_html_path = os.path.join(_CORE_DIR, "overlay_alpha.html")
+        with open(overlay_html_path, "r", encoding="utf-8") as f:
+            html_content = f.read()
+
+        # calculatedBiddingPrice must NOT exist in overlay UI
+        self.assertNotIn("calculatedBiddingPrice", html_content)
+
+        # Must display divisor, multiplier, and unconfirmed semantics text
+        self.assertIn("canonicalDivisor", html_content)
+        self.assertIn("calculatedMultiplier", html_content)
+        self.assertIn("基准量语义未确认", html_content)
+
 
 if __name__ == "__main__":
     unittest.main()
