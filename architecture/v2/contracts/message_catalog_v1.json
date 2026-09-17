@@ -6,7 +6,7 @@
     {
       "messageType": "HELLO",
       "direction": "Host -> Engine",
-      "description": "Initial handshake initiation message sent by Native Host upon process spawn or reconnect.",
+      "description": "Initial handshake initiation message sent by Native Host advertising protocol, capabilities, and ring buffer parameters.",
       "payloadSchema": {
         "hostVersion": "string",
         "supportedProtocols": ["string"],
@@ -16,22 +16,47 @@
           "additionalProperties": { "type": "string", "enum": ["AVAILABLE", "UNAVAILABLE", "EXPERIMENTAL", "NOT_MEASURED"] }
         },
         "frameBufferName": "string",
-        "frameBufferSize": "integer"
+        "slotCount": "integer",
+        "slotSizeBytes": "integer",
+        "mapTotalSizeBytes": "integer"
       },
-      "requiredPayloadFields": ["hostVersion", "supportedProtocols", "sessionNonce", "capabilities", "frameBufferName", "frameBufferSize"]
+      "requiredPayloadFields": [
+        "hostVersion",
+        "supportedProtocols",
+        "sessionNonce",
+        "capabilities",
+        "frameBufferName",
+        "slotCount",
+        "slotSizeBytes",
+        "mapTotalSizeBytes"
+      ]
     },
     {
       "messageType": "HELLO_ACK",
       "direction": "Engine -> Host",
-      "description": "Handshake response from Python Engine agreeing on protocol version and session parameters.",
+      "description": "Handshake response from Python Engine negotiating protocol version, readiness state, and confirming ring buffer geometry.",
       "payloadSchema": {
         "engineVersion": "string",
         "negotiatedProtocol": "string",
         "status": { "type": "string", "enum": ["ACCEPTED", "REJECTED_VERSION", "REJECTED_CAPABILITY"] },
+        "readiness": { "type": "string", "enum": ["STARTING", "LOADING", "READY", "DEGRADED", "FAILED"] },
         "enginePid": "integer",
-        "modelStatus": "string"
+        "slotCount": "integer",
+        "slotSizeBytes": "integer",
+        "mapTotalSizeBytes": "integer",
+        "engineBusinessReady": "boolean"
       },
-      "requiredPayloadFields": ["engineVersion", "negotiatedProtocol", "status", "enginePid"]
+      "requiredPayloadFields": [
+        "engineVersion",
+        "negotiatedProtocol",
+        "status",
+        "readiness",
+        "enginePid",
+        "slotCount",
+        "slotSizeBytes",
+        "mapTotalSizeBytes",
+        "engineBusinessReady"
+      ]
     },
     {
       "messageType": "HEARTBEAT",
@@ -47,31 +72,45 @@
     {
       "messageType": "FRAME_READY",
       "direction": "Host -> Engine",
-      "description": "Notification that a new frame has been written to the shared memory buffer.",
+      "description": "Notification that a new frame has been written to ring buffer slot bufferIndex. Metadata must exact-match MMF frame header.",
       "payloadSchema": {
-        "bufferIndex": "integer",
+        "sessionId": "string",
+        "bufferIndex": "integer (0 <= bufferIndex < slotCount)",
         "sequence": "integer (int64)",
         "width": "integer",
         "height": "integer",
         "stride": "integer",
-        "pixelFormat": "string",
+        "pixelFormat": "integer (1=BGRA8)",
+        "bufferLength": "integer",
         "captureTimestampNs": "integer (int64)",
         "checksum": "integer"
       },
-      "requiredPayloadFields": ["bufferIndex", "sequence", "width", "height", "stride", "pixelFormat", "captureTimestampNs"]
+      "requiredPayloadFields": [
+        "sessionId",
+        "bufferIndex",
+        "sequence",
+        "width",
+        "height",
+        "stride",
+        "pixelFormat",
+        "bufferLength",
+        "captureTimestampNs",
+        "checksum"
+      ]
     },
     {
       "messageType": "FRAME_ACK",
       "direction": "Engine -> Host",
-      "description": "Acknowledgment from Engine indicating read completion of the specified buffer slot.",
+      "description": "Slot release token emitted by Engine upon processing completion. Authorizes Host to transition slot back to FREE.",
       "payloadSchema": {
-        "bufferIndex": "integer",
+        "sessionId": "string",
+        "bufferIndex": "integer (0 <= bufferIndex < slotCount)",
         "sequence": "integer (int64)",
-        "status": { "type": "string", "enum": ["CONSUMED", "SKIPPED", "CORRUPTED"] },
+        "status": { "type": "string", "enum": ["RELEASED", "CONSUMED", "SKIPPED", "CORRUPTED"] },
         "mappingLatencyMs": "number",
         "processingLatencyMs": "number"
       },
-      "requiredPayloadFields": ["bufferIndex", "sequence", "status"]
+      "requiredPayloadFields": ["sessionId", "bufferIndex", "sequence", "status"]
     },
     {
       "messageType": "PERCEPTION_RESULT",
@@ -111,14 +150,14 @@
     {
       "messageType": "COMMAND",
       "direction": "Host -> Engine",
-      "description": "High-level user or UI intent submitted to Engine (e.g. trigger scan, refresh valuation).",
+      "description": "High-level user or UI intent submitted to Engine (deduplicated by (sessionId, commandId)).",
       "payloadSchema": {
         "commandId": "string",
         "action": "string",
         "parameters": "object",
         "expiresAtNs": "integer (int64)"
       },
-      "requiredPayloadFields": ["commandId", "action", "expiresAtNs"]
+      "requiredPayloadFields": ["commandId", "action", "parameters", "expiresAtNs"]
     },
     {
       "messageType": "COMMAND_RESULT",
@@ -135,26 +174,35 @@
     {
       "messageType": "STATE_SNAPSHOT_REQUEST",
       "direction": "Host -> Engine",
-      "description": "Request from Host to retrieve full business state snapshot following engine reconnect or resync.",
+      "description": "Request from Host to retrieve authoritative business state snapshot to resync projection.",
       "payloadSchema": {
         "sinceSequence": "integer (int64)|null",
-        "includeDrafts": "boolean"
+        "includeDrafts": "boolean",
+        "includeProjection": "boolean"
       },
       "requiredPayloadFields": ["includeDrafts"]
     },
     {
       "messageType": "STATE_SNAPSHOT",
       "direction": "Engine -> Host",
-      "description": "Authoritative match and session state payload serialized by Python Engine.",
+      "description": "Authoritative match and session projection payload sufficient to rebuild Host UI state.",
       "payloadSchema": {
-        "matchId": "string|null",
-        "matchState": "string",
-        "draftCount": "integer",
-        "finalizedCount": "integer",
-        "activeAuctionItems": "array",
-        "snapshotSequence": "integer (int64)"
+        "snapshotSchemaVersion": "string",
+        "snapshotSessionId": "string",
+        "snapshotSequence": "integer (int64)",
+        "businessReady": "boolean",
+        "currentMatchProjection": {
+          "type": "object",
+          "required": ["matchState", "draftCount", "finalizedCount"]
+        }
       },
-      "requiredPayloadFields": ["matchState", "draftCount", "finalizedCount", "snapshotSequence"]
+      "requiredPayloadFields": [
+        "snapshotSchemaVersion",
+        "snapshotSessionId",
+        "snapshotSequence",
+        "businessReady",
+        "currentMatchProjection"
+      ]
     },
     {
       "messageType": "ENGINE_SHUTDOWN",
@@ -169,7 +217,7 @@
     {
       "messageType": "ENGINE_RESTARTING",
       "direction": "Engine -> Host",
-      "description": "Self-diagnosed recovery signal emitted by Engine before controlled restart (e.g. memory threshold exceeded).",
+      "description": "Self-diagnosed recovery signal emitted by Engine before controlled restart.",
       "payloadSchema": {
         "reason": "string",
         "exitCode": "integer"
@@ -179,7 +227,7 @@
     {
       "messageType": "ERROR",
       "direction": "Bidirectional (Host <-> Engine)",
-      "description": "Structured fail-closed error payload detailing protocol, transport, payload, or authority violations.",
+      "description": "Structured fail-closed error payload detailing protocol, transport, payload, authority, or capability violations.",
       "payloadSchema": {
         "errorCode": "string",
         "category": { "type": "string", "enum": ["PROTOCOL", "TRANSPORT", "PAYLOAD", "TIMEOUT", "AUTHORITY", "CAPABILITY"] },

@@ -8,178 +8,226 @@
     {
       "errorCode": "ERR_PROTOCOL_VERSION_MISMATCH",
       "category": "PROTOCOL",
-      "description": "Host and Engine negotiate incompatible major or minor protocol versions.",
+      "description": "Host and Engine negotiate incompatible protocol versions (exact match '1.0.0' required).",
       "isFatal": true,
-      "recoveryAction": "TERMINATE_SESSION",
-      "httpEquiv": 505
+      "recoveryAction": "TERMINATE_SESSION"
     },
     {
       "errorCode": "ERR_UNKNOWN_MESSAGE_TYPE",
       "category": "PROTOCOL",
       "description": "Received a messageType string not present in message_catalog_v1.json.",
       "isFatal": false,
-      "recoveryAction": "FAIL_CLOSED_DROP_MESSAGE",
-      "httpEquiv": 400
+      "recoveryAction": "FAIL_CLOSED_DROP_MESSAGE"
     },
     {
       "errorCode": "ERR_MALFORMED_ENVELOPE",
       "category": "PROTOCOL",
-      "description": "JSON message payload is missing one or more required envelope fields (protocolVersion, sessionId, messageType, requestId, sequence, monotonicTimestampNs, payload).",
+      "description": "JSON message envelope is missing required fields or has invalid field types (coercion prohibited).",
       "isFatal": false,
-      "recoveryAction": "FAIL_CLOSED_DROP_MESSAGE",
-      "httpEquiv": 400
+      "recoveryAction": "FAIL_CLOSED_DROP_MESSAGE"
     },
     {
       "errorCode": "ERR_STALE_SEQUENCE",
       "category": "PROTOCOL",
-      "description": "Received message sequence number is less than or equal to previous high-water mark for the session.",
+      "description": "Received message sequence number is less than or equal to previous high-water mark for sender in current session.",
       "isFatal": false,
-      "recoveryAction": "LOG_AND_IGNORE",
-      "httpEquiv": 409
+      "recoveryAction": "LOG_AND_IGNORE"
+    },
+    {
+      "errorCode": "ERR_STALE_SESSION",
+      "category": "PROTOCOL",
+      "description": "Message sessionId does not match current active negotiated session.",
+      "isFatal": false,
+      "recoveryAction": "FAIL_CLOSED_DROP_MESSAGE"
+    },
+    {
+      "errorCode": "ERR_INVALID_STATE_TRANSITION",
+      "category": "PROTOCOL",
+      "description": "Attempted illegal state machine transition (e.g. HANDSHAKING -> READY on reconnect without SYNCING).",
+      "isFatal": false,
+      "recoveryAction": "FAIL_CLOSED_REJECT"
+    },
+    {
+      "errorCode": "ERR_DUPLICATE_COMMAND",
+      "category": "PROTOCOL",
+      "description": "Duplicate command received while original command is still executing.",
+      "isFatal": false,
+      "recoveryAction": "REJECT_DUPLICATE"
+    },
+    {
+      "errorCode": "ERR_COMMAND_ID_REUSE_MISMATCH",
+      "category": "PROTOCOL",
+      "description": "Re-submitted command with identical commandId but conflicting action or parameters.",
+      "isFatal": false,
+      "recoveryAction": "FAIL_CLOSED_REJECT"
     },
     {
       "errorCode": "ERR_PIPE_DISCONNECTED",
       "category": "TRANSPORT",
       "description": "Named Pipe peer closed handle or crashed unexpectedly.",
       "isFatal": true,
-      "recoveryAction": "DRAIN_AND_RESTART_ENGINE",
-      "httpEquiv": 503
+      "recoveryAction": "DRAIN_AND_RESTART_ENGINE"
     },
     {
       "errorCode": "ERR_PIPE_BROKEN",
       "category": "TRANSPORT",
       "description": "IO exception occurred during pipe read or write operation (ERROR_BROKEN_PIPE 109).",
       "isFatal": true,
-      "recoveryAction": "DRAIN_AND_RESTART_ENGINE",
-      "httpEquiv": 503
+      "recoveryAction": "DRAIN_AND_RESTART_ENGINE"
     },
     {
       "errorCode": "ERR_MESSAGE_TOO_LARGE",
       "category": "TRANSPORT",
       "description": "Frame length prefix exceeds maxMessageBytes (1048576 bytes / 1 MB).",
       "isFatal": true,
-      "recoveryAction": "DISCONNECT_AND_RECONNECT",
-      "httpEquiv": 413
+      "recoveryAction": "DISCONNECT_AND_RECONNECT"
     },
     {
       "errorCode": "ERR_STREAM_EOF",
       "category": "TRANSPORT",
       "description": "Unexpected end of stream encountered before reading declared length prefix.",
       "isFatal": true,
-      "recoveryAction": "DRAIN_AND_RESTART_ENGINE",
-      "httpEquiv": 500
+      "recoveryAction": "DRAIN_AND_RESTART_ENGINE"
+    },
+    {
+      "errorCode": "ERR_INCOMPLETE_FRAME",
+      "category": "TRANSPORT",
+      "description": "Transport stream buffer contains fewer bytes than indicated by the 4-byte length prefix.",
+      "isFatal": false,
+      "recoveryAction": "AWAIT_MORE_BYTES_OR_FAIL_CLOSED"
     },
     {
       "errorCode": "ERR_SCHEMA_VALIDATION_FAILED",
       "category": "PAYLOAD",
       "description": "Message payload schema does not match declared schema in message catalog.",
       "isFatal": false,
-      "recoveryAction": "FAIL_CLOSED_DROP_MESSAGE",
-      "httpEquiv": 422
+      "recoveryAction": "FAIL_CLOSED_DROP_MESSAGE"
     },
     {
       "errorCode": "ERR_MISSING_REQUIRED_FIELD",
       "category": "PAYLOAD",
       "description": "Message payload lacks one of requiredPayloadFields defined in message catalog.",
       "isFatal": false,
-      "recoveryAction": "FAIL_CLOSED_DROP_MESSAGE",
-      "httpEquiv": 422
+      "recoveryAction": "FAIL_CLOSED_DROP_MESSAGE"
     },
     {
       "errorCode": "ERR_CORRUPT_FRAME_MAGIC",
       "category": "PAYLOAD",
       "description": "Shared memory frame header magic does not equal 0x4246544E ('NTFB').",
       "isFatal": false,
-      "recoveryAction": "DISCARD_FRAME_INCREMENT_CORRUPT_COUNTER",
-      "httpEquiv": 422
+      "recoveryAction": "DISCARD_FRAME_INCREMENT_CORRUPT_COUNTER"
+    },
+    {
+      "errorCode": "ERR_FRAME_PAYLOAD_TOO_SHORT",
+      "category": "PAYLOAD",
+      "description": "Frame buffer slice is smaller than 64-byte FrameHeaderV1.",
+      "isFatal": false,
+      "recoveryAction": "FAIL_CLOSED_REJECT"
     },
     {
       "errorCode": "ERR_FRAME_CHECKSUM_FAILED",
       "category": "PAYLOAD",
       "description": "Frame corner pixel checksum does not match expected header cornerChecksum.",
       "isFatal": false,
-      "recoveryAction": "DISCARD_FRAME_INCREMENT_CORRUPT_COUNTER",
-      "httpEquiv": 422
+      "recoveryAction": "DISCARD_FRAME_INCREMENT_CORRUPT_COUNTER"
+    },
+    {
+      "errorCode": "ERR_FRAME_METADATA_MISMATCH",
+      "category": "PAYLOAD",
+      "description": "FRAME_READY envelope metadata contradicts actual shared memory FrameHeaderV1 values.",
+      "isFatal": false,
+      "recoveryAction": "FAIL_CLOSED_DISCARD_FRAME"
+    },
+    {
+      "errorCode": "ERR_SLOT_INDEX_OUT_OF_BOUNDS",
+      "category": "PAYLOAD",
+      "description": "bufferIndex is outside the negotiated range 0 <= bufferIndex < slotCount.",
+      "isFatal": false,
+      "recoveryAction": "FAIL_CLOSED_REJECT"
+    },
+    {
+      "errorCode": "ERR_SLOT_NOT_LOCKED",
+      "category": "PAYLOAD",
+      "description": "FRAME_ACK received for a slot that is not currently locked or in use by consumer.",
+      "isFatal": false,
+      "recoveryAction": "LOG_AND_IGNORE"
+    },
+    {
+      "errorCode": "ERR_UNKNOWN_FRAME_ACK",
+      "category": "PAYLOAD",
+      "description": "FRAME_ACK received with sequence number not matching the active frame in the slot.",
+      "isFatal": false,
+      "recoveryAction": "LOG_AND_IGNORE"
     },
     {
       "errorCode": "ERR_UNSUPPORTED_PIXEL_FORMAT",
       "category": "PAYLOAD",
       "description": "Shared memory pixelFormat != 1 (BGRA8).",
       "isFatal": false,
-      "recoveryAction": "DISCARD_FRAME_LOG_ERROR",
-      "httpEquiv": 415
+      "recoveryAction": "DISCARD_FRAME_LOG_ERROR"
     },
     {
       "errorCode": "ERR_HANDSHAKE_TIMEOUT",
       "category": "TIMEOUT",
       "description": "Engine did not reply with HELLO_ACK within helloNegotiationTimeoutMs (5000ms).",
       "isFatal": true,
-      "recoveryAction": "KILL_AND_RESTART_ENGINE",
-      "httpEquiv": 504
+      "recoveryAction": "KILL_AND_RESTART_ENGINE"
     },
     {
       "errorCode": "ERR_HEARTBEAT_TIMEOUT",
       "category": "TIMEOUT",
       "description": "No HEARTBEAT message received within heartbeatTimeoutMs (3000ms).",
       "isFatal": true,
-      "recoveryAction": "MARK_DEGRADED_OR_RECONNECT",
-      "httpEquiv": 504
+      "recoveryAction": "MARK_DEGRADED_OR_RECONNECT"
     },
     {
       "errorCode": "ERR_FRAME_ACK_TIMEOUT",
       "category": "TIMEOUT",
-      "description": "Engine did not acknowledge frame within frameAckTimeoutMs (100ms).",
+      "description": "Engine did not release slot within frameAckTimeoutMs (500ms). Slot remains locked without forced overwrite.",
       "isFatal": false,
-      "recoveryAction": "INCREMENT_CONSUMER_TIMEOUT_COUNTER",
-      "httpEquiv": 504
+      "recoveryAction": "INCREMENT_CONSUMER_TIMEOUT_COUNTER"
     },
     {
       "errorCode": "ERR_COMMAND_TIMEOUT",
       "category": "TIMEOUT",
       "description": "Engine did not complete COMMAND before expiresAtNs or commandExecutionTimeoutMs.",
       "isFatal": false,
-      "recoveryAction": "EMIT_COMMAND_EXPIRED",
-      "httpEquiv": 504
+      "recoveryAction": "EMIT_COMMAND_EXPIRED"
     },
     {
       "errorCode": "ERR_AUTHORITY_VIOLATION",
       "category": "AUTHORITY",
       "description": "Host attempted to assert business truth, or Engine attempted direct OS window/input manipulation.",
       "isFatal": true,
-      "recoveryAction": "ABORT_OPERATION_LOG_SECURITY_INCIDENT",
-      "httpEquiv": 403
+      "recoveryAction": "ABORT_OPERATION_LOG_SECURITY_INCIDENT"
     },
     {
       "errorCode": "ERR_UNAUTHORIZED_STATE_MUTATION",
       "category": "AUTHORITY",
       "description": "Host UI attempted to mutate CurrentMatch state directly without Python COMMAND roundtrip.",
       "isFatal": false,
-      "recoveryAction": "REJECT_MUTATION_TRIGGER_RESYNC",
-      "httpEquiv": 403
+      "recoveryAction": "REJECT_MUTATION_TRIGGER_RESYNC"
     },
     {
       "errorCode": "ERR_CAPABILITY_UNSUPPORTED",
       "category": "CAPABILITY",
       "description": "Action requested a capability marked UNAVAILABLE during handshake negotiation.",
       "isFatal": false,
-      "recoveryAction": "REJECT_COMMAND_WITH_CAPABILITY_ERROR",
-      "httpEquiv": 501
+      "recoveryAction": "REJECT_COMMAND_WITH_CAPABILITY_ERROR"
     },
     {
       "errorCode": "ERR_WGC_NOT_MEASURED",
       "category": "CAPABILITY",
       "description": "Attempted to activate Windows.Graphics.Capture which is strictly NOT_MEASURED in production.",
       "isFatal": false,
-      "recoveryAction": "FALLBACK_TO_BITBLT",
-      "httpEquiv": 501
+      "recoveryAction": "FALLBACK_TO_BITBLT"
     },
     {
       "errorCode": "ERR_WEBVIEW2_UNAVAILABLE",
       "category": "CAPABILITY",
       "description": "CoreWebView2Controller failed to attach to host HWND visual tree.",
       "isFatal": false,
-      "recoveryAction": "FALLBACK_TO_STATIC_NATIVE_HUD",
-      "httpEquiv": 503
+      "recoveryAction": "FALLBACK_TO_STATIC_NATIVE_HUD"
     }
   ]
 }

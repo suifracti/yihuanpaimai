@@ -2,7 +2,7 @@
   "schemaVersion": "security.boundary.v1",
   "protocolVersion": "1.0.0",
   "title": "NTE Host-Engine Security Boundary & Isolation Specification",
-  "description": "Defines cryptographic naming derivation, access control lists (ACLs), process boundary protections, and input takeover safety guards.",
+  "description": "Defines cryptographic naming derivation, dynamic access control lists (ACLs), process boundary protections, and input takeover safety guards.",
   "namingDerivation": {
     "pipeName": {
       "template": "\\\\.\\pipe\\nte_engine_ipc_{sessionId}_{nonce}",
@@ -20,8 +20,10 @@
     "namedPipe": {
       "pipeMode": "PIPE_TYPE_BYTE | PIPE_READMODE_BYTE | PIPE_REJECT_REMOTE_CLIENTS",
       "maxInstances": 1,
-      "securityDescriptor": "D:(A;;GA;;;OW)",
-      "aclPolicy": "Restricted strictly to Owner / Current User SID (OW). Denies NETWORK, REMOTE, and cross-session accounts."
+      "remoteClientRejected": true,
+      "crossSessionPolicy": "DENY_CROSS_SESSION",
+      "aclPrincipalType": "CURRENT_USER_SID",
+      "aclPolicy": "Resolved dynamically at runtime via process TokenUser SID. Grants GENERIC_ALL exclusively to the current logged-on user SID; denies network callers and remote terminal sessions. Note: OW (OWNER_RIGHTS, S-1-3-4) is NOT used as substitute for Current User SID."
     },
     "sharedMemory": {
       "hostProtection": "PAGE_READWRITE (0x04)",
@@ -35,7 +37,8 @@
   },
   "inputTakeoverSafety": {
     "takeoverHookThread": "Dedicated Win32 message pump thread running WH_MOUSE_LL and WH_KEYBOARD_LL.",
-    "abortTriggerLatency": "< 1ms from OS raw input event to active scan abort flag assertion.",
+    "targetAbortLatencyMs": 1,
+    "validationStatus": "NOT_MEASURED",
     "toctouGuard": "Before any potential input dispatch, Host verifies that GetForegroundWindow() == targetGameHwnd at the instant of execution. If focus has shifted, operation is aborted fail-closed."
   }
 }

@@ -1,18 +1,22 @@
 {
   "schemaVersion": "frame.buffer.layout.v1",
   "protocolVersion": "1.0.0",
-  "name": "NTE Shared Memory Frame Buffer Layout Specification",
-  "bufferGeometry": {
+  "name": "NTE Shared Memory Ring Buffer Layout Specification",
+  "ringBufferGeometry": {
+    "slotCount": 4,
     "maxWidth": 3840,
     "maxHeight": 2160,
     "defaultWidth": 1920,
     "defaultHeight": 1080,
     "bytesPerPixel": 4,
     "defaultStride": 7680,
-    "defaultPayloadBytes": 8294400,
+    "slotPayloadCapacityBytes": 8294400,
     "headerSizeBytes": 64,
-    "totalBufferSizeBytes": 8294464,
-    "alignmentBytes": 64,
+    "slotSizeBytes": 8294464,
+    "slotAlignmentBytes": 64,
+    "mapTotalSizeBytes": 33177856,
+    "slotOffsetFormula": "slotOffset(index) = index * slotSizeBytes",
+    "validIndexRange": "0 <= bufferIndex < slotCount",
     "endianness": "LITTLE_ENDIAN",
     "pixelFormat": {
       "formatId": 1,
@@ -42,28 +46,29 @@
   "bufferOwnershipAndLifecycle": {
     "producer": "Native Host (.NET 8)",
     "consumer": "Python Intelligence Engine",
+    "slotStates": ["FREE", "WRITING", "COMMITTED", "CONSUMER_LOCKED"],
     "flow": [
-      "1. Host acquires frame via Win32 BitBlt / WGC.",
-      "2. Host selects next available ring buffer slot (ensuring slot is not currently locked by consumer).",
-      "3. Host writes 64-byte FrameHeaderV1 and pixel buffer to MemoryMappedFile.",
-      "4. Host emits FRAME_READY message over Named Pipe control plane.",
-      "5. Python maps slot via numpy.frombuffer(mm, offset=64) zero-copy view.",
-      "6. Python verifies header magic, sequence, and corner checksum.",
+      "1. Host selects slot in state FREE where 0 <= bufferIndex < slotCount.",
+      "2. Host transitions slot state to WRITING.",
+      "3. Host writes 64-byte FrameHeaderV1 at slotOffset(bufferIndex) and pixel buffer at slotOffset(bufferIndex) + 64.",
+      "4. Host transitions slot state to COMMITTED, then CONSUMER_LOCKED upon emitting FRAME_READY.",
+      "5. Python maps slot via numpy.frombuffer(mm, offset=slotOffset(bufferIndex)+64, count=bufferLength).",
+      "6. Python verifies header magic, sequence, geometry, and corner checksum against FRAME_READY metadata.",
       "7. Python executes visual parsing / inference.",
-      "8. Python emits FRAME_ACK message.",
-      "9. Host marks slot available for reuse."
+      "8. Python emits FRAME_ACK with (sessionId, bufferIndex, sequence) acting as explicit slot release token.",
+      "9. Host verifies (sessionId, bufferIndex, sequence) matches active lock and marks slot FREE for reuse."
     ]
   },
   "backpressureAndDropPolicy": {
     "strategy": "LATEST_FRAME_WINS",
-    "guarantee": "Host shall NEVER overwrite a ring buffer slot currently being read by Python. If all slots are locked or Python OCR is slower than capture rate, Host drops newly captured frames and increments distinct drop counters.",
+    "guarantee": "Host shall NEVER overwrite a ring buffer slot currently locked or being read by Python. If all slotCount (4) slots are locked by consumer, newly captured frames are discarded and bufferUnavailable counter is incremented. Consumer timeout shall NEVER trigger forced overwrite of locked slots.",
     "dropCounters": {
-      "producerOverwrite": "Host attempted to write to a locked buffer slot (strictly avoided by ring selection, incremented on forced discard)",
-      "consumerTimeout": "Python consumer did not return FRAME_ACK within frameAckTimeoutMs (100ms)",
+      "producerOverwrite": "Host attempted to write to a locked buffer slot (strictly avoided by ring selection; incremented on forced discard)",
+      "consumerTimeout": "Python consumer did not return FRAME_ACK within frameAckTimeoutMs (slot remains locked; no overwrite)",
       "captureFailure": "Underlying Win32 PrintWindow or BitBlt API returned failure or zero-sized DC",
-      "contentInvalid": "Frame header magic mismatch or corner checksum corruption detected",
+      "contentInvalid": "Frame header magic mismatch, stride mismatch, or corner checksum corruption detected",
       "frameSuperseded": "New frame arrived while a previous frame was queued; superseded frame discarded without sending to consumer",
-      "bufferUnavailable": "All available ring buffer slots locked by active consumer processing"
+      "bufferUnavailable": "All available ring buffer slots (0 <= bufferIndex < 4) locked by active consumer processing"
     }
   }
 }
