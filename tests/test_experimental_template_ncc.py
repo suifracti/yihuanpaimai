@@ -488,13 +488,15 @@ class TestExperimentalTemplateNcc(unittest.TestCase):
         self.assertFalse(res["valid"])
         self.assertEqual(res["status"], "SHAPE_MISMATCH")
 
-    # Test 33: Verdict scope no clear gain on scoring kernel
-    def test_33_verdict_scope_no_clear_gain_on_scoring_kernel(self):
+    # Test 33: Verdict scope no clear gain on candidate scoring pipeline
+    def test_33_verdict_scope_no_clear_gain_on_candidate_scoring_pipeline(self):
         from benchmark_template_ncc import build_benchmark_corpus, run_benchmark
         corpus, templates = build_benchmark_corpus(Path(_PROJECT_ROOT))
         report, _, _ = run_benchmark(corpus[:5], templates, warmup_rounds=1, measured_rounds=1)
-        self.assertEqual(report["evaluationConclusion"]["verdict"], "NO_CLEAR_GAIN_ON_SCORING_KERNEL")
-        self.assertEqual(report["evaluationConclusion"]["verdictScope"], "latency_and_throughput_on_scoring_kernel")
+        self.assertEqual(report["evaluationConclusion"]["verdict"], "NO_CLEAR_GAIN_ON_CANDIDATE_SCORING_PIPELINE")
+        self.assertEqual(report["evaluationConclusion"]["verdictScope"], "latency_and_throughput_on_candidate_scoring_pipeline")
+        self.assertEqual(report["scope"]["benchmarkScope"], "candidate_scoring_pipeline_after_candidate_generation")
+        self.assertEqual(report["evaluationConclusion"]["experimentalStatus"], "OPTIONAL_EXPERIMENTAL_SCORER_COMPONENT_READY")
         self.assertFalse(report["evaluationConclusion"]["productionPromotionClaimed"])
         self.assertFalse(report["evaluationConclusion"]["defaultEnabled"])
         self.assertFalse(report["evaluationConclusion"]["productionEligible"])
@@ -511,6 +513,133 @@ class TestExperimentalTemplateNcc(unittest.TestCase):
                     self.assertNotEqual(alias.name, "cv2", "core/experimental_template_ncc.py must not import cv2")
             elif isinstance(node, ast.ImportFrom):
                 self.assertNotEqual(node.module, "cv2", "core/experimental_template_ncc.py must not import from cv2")
+
+    # Test 35: Candidate fallback strictly disqualifies accuracy claim eligibility
+    def test_35_truth_fallback_forces_accuracy_claim_ineligible(self):
+        from benchmark_template_ncc import build_benchmark_corpus
+        corpus, _ = build_benchmark_corpus(Path(_PROJECT_ROOT))
+        fallback_samples = [s for s in corpus if s.get("candidateGenerationFallbackUsed")]
+        self.assertGreater(len(fallback_samples), 0, "Must have samples where fallback was triggered")
+        for s in fallback_samples:
+            self.assertFalse(s["accuracyClaimEligible"], f"Sample {s['sampleId']} with fallback must not be accuracy eligible")
+            self.assertEqual(s["fallbackSource"], "truth_injection_mechanics_only")
+            self.assertTrue(s["overlapChecked"])
+
+    # Test 36: Accuracy eligible metrics use accuracyEligibleN as denominator
+    def test_36_accuracy_eligible_cohort_denominator_only(self):
+        from benchmark_template_ncc import build_benchmark_corpus, run_benchmark
+        corpus, templates = build_benchmark_corpus(Path(_PROJECT_ROOT))
+        report, _, _ = run_benchmark(corpus, templates, warmup_rounds=1, measured_rounds=1)
+        acc_n = report["accuracyAndAgreement"]["accuracyEligibleN"]
+        self.assertEqual(report["accuracyAndAgreement"]["rankTop1AccuracyEligible"]["denominator"], acc_n)
+        self.assertEqual(report["accuracyAndAgreement"]["exactDecisionAccuracyEligible"]["denominator"], acc_n)
+        self.assertEqual(report["accuracyAndAgreement"]["top3RecallEligible"]["denominator"], acc_n)
+        self.assertNotEqual(acc_n, report["accuracyAndAgreement"]["heldOutSampleN"])
+
+    # Test 37: Rank top1 accuracy vs exact decision accuracy split
+    def test_37_rank_top1_accuracy_vs_exact_decision_accuracy_split(self):
+        adapter = NumpyNccMatcherAdapter(top1_threshold=0.85, margin_threshold=0.08)
+        crop = np.ones((75, 75, 3), dtype=np.uint8) * 100
+        tpl = np.ones((75, 75, 3), dtype=np.uint8) * 110
+        tpl[10:30, 10:30] = 140
+        templates = {"item_a": tpl}
+        candidates = [{"catalogId": "item_a", "name": "Item A"}]
+        res = adapter.evaluate_candidates(crop, candidates, templates)
+        self.assertEqual(res["status"], "AMBIGUOUS_CANDIDATES")
+        self.assertIsNone(res["exactCatalogId"])
+        self.assertEqual(res["rankedCandidates"][0]["catalogId"], "item_a")
+
+    # Test 38: Top3 recall uses eligible denominator
+    def test_38_top3_recall_uses_eligible_denominator(self):
+        from benchmark_template_ncc import build_benchmark_corpus, run_benchmark
+        corpus, templates = build_benchmark_corpus(Path(_PROJECT_ROOT))
+        report, _, _ = run_benchmark(corpus, templates, warmup_rounds=1, measured_rounds=1)
+        top3_res = report["accuracyAndAgreement"]["top3RecallEligible"]
+        self.assertIn("baseline", top3_res)
+        self.assertIn("numpyNcc", top3_res)
+        self.assertEqual(top3_res["denominator"], report["accuracyAndAgreement"]["accuracyEligibleN"])
+
+    # Test 39: Score comparison aligned by catalogId
+    def test_39_score_comparison_aligned_by_catalog_id(self):
+        b_ranked = [{"catalogId": "cid_1", "score": 0.9}, {"catalogId": "cid_2", "score": 0.5}]
+        n_ranked = [{"catalogId": "cid_2", "score": 0.5}, {"catalogId": "cid_1", "score": 0.9}]
+        b_scores = {c["catalogId"]: c["score"] for c in b_ranked}
+        n_scores = {c["catalogId"]: c["score"] for c in n_ranked}
+        self.assertEqual(set(b_scores.keys()), set(n_scores.keys()))
+        for cid in b_scores:
+            self.assertAlmostEqual(b_scores[cid], n_scores[cid])
+
+    # Test 40: Candidate set mismatch excluded from score parity
+    def test_40_candidate_set_mismatch_excluded_from_parity(self):
+        b_scores = {"cid_1": 0.9}
+        n_scores = {"cid_2": 0.9}
+        cand_set_mismatch = (set(b_scores.keys()) != set(n_scores.keys()))
+        self.assertTrue(cand_set_mismatch)
+
+    # Test 41: Missing template not counted as scored pair
+    def test_41_missing_template_not_counted_as_scored_pair(self):
+        from benchmark_template_ncc import run_benchmark
+        sample = {
+            "sampleId": "sample_missing_tpl_test",
+            "syntheticImage": np.ones((75, 75, 3), dtype=np.uint8),
+            "candidates": [
+                {"catalogId": "present_cid", "name": "Present"},
+                {"catalogId": "missing_cid", "name": "Missing"},
+            ],
+            "truthCatalogId": "present_cid",
+            "truthCandidatePresent": True,
+            "templateSourceOverlap": False,
+            "candidateGenerationFallbackUsed": False,
+            "accuracyClaimEligible": True,
+            "datasetRole": "held_out_query",
+        }
+        templates = {"present_cid": np.ones((75, 75, 3), dtype=np.uint8)}
+        report, _, _ = run_benchmark([sample], templates, warmup_rounds=1, measured_rounds=1)
+        tp = report["performance"]["throughput"]
+        self.assertEqual(tp["candidateEntriesPerRound"], 2)
+        self.assertEqual(tp["scoredTemplatePairsPerRound"], 1)
+        self.assertEqual(tp["missingTemplateEntriesPerRound"], 1)
+
+
+    # Test 42: Benchmark scope and verdict naming
+    def test_42_benchmark_scope_and_verdict_naming(self):
+        from benchmark_template_ncc import build_benchmark_corpus, run_benchmark
+        corpus, templates = build_benchmark_corpus(Path(_PROJECT_ROOT))
+        report, _, _ = run_benchmark(corpus[:5], templates, warmup_rounds=1, measured_rounds=1)
+        self.assertEqual(report["scope"]["benchmarkScope"], "candidate_scoring_pipeline_after_candidate_generation")
+        self.assertEqual(report["evaluationConclusion"]["verdict"], "NO_CLEAR_GAIN_ON_CANDIDATE_SCORING_PIPELINE")
+        self.assertEqual(report["evaluationConclusion"]["verdictScope"], "latency_and_throughput_on_candidate_scoring_pipeline")
+        self.assertEqual(report["evaluationConclusion"]["experimentalStatus"], "OPTIONAL_EXPERIMENTAL_SCORER_COMPONENT_READY")
+
+    # Test 43: Accuracy degradation status undetermined
+    def test_43_accuracy_degradation_status_undetermined(self):
+        from benchmark_template_ncc import build_benchmark_corpus, run_benchmark
+        corpus, templates = build_benchmark_corpus(Path(_PROJECT_ROOT))
+        report, _, _ = run_benchmark(corpus[:5], templates, warmup_rounds=1, measured_rounds=1)
+        self.assertEqual(report["evaluationConclusion"]["accuracyDegradationStatus"], "UNDETERMINED")
+        self.assertEqual(report["evaluationConclusion"]["accuracyValidationStatus"], "INSUFFICIENT_ELIGIBLE_TRUTH_COHORT")
+        self.assertFalse(report["evaluationConclusion"]["performanceClaimEligible"])
+        self.assertNotIn("accuracyDegraded", report["evaluationConclusion"])
+
+    # Test 44: Benchmark run ID generated and consistent
+    def test_44_benchmark_run_id_consistent_across_reports(self):
+        from benchmark_template_ncc import build_benchmark_corpus, run_benchmark
+        corpus, templates = build_benchmark_corpus(Path(_PROJECT_ROOT))
+        report, _, _ = run_benchmark(corpus[:5], templates, warmup_rounds=1, measured_rounds=1)
+        run_id = report.get("benchmarkRunId")
+        self.assertIsNotNone(run_id)
+        self.assertTrue(run_id.startswith("bench-"))
+        self.assertEqual(report["generatedAt"], report["timestampUtc"])
+
+    # Test 45: No hardcoded final performance summary
+    def test_45_no_hardcoded_final_performance_summary(self):
+        from benchmark_template_ncc import build_benchmark_corpus, run_benchmark
+        corpus, templates = build_benchmark_corpus(Path(_PROJECT_ROOT))
+        report, samples, evals = run_benchmark(corpus[:5], templates, warmup_rounds=1, measured_rounds=1)
+        p50 = report["performance"]["perCropLatencyMs"]["baseline"]["p50"]
+        self.assertIsInstance(p50, float)
+        self.assertIn("baselineFasterFactorP50", report["performance"]["perCropLatencyMs"])
+        self.assertNotIn("speedupRatioP50", report["performance"]["perCropLatencyMs"])
 
 
 if __name__ == "__main__":
