@@ -4213,6 +4213,58 @@ class HudJsApi:
         """主动触发单帧游戏截图识别"""
         return handle_triggered_snapshot()
 
+    def experimental_profile_set(self, payload=None, **kwargs):
+        """Toggle experimental probability/strategy profile.
+
+        Strictly whitelist-gated. Invalid profiles fail closed without state mutation.
+        """
+        if payload is None and kwargs:
+            payload = kwargs
+        elif isinstance(payload, str):
+            try:
+                payload = json.loads(payload)
+            except Exception:
+                payload = {}
+        elif not isinstance(payload, dict):
+            payload = {}
+
+        profile_id = str(payload.get("profileId", ""))
+        enabled = bool(payload.get("enabled", False))
+
+        from experimental_probability_strategy import (
+            ALLOWED_EXPERIMENTAL_PROFILES,
+            get_global_strategy_registry,
+        )
+
+        reg = get_global_strategy_registry()
+        if profile_id not in ALLOWED_EXPERIMENTAL_PROFILES or profile_id == "baseline":
+            log_stage("STRATEGY_EXP", f"Rejected profile mutation: '{profile_id}'")
+            return {
+                "success": False,
+                "error": f"Invalid or restricted profile ID: '{profile_id}'",
+                "activeProfiles": reg.get_active_profile_ids(),
+            }
+
+        if enabled:
+            ok = reg.enable_profile(profile_id)
+        else:
+            ok = reg.disable_profile(profile_id)
+
+        log_stage("STRATEGY_EXP", f"Profile '{profile_id}' set to enabled={enabled} (ok={ok})")
+        return {
+            "success": ok,
+            "profileId": profile_id,
+            "enabled": enabled,
+            "activeProfiles": reg.get_active_profile_ids(),
+            "profileGeneration": reg.profile_generation,
+        }
+
+    def invoke_action(self, action_name, payload=None, **kwargs):
+        """Generic action dispatcher for WebView frontend."""
+        if action_name == "experimental_profile_set":
+            return self.experimental_profile_set(payload, **kwargs)
+        return {"success": False, "error": f"Unknown action: {action_name}"}
+
     def capture_game(self):
         return handle_triggered_snapshot()
 
