@@ -400,6 +400,9 @@ class StructuralFitDiagnostic:
     mean_area: Optional[float] = None
     variance_area: Optional[float] = None
     quality_score: Optional[float] = None
+    quality_score_source: str = "internal_experimental_heuristic_v1"
+    quality_score_validated_by_our_data: bool = False
+    quality_score_production_eligible: bool = False
     conflicts: Tuple[str, ...] = ()
     evidence_used: Tuple[str, ...] = ()
     details: Dict[str, Any] = field(default_factory=dict)
@@ -413,6 +416,9 @@ class StructuralFitDiagnostic:
             "meanArea": round(self.mean_area, 4) if self.mean_area is not None else None,
             "varianceArea": round(self.variance_area, 4) if self.variance_area is not None else None,
             "qualityScore": round(self.quality_score, 4) if self.quality_score is not None else None,
+            "qualityScoreSource": self.quality_score_source,
+            "qualityScoreValidatedByOurData": self.quality_score_validated_by_our_data,
+            "qualityScoreProductionEligible": self.quality_score_production_eligible,
             "conflicts": list(self.conflicts),
             "evidenceUsed": list(self.evidence_used),
             "details": self.details,
@@ -421,7 +427,14 @@ class StructuralFitDiagnostic:
 
 
 def compute_structural_fit(session_ctx: Mapping[str, Any]) -> StructuralFitDiagnostic:
-    """Compute internal structural fit diagnostic against canonical inventory intel."""
+    """Compute internal structural fit diagnostic against canonical inventory intel.
+
+    Adapts canonical qualities shape:
+    - qualities.<color>.count / grid / knownItems
+    - publicIntel.totalItems / totalGrid
+    Uses extract_canonical_footprint_cells exclusively for footprint sizing.
+    Never uses q as item count. Never defaults totalGrid.
+    """
     public_intel = session_ctx.get("publicIntel") or {}
     total_grid = session_ctx.get("totalGrid") or public_intel.get("totalGrid")
 
@@ -448,30 +461,53 @@ def compute_structural_fit(session_ctx: Mapping[str, Any]) -> StructuralFitDiagn
             conflicts.append("TOTAL_ITEMS_EXCEEDS_GRID_CAPACITY")
 
     # Known items footprint parsing via canonical authority
-    known_items = session_ctx.get("knownItems") or []
     item_areas: List[int] = []
-    if isinstance(known_items, list) and known_items:
+
+    # 1. Top-level knownItems
+    top_known_items = session_ctx.get("knownItems") or []
+    if isinstance(top_known_items, list) and top_known_items:
         evidence_used.append("knownItems")
-        for item in known_items:
+        for item in top_known_items:
             area = extract_canonical_footprint_cells(item)
             if area is not None and area > 0:
                 item_areas.append(area)
 
+    # 2. Canonical qualities shape adapter: qualities.<color>.count / grid / knownItems
+    qualities = session_ctx.get("qualities") or public_intel.get("qualities") or {}
+    quality_grids = session_ctx.get("qualityGrids") or {}
+    quality_counts = session_ctx.get("qualityCounts") or {}
+
+    for q_name in ("white", "green", "blue", "purple", "gold", "red"):
+        q_obj = qualities.get(q_name) if isinstance(qualities, Mapping) else None
+        cnt = None
+        g_cells = None
+        q_items = None
+
+        if isinstance(q_obj, Mapping):
+            cnt = q_obj.get("count")
+            g_cells = q_obj.get("grid")
+            q_items = q_obj.get("knownItems")
+        else:
+            if isinstance(quality_counts, Mapping):
+                cnt = quality_counts.get(q_name)
+            if isinstance(quality_grids, Mapping):
+                g_cells = quality_grids.get(q_name)
+
+        if isinstance(q_items, list) and q_items:
+            evidence_used.append(f"quality_{q_name}_knownItems")
+            for item in q_items:
+                area = extract_canonical_footprint_cells(item)
+                if area is not None and area > 0:
+                    item_areas.append(area)
+
+        if isinstance(g_cells, (int, float)) and isinstance(cnt, (int, float)) and not isinstance(g_cells, bool) and not isinstance(cnt, bool):
+            evidence_used.append(f"quality_{q_name}")
+            if cnt > 0 and g_cells < cnt:
+                conflicts.append(f"{q_name.upper()}_GRID_LESS_THAN_ITEM_COUNT")
+
     known_cells_total = sum(item_areas)
     if known_cells_total > total_grid:
         conflicts.append("KNOWN_ITEM_FOOTPRINTS_EXCEED_TOTAL_GRID")
-
-    # Quality counts vs quality grids
-    quality_grids = session_ctx.get("qualityGrids") or {}
-    quality_counts = session_ctx.get("qualityCounts") or {}
-    if isinstance(quality_grids, dict) and isinstance(quality_counts, dict):
-        for q_name in ("white", "green", "blue", "purple", "gold", "red"):
-            g_cells = quality_grids.get(q_name)
-            cnt = quality_counts.get(q_name)
-            if isinstance(g_cells, (int, float)) and isinstance(cnt, (int, float)) and not isinstance(g_cells, bool) and not isinstance(cnt, bool):
-                evidence_used.append(f"quality_{q_name}")
-                if cnt > 0 and g_cells < cnt:
-                    conflicts.append(f"{q_name.upper()}_GRID_LESS_THAN_ITEM_COUNT")
 
     fill_ratio = min(1.0, known_cells_total / max(1, total_grid))
     mean_area = (sum(item_areas) / len(item_areas)) if item_areas else 0.0
@@ -500,6 +536,9 @@ def compute_structural_fit(session_ctx: Mapping[str, Any]) -> StructuralFitDiagn
             "totalItems": total_items,
             "knownCellsTotal": known_cells_total,
             "itemAreasCount": len(item_areas),
+            "qualityScoreSource": "internal_experimental_heuristic_v1",
+            "qualityScoreValidatedByOurData": False,
+            "qualityScoreProductionEligible": False,
         },
     )
 
