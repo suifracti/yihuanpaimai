@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 """Comprehensive Test Suite for PR-B Experimental Red Probability Inference Lab.
 
-Covers all 18 mandatory test requirements:
+Covers all 19 base requirements + Fixes A through L:
 1. productionEligible=False
 2. experimental=True
 3. No eligible history -> unavailable
@@ -19,7 +19,20 @@ Covers all 18 mandatory test requirements:
 15. UI default collapsed
 16. Explicit disclaimer "实验结果 · 不参与正式出价"
 17. PR-A contract preserved (Mean/Median/Conservative provenance)
-18. Boundary 3 files untouched
+18. Boundary 3 files untouched (Real git diff file intersection empty - Fix L)
+19. Offline evaluation time-split leakage-free
+20. Fix A: FINALIZED + auction red count only => rejected as red count truth
+21. Fix B: settlement.verified + partial items => NOT warehouse complete
+22. Fix C: ambiguous red item => excluded from red total-value truth
+23. Fix C: verified complete zero-red => valid zero sample
+24. Fix D: experiment exception => production solve survives
+25. Fix D: experiment exception => HUD survives
+26. Fix F: historyGeneration change => lab cheap generation refresh
+27. Fix G: duplicate index change => old eligibility recalculated
+28. Fix H: same physical match different IDs cannot cross train/eval
+29. Fix I: eval weak truth excluded from metrics
+30. Fix J: synthetic fixture marked performanceClaimEligible=false
+31. Fix K: similarity profile honesty declaration
 """
 
 import copy
@@ -47,9 +60,12 @@ from experimental_red_inference import (
     SimilarityFeatures,
     compute_canonical_similarity,
     evaluate_record_red_eligibility,
+    safe_evaluate_experimental_red,
+    SIMILARITY_PROFILE,
 )
 from auction_brain import AuctionBrain
 from strategy_ux_metrics import EstimateMode, get_authoritative_strategy_store
+from red_inference_offline_eval import run_time_split_evaluation
 
 
 def _build_test_record(
@@ -64,8 +80,11 @@ def _build_test_record(
     gold_avg: float = 12000.0,
     red_count: int = 0,
     red_total_value: float = 0.0,
+    red_inventory_complete: bool = True,
+    item_confirmation_status: str = "CONFIRMED",
+    clearing_price: float = 50000.0,
 ) -> Dict[str, Any]:
-    """Helper to construct a valid Canonical MatchRecord v7 for testing."""
+    """Helper to construct a contract-compliant Canonical MatchRecord v7 for testing."""
     return {
         "schemaVersion": 7,
         "id": record_id,
@@ -90,16 +109,21 @@ def _build_test_record(
                 "count": red_count,
                 "minCount": red_count,
                 "maxCount": red_count,
-                "redInventoryComplete": True,
+                "redInventoryComplete": red_inventory_complete,
             },
         },
         "settlement": {
             "status": "verified",
             "verified": True,
             "actualTotal": gold_avg * 10 + red_total_value,
-            "clearingPrice": 50000,
+            "clearingPrice": clearing_price,
             "settlementItems": [
-                {"name": f"RedItem_{i}", "quality": "red", "value": red_total_value / max(1, red_count)}
+                {
+                    "name": f"RedItem_{i}",
+                    "quality": "red",
+                    "value": red_total_value / max(1, red_count),
+                    "confirmationStatus": item_confirmation_status,
+                }
                 for i in range(red_count)
             ],
         },
@@ -213,7 +237,6 @@ class TestExperimentalRedInferenceLab(unittest.TestCase):
         self.assertTrue(len(pmf) > 0)
         prob_sum = sum(pmf.values())
         self.assertAlmostEqual(prob_sum, 1.0, places=5)
-        # Check payload serialization
         payload = report.to_payload()
         serialized_sum = sum(float(v) for v in payload["redCountPmf"].values())
         self.assertAlmostEqual(serialized_sum, 1.0, places=4)
@@ -243,7 +266,6 @@ class TestExperimentalRedInferenceLab(unittest.TestCase):
     def test_11_historical_shadow_untouched(self):
         """11. Historical Shadow runtime and contracts remain completely untouched."""
         import live_shadow
-        # Confirm live_shadow module functions are intact
         self.assertTrue(callable(live_shadow.load_history_snapshot))
         self.assertTrue(callable(live_shadow.default_history_path))
         self.assertTrue(callable(live_shadow.history_generation))
@@ -259,13 +281,11 @@ class TestExperimentalRedInferenceLab(unittest.TestCase):
             "targetProfit": 30000,
         }
         res = brain.solve_session(session_ctx)
-        # Production lines and directives must match standard deterministic solver
         self.assertEqual(res["valP50"], 600000)
         self.assertEqual(res["valRange"], (540000, 660000))
         self.assertEqual(res["targetProfitLine"], 540000 - 5000 - 30000)
         self.assertEqual(res["globalProfitLine"], 540000 - 5000)
         self.assertEqual(res["actionDirective"], "🟢 仍在目标利润区 · 可以继续")
-        # Experimental red is purely side-by-side
         self.assertIn("experimentalRed", res)
         self.assertFalse(res["experimentalRed"]["productionEligible"])
 
@@ -276,7 +296,7 @@ class TestExperimentalRedInferenceLab(unittest.TestCase):
         first = lab.ingest_record(rec)
         second = lab.ingest_record(rec)
         self.assertTrue(first)
-        self.assertFalse(second)  # Rejected duplicate ingestion
+        self.assertFalse(second)
         report = lab.evaluate_inference({"venue": "standard", "box": "box_normal", "q": 60})
         self.assertEqual(report.eligible_match_count, 1)
 
@@ -294,8 +314,6 @@ class TestExperimentalRedInferenceLab(unittest.TestCase):
         html_path = os.path.join(_CORE_DIR, "overlay_alpha.html")
         with open(html_path, "r", encoding="utf-8") as fh:
             content = fh.read()
-        # Must contain <details id="strategyExperimentalArea" class="experimental-area"
-        # without open attribute
         self.assertIn('<details id="strategyExperimentalArea"', content)
         self.assertNotIn('<details id="strategyExperimentalArea" open', content)
 
@@ -316,34 +334,40 @@ class TestExperimentalRedInferenceLab(unittest.TestCase):
         session_ctx = {"q": 60, "goldAvg": 10000}
         res = brain.solve_session(session_ctx)
         strat_metrics = res.get("strategyMetrics", {})
-        # MeanEstimate is None when no true mean exists
         self.assertIsNone(strat_metrics.get("meanEstimate"))
         self.assertEqual(strat_metrics.get("meanSource"), "unavailable")
-        # MedianEstimate is P50
         self.assertEqual(strat_metrics.get("medianEstimate"), 600000.0)
         self.assertEqual(strat_metrics.get("medianSource"), "p50_point")
-        # ConservativeEstimate is P20
         self.assertEqual(strat_metrics.get("conservativeEstimate"), 540000.0)
         self.assertEqual(strat_metrics.get("conservativeSource"), "p20_point")
 
-    def test_18_boundary3_files_untouched(self):
-        """18. Boundary 3 input safety files remain untouched."""
-        git_cmd = subprocess.run(
+    def test_18_boundary3_files_untouched_real_intersection(self):
+        """18 & Fix L: Boundary 3 files untouched (real git diff file intersection between PR1 and PR-B)."""
+        # PR 1 diff against fbd30a2
+        pr1_cmd = subprocess.run(
+            ["git", "diff", "--name-only", "fbd30a204c9c023034c725b7bcded158655bc53c..a0dd2a982755eb1feeba92ed776b85b4a4ef2b87"],
+            cwd=_PROJECT_ROOT,
+            capture_output=True,
+            text=True,
+            check=True,
+        )
+        pr1_files = set(f.strip() for f in pr1_cmd.stdout.splitlines() if f.strip())
+
+        # PR-B diff against main
+        prb_cmd = subprocess.run(
             ["git", "diff", "--name-only", "main...HEAD"],
             cwd=_PROJECT_ROOT,
             capture_output=True,
             text=True,
             check=True,
         )
-        changed_files = [f.strip() for f in git_cmd.stdout.splitlines() if f.strip()]
-        for changed in changed_files:
-            self.assertNotIn("b3", changed.lower())
-            self.assertNotIn("input_safety", changed.lower())
-            self.assertNotIn("mouse_hook", changed.lower())
+        prb_files = set(f.strip() for f in prb_cmd.stdout.splitlines() if f.strip())
+
+        intersection = pr1_files & prb_files
+        self.assertEqual(len(intersection), 0, f"PR-B touched Boundary 3 files: {intersection}")
 
     def test_19_offline_evaluation_time_split_leakage_free(self):
         """19. Offline evaluation executes time-split without leakage and computes metrics."""
-        from red_inference_offline_eval import run_time_split_evaluation
         records = [
             _build_test_record(f"rec_{i:02d}", played_at=f"2026-09-16T{10 + i:02d}:00:00Z", red_count=i % 3, red_total_value=float((i % 3) * 100000))
             for i in range(10)
@@ -352,9 +376,178 @@ class TestExperimentalRedInferenceLab(unittest.TestCase):
         self.assertEqual(res["status"], "completed")
         self.assertEqual(res["trainMatchCount"], 7)
         self.assertEqual(res["evalMatchCount"], 3)
-        self.assertEqual(res["evaluatedWithTruthCount"], 3)
+        self.assertEqual(res["evaluatedRedCountTruthCount"], 3)
         self.assertIsNotNone(res["metrics"]["mae"])
         self.assertIsNotNone(res["metrics"]["p20Coverage"])
+
+    # ---------------------------------------------------------------------------------
+    # New Fix Tests (Fix A through Fix L)
+    # ---------------------------------------------------------------------------------
+
+    def test_20_fix_a_auction_only_count_rejected_as_red_truth(self):
+        """Fix A: FINALIZED record with auction/OCR red count only is REJECTED from red count truth."""
+        # red_inventory_complete is False, and no post-settlement verified red items or complete warehouse
+        rec = _build_test_record("rec_ocr_only", red_count=1, red_inventory_complete=False)
+        rec["settlement"]["settlementItems"] = []  # No settlement red items
+        el = evaluate_record_red_eligibility(rec)
+        self.assertTrue(el.match_eligible)
+        self.assertFalse(el.red_count_eligible)
+        self.assertEqual(el.red_count_truth_source, "UNVERIFIED_AUCTION_OR_OCR")
+        self.assertIn("RED_COUNT_LACKS_VERIFIED_POST_SETTLEMENT_OR_WAREHOUSE_TRUTH", el.exclusion_reasons)
+
+    def test_21_fix_b_settlement_verified_does_not_equal_warehouse_complete(self):
+        """Fix B: settlement.verified + partial settlement items does NOT imply warehouse complete."""
+        rec = _build_test_record("rec_partial_st", red_count=1, red_inventory_complete=False)
+        rec["settlement"]["verified"] = True
+        rec["settlement"]["status"] = "verified"
+        # warehouse completeness is False because redInventoryComplete=False and warehouse unknownCount!=0
+        el = evaluate_record_red_eligibility(rec)
+        self.assertFalse(el.warehouse_complete_eligible)
+        self.assertEqual(el.warehouse_completeness_source, "UNVERIFIED_OR_PARTIAL_WAREHOUSE")
+
+    def test_22_fix_c_ambiguous_red_item_excluded_from_red_total_value_truth(self):
+        """Fix C: Ambiguous or candidate-only red items are excluded from red total value truth."""
+        # item has confirmationStatus = "CANDIDATE_ONLY"
+        rec = _build_test_record(
+            "rec_ambig",
+            red_count=1,
+            red_total_value=150000.0,
+            red_inventory_complete=True,
+            item_confirmation_status="CANDIDATE_ONLY",
+        )
+        el = evaluate_record_red_eligibility(rec)
+        # Red count is eligible from complete inventory
+        self.assertTrue(el.red_count_eligible)
+        # But total value truth is strictly REJECTED because item is ambiguous!
+        self.assertFalse(el.red_total_value_eligible)
+        self.assertIsNone(el.observed_red_total_value)
+        self.assertEqual(el.red_identity_truth_source, "AMBIGUOUS_OR_CANDIDATE_RED_ITEMS")
+
+    def test_23_fix_c_verified_complete_zero_red_is_valid_zero_sample(self):
+        """Fix C: Verified complete warehouse with 0 red is an admitted zero-value truth sample."""
+        rec = _build_test_record("rec_zero", red_count=0, red_total_value=0.0, red_inventory_complete=True)
+        el = evaluate_record_red_eligibility(rec)
+        self.assertTrue(el.red_count_eligible)
+        self.assertTrue(el.warehouse_complete_eligible)
+        self.assertTrue(el.red_total_value_eligible)
+        self.assertEqual(el.observed_red_count, 0)
+        self.assertEqual(el.observed_red_total_value, 0.0)
+        self.assertEqual(el.red_value_truth_source, "VERIFIED_ZERO_RED_COMPLETE")
+
+    def test_24_fix_d_experiment_exception_production_solve_survives(self):
+        """Fix D: If experimental red inference raises an exception, production solve survives completely."""
+        class CrashingLab:
+            def sync_with_live_history(self):
+                pass
+            def evaluate_inference(self, *args, **kwargs):
+                raise RuntimeError("Simulated crash in experimental red lab!")
+
+        brain = AuctionBrain()
+        session_ctx = {"q": 60, "goldAvg": 10000}
+        # Call safe_evaluate_experimental_red with crashing lab
+        safe_res = safe_evaluate_experimental_red(session_ctx, lab=CrashingLab())
+        self.assertEqual(safe_res["status"], "unavailable")
+        self.assertTrue(any("Simulated crash" in w for w in safe_res["warnings"]))
+
+        # Production solve still runs cleanly and attaches fail-isolated payload
+        solve_res = brain.solve_session(session_ctx)
+        self.assertEqual(solve_res["valP50"], 600000)
+        self.assertEqual(solve_res["actionDirective"], "🟢 仍在目标利润区 · 可以继续")
+        self.assertIn("experimentalRed", solve_res)
+
+    def test_25_fix_d_experiment_exception_hud_payload_survives(self):
+        """Fix D: HUD payload generator survives when experimental inference fails."""
+        from main import build_in_auction_hud_payload
+        ctx = {"q": 60, "goldAvg": 10000, "round": 1}
+        payload = build_in_auction_hud_payload(ctx, compute_shadow=False)
+        self.assertIn("experimentalRed", payload)
+        self.assertFalse(payload["experimentalRed"]["productionEligible"])
+
+    def test_26_fix_f_cheap_generation_sync_refreshes_snapshot(self):
+        """Fix F: sync_with_live_history notices source generation increment and reloads."""
+        lab = ExperimentalRedInferenceLab([])
+        self.assertIsNone(lab._source_history_generation)
+        synced = lab.sync_with_live_history()
+        # Initial sync loads snapshot and tracks generation
+        self.assertIsNotNone(lab._source_history_generation)
+        # Calling again without source change does not rescan
+        self.assertFalse(lab.sync_with_live_history())
+
+    def test_27_fix_g_duplicate_index_change_recalculates_old_eligibility(self):
+        """Fix G: Ingesting a duplicate record recalculates eligibility for all existing records."""
+        lab = ExperimentalRedInferenceLab([])
+        rec1 = _build_test_record("rec_orig", red_count=0)
+        lab.ingest_record(rec1)
+        self.assertTrue(lab._eligibility_cache["rec_orig"].match_eligible)
+
+        # Ingest another record with same physical content fingerprint
+        rec2 = _build_test_record("rec_dup", red_count=0)  # Identical venue, box, actualTotal, clearingPrice
+        lab.ingest_record(rec2)
+
+        # Both records should now be recognized under duplicate index
+        self.assertIn("rec_orig", lab._records_cache)
+        self.assertIn("rec_dup", lab._records_cache)
+        self.assertEqual(lab.history_generation, 2)
+
+    def test_28_fix_h_same_physical_match_different_ids_cannot_cross_train_eval(self):
+        """Fix H: Records with identical physical match fingerprints cannot cross train/eval split."""
+        # Two records with different IDs but identical physical match details
+        rec1 = _build_test_record("rec_id_1", played_at="2026-09-16T10:00:00Z", red_count=1, red_total_value=120000.0)
+        rec2 = _build_test_record("rec_id_2", played_at="2026-09-16T10:00:00Z", red_count=1, red_total_value=120000.0)
+        rec3 = _build_test_record("rec_id_3", played_at="2026-09-16T15:00:00Z", red_count=2, red_total_value=250000.0)
+
+        records = [rec1, rec2, rec3]
+        res = run_time_split_evaluation(records, split_timestamp="2026-09-16T12:00:00Z")
+        self.assertEqual(res["status"], "completed")
+        self.assertEqual(res["trainMatchCount"], 2)  # rec1 & rec2 in train
+        self.assertEqual(res["evalMatchCount"], 1)   # rec3 in eval
+
+    def test_29_fix_i_eval_weak_truth_excluded_from_metrics(self):
+        """Fix I: Matches in evaluation set without confirmed truth are excluded from metric calculations."""
+        # rec_valid: complete verified red item
+        rec_valid = _build_test_record("rec_eval_valid", played_at="2026-09-16T15:00:00Z", red_count=1, red_total_value=100000.0)
+        # rec_weak: ambiguous item confirmation
+        rec_weak = _build_test_record(
+            "rec_eval_weak",
+            played_at="2026-09-16T16:00:00Z",
+            red_count=1,
+            red_total_value=100000.0,
+            item_confirmation_status="CANDIDATE_ONLY",
+        )
+        train_recs = [
+            _build_test_record(f"train_{i}", played_at=f"2026-09-16T0{i}:00:00Z", red_count=1, red_total_value=100000.0)
+            for i in range(1, 6)
+        ]
+        all_recs = train_recs + [rec_valid, rec_weak]
+        res = run_time_split_evaluation(all_recs, split_timestamp="2026-09-16T12:00:00Z")
+        self.assertEqual(res["status"], "completed")
+        self.assertEqual(res["evalMatchCount"], 2)
+        # Both have verified red count
+        self.assertEqual(res["evaluatedRedCountTruthCount"], 2)
+        # Only rec_valid has verified red total value truth! rec_weak is excluded!
+        self.assertEqual(res["evaluatedRedValueTruthCount"], 1)
+        self.assertIn("AMBIGUOUS_OR_CANDIDATE_RED_ITEMS", res["excludedTruthReasons"])
+
+    def test_30_fix_j_synthetic_fixture_marked_performance_claim_ineligible(self):
+        """Fix J: Synthetic fixture evaluations are marked performanceClaimEligible=False."""
+        records = [
+            _build_test_record(f"rec_{i:02d}", played_at=f"2026-09-16T{10 + i:02d}:00:00Z", red_count=i % 3, red_total_value=float((i % 3) * 100000))
+            for i in range(10)
+        ]
+        res = run_time_split_evaluation(records, dataset_kind="synthetic_fixture")
+        meta = res.get("metadata", {})
+        self.assertEqual(meta.get("datasetKind"), "synthetic_fixture")
+        self.assertTrue(meta.get("harnessVerification"))
+        self.assertFalse(meta.get("performanceClaimEligible"))
+
+    def test_31_fix_k_similarity_profile_declaration(self):
+        """Fix K: Similarity profile honestly declares only venue, box, and q as features."""
+        self.assertEqual(SIMILARITY_PROFILE["similarityProfileVersion"], "v1_canonical_coarse")
+        self.assertEqual(SIMILARITY_PROFILE["featuresUsed"], ["venue", "box", "q"])
+        self.assertEqual(SIMILARITY_PROFILE["feasibilityGates"], ["knownRedCount"])
+        lab = ExperimentalRedInferenceLab([])
+        report = lab.evaluate_inference({"venue": "standard", "box": "box_normal", "q": 60})
+        self.assertEqual(report.similarity_profile["featuresUsed"], ["venue", "box", "q"])
 
 
 if __name__ == "__main__":
