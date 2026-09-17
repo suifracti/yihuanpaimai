@@ -13,6 +13,13 @@
       "recoveryAction": "TERMINATE_SESSION"
     },
     {
+      "errorCode": "ERR_RING_GEOMETRY_MISMATCH",
+      "category": "PROTOCOL",
+      "description": "HELLO.frameBufferSize does not equal the fixed v1 mapTotalSizeBytes (33177856). V1 ring geometry is NOT negotiated; slotCount, slotSizeBytes and mapTotalSizeBytes are derived from protocolVersion '1.0.0' and validated against fixed constants.",
+      "isFatal": true,
+      "recoveryAction": "TERMINATE_SESSION"
+    },
+    {
       "errorCode": "ERR_UNKNOWN_MESSAGE_TYPE",
       "category": "PROTOCOL",
       "description": "Received a messageType string not present in message_catalog_v1.json.",
@@ -148,7 +155,7 @@
     {
       "errorCode": "ERR_FRAME_METADATA_MISMATCH",
       "category": "PAYLOAD",
-      "description": "FRAME_READY envelope metadata contradicts actual shared memory FrameHeaderV1 values.",
+      "description": "FRAME_READY envelope metadata contradicts the actual shared memory FrameHeaderV1 values for any field listed in message_catalog_v1.json -> frameHeaderMetadataContract.checkedFields (bufferIndex, sequence, width, height, stride, pixelFormat, bufferLength, captureTimestampNs, cornerChecksum).",
       "isFatal": false,
       "recoveryAction": "FAIL_CLOSED_DISCARD_FRAME"
     },
@@ -162,9 +169,16 @@
     {
       "errorCode": "ERR_SLOT_INDEX_OUT_OF_BOUNDS",
       "category": "PAYLOAD",
-      "description": "bufferIndex is outside the negotiated range 0 <= bufferIndex < slotCount.",
+      "description": "bufferIndex is outside the fixed v1 range 0 <= bufferIndex < slotCount.",
       "isFatal": false,
       "recoveryAction": "FAIL_CLOSED_REJECT"
+    },
+    {
+      "errorCode": "ERR_BUFFER_UNAVAILABLE",
+      "category": "PAYLOAD",
+      "description": "All ring buffer slots (0 <= bufferIndex < slotCount) are locked by the consumer, so no slot is available to the producer. The locked slots are NEVER force-overwritten; the frame is discarded and the bufferUnavailable drop counter is incremented.",
+      "isFatal": false,
+      "recoveryAction": "DISCARD_FRAME_INCREMENT_BUFFER_UNAVAILABLE_COUNTER"
     },
     {
       "errorCode": "ERR_SLOT_NOT_LOCKED",

@@ -32,6 +32,10 @@ isolated_trial.json
 **/isolated_trial.json
 # Keep *.spec: it is the formal PyInstaller build configuration.
 
+# .NET build outputs (contract verifier)
+architecture/v2/verifier/bin/
+architecture/v2/verifier/obj/
+
 # Runtime logs and temporary files
 *.log
 *.tmp

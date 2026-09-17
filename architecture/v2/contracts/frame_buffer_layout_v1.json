@@ -3,6 +3,10 @@
   "protocolVersion": "1.0.0",
   "name": "NTE Shared Memory Ring Buffer Layout Specification",
   "ringBufferGeometry": {
+    "geometryPolicy": "FIXED_V1_CONSTANTS",
+    "geometryIsNegotiated": false,
+    "fixedGeometrySource": "All values below are pure functions of protocolVersion == '1.0.0'. They are never carried in HELLO/HELLO_ACK and never accepted or rejected through a negotiation message; HELLO only declares frameBufferName + frameBufferSize and the Engine validates frameBufferSize == mapTotalSizeBytes (33177856) with ERR_RING_GEOMETRY_MISMATCH on failure.",
+    "schemaSourceOfTruth": "message_catalog_v1.json -> ringBufferGeometry",
     "slotCount": 4,
     "maxWidth": 1920,
     "maxHeight": 1080,

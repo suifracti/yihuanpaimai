@@ -39,6 +39,10 @@
     "dataPlane": {
       "primary": "Windows Memory-Mapped File",
       "mapNameFormat": "Local\\NteFrameBuffer_v1_{sessionId}_{nonce}",
+      "geometryPolicy": "FIXED_V1_CONSTANTS",
+      "geometryIsNegotiated": false,
+      "fixedGeometrySource": "slotCount, slotSizeBytes and mapTotalSizeBytes are pure functions of protocolVersion == '1.0.0'. Both peers derive them from the constants below; there is no accept/reject geometry handshake and no acceptedSlot* fields exist in protocol 1.0.0.",
+      "handshakeGeometryDeclaration": "HELLO carries frameBufferName and frameBufferSize only. The Engine validates HELLO.frameBufferSize == mapTotalSizeBytes (33177856); a mismatch fails closed with ERR_RING_GEOMETRY_MISMATCH (PROTOCOL, isFatal true).",
       "slotCount": 4,
       "maxWidth": 1920,
       "maxHeight": 1080,
@@ -58,6 +62,18 @@
       }
     }
   },
+  "frameMetadataContract": {
+    "appliesTo": "FRAME_READY",
+    "sourceOfTruth": "message_catalog_v1.json -> frameHeaderMetadataContract",
+    "checkedFields": ["bufferIndex", "sequence", "width", "height", "stride", "pixelFormat", "bufferLength", "captureTimestampNs", "cornerChecksum"],
+    "rule": "Each checked field must be present in the FRAME_READY payload and must exactly equal the FrameHeaderV1 value read from ring slot bufferIndex. No coercion and no tolerance.",
+    "fieldNamingRule": "Payload field names are identical to FrameHeaderV1 field names; the corner checksum is cornerChecksum in both places. The bare name 'checksum' is not part of protocol 1.0.0.",
+    "pixelFormatType": "integer enum identical to FrameHeaderV1.pixelFormat (int32); 1 == BGRA8. The string \"BGRA8\" is not a valid wire value.",
+    "errorCodes": {
+      "bufferIndexBounds": "ERR_SLOT_INDEX_OUT_OF_BOUNDS",
+      "metadataMismatch": "ERR_FRAME_METADATA_MISMATCH"
+    }
+  },
   "envelope": {
     "requiredFields": [
       "protocolVersion",
@@ -71,7 +87,7 @@
     ],
     "fieldTypes": {
       "protocolVersion": "string (exact '1.0.0')",
-      "sessionId": "string (non-empty UUIDv4 format)",
+      "sessionId": "string (non-empty; no UUID format is enforced by the v1 validator)",
       "messageType": "string (one of MessageType enum)",
       "requestId": "string (non-empty string)",
       "correlationId": "string|null",
