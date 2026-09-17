@@ -281,3 +281,9 @@ def _potential_content_fingerprint(record: Mapping[str, Any]) -> Optional[str]:
     }
     canonical = json.dumps(payload, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
     return hashlib.sha256(canonical.encode("utf-8")).hexdigest()
+
+
+def canonical_duplicate_group_key(record: Mapping[str, Any]) -> Optional[str]:
+    """Expose the authoritative canonical content fingerprint used for duplicate grouping."""
+    return _potential_content_fingerprint(record)
+

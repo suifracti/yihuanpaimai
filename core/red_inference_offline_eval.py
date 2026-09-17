@@ -44,6 +44,7 @@ try:
         DuplicateIndex,
         build_duplicate_index,
         evaluate_history_admission,
+        canonical_duplicate_group_key,
         _potential_content_fingerprint,
     )
 except ImportError:
@@ -52,11 +53,13 @@ except ImportError:
             DuplicateIndex,
             build_duplicate_index,
             evaluate_history_admission,
+            canonical_duplicate_group_key,
             _potential_content_fingerprint,
         )
     except ImportError:
         build_duplicate_index = None
         evaluate_history_admission = None
+        canonical_duplicate_group_key = None
         _potential_content_fingerprint = None
 
 _LOG = logging.getLogger(__name__)
@@ -77,30 +80,21 @@ def _parse_iso_timestamp(ts: Optional[str]) -> Optional[datetime]:
         return None
 
 
-def _get_physical_match_fingerprint(record: Mapping[str, Any]) -> str:
-    """Derive canonical physical match identity fingerprint (Fix H)."""
-    if _potential_content_fingerprint is not None:
+def get_canonical_physical_match_fingerprint(record: Mapping[str, Any]) -> Optional[str]:
+    """Retrieve canonical physical match identity strictly via authoritative history admission (Fix H & Final Fix 2).
+
+    PR-B forbids custom physical identity hashing. If authoritative duplicate identity cannot be resolved,
+    returns None to fail closed.
+    """
+    if canonical_duplicate_group_key is not None:
+        fp = canonical_duplicate_group_key(record)
+        if fp:
+            return str(fp)
+    elif _potential_content_fingerprint is not None:
         fp = _potential_content_fingerprint(record)
         if fp:
             return str(fp)
-
-    # Fallback physical content fingerprint
-    env = record.get("environment") if isinstance(record.get("environment"), Mapping) else {}
-    venue = str(record.get("venue") or env.get("venue") or env.get("venueTier") or "").strip()
-    box = str(record.get("box") or env.get("box") or env.get("boxType") or "").strip()
-    st = record.get("settlement") if isinstance(record.get("settlement"), Mapping) else {}
-    actual_total = st.get("actualTotal", record.get("actualTotal"))
-    clearing = st.get("clearingPrice", record.get("clearingPrice"))
-    dt_str = str(record.get("playedAt") or record.get("timestamp") or "").strip()
-    payload = {
-        "playedAt": dt_str,
-        "venue": venue,
-        "box": box,
-        "actualTotal": str(actual_total),
-        "clearingPrice": str(clearing),
-    }
-    canon = json.dumps(payload, sort_keys=True, separators=(",", ":"))
-    return hashlib.sha256(canon.encode("utf-8")).hexdigest()
+    return None
 
 
 def run_time_split_evaluation(
@@ -109,23 +103,27 @@ def run_time_split_evaluation(
     train_ratio: float = 0.7,
     dataset_kind: str = "synthetic_fixture",
 ) -> Dict[str, Any]:
-    """Execute a strict time-split offline evaluation on admitted canonical records (Fix H, I, J)."""
+    """Execute a strict time-split offline evaluation on admitted canonical records (Fix H, I, J & Final Fix 2)."""
     valid_recs = [r for r in records if isinstance(r, Mapping)]
     if build_duplicate_index is not None:
         duplicate_index = build_duplicate_index(valid_recs)
     else:
         duplicate_index = None
 
-    # 1. Admission and Truth Filtering (Fix H)
+    # 1. Admission and Truth Filtering (Fix H & Final Fix 2)
     admitted_records: List[Tuple[datetime, str, Mapping[str, Any]]] = []
     for r in valid_recs:
         el = evaluate_record_red_eligibility(r, duplicate_index)
         if not el.match_eligible:
             continue
         dt = _parse_iso_timestamp(el.played_at)
-        if dt is not None:
-            phys_fp = _get_physical_match_fingerprint(r)
-            admitted_records.append((dt, phys_fp, r))
+        if dt is None:
+            continue
+        phys_fp = get_canonical_physical_match_fingerprint(r)
+        if not phys_fp:
+            # Fail closed: canonical duplicate identity unavailable, exclude from evaluation
+            continue
+        admitted_records.append((dt, phys_fp, r))
 
     admitted_records.sort(key=lambda pair: pair[0])
 
@@ -147,29 +145,32 @@ def run_time_split_evaluation(
         cutoff_dt = _parse_iso_timestamp(split_timestamp)
         if cutoff_dt is None:
             raise ValueError(f"Invalid split_timestamp: {split_timestamp}")
+        train_candidates = [r for dt, _, r in admitted_records if dt < cutoff_dt]
+        eval_candidates = [r for dt, _, r in admitted_records if dt >= cutoff_dt]
     else:
         split_idx = max(1, int(len(admitted_records) * train_ratio))
         split_idx = min(split_idx, len(admitted_records) - 1)
         cutoff_dt = admitted_records[split_idx][0]
+        train_candidates = [r for _, _, r in admitted_records[:split_idx]]
+        eval_candidates = [r for _, _, r in admitted_records[split_idx:]]
 
-    # Partition by time
-    train_candidates = [r for dt, _, r in admitted_records if dt < cutoff_dt]
-    eval_candidates = [r for dt, _, r in admitted_records if dt >= cutoff_dt]
-
-    # 3. Physical Match Identity Leakage Guard (Fix H)
-    # If any physical match fingerprint exists in train, remove all records of that physical match from eval
-    train_phys_fps = {_get_physical_match_fingerprint(r) for r in train_candidates}
-    eval_phys_fps = {_get_physical_match_fingerprint(r) for r in eval_candidates}
+    # 3. Physical Match Identity Leakage Guard (Fix H & Final Fix 2)
+    # If any canonical physical match fingerprint exists in train, remove all records of that physical match from eval
+    train_phys_fps = {get_canonical_physical_match_fingerprint(r) for r in train_candidates}
+    train_phys_fps = {fp for fp in train_phys_fps if fp is not None}
+    eval_phys_fps = {get_canonical_physical_match_fingerprint(r) for r in eval_candidates}
+    eval_phys_fps = {fp for fp in eval_phys_fps if fp is not None}
 
     overlapping_fps = train_phys_fps & eval_phys_fps
-    eval_recs = [r for r in eval_candidates if _get_physical_match_fingerprint(r) not in overlapping_fps]
+    eval_recs = [r for r in eval_candidates if get_canonical_physical_match_fingerprint(r) not in overlapping_fps]
     train_recs = train_candidates
 
     train_ids = {str(r.get("id")) for r in train_recs}
     eval_ids = {str(r.get("id")) for r in eval_recs}
-    eval_phys_final = {_get_physical_match_fingerprint(r) for r in eval_recs}
+    eval_phys_final = {get_canonical_physical_match_fingerprint(r) for r in eval_recs}
+    eval_phys_final = {fp for fp in eval_phys_final if fp is not None}
 
-    # Hard Leakage Assertions (Fix H)
+    # Hard Leakage Assertions (Fix H & Final Fix 2)
     assert train_ids.isdisjoint(eval_ids), "Data leakage: train and eval sets share record IDs!"
     assert train_phys_fps.isdisjoint(eval_phys_final), "Data leakage: train and eval sets share physical match fingerprints!"
 
