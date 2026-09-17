@@ -20,6 +20,13 @@
       "recoveryAction": "FAIL_CLOSED_DROP_MESSAGE"
     },
     {
+      "errorCode": "ERR_MESSAGE_BEFORE_HANDSHAKE",
+      "category": "PROTOCOL",
+      "description": "Received operational message (e.g. FRAME_READY, COMMAND, STATE_SNAPSHOT) before completing HELLO/HELLO_ACK handshake.",
+      "isFatal": false,
+      "recoveryAction": "FAIL_CLOSED_REJECT"
+    },
+    {
       "errorCode": "ERR_MALFORMED_ENVELOPE",
       "category": "PROTOCOL",
       "description": "JSON message envelope is missing required fields or has invalid field types (coercion prohibited).",
@@ -29,7 +36,7 @@
     {
       "errorCode": "ERR_STALE_SEQUENCE",
       "category": "PROTOCOL",
-      "description": "Received message sequence number is less than or equal to previous high-water mark for sender in current session.",
+      "description": "Received message sequence number is less than or equal to previous high-water mark for sender in current connection generation.",
       "isFatal": false,
       "recoveryAction": "LOG_AND_IGNORE"
     },
@@ -39,6 +46,13 @@
       "description": "Message sessionId does not match current active negotiated session.",
       "isFatal": false,
       "recoveryAction": "FAIL_CLOSED_DROP_MESSAGE"
+    },
+    {
+      "errorCode": "ERR_STALE_GENERATION",
+      "category": "PROTOCOL",
+      "description": "Received message bearing sessionNonce from an earlier child connection generation.",
+      "isFatal": false,
+      "recoveryAction": "FAIL_CLOSED_DROP"
     },
     {
       "errorCode": "ERR_INVALID_STATE_TRANSITION",
@@ -137,6 +151,13 @@
       "description": "FRAME_READY envelope metadata contradicts actual shared memory FrameHeaderV1 values.",
       "isFatal": false,
       "recoveryAction": "FAIL_CLOSED_DISCARD_FRAME"
+    },
+    {
+      "errorCode": "ERR_FRAME_CAPACITY_EXCEEDED",
+      "category": "PAYLOAD",
+      "description": "Frame dimensions or stride * height exceed maximum V1 slot capacity (1920x1080 or 8,294,400 bytes).",
+      "isFatal": false,
+      "recoveryAction": "FAIL_CLOSED_REJECT"
     },
     {
       "errorCode": "ERR_SLOT_INDEX_OUT_OF_BOUNDS",

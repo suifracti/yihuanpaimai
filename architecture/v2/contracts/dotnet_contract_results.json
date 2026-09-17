@@ -1,8 +1,8 @@
 {
   "suite": "architecture.v2.verifier.ContractVerifier",
-  "timestamp": "2026-09-17T15:37:20.4730393Z",
-  "totalTests": 31,
-  "passedTests": 31,
+  "timestamp": "2026-09-17T15:58:48.8517664Z",
+  "totalTests": 36,
+  "passedTests": 36,
   "failedTests": 0,
   "allPassed": true,
   "testCases": [
@@ -67,6 +67,10 @@
       "status": "PASSED"
     },
     {
+      "name": "RingBuffer_Capacity_Invariants",
+      "status": "PASSED"
+    },
+    {
       "name": "RingBuffer_Slot_0_Offset_Calculation",
       "status": "PASSED"
     },
@@ -84,6 +88,10 @@
     },
     {
       "name": "GoldenVector_FrameHeader_Packing",
+      "status": "PASSED"
+    },
+    {
+      "name": "GoldenVector_Count_Is_14",
       "status": "PASSED"
     },
     {
@@ -123,7 +131,19 @@
       "status": "PASSED"
     },
     {
+      "name": "GoldenVector_STATE_SNAPSHOT_REQUEST_State_Snapshot_Request",
+      "status": "PASSED"
+    },
+    {
       "name": "GoldenVector_STATE_SNAPSHOT_State_Snapshot_Sync",
+      "status": "PASSED"
+    },
+    {
+      "name": "GoldenVector_ENGINE_SHUTDOWN_Engine_Graceful_Shutdown",
+      "status": "PASSED"
+    },
+    {
+      "name": "GoldenVector_ENGINE_RESTARTING_Engine_Restarting_Signal",
       "status": "PASSED"
     },
     {
