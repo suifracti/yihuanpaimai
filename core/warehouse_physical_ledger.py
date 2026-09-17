@@ -12,6 +12,8 @@ import json
 from typing import Any, Dict, List, Mapping, Optional, Sequence, Tuple
 
 from settlement_truth_evidence_contract import RECORD_KEY_RE
+from warehouse_scan_progress import WarehouseScanProgressTracker
+from warehouse_double_evidence_dedup import WarehouseDoubleEvidenceDedupGate, is_1x1_item
 
 SCHEMA_VERSION = "warehouse-physical-ledger.v1"
 
@@ -196,6 +198,23 @@ class PhysicalComponentLedger:
         self._chain_open = False
         self._anchored = False
         self._broken = False
+        self._progress_tracker = WarehouseScanProgressTracker(
+            record_stable_key=self.record_stable_key,
+            enforce_strict_guards=False,
+        )
+        self._dedup_gate = WarehouseDoubleEvidenceDedupGate()
+
+    @property
+    def progress_tracker(self) -> WarehouseScanProgressTracker:
+        return self._progress_tracker
+
+    @property
+    def dedup_gate(self) -> WarehouseDoubleEvidenceDedupGate:
+        return self._dedup_gate
+
+    @property
+    def scan_progress(self) -> Dict[str, Any]:
+        return self._progress_tracker.to_payload()
 
     def add_segment(
         self,
@@ -230,6 +249,9 @@ class PhysicalComponentLedger:
         origin_y = 0.0
         chain_ok = True
         reasons: List[str] = []
+        status = ""
+        offset = None
+        direction = ""
         if self._segments:
             previous = self._segments[-1]
             if sequence_index <= previous["sequenceIndex"]:
@@ -327,6 +349,24 @@ class PhysicalComponentLedger:
             self._assign_track(obs, segment)
 
         self._segments.append(segment)
+
+        # Wire: warehouse observation -> progress guard
+        prev_seg_id = self._segments[-2]["segmentId"] if len(self._segments) >= 2 else None
+        trans_id = f"{prev_seg_id}->{segment_id}" if prev_seg_id else f"init->{segment_id}"
+        is_verified_overlap = bool(chain_ok and status == STATUS_VERIFIED and offset is not None and direction in {DIR_DOWN, DIR_UP})
+        verified_px = float(abs(offset)) if (offset is not None and is_verified_overlap) else None
+        self._progress_tracker.update_from_observation(
+            segment_id=str(segment_id),
+            observation_id=digest,
+            transition_id=trans_id,
+            from_segment_id=prev_seg_id,
+            to_segment_id=str(segment_id),
+            segment_index=sequence_index,
+            overlap_verified=is_verified_overlap,
+            verified_offset_px=verified_px,
+            scrollbar_state=str(scroll_state or ""),
+        )
+
         return self.snapshot()
 
     def _materialize_observation(
@@ -395,6 +435,24 @@ class PhysicalComponentLedger:
                 self._add_reason(best, REASON_AMBIGUOUS_CANDIDATE)
             else:
                 chosen = best
+
+        # Wire: cross-segment merge candidate -> 1x1 double-evidence gate -> physical ledger merge / ambiguous
+        if chosen is not None and (is_1x1_item(chosen) or is_1x1_item(obs)):
+            sim_val = _ncc(chosen.get("_signature"), obs.get("signature"))
+            if sim_val is not None:
+                sim_val = max(0.0, min(1.0, float(sim_val)))
+            gate_decision = self._dedup_gate.evaluate_1x1_dedup(
+                candidate_track=chosen,
+                new_obs=obs,
+                segment_context=segment,
+                competing_candidate_scores=[c[0] for c in candidates],
+                raw_visual_similarity=sim_val,
+                competitor_search_complete=True,
+            )
+            if not gate_decision.get("admitted"):
+                self._add_reason(chosen, REASON_AMBIGUOUS_CANDIDATE)
+                chosen = None
+
         if chosen is None:
             chosen = self._new_track(obs, segment)
             self._tracks.append(chosen)

@@ -27,9 +27,10 @@ HUD_TITLE_MARKERS = (
 GAME_PROCESS_MARKERS = ("htgame", "neverness", "nte-win64", "hotta", "projectnte", "client-win64", "nte")
 GAME_CLASS_MARKERS = ("unrealwindow",)
 GAME_TITLE_MARKERS = ("异环", "neverness", "projectnte", "nte")
-CLOUD_GAME_PROCESS_MARKERS = ("ntecloudgame", "ntecloud", "cloudgame", "cg_game", "yihuan_cloud", "yihuancloud")
-CLOUD_GAME_TITLE_MARKERS = ("云·异环", "云异环", "异环云游戏", "异环 云游戏", "ntecloudgame", "nte cloud")
-CLOUD_GAME_CLASS_MARKERS = ("ntecloudwindow", "cloudgamewindow")
+CLOUD_GAME_PROCESS_EXACT = ("ntecloudgame.exe", "ntecloudgame")
+CLOUD_GAME_TITLE_MARKERS = ("云·异环", "云异环", "异环云游戏", "异环 (云游戏)")
+CLOUD_GAME_CLASS_MARKERS = ("ntecloudgamewnd", "cloudgamewindow")
+EXCLUDE_PROCESS_MARKERS = ("helper", "launcher", "updater", "crashreport", "yihuan", "异环拍卖助手", "msedgewebview2")
 EXCLUDE_CLASS_PREFIXES = ("qt", "chrome", "windowsforms", "applicationframewindow")
 
 
@@ -165,35 +166,41 @@ def score_window_candidate(
         exe = _process_basename(pid)
         meta["process"] = exe
 
-        if any(mark in exe for mark in ("yihuan", "异环拍卖助手", "msedgewebview2")):
-            meta["rejectReason"] = "ASSISTANT_PROCESS"
-            return 0, "ASSISTANT_PROCESS", meta
+        if any(mark in exe for mark in EXCLUDE_PROCESS_MARKERS):
+            meta["rejectReason"] = "HELPER_OR_EXCLUDED_PROCESS"
+            return 0, "HELPER_OR_EXCLUDED_PROCESS", meta
 
         # Cloud game vs local game classification
-        is_cloud_proc = any(mark in exe for mark in CLOUD_GAME_PROCESS_MARKERS)
+        # Strong: exact process allowlist ntecloudgame.exe
+        # Fallback: NTE-specific title AND known cloud window class
+        is_exact_cloud_proc = any(exe == mark for mark in CLOUD_GAME_PROCESS_EXACT)
         is_cloud_title = any(mark in title_lower for mark in CLOUD_GAME_TITLE_MARKERS)
         is_cloud_class = any(mark in cls_lower for mark in CLOUD_GAME_CLASS_MARKERS)
-        is_cloud = is_cloud_proc or is_cloud_title or is_cloud_class
+
+        is_cloud = False
+        if is_exact_cloud_proc:
+            is_cloud = True
+            meta["clientType"] = "cloud"
+        elif is_cloud_title and is_cloud_class:
+            is_cloud = True
+            meta["clientType"] = "cloud"
 
         is_local_proc = any(mark in exe for mark in GAME_PROCESS_MARKERS)
         is_local_class = any(mark in cls_lower for mark in GAME_CLASS_MARKERS)
 
-        if is_cloud:
-            meta["clientType"] = "cloud"
-        elif is_local_proc or is_local_class:
-            meta["clientType"] = "local"
-        else:
-            meta["clientType"] = "unknown"
+        if not is_cloud:
+            if is_local_proc or is_local_class:
+                meta["clientType"] = "local"
+            else:
+                meta["clientType"] = "unknown"
 
         # Positive scoring
         score = 0
         if is_cloud:
+            if is_exact_cloud_proc:
+                score += 50
             if is_cloud_class:
                 score += 35
-            elif any(mark in cls_lower for mark in GAME_CLASS_MARKERS):
-                score += 35
-            if is_cloud_proc:
-                score += 45
             if is_cloud_title:
                 score += 45
         else:
@@ -201,6 +208,8 @@ def score_window_candidate(
                 score += 35
             if any(mark in exe for mark in GAME_PROCESS_MARKERS):
                 score += 40
+
+        has_process_or_class = (is_exact_cloud_proc or is_cloud_class or is_local_proc or is_local_class)
 
         title_markers = set(GAME_TITLE_MARKERS)
         if is_cloud:
@@ -212,7 +221,11 @@ def score_window_candidate(
                     title_markers.add(clean_t)
 
         if any(mark in title_lower for mark in title_markers):
-            score += 45
+            if has_process_or_class:
+                score += 45
+            else:
+                # Title alone without recognized process or class cannot elevate arbitrary window to game
+                score += 20
 
         if w >= 1280 and h >= 720:
             score += 15
