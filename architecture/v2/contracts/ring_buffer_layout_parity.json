@@ -1,0 +1,17 @@
+{
+  "slotCount": 4,
+  "slotPayloadCapacityBytes": 8294400,
+  "headerSizeBytes": 64,
+  "slotSizeBytes": 8294464,
+  "slotAlignmentBytes": 64,
+  "mapTotalSizeBytes": 33177856,
+  "slotOffsetFormula": "slotOffset(index) = index * slotSizeBytes",
+  "validIndexRange": "0 \u003C= bufferIndex \u003C slotCount",
+  "allSlotCalculationsVerified": true,
+  "slotOffsets": {
+    "slot0": 0,
+    "slot1": 8294464,
+    "slot2": 16588928,
+    "slot3": 24883392
+  }
+}

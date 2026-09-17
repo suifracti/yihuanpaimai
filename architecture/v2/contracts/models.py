@@ -1,17 +1,20 @@
 """
 architecture/v2/contracts/models.py
 
-Standardized Python models, dataclasses, binary framing, struct packing,
-and contract validators for NTE Architecture V2 Host-Engine IPC Protocol.
+Standardized Python models, dataclasses, binary framing, ring-buffer geometry,
+sequence trackers, command idempotency, struct packing, and fail-closed validators
+for NTE Architecture V2 Host-Engine IPC Protocol.
 """
 
 from __future__ import annotations
 
 import json
+import re
 import struct
+import time
 from dataclasses import asdict, dataclass, field
 from enum import Enum
-from typing import Any, Dict, List, Optional, Tuple, Union
+from typing import Any, Dict, List, Optional, Set, Tuple
 
 # Protocol & Framing Constants
 PROTOCOL_VERSION: str = "1.0.0"
@@ -21,9 +24,26 @@ FRAME_HEADER_SIZE: int = 64
 MAX_MESSAGE_BYTES: int = 1048576  # 1 MB maximum length prefix
 DEFAULT_PIXEL_FORMAT_BGRA8: int = 1
 
+# Ring Buffer Geometry Constants
+SLOT_COUNT: int = 4
+SLOT_PAYLOAD_CAPACITY_BYTES: int = 8294400  # 1920 * 1080 * 4
+SLOT_SIZE_BYTES: int = 8294464             # 64 + 8294400
+SLOT_ALIGNMENT_BYTES: int = 64
+MAP_TOTAL_SIZE_BYTES: int = 33177856       # 4 * 8294464
+
 # Struct layout: 64 bytes little-endian (<I i q i i i i i i q q I i)
 FRAME_HEADER_STRUCT_FORMAT: str = "<IiqiiiiiiqqIi"
 assert struct.calcsize(FRAME_HEADER_STRUCT_FORMAT) == FRAME_HEADER_SIZE
+
+
+def get_slot_offset(slot_index: int) -> int:
+    """Calculates byte offset for ring buffer slot index."""
+    if not (0 <= slot_index < SLOT_COUNT):
+        raise ContractValidationError(
+            "ERR_SLOT_INDEX_OUT_OF_BOUNDS",
+            f"Buffer index {slot_index} out of bounds (valid: 0 <= index < {SLOT_COUNT})"
+        )
+    return slot_index * SLOT_SIZE_BYTES
 
 
 class MessageType(str, Enum):
@@ -74,7 +94,16 @@ class HelloAckStatus(str, Enum):
     REJECTED_CAPABILITY = "REJECTED_CAPABILITY"
 
 
+class EngineReadiness(str, Enum):
+    STARTING = "STARTING"
+    LOADING = "LOADING"
+    READY = "READY"
+    DEGRADED = "DEGRADED"
+    FAILED = "FAILED"
+
+
 class FrameAckStatus(str, Enum):
+    RELEASED = "RELEASED"
     CONSUMED = "CONSUMED"
     SKIPPED = "SKIPPED"
     CORRUPTED = "CORRUPTED"
@@ -97,6 +126,13 @@ class AbortReason(str, Enum):
     FOCUS_LOST = "FOCUS_LOST"
     ESCAPE_KEY = "ESCAPE_KEY"
     TARGET_CLOSED = "TARGET_CLOSED"
+
+
+class SlotState(str, Enum):
+    FREE = "FREE"
+    WRITING = "WRITING"
+    COMMITTED = "COMMITTED"
+    CONSUMER_LOCKED = "CONSUMER_LOCKED"
 
 
 class ContractValidationError(ValueError):
@@ -210,6 +246,38 @@ class FrameHeaderV1:
                 "ERR_UNSUPPORTED_PIXEL_FORMAT",
                 f"Unsupported pixel format {self.pixelFormat}, expected {DEFAULT_PIXEL_FORMAT_BGRA8} (BGRA8)"
             )
+        expected_stride = self.width * 4
+        if self.stride != expected_stride:
+            raise ContractValidationError(
+                "ERR_FRAME_METADATA_MISMATCH",
+                f"Stride {self.stride} does not match expected width * 4 = {expected_stride}"
+            )
+        expected_length = self.stride * self.height
+        if self.bufferLength != expected_length:
+            raise ContractValidationError(
+                "ERR_FRAME_METADATA_MISMATCH",
+                f"BufferLength {self.bufferLength} does not match expected stride * height = {expected_length}"
+            )
+
+
+def verify_frame_metadata_match(frame_ready_payload: Dict[str, Any], header: FrameHeaderV1) -> None:
+    """Verifies that FRAME_READY message payload matches shared memory header exact."""
+    checks = [
+        ("sequence", frame_ready_payload.get("sequence"), header.sequence),
+        ("width", frame_ready_payload.get("width"), header.width),
+        ("height", frame_ready_payload.get("height"), header.height),
+        ("stride", frame_ready_payload.get("stride"), header.stride),
+        ("pixelFormat", frame_ready_payload.get("pixelFormat"), header.pixelFormat),
+        ("bufferLength", frame_ready_payload.get("bufferLength"), header.bufferLength),
+        ("captureTimestampNs", frame_ready_payload.get("captureTimestampNs"), header.captureTimestampNs),
+        ("checksum", frame_ready_payload.get("checksum"), header.cornerChecksum),
+    ]
+    for field_name, payload_val, header_val in checks:
+        if payload_val != header_val:
+            raise ContractValidationError(
+                "ERR_FRAME_METADATA_MISMATCH",
+                f"FRAME_READY metadata mismatch for '{field_name}': payload={payload_val}, header={header_val}"
+            )
 
 
 @dataclass
@@ -225,6 +293,116 @@ class DropCounters:
         return asdict(self)
 
 
+class SequenceTracker:
+    """Tracks sequence high-water mark per sender per session."""
+    def __init__(self, session_id: str):
+        self.session_id: str = session_id
+        self._sender_high_water: Dict[str, int] = {}
+
+    def check_and_update(self, sender_id: str, session_id: str, sequence: int) -> None:
+        if session_id != self.session_id:
+            raise ContractValidationError(
+                "ERR_STALE_SESSION",
+                f"Session ID '{session_id}' does not match active session '{self.session_id}'"
+            )
+        if sequence < 0:
+            raise ContractValidationError(
+                "ERR_MALFORMED_ENVELOPE",
+                f"Negative sequence {sequence} not allowed"
+            )
+        last_seq = self._sender_high_water.get(sender_id, -1)
+        if sequence <= last_seq:
+            raise ContractValidationError(
+                "ERR_STALE_SEQUENCE",
+                f"Stale sequence {sequence} from sender '{sender_id}' (last high-water: {last_seq})"
+            )
+        self._sender_high_water[sender_id] = sequence
+
+
+class CommandIdempotencyManager:
+    """Deduplicates incoming COMMAND messages by (sessionId, commandId)."""
+    def __init__(self, retention_seconds: int = 300):
+        self.retention_seconds: int = retention_seconds
+        self._cache: Dict[Tuple[str, str], Tuple[Dict[str, Any], Optional[Dict[str, Any]], int, float]] = {}
+
+    def process_command(self, session_id: str, command_id: str, action: str, parameters: Dict[str, Any], expires_at_ns: int, now_ns: int) -> Optional[Dict[str, Any]]:
+        """
+        Returns cached result if identical replay.
+        Raises ContractValidationError if mismatched payload reuse or expired.
+        """
+        key = (session_id, command_id)
+        current_payload = {"action": action, "parameters": parameters}
+
+        if now_ns > expires_at_ns:
+            return {"commandId": command_id, "status": "EXPIRED", "errorDetails": "Command expired before processing"}
+
+        if key in self._cache:
+            cached_payload, cached_result, exp_ns, _ = self._cache[key]
+            if cached_payload != current_payload:
+                raise ContractValidationError(
+                    "ERR_COMMAND_ID_REUSE_MISMATCH",
+                    f"CommandId '{command_id}' reused in session '{session_id}' with conflicting action or parameters"
+                )
+            if cached_result is not None:
+                return cached_result
+            raise ContractValidationError(
+                "ERR_DUPLICATE_COMMAND",
+                f"CommandId '{command_id}' is currently pending execution"
+            )
+
+        self._cache[key] = (current_payload, None, expires_at_ns, time.time())
+        return None
+
+    def store_result(self, session_id: str, command_id: str, result: Dict[str, Any]) -> None:
+        key = (session_id, command_id)
+        if key in self._cache:
+            payload, _, exp, ts = self._cache[key]
+            self._cache[key] = (payload, result, exp, ts)
+
+
+class RingBufferSlotManager:
+    """Tracks slot lifecycle states and guarantees no overwrite of consumer-locked slots."""
+    def __init__(self, slot_count: int = SLOT_COUNT):
+        self.slot_count: int = slot_count
+        self._states: List[SlotState] = [SlotState.FREE] * slot_count
+        self._active_lock: List[Optional[Tuple[str, int]]] = [None] * slot_count  # (sessionId, sequence)
+
+    def allocate_write_slot(self) -> int:
+        for idx in range(self.slot_count):
+            if self._states[idx] == SlotState.FREE:
+                self._states[idx] = SlotState.WRITING
+                return idx
+        raise ContractValidationError(
+            "ERR_BUFFER_UNAVAILABLE",
+            f"All {self.slot_count} ring buffer slots are locked"
+        )
+
+    def commit_frame(self, slot_index: int, session_id: str, sequence: int) -> None:
+        if not (0 <= slot_index < self.slot_count):
+            raise ContractValidationError("ERR_SLOT_INDEX_OUT_OF_BOUNDS", f"Invalid index {slot_index}")
+        self._states[slot_index] = SlotState.CONSUMER_LOCKED
+        self._active_lock[slot_index] = (session_id, sequence)
+
+    def release_slot(self, slot_index: int, session_id: str, sequence: int) -> None:
+        if not (0 <= slot_index < self.slot_count):
+            raise ContractValidationError("ERR_SLOT_INDEX_OUT_OF_BOUNDS", f"Invalid slot index {slot_index}")
+        if self._states[slot_index] != SlotState.CONSUMER_LOCKED:
+            raise ContractValidationError("ERR_SLOT_NOT_LOCKED", f"Slot {slot_index} is not in CONSUMER_LOCKED state")
+        active = self._active_lock[slot_index]
+        if active != (session_id, sequence):
+            raise ContractValidationError(
+                "ERR_UNKNOWN_FRAME_ACK",
+                f"Release token ({session_id}, {sequence}) does not match active lock {active} on slot {slot_index}"
+            )
+        self._states[slot_index] = SlotState.FREE
+        self._active_lock[slot_index] = None
+
+    def get_slot_state(self, slot_index: int) -> SlotState:
+        if not (0 <= slot_index < self.slot_count):
+            raise ContractValidationError("ERR_SLOT_INDEX_OUT_OF_BOUNDS", f"Invalid index {slot_index}")
+        return self._states[slot_index]
+
+
 class LifecycleStateMachine:
     VALID_TRANSITIONS: Dict[LifecycleState, List[LifecycleState]] = {
         LifecycleState.ENGINE_DOWN: [LifecycleState.STARTING],
@@ -235,8 +413,13 @@ class LifecycleStateMachine:
         LifecycleState.DEGRADED: [LifecycleState.READY, LifecycleState.SYNCING, LifecycleState.ENGINE_DOWN],
     }
 
-    def __init__(self, initial_state: LifecycleState = LifecycleState.ENGINE_DOWN):
-        self._current_state = initial_state
+    def __init__(self, initial_state: LifecycleState = LifecycleState.ENGINE_DOWN, is_cold_boot: bool = True):
+        self._current_state: LifecycleState = initial_state
+        self.is_cold_boot: bool = is_cold_boot
+        self.protocol_negotiated: bool = False
+        self.capabilities_accepted: bool = False
+        self.engine_business_ready: bool = False
+        self.snapshot_resynced: bool = False
 
     @property
     def current_state(self) -> LifecycleState:
@@ -246,9 +429,37 @@ class LifecycleStateMachine:
         allowed = self.VALID_TRANSITIONS.get(self._current_state, [])
         if new_state not in allowed:
             raise ContractValidationError(
-                "ERR_AUTHORITY_VIOLATION",
+                "ERR_INVALID_STATE_TRANSITION",
                 f"Invalid lifecycle transition from {self._current_state.value} to {new_state.value}. Allowed: {[s.value for s in allowed]}"
             )
+
+        # Enforce READY Gate Invariants
+        if new_state == LifecycleState.READY:
+            if self._current_state == LifecycleState.HANDSHAKING:
+                # Reconnect / restart forbids skipping SYNCING
+                if not self.is_cold_boot:
+                    raise ContractValidationError(
+                        "ERR_INVALID_STATE_TRANSITION",
+                        "Direct transition from HANDSHAKING to READY is forbidden on reconnect; MUST transition to SYNCING first"
+                    )
+                # Cold boot requires no recoverable state AND engine business ready
+                if not self.engine_business_ready:
+                    raise ContractValidationError(
+                        "ERR_INVALID_STATE_TRANSITION",
+                        "Cannot transition to READY on cold boot while engine_business_ready is false"
+                    )
+            elif self._current_state == LifecycleState.SYNCING:
+                if not (self.engine_business_ready and self.snapshot_resynced):
+                    raise ContractValidationError(
+                        "ERR_INVALID_STATE_TRANSITION",
+                        "Cannot transition from SYNCING to READY without validated snapshot and businessReady == true"
+                    )
+
+        # Mark non-cold-boot on first shutdown/restart cycle
+        if self._current_state == LifecycleState.READY and new_state in [LifecycleState.DEGRADED, LifecycleState.ENGINE_DOWN]:
+            self.is_cold_boot = False
+            self.snapshot_resynced = False
+
         self._current_state = new_state
         return self._current_state
 
@@ -264,19 +475,18 @@ REQUIRED_ENVELOPE_FIELDS = [
     "payload",
 ]
 
-# Required payload fields mapped from message_catalog_v1.json
 REQUIRED_PAYLOAD_FIELDS: Dict[str, List[str]] = {
-    "HELLO": ["hostVersion", "supportedProtocols", "sessionNonce", "capabilities", "frameBufferName", "frameBufferSize"],
-    "HELLO_ACK": ["engineVersion", "negotiatedProtocol", "status", "enginePid"],
+    "HELLO": ["hostVersion", "supportedProtocols", "sessionNonce", "capabilities", "frameBufferName", "slotCount", "slotSizeBytes", "mapTotalSizeBytes"],
+    "HELLO_ACK": ["engineVersion", "negotiatedProtocol", "status", "readiness", "enginePid", "slotCount", "slotSizeBytes", "mapTotalSizeBytes", "engineBusinessReady"],
     "HEARTBEAT": ["timestamp", "state"],
-    "FRAME_READY": ["bufferIndex", "sequence", "width", "height", "stride", "pixelFormat", "captureTimestampNs"],
-    "FRAME_ACK": ["bufferIndex", "sequence", "status"],
+    "FRAME_READY": ["sessionId", "bufferIndex", "sequence", "width", "height", "stride", "pixelFormat", "bufferLength", "captureTimestampNs", "checksum"],
+    "FRAME_ACK": ["sessionId", "bufferIndex", "sequence", "status"],
     "PERCEPTION_RESULT": ["frameSequence", "scene", "inAuction", "bids"],
     "ABORT_SCAN": ["reason", "triggerTimestampNs"],
-    "COMMAND": ["commandId", "action", "expiresAtNs"],
+    "COMMAND": ["commandId", "action", "parameters", "expiresAtNs"],
     "COMMAND_RESULT": ["commandId", "status"],
     "STATE_SNAPSHOT_REQUEST": ["includeDrafts"],
-    "STATE_SNAPSHOT": ["matchState", "draftCount", "finalizedCount", "snapshotSequence"],
+    "STATE_SNAPSHOT": ["snapshotSchemaVersion", "snapshotSessionId", "snapshotSequence", "businessReady", "currentMatchProjection"],
     "ENGINE_SHUTDOWN": ["reason", "timeoutMs"],
     "ENGINE_RESTARTING": ["reason", "exitCode"],
     "ERROR": ["errorCode", "category", "message", "isFatal"],
@@ -284,42 +494,69 @@ REQUIRED_PAYLOAD_FIELDS: Dict[str, List[str]] = {
 
 
 def validate_envelope(msg_dict: Dict[str, Any]) -> Envelope:
-    """Validates envelope schema against protocol_v1.json fail-closed rules."""
+    """Validates envelope schema against protocol_v1.json fail-closed rules without type coercion."""
+    if not isinstance(msg_dict, dict):
+        raise ContractValidationError("ERR_MALFORMED_ENVELOPE", "Envelope must be a JSON dictionary")
+
     for req_field in REQUIRED_ENVELOPE_FIELDS:
         if req_field not in msg_dict:
             raise ContractValidationError(
                 "ERR_MALFORMED_ENVELOPE",
-                f"Missing required envelope field: {req_field}"
+                f"Missing required envelope field: '{req_field}'"
             )
 
     proto_ver = msg_dict["protocolVersion"]
     if not isinstance(proto_ver, str) or proto_ver != PROTOCOL_VERSION:
         raise ContractValidationError(
             "ERR_PROTOCOL_VERSION_MISMATCH",
-            f"Unsupported protocolVersion '{proto_ver}', expected '{PROTOCOL_VERSION}'"
+            f"Unsupported protocolVersion '{proto_ver}', exact '{PROTOCOL_VERSION}' required"
+        )
+
+    session_id = msg_dict["sessionId"]
+    if not isinstance(session_id, str) or len(session_id.strip()) == 0:
+        raise ContractValidationError(
+            "ERR_MALFORMED_ENVELOPE",
+            "Field 'sessionId' must be a non-empty string"
         )
 
     msg_type = msg_dict["messageType"]
     valid_types = {t.value for t in MessageType}
-    if msg_type not in valid_types:
+    if not isinstance(msg_type, str) or msg_type not in valid_types:
         raise ContractValidationError(
             "ERR_UNKNOWN_MESSAGE_TYPE",
             f"Unrecognized messageType '{msg_type}'. Valid types: {sorted(valid_types)}"
         )
 
-    if not isinstance(msg_dict["sequence"], int):
+    req_id = msg_dict["requestId"]
+    if not isinstance(req_id, str) or len(req_id.strip()) == 0:
         raise ContractValidationError(
             "ERR_MALFORMED_ENVELOPE",
-            "Field 'sequence' must be an integer"
+            "Field 'requestId' must be a non-empty string"
         )
 
-    if not isinstance(msg_dict["monotonicTimestampNs"], int):
+    corr_id = msg_dict["correlationId"]
+    if corr_id is not None and not isinstance(corr_id, str):
         raise ContractValidationError(
             "ERR_MALFORMED_ENVELOPE",
-            "Field 'monotonicTimestampNs' must be an integer"
+            "Field 'correlationId' must be a string or null"
         )
 
-    if not isinstance(msg_dict["payload"], dict):
+    seq = msg_dict["sequence"]
+    if isinstance(seq, bool) or not isinstance(seq, int) or seq < 0:
+        raise ContractValidationError(
+            "ERR_MALFORMED_ENVELOPE",
+            "Field 'sequence' must be a non-negative integer (int64 >= 0)"
+        )
+
+    ts_ns = msg_dict["monotonicTimestampNs"]
+    if isinstance(ts_ns, bool) or not isinstance(ts_ns, int) or ts_ns < 0:
+        raise ContractValidationError(
+            "ERR_MALFORMED_ENVELOPE",
+            "Field 'monotonicTimestampNs' must be a non-negative integer (int64 >= 0)"
+        )
+
+    payload = msg_dict["payload"]
+    if not isinstance(payload, dict):
         raise ContractValidationError(
             "ERR_MALFORMED_ENVELOPE",
             "Field 'payload' must be a dictionary object"
@@ -327,7 +564,6 @@ def validate_envelope(msg_dict: Dict[str, Any]) -> Envelope:
 
     # Validate required payload fields per message type
     req_payload_fields = REQUIRED_PAYLOAD_FIELDS.get(msg_type, [])
-    payload = msg_dict["payload"]
     for req_p in req_payload_fields:
         if req_p not in payload:
             raise ContractValidationError(
@@ -337,12 +573,12 @@ def validate_envelope(msg_dict: Dict[str, Any]) -> Envelope:
 
     return Envelope(
         protocolVersion=proto_ver,
-        sessionId=str(msg_dict["sessionId"]),
+        sessionId=session_id,
         messageType=msg_type,
-        requestId=str(msg_dict["requestId"]),
-        correlationId=str(msg_dict["correlationId"]) if msg_dict["correlationId"] is not None else None,
-        sequence=msg_dict["sequence"],
-        monotonicTimestampNs=msg_dict["monotonicTimestampNs"],
+        requestId=req_id,
+        correlationId=corr_id,
+        sequence=seq,
+        monotonicTimestampNs=ts_ns,
         payload=payload,
     )
 
@@ -363,10 +599,13 @@ def decode_framed_message(buffer: bytes) -> Tuple[Envelope, int]:
     """
     Decodes length-prefixed message from buffer.
     Returns (Envelope, bytes_consumed).
-    Raises ContractValidationError or ValueError if buffer is incomplete or corrupt.
+    Raises ContractValidationError if buffer is incomplete, oversized, or corrupt.
     """
     if len(buffer) < 4:
-        raise ValueError("Buffer too short to read length prefix")
+        raise ContractValidationError(
+            "ERR_INCOMPLETE_FRAME",
+            f"Buffer size {len(buffer)} is too short to read 4-byte length prefix"
+        )
     payload_len = struct.unpack_from("<I", buffer, 0)[0]
     if payload_len > MAX_MESSAGE_BYTES:
         raise ContractValidationError(
@@ -375,10 +614,13 @@ def decode_framed_message(buffer: bytes) -> Tuple[Envelope, int]:
         )
     total_len = 4 + payload_len
     if len(buffer) < total_len:
-        raise ValueError(f"Incomplete message: need {total_len} bytes, got {len(buffer)}")
+        raise ContractValidationError(
+            "ERR_INCOMPLETE_FRAME",
+            f"Incomplete message body: need {total_len} bytes, got {len(buffer)}"
+        )
 
-    raw_json = buffer[4:total_len].decode("utf-8")
     try:
+        raw_json = buffer[4:total_len].decode("utf-8")
         msg_dict = json.loads(raw_json)
     except Exception as e:
         raise ContractValidationError(
