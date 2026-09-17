@@ -44,8 +44,7 @@ try:
         DuplicateIndex,
         build_duplicate_index,
         evaluate_history_admission,
-        canonical_duplicate_group_key,
-        _potential_content_fingerprint,
+        potential_content_duplicate_group_key,
     )
 except ImportError:
     try:
@@ -53,14 +52,12 @@ except ImportError:
             DuplicateIndex,
             build_duplicate_index,
             evaluate_history_admission,
-            canonical_duplicate_group_key,
-            _potential_content_fingerprint,
+            potential_content_duplicate_group_key,
         )
     except ImportError:
         build_duplicate_index = None
         evaluate_history_admission = None
-        canonical_duplicate_group_key = None
-        _potential_content_fingerprint = None
+        potential_content_duplicate_group_key = None
 
 _LOG = logging.getLogger(__name__)
 
@@ -80,38 +77,23 @@ def _parse_iso_timestamp(ts: Optional[str]) -> Optional[datetime]:
         return None
 
 
-def get_canonical_physical_match_fingerprint(record: Mapping[str, Any]) -> Optional[str]:
-    """Retrieve canonical physical match identity strictly via authoritative history admission (Fix H & Final Fix 2).
-
-    PR-B forbids custom physical identity hashing. If authoritative duplicate identity cannot be resolved,
-    returns None to fail closed.
-    """
-    if canonical_duplicate_group_key is not None:
-        fp = canonical_duplicate_group_key(record)
-        if fp:
-            return str(fp)
-    elif _potential_content_fingerprint is not None:
-        fp = _potential_content_fingerprint(record)
-        if fp:
-            return str(fp)
-    return None
-
-
 def run_time_split_evaluation(
     records: Sequence[Mapping[str, Any]],
     split_timestamp: Optional[str] = None,
     train_ratio: float = 0.7,
     dataset_kind: str = "synthetic_fixture",
 ) -> Dict[str, Any]:
-    """Execute a strict time-split offline evaluation on admitted canonical records (Fix H, I, J & Final Fix 2)."""
+    """Execute a strict time-split offline evaluation on admitted canonical records (Fix H, I, J & Final Fix B)."""
     valid_recs = [r for r in records if isinstance(r, Mapping)]
     if build_duplicate_index is not None:
         duplicate_index = build_duplicate_index(valid_recs)
     else:
         duplicate_index = None
 
-    # 1. Admission and Truth Filtering (Fix H & Final Fix 2)
-    admitted_records: List[Tuple[datetime, str, Mapping[str, Any]]] = []
+    # 1. Admission and Truth Filtering (Final Semantic Fix B)
+    # Potential content duplicates and duplicate record IDs are strictly fail-closed excluded
+    # via evaluate_record_red_eligibility (exclude_all policy).
+    admitted_records: List[Tuple[datetime, Mapping[str, Any]]] = []
     for r in valid_recs:
         el = evaluate_record_red_eligibility(r, duplicate_index)
         if not el.match_eligible:
@@ -119,11 +101,7 @@ def run_time_split_evaluation(
         dt = _parse_iso_timestamp(el.played_at)
         if dt is None:
             continue
-        phys_fp = get_canonical_physical_match_fingerprint(r)
-        if not phys_fp:
-            # Fail closed: canonical duplicate identity unavailable, exclude from evaluation
-            continue
-        admitted_records.append((dt, phys_fp, r))
+        admitted_records.append((dt, r))
 
     admitted_records.sort(key=lambda pair: pair[0])
 
@@ -137,6 +115,9 @@ def run_time_split_evaluation(
                 "datasetKind": dataset_kind,
                 "harnessVerification": True,
                 "performanceClaimEligible": False,
+                "potentialDuplicateGuard": "exclude_all",
+                "stablePhysicalMatchIdentityAvailable": False,
+                "leakageProofLevel": "record_id_and_known_potential_duplicate_guard",
             },
         }
 
@@ -145,34 +126,25 @@ def run_time_split_evaluation(
         cutoff_dt = _parse_iso_timestamp(split_timestamp)
         if cutoff_dt is None:
             raise ValueError(f"Invalid split_timestamp: {split_timestamp}")
-        train_candidates = [r for dt, _, r in admitted_records if dt < cutoff_dt]
-        eval_candidates = [r for dt, _, r in admitted_records if dt >= cutoff_dt]
+        train_candidates = [r for dt, r in admitted_records if dt < cutoff_dt]
+        eval_candidates = [r for dt, r in admitted_records if dt >= cutoff_dt]
     else:
         split_idx = max(1, int(len(admitted_records) * train_ratio))
         split_idx = min(split_idx, len(admitted_records) - 1)
         cutoff_dt = admitted_records[split_idx][0]
-        train_candidates = [r for _, _, r in admitted_records[:split_idx]]
-        eval_candidates = [r for _, _, r in admitted_records[split_idx:]]
+        train_candidates = [r for _, r in admitted_records[:split_idx]]
+        eval_candidates = [r for _, r in admitted_records[split_idx:]]
 
-    # 3. Physical Match Identity Leakage Guard (Fix H & Final Fix 2)
-    # If any canonical physical match fingerprint exists in train, remove all records of that physical match from eval
-    train_phys_fps = {get_canonical_physical_match_fingerprint(r) for r in train_candidates}
-    train_phys_fps = {fp for fp in train_phys_fps if fp is not None}
-    eval_phys_fps = {get_canonical_physical_match_fingerprint(r) for r in eval_candidates}
-    eval_phys_fps = {fp for fp in eval_phys_fps if fp is not None}
-
-    overlapping_fps = train_phys_fps & eval_phys_fps
-    eval_recs = [r for r in eval_candidates if get_canonical_physical_match_fingerprint(r) not in overlapping_fps]
+    # 3. Known Potential Duplicate Guard & Record ID Leakage Guard (Final Semantic Fix B)
+    # Under exclude_all policy, all potential duplicates have already been excluded at admission.
     train_recs = train_candidates
+    eval_recs = eval_candidates
 
     train_ids = {str(r.get("id")) for r in train_recs}
     eval_ids = {str(r.get("id")) for r in eval_recs}
-    eval_phys_final = {get_canonical_physical_match_fingerprint(r) for r in eval_recs}
-    eval_phys_final = {fp for fp in eval_phys_final if fp is not None}
 
-    # Hard Leakage Assertions (Fix H & Final Fix 2)
+    # Hard Leakage Assertion (Record ID level)
     assert train_ids.isdisjoint(eval_ids), "Data leakage: train and eval sets share record IDs!"
-    assert train_phys_fps.isdisjoint(eval_phys_final), "Data leakage: train and eval sets share physical match fingerprints!"
 
     # 4. Train Lab on Training Split Only
     lab = ExperimentalRedInferenceLab(train_recs)
@@ -260,6 +232,9 @@ def run_time_split_evaluation(
             "datasetKind": dataset_kind,  # Fix J
             "harnessVerification": True,
             "performanceClaimEligible": False,  # Fix J: Synthetic fixture cannot make real claims
+            "potentialDuplicateGuard": "exclude_all",
+            "stablePhysicalMatchIdentityAvailable": False,
+            "leakageProofLevel": "record_id_and_known_potential_duplicate_guard",
             "similarityProfile": report.similarity_profile,
         },
         "trainMatchCount": len(train_recs),
@@ -288,6 +263,9 @@ def format_evaluation_markdown(report: Dict[str, Any]) -> str:
         f"- **Dataset Kind**: `{meta.get('datasetKind')}`",
         f"- **Harness Verification**: `{meta.get('harnessVerification')}`",
         f"- **Performance Claim Eligible**: `{meta.get('performanceClaimEligible')}`",
+        f"- **Potential Duplicate Guard**: `{meta.get('potentialDuplicateGuard')}`",
+        f"- **Stable Physical Match Identity Available**: `{meta.get('stablePhysicalMatchIdentityAvailable')}`",
+        f"- **Leakage Proof Level**: `{meta.get('leakageProofLevel')}`",
         f"- **Split Timestamp**: `{report.get('splitTimestamp')}`",
         f"- **Train Match Count**: `{report.get('trainMatchCount')}`",
         f"- **Evaluation Match Count**: `{report.get('evalMatchCount')}`",
