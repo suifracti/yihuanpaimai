@@ -1,0 +1,9 @@
+# V2-1 reference engine dependencies
+#
+# Intentionally empty.
+#
+# nte_engine_ref.py is a mock engine for supervisor verification only. It imports
+# nothing outside the Python standard library (argparse, ctypes, json, os, struct,
+# sys, time), so V2-1 adds no third-party runtime dependency and no packaging
+# burden. The real Python Intelligence Engine keeps its own dependency set in
+# requirements-desktop.lock.txt at the repository root.
