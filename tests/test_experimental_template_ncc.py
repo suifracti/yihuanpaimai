@@ -44,7 +44,8 @@ _TESTS_DIR = os.path.dirname(os.path.abspath(__file__))
 _PROJECT_ROOT = os.path.abspath(os.path.join(_TESTS_DIR, ".."))
 _CORE_DIR = os.path.join(_PROJECT_ROOT, "core")
 _APP_DIR = os.path.join(_PROJECT_ROOT, "app")
-for _p in (_PROJECT_ROOT, _CORE_DIR, _APP_DIR):
+_TOOLS_DIR = os.path.join(_PROJECT_ROOT, "tools")
+for _p in (_PROJECT_ROOT, _CORE_DIR, _APP_DIR, _TOOLS_DIR):
     if _p not in sys.path:
         sys.path.insert(0, _p)
 
@@ -53,7 +54,7 @@ import numpy as np
 
 import experimental_template_ncc as ncc
 from experimental_template_ncc import numpy_ncc_score, numpy_sliding_ncc
-from matcher_adapters import CurrentMatcherAdapter, NumpyNccMatcherAdapter
+from matcher_adapters import CurrentMatcherAdapter, NumpyNccMatcherAdapter, OpenCvScorerBaselineAdapter, prepare_matching_pair
 from settlement_catalog_candidates import _match_template_score, get_global_catalog_candidate_resolver
 
 
@@ -121,15 +122,18 @@ class TestExperimentalTemplateNcc(unittest.TestCase):
     def test_07_shape_mismatch_contract(self):
         different_shape = np.ones((50, 40, 3), dtype=np.uint8) * 50
         different_shape[10:30, 10:30] = 150
-        # When resize_template=False, fails closed
-        res_no_resize = numpy_ncc_score(self.pattern, different_shape, resize_template=False)
+        # Pure NumPy kernel fails closed when spatial shapes differ directly
+        res_no_resize = numpy_ncc_score(self.pattern, different_shape)
         self.assertFalse(res_no_resize["valid"])
         self.assertEqual(res_no_resize["status"], "SHAPE_MISMATCH")
 
-        # When resize_template=True, resizes without mutating template
-        res_resize = numpy_ncc_score(self.pattern, different_shape, resize_template=True)
-        self.assertTrue(res_resize["valid"])
-        self.assertEqual(different_shape.shape, (50, 40, 3))
+        # Shared preprocessing standardizes shapes prior to scoring
+        crop_pre, tpl_pre = prepare_matching_pair(self.pattern, different_shape)
+        self.assertEqual(crop_pre.shape[:2], tpl_pre.shape[:2])
+        self.assertFalse(crop_pre.flags.writeable)
+        self.assertFalse(tpl_pre.flags.writeable)
+        res_pre = numpy_ncc_score(crop_pre, tpl_pre)
+        self.assertTrue(res_pre["valid"])
 
     # Test 8: Deterministic repeated result
     def test_08_deterministic_repeated_results(self):
@@ -144,10 +148,10 @@ class TestExperimentalTemplateNcc(unittest.TestCase):
     # Test 9: Input arrays unchanged (non-mutation guarantee)
     def test_09_input_arrays_unchanged(self):
         crop_orig = self.pattern.copy()
-        tpl_orig = np.random.randint(0, 256, (60, 60, 3), dtype=np.uint8)
+        tpl_orig = np.random.randint(0, 256, (75, 75, 3), dtype=np.uint8)
         tpl_copy = tpl_orig.copy()
 
-        _ = numpy_ncc_score(self.pattern, tpl_orig, resize_template=True)
+        _ = numpy_ncc_score(self.pattern, tpl_orig)
         np.testing.assert_array_equal(self.pattern, crop_orig)
         np.testing.assert_array_equal(tpl_orig, tpl_copy)
 
@@ -262,26 +266,39 @@ class TestExperimentalTemplateNcc(unittest.TestCase):
         self.assertEqual(sample["datasetRole"], "mechanics_only")
         self.assertFalse(sample["performanceClaimEligible"])
 
-    # Test 18: Held-out truth cohort eligibility
+    # Test 18: Held-out truth cohort eligibility & accuracy gate
     def test_18_held_out_truth_cohort_eligibility(self):
         sample = {
             "datasetRole": "held_out_query",
+            "agreementEligible": True,
+            "truthEligible": True,
+            "truthCandidatePresent": True,
             "templateSourceOverlap": False,
-            "performanceClaimEligible": True,
+            "candidateSetCompleteForTruth": True,
+            "performanceClaimEligible": False,  # PR-E maintains False
             "sourceMatchId": "match_144037",
         }
+        accuracy_eligible = bool(
+            sample["truthEligible"]
+            and sample["truthCandidatePresent"]
+            and not sample["templateSourceOverlap"]
+            and sample["candidateSetCompleteForTruth"]
+            and sample["datasetRole"] != "mechanics_only"
+        )
         self.assertEqual(sample["datasetRole"], "held_out_query")
-        self.assertFalse(sample["templateSourceOverlap"])
-        self.assertTrue(sample["performanceClaimEligible"])
+        self.assertTrue(sample["agreementEligible"])
+        self.assertTrue(accuracy_eligible)
+        self.assertFalse(sample["performanceClaimEligible"])
 
     # Test 19: Baseline adapter matches current production matcher
     def test_19_baseline_adapter_matches_current_production_matcher(self):
-        base_adapter = CurrentMatcherAdapter()
+        base_adapter = OpenCvScorerBaselineAdapter()
         res_adapter = base_adapter.score_single_pair(self.pattern, self.pattern)
         score_adapter = res_adapter["score"]
         score_prod, _, src = _match_template_score(self.pattern, self.pattern, "raw_tpl")
         self.assertAlmostEqual(score_adapter, score_prod, places=4)
         self.assertEqual(src, "PIXEL_TEMPLATE_MATCH")
+        self.assertIs(CurrentMatcherAdapter, OpenCvScorerBaselineAdapter)
 
     # Test 20: Default experimental backend disabled
     def test_20_default_experimental_backend_disabled(self):
@@ -371,6 +388,129 @@ class TestExperimentalTemplateNcc(unittest.TestCase):
 
         coord = WarehouseScanSafetyCoordinator()
         self.assertTrue(coord.scroll_permitted)
+
+    # Test 26: Actual production baseline replica classification
+    def test_26_actual_production_baseline_replica_classification(self):
+        base_adapter = OpenCvScorerBaselineAdapter()
+        meta = base_adapter.get_metadata()
+        self.assertEqual(meta["adapterReuseMode"], "scorer_replica")
+        self.assertFalse(meta["fullProductionMatcherEquivalent"])
+        self.assertEqual(meta["actualProductionEntry"], "core.warehouse_vision.WarehouseVisionPipeline.process_frame")
+        self.assertEqual(meta["candidateGenerator"], "core.warehouse_vision.WarehouseTemplateMatcher.get_candidates")
+        self.assertIn("WarehouseTemplateMatcher.match_candidates", meta["scoreAuthority"])
+        self.assertIn("WarehouseVisionConfig", meta["thresholdAuthority"])
+
+    # Test 27: Threshold provenance
+    def test_27_threshold_provenance(self):
+        from warehouse_vision import WarehouseVisionConfig
+        cfg = WarehouseVisionConfig()
+        base_adapter = OpenCvScorerBaselineAdapter()
+        meta = base_adapter.get_metadata()
+        self.assertEqual(meta["thresholds"]["top1ScoreThreshold"], cfg.MATCH_CONFIDENCE_THRESHOLD)
+        self.assertEqual(meta["thresholds"]["marginThreshold"], cfg.MATCH_MARGIN_THRESHOLD)
+        self.assertEqual(meta["thresholds"]["top1ScoreThreshold"], 0.85)
+        self.assertEqual(meta["thresholds"]["marginThreshold"], 0.08)
+        self.assertEqual(meta["thresholdProvenance"], "core.warehouse_vision.WarehouseVisionConfig")
+
+    # Test 28: Truth candidate absent => accuracy ineligible
+    def test_28_truth_candidate_absent_ineligible_for_accuracy(self):
+        sample_absent = {
+            "datasetRole": "held_out_query",
+            "truthEligible": True,
+            "truthCandidatePresent": False,
+            "templateSourceOverlap": False,
+            "candidateSetCompleteForTruth": False,
+        }
+        accuracy_eligible = bool(
+            sample_absent["truthEligible"]
+            and sample_absent["truthCandidatePresent"]
+            and not sample_absent["templateSourceOverlap"]
+            and sample_absent["candidateSetCompleteForTruth"]
+            and sample_absent["datasetRole"] != "mechanics_only"
+        )
+        self.assertFalse(accuracy_eligible)
+
+    # Test 29: Mechanics-only => accuracy ineligible
+    def test_29_mechanics_only_ineligible_for_accuracy(self):
+        sample_mechanics = {
+            "datasetRole": "mechanics_only",
+            "truthEligible": False,
+            "truthCandidatePresent": True,
+            "templateSourceOverlap": True,
+            "candidateSetCompleteForTruth": True,
+        }
+        accuracy_eligible = bool(
+            sample_mechanics["truthEligible"]
+            and sample_mechanics["truthCandidatePresent"]
+            and not sample_mechanics["templateSourceOverlap"]
+            and sample_mechanics["candidateSetCompleteForTruth"]
+            and sample_mechanics["datasetRole"] != "mechanics_only"
+        )
+        self.assertFalse(accuracy_eligible)
+
+    # Test 30: Candidate count reporting and distribution
+    def test_30_candidate_count_reporting_and_distribution(self):
+        sample = {
+            "candidates": [{"catalogId": "c1"}, {"catalogId": "c2"}],
+            "candidateCount": 2,
+            "candidateIds": ["c1", "c2"],
+            "candidateGenerationSource": "core.settlement_catalog_candidates.SettlementCatalogCandidateResolver.resolve_candidates_for_hypothesis",
+            "candidateGenerationIncludedInTiming": False,
+            "templateUniverseSize": 213,
+        }
+        self.assertEqual(sample["candidateCount"], 2)
+        self.assertEqual(sample["candidateIds"], ["c1", "c2"])
+        self.assertFalse(sample["candidateGenerationIncludedInTiming"])
+        self.assertEqual(sample["templateUniverseSize"], 213)
+
+    # Test 31: Shared preprocessing and input immutability
+    def test_31_shared_preprocessing_and_input_immutability(self):
+        crop = np.random.randint(0, 256, (75, 75, 3), dtype=np.uint8)
+        template = np.random.randint(0, 256, (50, 60, 3), dtype=np.uint8)
+        crop_pre, tpl_pre = prepare_matching_pair(crop, template)
+        self.assertEqual(crop_pre.shape[:2], tpl_pre.shape[:2])
+        self.assertFalse(crop_pre.flags.writeable)
+        self.assertFalse(tpl_pre.flags.writeable)
+
+    # Test 32: Backend-specific resize forbidden
+    def test_32_backend_specific_resize_forbidden(self):
+        base_meta = OpenCvScorerBaselineAdapter().get_metadata()
+        ncc_meta = NumpyNccMatcherAdapter().get_metadata()
+        self.assertTrue(base_meta["preprocessingShared"])
+        self.assertFalse(base_meta["backendSpecificResize"])
+        self.assertTrue(ncc_meta["preprocessingShared"])
+        self.assertFalse(ncc_meta["backendSpecificResize"])
+
+        # Pure NumPy kernel fails closed when given raw mismatched shapes directly
+        raw_crop = np.ones((75, 75, 3), dtype=np.uint8)
+        raw_tpl = np.ones((50, 60, 3), dtype=np.uint8)
+        res = numpy_ncc_score(raw_crop, raw_tpl)
+        self.assertFalse(res["valid"])
+        self.assertEqual(res["status"], "SHAPE_MISMATCH")
+
+    # Test 33: Verdict scope no clear gain on scoring kernel
+    def test_33_verdict_scope_no_clear_gain_on_scoring_kernel(self):
+        from benchmark_template_ncc import build_benchmark_corpus, run_benchmark
+        corpus, templates = build_benchmark_corpus(Path(_PROJECT_ROOT))
+        report, _, _ = run_benchmark(corpus[:5], templates, warmup_rounds=1, measured_rounds=1)
+        self.assertEqual(report["evaluationConclusion"]["verdict"], "NO_CLEAR_GAIN_ON_SCORING_KERNEL")
+        self.assertEqual(report["evaluationConclusion"]["verdictScope"], "latency_and_throughput_on_scoring_kernel")
+        self.assertFalse(report["evaluationConclusion"]["productionPromotionClaimed"])
+        self.assertFalse(report["evaluationConclusion"]["defaultEnabled"])
+        self.assertFalse(report["evaluationConclusion"]["productionEligible"])
+
+    # Test 34: Pure NumPy kernel has no cv2 import
+    def test_34_pure_numpy_kernel_has_no_cv2_import(self):
+        kernel_path = Path(_PROJECT_ROOT) / "core" / "experimental_template_ncc.py"
+        code = kernel_path.read_text(encoding="utf-8")
+        import ast
+        tree = ast.parse(code)
+        for node in ast.walk(tree):
+            if isinstance(node, ast.Import):
+                for alias in node.names:
+                    self.assertNotEqual(alias.name, "cv2", "core/experimental_template_ncc.py must not import cv2")
+            elif isinstance(node, ast.ImportFrom):
+                self.assertNotEqual(node.module, "cv2", "core/experimental_template_ncc.py must not import from cv2")
 
 
 if __name__ == "__main__":

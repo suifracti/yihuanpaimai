@@ -16,6 +16,8 @@ Contracts:
 - Memory budget: Sliding window operations calculate memory requirements upfront and
   fail closed before allocation if budget is exceeded.
 - Experimental isolation: Never promoted to production default in this module.
+- NCC math kernel = pure NumPy: Zero OpenCV / C++ dependencies in scoring kernel.
+  Shape mismatch fails closed; preprocessing is decoupled and shared.
 """
 
 from __future__ import annotations
@@ -23,7 +25,6 @@ from __future__ import annotations
 import math
 from typing import Any, Callable, Dict, List, Mapping, Optional, Sequence, Tuple, Union
 import numpy as np
-import cv2
 
 SCHEMA_VERSION = "experimental-template-ncc.v1"
 DEFAULT_ZERO_VARIANCE_EPS = 1e-12
@@ -60,10 +61,13 @@ def numpy_ncc_score(
     template: np.ndarray,
     *,
     per_channel: bool = True,
-    resize_template: bool = True,
     zero_variance_eps: float = DEFAULT_ZERO_VARIANCE_EPS,
 ) -> Dict[str, Any]:
     """Compute Zero-Mean Normalized Cross-Correlation between a crop and a template.
+
+    Pure NumPy math kernel. Requires identical spatial dimensions.
+    Shared preprocessing should be applied prior to scoring; backend-specific
+    resizing is strictly prohibited.
 
     Args:
         crop: Query image array (2D or 3D). Original array is NEVER mutated.
@@ -71,9 +75,6 @@ def numpy_ncc_score(
         per_channel: If True and input is 3D, zero-mean is computed per-channel
                      (matching OpenCV cv2.TM_CCOEFF_NORMED multi-channel semantics).
                      If False, overall mean across all pixels and channels is used.
-        resize_template: If True and shapes differ, template is resized to match crop
-                         shape using INTER_AREA without modifying the original template.
-                         If False and shapes differ, returns SHAPE_MISMATCH error.
         zero_variance_eps: Threshold below which array variance is treated as zero.
 
     Returns:
@@ -122,18 +123,16 @@ def numpy_ncc_score(
     crop_h, crop_w = crop.shape[:2]
     tpl_h, tpl_w = template.shape[:2]
 
-    tpl_eval = template
     if (crop_h, crop_w) != (tpl_h, tpl_w):
-        if not resize_template:
-            return {
-                "rawNcc": 0.0,
-                "score": 0.0,
-                "status": "SHAPE_MISMATCH",
-                "valid": False,
-                "reason": f"Spatial shape mismatch: crop {(crop_h, crop_w)} != template {(tpl_h, tpl_w)}",
-            }
-        # Resize template copy to crop dimensions using INTER_AREA (production parity)
-        tpl_eval = cv2.resize(template, (crop_w, crop_h), interpolation=cv2.INTER_AREA)
+        return {
+            "rawNcc": 0.0,
+            "score": 0.0,
+            "status": "SHAPE_MISMATCH",
+            "valid": False,
+            "reason": f"Spatial shape mismatch: crop {(crop_h, crop_w)} != template {(tpl_h, tpl_w)} (shared preprocessing required)",
+        }
+
+    tpl_eval = template
 
     # 3. Precision conversion without mutating input
     crop_f = np.asarray(crop, dtype=np.float64)
