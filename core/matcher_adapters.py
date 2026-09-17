@@ -22,13 +22,50 @@ CATALOG_REVISION = "catalog_065.v1+visual-catalog.v2"
 
 DEFAULT_TOP1_THRESHOLD = 0.85
 DEFAULT_MARGIN_THRESHOLD = 0.08
+ACTUAL_PRODUCTION_ENTRY = "core.warehouse_vision.WarehouseVisionPipeline.process_frame"
+CANDIDATE_GENERATOR = "core.warehouse_vision.WarehouseTemplateMatcher.get_candidates"
+SCORE_AUTHORITY = "core.warehouse_vision.WarehouseTemplateMatcher.match_candidates (cv2.matchTemplate, cv2.TM_CCOEFF_NORMED)"
+THRESHOLD_AUTHORITY = "core.warehouse_vision.WarehouseVisionConfig (MATCH_CONFIDENCE_THRESHOLD=0.85, MATCH_MARGIN_THRESHOLD=0.08)"
+AMBIGUITY_AUTHORITY = "core.warehouse_vision.EvidenceLevel (EXACT_IDENTIFIED vs CANDIDATE_SET)"
 
 
-class CurrentMatcherAdapter:
-    """Invokes current production OpenCV TM_CCOEFF_NORMED template matching.
+def prepare_matching_pair(
+    crop: np.ndarray,
+    template: np.ndarray,
+) -> Tuple[np.ndarray, np.ndarray]:
+    """Shared preprocessing: prepare crop and template pair to identical spatial dimensions.
 
-    Frozen baseline adapter. Guaranteed not to modify production thresholds,
-    crop geometry, or candidate resolution.
+    Standardizes spatial dimensions once using cv2.INTER_AREA on the template
+    if template shape differs from crop shape. Produces immutable (read-only)
+    arrays so neither downstream backend can mutate them or perform backend-specific
+    resizing.
+
+    Returns:
+        (crop_prepared, template_prepared) with flags.writeable = False.
+    """
+    if crop is None or template is None or crop.size == 0 or template.size == 0:
+        return crop, template
+
+    crop_h, crop_w = crop.shape[:2]
+    tpl_h, tpl_w = template.shape[:2]
+
+    if (crop_h, crop_w) == (tpl_h, tpl_w):
+        tpl_eval = template.copy()
+    else:
+        tpl_eval = cv2.resize(template, (crop_w, crop_h), interpolation=cv2.INTER_AREA)
+
+    crop_eval = crop.copy()
+    crop_eval.flags.writeable = False
+    tpl_eval.flags.writeable = False
+    return crop_eval, tpl_eval
+
+
+class OpenCvScorerBaselineAdapter:
+    """Scorer replica baseline of production OpenCV TM_CCOEFF_NORMED template matching.
+
+    Classified as scorer_replica rather than direct production authority because it
+    evaluates a pre-filtered candidate set instead of running the full warehouse pipeline.
+    Thresholds and decision logic are identical to production WarehouseVisionConfig.
     """
 
     def __init__(
@@ -37,13 +74,18 @@ class CurrentMatcherAdapter:
         top1_threshold: float = DEFAULT_TOP1_THRESHOLD,
         margin_threshold: float = DEFAULT_MARGIN_THRESHOLD,
     ):
-        self.backend_name = "current_opencv_matcher"
+        self.backend_name = "opencv_scorer_baseline"
         self.top1_threshold = float(top1_threshold)
         self.margin_threshold = float(margin_threshold)
         self.baseline_code_revision = BASELINE_CODE_REVISION
         self.template_set_revision = TEMPLATE_SET_REVISION
         self.catalog_revision = CATALOG_REVISION
         self.crop_geometry_mode = "cell_aligned_or_source_bbox"
+        self.adapter_reuse_mode = "scorer_replica"
+        self.full_production_matcher_equivalent = False
+        self.preprocessing_shared = True
+        self.backend_specific_resize = False
+        self.scorer_parity_scope = "scoring_kernel_after_candidate_generation"
         self.experimental = False
         self.production_eligible = True
         self.default_enabled = True
@@ -52,13 +94,24 @@ class CurrentMatcherAdapter:
         return {
             "schemaVersion": SCHEMA_VERSION,
             "backendName": self.backend_name,
+            "adapterReuseMode": self.adapter_reuse_mode,
+            "fullProductionMatcherEquivalent": self.full_production_matcher_equivalent,
+            "actualProductionEntry": ACTUAL_PRODUCTION_ENTRY,
+            "candidateGenerator": CANDIDATE_GENERATOR,
+            "scoreAuthority": SCORE_AUTHORITY,
+            "thresholdAuthority": THRESHOLD_AUTHORITY,
+            "ambiguityAuthority": AMBIGUITY_AUTHORITY,
+            "scorerParityScope": self.scorer_parity_scope,
             "baselineCodeRevision": self.baseline_code_revision,
             "templateSetRevision": self.template_set_revision,
             "catalogRevision": self.catalog_revision,
+            "thresholdProvenance": "core.warehouse_vision.WarehouseVisionConfig",
             "thresholds": {
                 "top1ScoreThreshold": self.top1_threshold,
                 "marginThreshold": self.margin_threshold,
             },
+            "preprocessingShared": self.preprocessing_shared,
+            "backendSpecificResize": self.backend_specific_resize,
             "cropGeometryMode": self.crop_geometry_mode,
             "experimental": self.experimental,
             "productionEligible": self.production_eligible,
@@ -70,7 +123,7 @@ class CurrentMatcherAdapter:
         crop: np.ndarray,
         template: np.ndarray,
     ) -> Dict[str, Any]:
-        """Compute score using exact production logic."""
+        """Compute score using shared preprocessed pair and OpenCV TM_CCOEFF_NORMED."""
         if crop is None or template is None or crop.size == 0 or template.size == 0:
             return {"score": 0.0, "rawNcc": 0.0, "valid": False, "status": "EMPTY_INPUT"}
 
@@ -79,8 +132,8 @@ class CurrentMatcherAdapter:
             return {"score": 0.0, "rawNcc": 0.0, "valid": False, "status": "ROI_TOO_SMALL"}
 
         try:
-            tpl_resized = cv2.resize(template, (crop_w, crop_h), interpolation=cv2.INTER_AREA)
-            res = cv2.matchTemplate(crop, tpl_resized, cv2.TM_CCOEFF_NORMED)
+            crop_pre, tpl_pre = prepare_matching_pair(crop, template)
+            res = cv2.matchTemplate(crop_pre, tpl_pre, cv2.TM_CCOEFF_NORMED)
             _, max_val, _, _ = cv2.minMaxLoc(res)
             raw_val = float(max_val)
             score = max(0.0, min(1.0, raw_val))
@@ -193,7 +246,13 @@ class NumpyNccMatcherAdapter:
         self.baseline_code_revision = BASELINE_CODE_REVISION
         self.template_set_revision = TEMPLATE_SET_REVISION
         self.catalog_revision = CATALOG_REVISION
+        self.adapter_reuse_mode = "experimental_evaluator"
+        self.full_production_matcher_equivalent = False
+        self.math_kernel = "pure_numpy"
+        self.preprocessing_shared = True
+        self.backend_specific_resize = False
         self.crop_geometry_mode = "cell_aligned_or_source_bbox"
+        self.scorer_parity_scope = "scoring_kernel_after_candidate_generation"
         self.experimental = True
         self.production_eligible = False
         self.default_enabled = False
@@ -202,13 +261,25 @@ class NumpyNccMatcherAdapter:
         return {
             "schemaVersion": SCHEMA_VERSION,
             "backendName": self.backend_name,
+            "adapterReuseMode": self.adapter_reuse_mode,
+            "fullProductionMatcherEquivalent": self.full_production_matcher_equivalent,
+            "mathKernel": self.math_kernel,
+            "actualProductionEntry": ACTUAL_PRODUCTION_ENTRY,
+            "candidateGenerator": CANDIDATE_GENERATOR,
+            "scoreAuthority": SCORE_AUTHORITY,
+            "thresholdAuthority": THRESHOLD_AUTHORITY,
+            "ambiguityAuthority": AMBIGUITY_AUTHORITY,
+            "scorerParityScope": self.scorer_parity_scope,
             "baselineCodeRevision": self.baseline_code_revision,
             "templateSetRevision": self.template_set_revision,
             "catalogRevision": self.catalog_revision,
+            "thresholdProvenance": "core.warehouse_vision.WarehouseVisionConfig",
             "thresholds": {
                 "top1ScoreThreshold": self.top1_threshold,
                 "marginThreshold": self.margin_threshold,
             },
+            "preprocessingShared": self.preprocessing_shared,
+            "backendSpecificResize": self.backend_specific_resize,
             "cropGeometryMode": self.crop_geometry_mode,
             "experimental": self.experimental,
             "productionEligible": self.production_eligible,
@@ -220,7 +291,7 @@ class NumpyNccMatcherAdapter:
         crop: np.ndarray,
         template: np.ndarray,
     ) -> Dict[str, Any]:
-        """Compute score using pure NumPy NCC."""
+        """Compute score using shared preprocessed pair and pure NumPy NCC."""
         if crop is None or template is None or crop.size == 0 or template.size == 0:
             return {"score": 0.0, "rawNcc": 0.0, "valid": False, "status": "EMPTY_INPUT"}
 
@@ -228,14 +299,24 @@ class NumpyNccMatcherAdapter:
         if crop_h < 2 or crop_w < 2:
             return {"score": 0.0, "rawNcc": 0.0, "valid": False, "status": "ROI_TOO_SMALL"}
 
-        res = numpy_ncc_score(crop, template, per_channel=True, resize_template=True)
-        return {
-            "score": res["score"],
-            "rawNcc": res["rawNcc"],
-            "valid": res["valid"],
-            "status": res["status"],
-            "reason": res.get("reason"),
-        }
+        try:
+            crop_pre, tpl_pre = prepare_matching_pair(crop, template)
+            res = numpy_ncc_score(crop_pre, tpl_pre, per_channel=True)
+            return {
+                "score": res["score"],
+                "rawNcc": res["rawNcc"],
+                "valid": res["valid"],
+                "status": res["status"],
+                "reason": res.get("reason"),
+            }
+        except Exception as exc:
+            return {
+                "score": 0.0,
+                "rawNcc": 0.0,
+                "valid": False,
+                "status": "MATCH_ERROR",
+                "reason": str(exc),
+            }
 
     def evaluate_candidates(
         self,
@@ -310,3 +391,8 @@ class NumpyNccMatcherAdapter:
             "latencySeconds": latency,
             "backendMetadata": self.get_metadata(),
         }
+
+
+# Backwards compatibility alias
+CurrentMatcherAdapter = OpenCvScorerBaselineAdapter
+
