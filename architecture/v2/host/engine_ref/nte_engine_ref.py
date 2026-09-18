@@ -244,6 +244,7 @@ class Engine:
         self.pipe: PipeClient | None = None
         self.heartbeat_enabled = True
         self.wrong_session_snapshot = False
+        self.linger_ms = 1200
         self.request_counter = 0
         self.hello_seen = False
         self.session_nonce_used = self.nonce
@@ -410,6 +411,17 @@ class Engine:
             sys.stderr.flush()
             os._exit(4)
 
+        if action == "test.close_pipe_and_linger":
+            # Test-only: close the pipe and stay alive for a while before exiting, so
+            # the pipe EOF signal is deterministically observed BEFORE Process.Exited.
+            self.send("COMMAND_RESULT", {"commandId": command_id, "status": "ACK"}, "cmdres")
+            self.log("pipe.closed_then_lingering", commandId=command_id, lingerMs=self.linger_ms)
+            if self.pipe:
+                self.pipe.close()
+            sys.stderr.flush()
+            time.sleep(self.linger_ms / 1000.0)
+            os._exit(5)
+
         if action == "test.stop_heartbeat":
             self.heartbeat_enabled = False
 
@@ -516,6 +528,8 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
                         help="test-only fault injection: wrong_pipe")
     parser.add_argument("--fault-missing-mandatory-capability", default=None,
                         help="test-only: advertise this mandatory capability as unavailable")
+    parser.add_argument("--linger-ms", type=int, default=1200,
+                        help="test-only: how long the engine stays alive after closing the pipe")
     parser.add_argument("--fault-hello-size", default=None,
                         help="test-only: recorded for the host-side fault; the engine always "
                              "expects the fixed v1 frameBufferSize handed over in argv")
@@ -525,6 +539,7 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
 def main(argv: list[str]) -> int:
     args = parse_args(argv)
     engine = Engine(args)
+    engine.linger_ms = getattr(args, "linger_ms", 1200)
     try:
         return engine.run()
     except ProtocolError as exc:

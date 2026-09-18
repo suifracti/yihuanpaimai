@@ -36,10 +36,6 @@ isolated_trial.json
 architecture/v2/verifier/bin/
 architecture/v2/verifier/obj/
 
-# .NET build outputs (V2-1 native host, protocol library, host supervisor verifier)
-architecture/v2/host/**/bin/
-architecture/v2/host/**/obj/
-
 # Runtime logs and temporary files
 *.log
 *.tmp

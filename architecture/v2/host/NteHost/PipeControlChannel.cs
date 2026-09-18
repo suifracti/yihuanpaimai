@@ -40,6 +40,13 @@ public sealed class PipeControlChannel : IDisposable
     public string PipeName { get; }
     public PipeSecurityFacts SecurityFacts { get; private set; }
 
+    /// <summary>
+    /// QPC nanoseconds at which ConnectNamedPipe reported success. This is the
+    /// frozen start of handshakeMs: it excludes child spawn, the wait for the
+    /// engine to reach the pipe, and the accept wait itself.
+    /// </summary>
+    public long AcceptedNs { get; private set; }
+
     private SafeFileHandle? _handle;
     private Stream? _stream;
     private readonly ManualResetEventSlim _connected = new(false);
@@ -144,8 +151,12 @@ public sealed class PipeControlChannel : IDisposable
                     return;
                 }
 
+                // Timestamp the accept BEFORE releasing the waiter, so the session
+                // thread always observes a populated AcceptedNs.
+                AcceptedNs = ProtocolClock.NowNs();
                 _stream = new RawPipeStream(_handle!);
-                trace.Event("pipe.accepted", generationId, new { pipeName = PipeName, win32Error = err });
+                trace.Event("pipe.accepted", generationId,
+                    new { pipeName = PipeName, win32Error = err, acceptedNs = AcceptedNs });
                 _connected.Set();
             }
             catch (Exception ex)
