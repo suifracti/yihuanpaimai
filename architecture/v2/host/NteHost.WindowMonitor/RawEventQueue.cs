@@ -26,6 +26,8 @@ public sealed class RawEventQueue
     private readonly int _capacity;
     private long _dropped;
     private long _enqueued;
+    private long _droppedSinceLastDrain;
+    private long _droppedAcknowledged;
 
     public RawEventQueue(int capacity)
     {
@@ -38,6 +40,17 @@ public sealed class RawEventQueue
     public long DroppedCount => Interlocked.Read(ref _dropped);
 
     public long EnqueuedCount => Interlocked.Read(ref _enqueued);
+
+    /// <summary>
+    /// Diagnostic seam: the number of records dropped during the most recent
+    /// <see cref="DrainWithDelta"/>.
+    ///
+    /// The worker must react to a drop that has JUST happened, not to the fact that
+    /// a drop ever happened. <see cref="DroppedCount"/> is cumulative and never
+    /// decreases, so testing <c>DroppedCount &gt; 0</c> would latch "overflowing"
+    /// permanently after the very first drop and keep requesting recovery forever.
+    /// </summary>
+    public long DroppedSinceLastDrain => Interlocked.Read(ref _droppedSinceLastDrain);
 
     /// <summary>
     /// Appends one raw event. Bounded work only: no Win32 call, no allocation beyond
@@ -57,20 +70,28 @@ public sealed class RawEventQueue
         }
     }
 
-    /// <summary>Atomically takes everything currently queued.</summary>
-    public RawWinEvent[] Drain()
+    /// <summary>
+    /// Atomically takes everything currently queued, and reports how many records
+    /// were dropped since the previous call.
+    ///
+    /// The delta is the important half. <see cref="DroppedCount"/> is cumulative, so
+    /// a worker that asks "has anything ever been dropped?" answers yes forever after
+    /// the first overflow and would keep triggering recovery on every subsequent
+    /// loop iteration. Recovery must respond to a NEW drop only.
+    /// </summary>
+    public RawEventBatch DrainWithDelta()
     {
         lock (_sync)
         {
-            if (_queue.Count == 0)
-            {
-                return Array.Empty<RawWinEvent>();
-            }
-            var batch = _queue.ToArray();
-            _queue.Clear();
-            return batch;
+            var droppedSinceLastDrain = _dropped - _droppedAcknowledged;
+            _droppedAcknowledged = _dropped;
+            Interlocked.Exchange(ref _droppedSinceLastDrain, droppedSinceLastDrain);
+            return new RawEventBatch(_queue.ToArray(), droppedSinceLastDrain);
         }
     }
+
+    /// <summary>Atomically takes everything currently queued (delta discarded).</summary>
+    public RawWinEvent[] Drain() => DrainWithDelta().Events;
 
     public int Count
     {
@@ -110,4 +131,19 @@ public readonly record struct RawWinEvent(uint EventType, long Hwnd, long Observ
 {
     public static RawWinEvent Synthetic(uint eventType, long hwnd) =>
         new(eventType, hwnd, ProtocolClock.NowNs());
+}
+
+/// <summary>
+/// One drain result: the events taken, plus how many records overflow-dropped since
+/// the previous drain. The drop count is a DELTA, not a running total, so a consumer
+/// can distinguish "a drop just happened" from "a drop happened at some point in the
+/// past".
+/// </summary>
+public readonly record struct RawEventBatch(RawWinEvent[] Events, long DroppedSinceLastDrain)
+{
+    public bool OverflowedSinceLastDrain => DroppedSinceLastDrain > 0;
+
+    public int Length => Events.Length;
+
+    public bool IsEmpty => Events.Length == 0;
 }

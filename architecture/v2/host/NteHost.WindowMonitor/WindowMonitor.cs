@@ -42,7 +42,6 @@ public sealed class WindowMonitorOptions
     /// </summary>
     public int IdentityWorkDelayMsForDiagnostics { get; init; }
 }
-
 /// <summary>
 /// The V2-2A target window / focus monitor.
 ///
@@ -83,6 +82,28 @@ public sealed class WindowMonitor : IRawWinEventSink, IDisposable
     private long _sequence;
     private long _processedEvents;
 
+    /// <summary>Number of overflow-drop observations that actually emitted evidence.</summary>
+    private long _overflowObservations;
+
+    /// <summary>
+    /// Diagnostic seam: while non-zero, raw ingestion is suppressed at the queue so a
+    /// test can drive a genuinely quiet window after an overflow. Without a way to
+    /// stop the input, "recovery must not keep firing" cannot be distinguished from
+    /// "recovery fired because input kept arriving".
+    /// </summary>
+    private volatile bool _rawIngestionSuppressedForDiagnostics;
+
+    /// <summary>
+    /// Diagnostic seam for the lock-isolation test. When the test wants to prove the
+    /// callback does not wait on the STATE lock, it needs the state lock to be held by
+    /// something it controls, deterministically, rather than inferring it from "a slow
+    /// identity evaluation is probably running right now". This handle is null until
+    /// the test asks for the lock, and the test releases it explicitly.
+    /// </summary>
+    private volatile bool _stateGateHeldForDiagnostics;
+    private readonly ManualResetEventSlim _stateGateAcquired = new(false);
+    private readonly ManualResetEventSlim _stateGateReleaseRequested = new(false);
+
     public WindowMonitor(WindowMonitorOptions? options = null)
     {
         _options = options ?? new WindowMonitorOptions();
@@ -96,6 +117,14 @@ public sealed class WindowMonitor : IRawWinEventSink, IDisposable
     public long RecoveryScanCount => _enumerator.EnumerationCount;
 
     public long DroppedEventCount => _rawQueue.DroppedCount;
+
+    /// <summary>
+    /// How many times the worker observed a NEW overflow drop and therefore emitted
+    /// `EventQueueOverflow`. Distinct from <see cref="DroppedEventCount"/> (cumulative
+    /// records dropped): this counts the recovery decisions, which is what must not
+    /// latch.
+    /// </summary>
+    public long OverflowObservationCount => Interlocked.Read(ref _overflowObservations);
 
     public long ProcessedEventCount => Interlocked.Read(ref _processedEvents);
 
@@ -179,6 +208,14 @@ public sealed class WindowMonitor : IRawWinEventSink, IDisposable
     /// </summary>
     public void OnRawWinEvent(uint eventType, long hwnd, int idObject)
     {
+        // Diagnostic seam: a deliberately quiet period, used by the overflow-regression
+        // test to prove that recovery stops once the input stops. Suppression happens
+        // HERE rather than at the queue so the callback path itself is unchanged.
+        if (_rawIngestionSuppressedForDiagnostics)
+        {
+            return;
+        }
+
         var observedAtNs = ProtocolClock.NowNs();
         _rawQueue.Enqueue(new RawWinEvent(eventType, hwnd, observedAtNs));
         Signal();
@@ -205,6 +242,78 @@ public sealed class WindowMonitor : IRawWinEventSink, IDisposable
     public void HoldRawQueueLockForDiagnostics(int milliseconds) =>
         _rawQueue.HoldQueueLockForDiagnostics(milliseconds);
 
+    /// <summary>
+    /// Diagnostic seam: start/stop suppressing raw ingestion, to create a genuinely
+    /// quiet observation window.
+    /// </summary>
+    public void SetRawIngestionSuppressedForDiagnostics(bool suppressed) =>
+        _rawIngestionSuppressedForDiagnostics = suppressed;
+
+    /// <summary>
+    /// Diagnostic seam: enqueue through the RAW QUEUE directly, bypassing the
+    /// ingestion-suppression flag. Used to (a) fill the queue to capacity while a
+    /// hold is in progress and (b) confirm ingestion resumes after a release, without
+    /// depending on the suppress toggle.
+    /// </summary>
+    public void EnqueueRawEventBypassingSuppressionForDiagnostics(uint eventType, long hwnd)
+    {
+        var observedAtNs = ProtocolClock.NowNs();
+        _rawQueue.Enqueue(new RawWinEvent(eventType, hwnd, observedAtNs));
+        Signal();
+    }
+
+    /// <summary>
+    /// Diagnostic seam: hold the STATE lock for a requested duration and report when
+    /// it was actually taken.
+    ///
+    /// This exists so the isolation test can prove direction A deterministically: the
+    /// state lock is verifiably held by the test's own call, so an ingestion performed
+    /// meanwhile cannot be excused as "the worker happened not to be busy". Inferring
+    /// the hold from a slow identity evaluation leaves the test unable to distinguish
+    /// "the callback is not serialised" from "the state path was idle at that instant".
+    /// </summary>
+    public void HoldStateGateForDiagnostics(int milliseconds)
+    {
+        _stateGateAcquired.Reset();
+        _stateGateReleaseRequested.Reset();
+        _stateGateHeldForDiagnostics = true;
+        var releaser = new Thread(() =>
+        {
+            lock (_gate)
+            {
+                _stateGateAcquired.Set();
+                _stateGateReleaseRequested.Wait(milliseconds + 30_000);
+            }
+            _stateGateHeldForDiagnostics = false;
+        })
+        {
+            IsBackground = true,
+            Name = "state-gate-hold",
+        };
+        releaser.Start();
+    }
+
+    /// <summary>Blocks until <see cref="HoldStateGateForDiagnostics"/> has taken the lock.</summary>
+    public bool WaitForStateGateAcquiredForDiagnostics(int timeoutMs) =>
+        _stateGateAcquired.Wait(timeoutMs);
+
+    /// <summary>Releases a hold taken by <see cref="HoldStateGateForDiagnostics"/>.</summary>
+    public void ReleaseStateGateForDiagnostics() => _stateGateReleaseRequested.Set();
+
+    public bool IsStateGateHeldForDiagnostics => _stateGateHeldForDiagnostics;
+
+    /// <summary>
+    /// Diagnostic seam: push N events straight into the bounded queue, bypassing
+    /// suppression, to overflow a small-capacity queue deterministically.
+    /// </summary>
+    public void OverflowQueueForDiagnostics(int count)
+    {
+        for (var i = 0; i < count; i++)
+        {
+            EnqueueRawEventBypassingSuppressionForDiagnostics(DiagnosticCreateEventType, 0);
+        }
+    }
+
     private void Signal()
     {
         try
@@ -229,11 +338,20 @@ public sealed class WindowMonitor : IRawWinEventSink, IDisposable
                 _wake.Wait(0);
             }
 
-            var batch = _rawQueue.Drain();
-            var overflowed = _rawQueue.DroppedCount > 0;
+            var drained = _rawQueue.DrainWithDelta();
+            var batch = drained.Events;
 
-            if (overflowed)
+            // React to a drop that just happened, NOT to the cumulative total. The
+            // total never decreases, so `DroppedCount > 0` would latch the monitor
+            // into requesting recovery on every loop iteration forever after the very
+            // first overflow.
+            if (drained.OverflowedSinceLastDrain)
             {
+                Interlocked.Increment(ref _overflowObservations);
+                Emit(WindowMonitorEventKind.EventQueueOverflow, "event-queue-overflow", 0,
+                    ProtocolClock.NowNs(),
+                    $"droppedSinceLastDrain={drained.DroppedSinceLastDrain} " +
+                    $"totalDropped={_rawQueue.DroppedCount} capacity={_rawQueue.Capacity}");
                 RequestRecoveryScan("event-queue-overflow");
             }
 
@@ -497,6 +615,22 @@ public sealed class WindowMonitor : IRawWinEventSink, IDisposable
     /// <summary>Caller must hold <see cref="_gate"/>.</summary>
     private void Emit(WindowMonitorEventKind kind, string sourceEvent, long hwnd, long observedAtNs, string reason)
     {
+        // Ordering discipline: the event list is a total order (sequence), so the
+        // timestamps carried in it must be non-decreasing in that order. `observedAtNs`
+        // is normally the raw event's own stamp, which is taken on the pump thread at
+        // callback entry - and Windows delivers OUTOFCONTEXT callbacks whose arrival
+        // order need not agree with their stamp order. Two independent sources feed one
+        // emit stream (the raw event's stamp and the live `NowNs()` used by the
+        // snapshot/recovery paths), so without this clamp a derived event could be
+        // appended carrying an earlier stamp than the event before it and the stream
+        // would read as if time went backwards.
+        //
+        // Clamping is the honest resolution rather than re-stamping: it preserves the
+        // observation time where it is already ordered, and only raises a stamp that
+        // would otherwise violate the invariant the module documents.
+        var lastObservedAtNs = _events.Count > 0 ? _events[^1].ObservedAtNs : 0;
+        var orderedObservedAtNs = observedAtNs < lastObservedAtNs ? lastObservedAtNs : observedAtNs;
+
         _sequence++;
         _events.Add(new WindowMonitorEvent
         {
@@ -511,7 +645,7 @@ public sealed class WindowMonitor : IRawWinEventSink, IDisposable
             IsTargetAlive = _target is not null,
             IsTargetForeground = _isTargetForeground,
             Generation = _generation,
-            ObservedAtNs = observedAtNs,
+            ObservedAtNs = orderedObservedAtNs,
             Reason = reason,
         });
     }

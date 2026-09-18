@@ -71,6 +71,17 @@ internal static class NativeWindowApi
     [return: MarshalAs(UnmanagedType.Bool)]
     internal static extern bool QueryFullProcessImageNameW(SafeProcessHandle hProcess, uint dwFlags,
         StringBuilder lpExeName, ref uint lpdwSize);
+
+    // ---- process instance ----------------------------------------------------
+    // GetProcessTimes is the only supported way to learn when a process instance
+    // started. The creation FILETIME is fixed at process start and is never reused,
+    // which is what lets (pid, creationTime) name a process INSTANCE rather than
+    // merely a process id. A recycled pid therefore cannot masquerade as the
+    // instance we recorded, even when the executable path is identical.
+    [DllImport("kernel32.dll", SetLastError = true)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    internal static extern bool GetProcessTimes(SafeProcessHandle hProcess,
+        out long lpCreationTime, out long lpExitTime, out long lpKernelTime, out long lpUserTime);
 }
 
 /// <summary>
