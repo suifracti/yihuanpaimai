@@ -1,0 +1,18 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <RootNamespace>NteHost.WindowMonitor</RootNamespace>
+    <AssemblyName>NteHost.WindowMonitor</AssemblyName>
+    <NoWarn>$(NoWarn);CA1416</NoWarn>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- Read-only reuse of the V2-1 monotonic clock. The V2-0 frozen contracts
+         (architecture/v2/contracts/**) are neither referenced nor modified. -->
+    <ProjectReference Include="..\NteHost.Protocol\NteHost.Protocol.csproj" />
+  </ItemGroup>
+
+</Project>
