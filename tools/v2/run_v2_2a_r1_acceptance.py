@@ -107,6 +107,28 @@ def main() -> int:
                    "identity_stale_recycle_raw.txt") == "failed":
         failures.append("identity_stale_recycle_raw.txt")
 
+    # --- the R2 blocker regressions, each captured as its own artifact ------------
+    # Blocker 1: same-generation stale-cache hole + process-instance identity.
+    if run_capture([py, "-m", "unittest",
+                    "tests.test_v2_2a_window_focus_monitor.V22AWindowFocusMonitorTests."
+                    "test_24_revalidate_is_authority_not_cache", "-v"],
+                   "identity_same_generation_authority_raw.txt") == "failed":
+        failures.append("identity_same_generation_authority_raw.txt")
+
+    # Blocker 2: the overflow latch, and the previously-unemittable public event kind.
+    if run_capture([py, "-m", "unittest",
+                    "tests.test_v2_2a_window_focus_monitor.V22AWindowFocusMonitorTests."
+                    "test_25_event_queue_overflow_is_not_a_latch", "-v"],
+                   "event_queue_overflow_regression_raw.txt") == "failed":
+        failures.append("event_queue_overflow_regression_raw.txt")
+
+    # Blocker 3: deterministic lock isolation (A held-verifiably, B resumes after release).
+    if run_capture([py, "-m", "unittest",
+                    "tests.test_v2_2a_window_focus_monitor.V22AWindowFocusMonitorTests."
+                    "test_26_raw_callback_isolation_deterministic", "-v"],
+                   "callback_isolation_deterministic_raw.txt") == "failed":
+        failures.append("callback_isolation_deterministic_raw.txt")
+
     # The bundle is only honest if every raw log came off the SAME head. Editing the
     # tree mid-run (or amending the commit) would silently mix revisions, so the head
     # is re-checked and a mismatch is a hard failure.

@@ -496,7 +496,25 @@ class V22AWindowFocusMonitorTests(unittest.TestCase):
         self.assertTrue(later_gains, "the reacquired target never regained foreground")
         self.assertTrue(later_gains[-1]["isTargetForeground"])
         self.assertEqual(later_gains[-1]["generation"], reacquired["generation"])
-        self.assertTrue(self.main["finalSnapshot"]["isTargetForeground"],
+
+        # The final snapshot is a LIVE read, so it only agrees with the event stream while
+        # the target is still the foreground window. `SetForegroundWindow` can be granted
+        # and then taken away again by an unrelated desktop process (a notification, a
+        # focus-stealing window, the harness's own console regaining focus). When that
+        # happens the snapshot legitimately reports `isTargetForeground=false` and proving
+        # the event stream from it says nothing about the module.
+        final = self.main["finalSnapshot"]
+        last_fg = later_gains[-1]["foregroundHwnd"]
+        if not final["isTargetForeground"] and final["foregroundHwnd"] != last_fg:
+            self.skipTest(
+                "test_07: ENVIRONMENTAL foreground theft - the switch WAS granted "
+                f"(tookEffect, fg=0x{last_fg:x}) but a third-party window "
+                f"(0x{final['foregroundHwnd']:x}) took the foreground before the snapshot was "
+                "read, so the live snapshot cannot confirm the event stream. This is not a "
+                "V2-2A defect; see test_23 for the authoritative precondition report."
+            )
+
+        self.assertTrue(final["isTargetForeground"],
                         "the final snapshot does not report the reacquired target as foreground")
 
     # -- T08 (precondition-guarded) --------------------------------------- #
@@ -517,10 +535,22 @@ class V22AWindowFocusMonitorTests(unittest.TestCase):
             self.assertGreater(event["observedAtNs"], 0)
 
         # The last event and the final snapshot must agree on the observable state.
+        #
+        # `isTargetForeground` is compared only when the foreground has not moved since the
+        # last event. The snapshot is a LIVE `GetForegroundWindow()` read taken after the
+        # event stream was captured, so an unrelated process stealing focus in that gap
+        # legitimately changes the answer without anything being wrong with the module.
+        # The identity/ordering invariants above are the ones the module actually owns.
         final = self.main["finalSnapshot"]
         last = events[-1]
         self.assertEqual(final["isTargetAlive"], last["isTargetAlive"])
-        self.assertEqual(final["isTargetForeground"], last["isTargetForeground"])
+        if final["foregroundHwnd"] == last["foregroundHwnd"]:
+            self.assertEqual(final["isTargetForeground"], last["isTargetForeground"])
+        else:
+            self.notes.append(
+                f"test_08: foreground moved between the last event (0x{last['foregroundHwnd']:x}) "
+                f"and the snapshot (0x{final['foregroundHwnd']:x}); "
+                f"isTargetForeground agreement not asserted for this run")
         self.assertEqual(final["generation"], last["generation"])
         self.assertEqual(final["targetHwnd"], last["targetHwnd"])
 
@@ -832,15 +862,20 @@ class V22AWindowFocusMonitorTests(unittest.TestCase):
         The defect this guards against: the callback used to take the SAME lock the
         worker holds while performing Win32 / process-identity work, so a busy worker
         could stall desktop-wide event delivery. The fix gives the raw queue its own
-        lock. Both directions are proved here, with the state-machine path deliberately
-        widened by `identityWorkDelayMsForDiagnostics` so the measurement is not a
-        microsecond-scale race:
+        lock.
 
-          A. while the worker is inside a slow identity path (holding the state lock),
-             injecting raw events is NOT delayed by it;
-          B. while the raw queue lock is held, the worker still makes progress and the
-             monitor still shuts down cleanly - i.e. no lock-order inversion, no
-             deadlock, and resources are released.
+        Scope note: this test is the ORIGINAL form of the check and is kept for
+        continuity. It is deliberately weaker than `test_26`, which proves the same
+        property with a test-controlled lock hold instead of inferring it from a widened
+        identity path. The assertions here are limited to what this construction can
+        actually show:
+
+          A. raw ingestion is fast while a slow state path is in flight;
+          B. the raw lock is not held ACROSS state-machine work - proved by the worker
+             RESUMING after the lock is released (a strict increase in processed events),
+             not by claiming progress while it is held. The worker legitimately needs the
+             raw lock while draining, so "progress while held" was never a valid claim and
+             the old `assertGreaterEqual` permitted zero progress.
 
         On the teardown half, the claim being pinned is deliberately narrow and stated
         precisely: after `Dispose()` returns, no callback is *delivered by Windows*
@@ -860,7 +895,7 @@ class V22AWindowFocusMonitorTests(unittest.TestCase):
             session.cmd("create 0", timeout=30)
             session.set_foreground(0)
 
-            # --- A: ingest while the worker is provably inside the slow state path.
+            # --- A: ingest while the worker is inside the slow state path.
             # Several identity evaluations of `delay_ms` each run back to back, so the
             # state lock is held for hundreds of milliseconds while we ingest.
             session.cmd("createother 1", timeout=30)
@@ -886,18 +921,39 @@ class V22AWindowFocusMonitorTests(unittest.TestCase):
             self.assertLess(ingest_wall_ms, 5000,
                             f"injecting {injection_count} raw events took {ingest_wall_ms:.1f}ms")
 
-            # --- B: hold the raw queue lock and prove the worker still progresses.
+            # --- B: the raw lock is held then RELEASED, and processing must RESUME.
+            #
+            # The correct invariant is NOT "the worker progresses while the raw lock is
+            # held" - the worker needs that lock to drain, so waiting there is correct
+            # behaviour, not a defect. What must hold is:
+            #   * the raw lock is never held ACROSS the state path (proved by A);
+            #   * there is no lock-order inversion (proved by B: work queued during the
+            #     hold is still delivered after the release);
+            #   * no deadlock, and Dispose completes (proved by the shutdown phase).
             before = session.monitor_cmd("identityprobe")
-            held = session.monitor_cmd("holdraw 300")
+            self.assertIn("processedEvents", before, f"identityprobe did not reply: {before}")
+
+            held = session.monitor_cmd("holdraw 300", timeout=20)
             self.assertGreaterEqual(held.get("requestedMs", 0), 300,
                                     f"the holdraw seam did not reply: {held}")
-            time.sleep(0.5)
+
+            # Queue work while the lock is held; it must survive and be processed after.
+            session.monitor_cmd("rawpush 200", timeout=20)
+            time.sleep(1.0)
+
             after = session.monitor_cmd("identityprobe")
-            self.assertIn("processedEvents", before)
-            self.assertIn("processedEvents", after)
-            self.assertGreaterEqual(
+            deadline = time.monotonic() + 10.0
+            while (after["processedEvents"] <= before["processedEvents"]
+                   and time.monotonic() < deadline):
+                time.sleep(0.25)
+                after = session.monitor_cmd("identityprobe")
+
+            self.assertGreater(
                 after["processedEvents"], before["processedEvents"],
-                "the worker made negative progress while the raw queue lock was held",
+                f"the worker never resumed after the raw lock was released "
+                f"({before['processedEvents']} -> {after['processedEvents']}): queued work "
+                f"was lost or the worker is stalled, which is a lock-order problem, not "
+                f"isolation",
             )
 
             # The monitor is still alive and responsive after both stress phases.
@@ -1028,6 +1084,491 @@ class V22AWindowFocusMonitorTests(unittest.TestCase):
         # And the image cache moved its generation at the loss boundary, which is what
         # makes the recycled-pid case impossible to inherit silently.
         self.assertGreaterEqual(self.main["counters"]["identityCacheGeneration"], 1)
+
+    # -- T24 -------------------------------------------------------------- #
+    def test_24_revalidate_is_authority_not_cache(self) -> None:
+        """Revalidation must not read the DISCOVERY cache, and must compare the process
+        INSTANCE, so a same-generation recycle cannot be waved through.
+
+        The hole this closes is precisely the one the cached design could not see:
+
+          * the image cache is keyed by (pid, generation);
+          * the generation only moves once a LOSS has been OBSERVED - i.e. inside
+            `LoseTarget`;
+          * therefore, in the window where the old target has already exited, Windows has
+            already recycled the HWND+pid onto a new process, and the monitor has not yet
+            processed the destroy event, `ResolveImageName(pid)` answers with the DEAD
+            process's image under the still-current generation. A revalidation that reads
+            through the cache could accept a foreign window.
+
+        Two properties are pinned here, both structurally and behaviourally:
+
+          1. the authority path is `ResolveImageNameUncached`, never `ResolveImageName`;
+          2. the authority path also compares the process-instance token (creation time),
+             so a recycled pid reused by a fresh instance of the SAME executable is still
+             rejected - a pid+image check cannot see that case at all.
+        """
+        # --- structural: the authority path exists, is used, and the cache path is not.
+        reader_src = (HOST_DIR / "NteHost.WindowMonitor" / "WindowIdentityReader.cs").read_text(encoding="utf-8")
+        self.assertIn("ResolveImageNameUncached", reader_src,
+                      "there is no uncached authority query for the process image")
+        self.assertIn("QueryProcessInstanceToken", reader_src,
+                      "the authority path does not read a process-instance token")
+        self.assertIn("GetProcessTimes", reader_src,
+                      "the process-instance token is not derived from the creation time")
+
+        # `Revalidate` must call the uncached resolver. Reading through the cache in the
+        # trust path is the defect.
+        revalidate_body = reader_src.split("public IdentityVerdict Revalidate(", 1)[1]
+        self.assertIn("ResolveImageNameUncached", revalidate_body,
+                      "Revalidate does not use the uncached authority query")
+        self.assertNotIn("ResolveImageName((int)pid)", revalidate_body,
+                         "Revalidate still reads the process image through the discovery cache")
+
+        verdict_src = (HOST_DIR / "NteHost.WindowMonitor" / "WindowIdentity.cs").read_text(encoding="utf-8")
+        self.assertIn("ProcessInstanceToken", verdict_src,
+                      "WindowIdentity does not carry a process-instance token")
+        self.assertIn("InstanceMatches", verdict_src,
+                      "the verdict does not report the instance comparison")
+        self.assertNotIn("ResolveImageName(pid)", reader_src.split("private static string QueryImageName")[0].split("public WindowIdentity Read(")[0] or "",
+                         "a trust path still resolves the image through the cache")
+
+        # --- behavioural: the deterministic same-generation negative case.
+        # A tiny standalone driver runs the reader directly, so the recycle window can be
+        # exercised WITHOUT relying on Windows to recycle a pid on cue (which would make
+        # this a flaky test rather than a proof).
+        probe = self._run_identity_recycle_probe()
+        self.assertEqual(probe["verdict"], "ok", f"the identity probe failed: {probe}")
+
+        # 1. The SAME image on a DIFFERENT process instance must be rejected: this is the
+        #    case a pid+image check cannot distinguish.
+        self.assertFalse(probe["sameImageDifferentInstanceAccepted"],
+                         "a recycled pid reused by a new instance of the SAME executable was "
+                         "accepted: the identity check degrades to pid+image")
+        # 2. A DIFFERENT image under the still-current generation must be rejected.
+        self.assertFalse(probe["differentImageAccepted"],
+                         "a different executable under the same pid+generation was accepted: "
+                         "the authority path is still reading the discovery cache")
+        # 3. And the generation genuinely did NOT move across the negative case, which is
+        #    what makes this the same-generation window rather than the already-covered one.
+        self.assertEqual(probe["generationBefore"], probe["generationAfter"],
+                         "the negative case moved the cache generation, so it does not "
+                         "exercise the same-generation window")
+        # 4. Sanity: the unmodified identity IS accepted, so the rejections above are not
+        #    an artefact of the check rejecting everything.
+        self.assertTrue(probe["unchangedIdentityAccepted"],
+                        "the identity check rejects an unchanged identity, so its rejections "
+                        "carry no information")
+        # 5. An unprovable instance (token 0) must be rejected, not assumed to match.
+        self.assertFalse(probe["zeroInstanceTokenAccepted"],
+                         "an unprovable process instance was accepted")
+
+    def _run_identity_recycle_probe(self) -> dict:
+        """Runs the reader-level identity recycle probe and parses its JSON verdict."""
+        probe_dir = self.work_root / "identity_probe"
+        probe_dir.mkdir(parents=True, exist_ok=True)
+        csproj = probe_dir / "IdentityRecycleProbe.csproj"
+        program = probe_dir / "Program.cs"
+        csproj.write_text(
+            "<Project Sdk=\"Microsoft.NET.Sdk\">\n"
+            "  <PropertyGroup>\n"
+            "    <OutputType>Exe</OutputType>\n"
+            "    <TargetFramework>net8.0</TargetFramework>\n"
+            "    <Nullable>enable</Nullable>\n"
+            "    <ImplicitUsings>enable</ImplicitUsings>\n"
+            "    <AssemblyName>IdentityRecycleProbe</AssemblyName>\n"
+            "    <RootNamespace>IdentityRecycleProbe</RootNamespace>\n"
+            "    <EnableDefaultCompileItems>false</EnableDefaultCompileItems>\n"
+            "  </PropertyGroup>\n"
+            "  <ItemGroup>\n"
+            "    <Compile Include=\"Program.cs\" />\n"
+            "    <ProjectReference Include=\"" + str(LIB_PROJECT) + "\" />\n"
+            "  </ItemGroup>\n"
+            "</Project>\n",
+            encoding="utf-8")
+        program.write_text(IDENTITY_PROBE_SOURCE, encoding="utf-8")
+
+        result = run_dotnet(["run", "--project", str(csproj), "-c", "Release", "--nologo"], timeout=600)
+        if result.returncode != 0:
+            return {"verdict": "dotnet-run-failed", "stdout": result.stdout[-4000:],
+                    "stderr": result.stderr[-4000:]}
+        for line in reversed(result.stdout.splitlines()):
+            line = line.strip()
+            if line.startswith("{") and line.endswith("}"):
+                try:
+                    payload = json.loads(line)
+                except json.JSONDecodeError:
+                    continue
+                return payload
+        return {"verdict": "no-json", "stdout": result.stdout[-4000:]}
+
+    # -- T25 -------------------------------------------------------------- #
+    def test_25_event_queue_overflow_is_not_a_latch(self) -> None:
+        """An overflow must produce ONE piece of evidence and ONE recovery trigger, and
+        must NOT latch the worker into requesting recovery forever.
+
+        The defect: the worker tested `_rawQueue.DroppedCount > 0`. That counter is
+        cumulative and never decreases, so after the very first drop every subsequent
+        worker iteration considered the queue "overflowing": with a target present it
+        repeatedly set and cleared a recovery request, and without a target the 200 ms
+        rate limit turned it into a continuous EnumWindows recovery loop.
+
+        The fix: the queue reports how many records were dropped SINCE THE PREVIOUS
+        DRAIN, and only a positive delta is treated as a new overflow. The public
+        `EventQueueOverflow` event kind is now really emitted (it existed in the contract
+        but was never produced), so no public event kind is permanently unemittable.
+
+        Assertion strategy: a small queue, one deliberate overflow, then a strictly quiet
+        window. The recovery-scan count must not keep growing once the input stops.
+        """
+        # --- structural: no cumulative-counter test remains in the worker.
+        monitor_src = (HOST_DIR / "NteHost.WindowMonitor" / "WindowMonitor.cs").read_text(encoding="utf-8")
+        self.assertIn("DrainWithDelta", monitor_src,
+                      "the worker does not drain with a drop delta")
+        self.assertIn("OverflowedSinceLastDrain", monitor_src,
+                      "the worker does not test the drop delta")
+        self.assertNotIn("_rawQueue.DroppedCount > 0", monitor_src,
+                         "the worker still latches on the cumulative drop counter")
+        self.assertIn("EventQueueOverflow", monitor_src,
+                      "EventQueueOverflow is declared in the contract but never emitted")
+
+        queue_src = (HOST_DIR / "NteHost.WindowMonitor" / "RawEventQueue.cs").read_text(encoding="utf-8")
+        self.assertIn("DroppedSinceLastDrain", queue_src,
+                      "the raw queue does not report a drop delta")
+
+        # --- behavioural: one overflow, then a genuinely quiet period.
+        #
+        # Capacity is small enough to overflow deterministically but large enough that the
+        # harness's own startup window churn does not drop events before the induced burst,
+        # which would make "did the induced overflow produce evidence" unanswerable.
+        capacity = 256
+        session = MonitorSession(HARNESS_EXE, self.work_root / "overflow", HARNESS_IMAGE, TARGET_CLASS,
+                                 extra_monitor_args=["--queue-capacity", str(capacity)])
+        try:
+            # Deliberately NO target: this is the configuration where the latch turned
+            # into a continuous recovery loop, which is the failure this test exists for.
+            # Stop real ingestion first so the induced overflow is the only source of drops.
+            session.monitor_cmd("suppress 1", timeout=20)
+            time.sleep(0.6)
+
+            before = session.monitor_cmd("statusprobe")
+            self.assertIn("overflowObservations", before, f"statusprobe did not reply: {before}")
+            baseline_drops = before["droppedEvents"]
+            baseline_observations = before["overflowObservations"]
+            baseline_scans = before["recoveryScans"]
+
+            # Push well past capacity in a single burst: this MUST overflow.
+            burst = capacity * 4
+            pushed = session.monitor_cmd(f"overflow {burst}", timeout=30)
+            self.assertGreater(pushed["droppedEvents"], baseline_drops,
+                               f"pushing {burst} events into a capacity-{capacity} queue "
+                               f"produced no new drops ({baseline_drops} -> "
+                               f"{pushed['droppedEvents']}): {pushed}")
+
+            # Let the worker observe the overflow at least once.
+            time.sleep(1.0)
+            after_overflow = session.monitor_cmd("statusprobe")
+            self.assertGreaterEqual(
+                after_overflow["overflowObservations"], baseline_observations + 1,
+                f"no EventQueueOverflow was emitted for a real overflow "
+                f"({baseline_observations} -> {after_overflow['overflowObservations']}): "
+                f"{after_overflow}")
+            observations_at_overflow = after_overflow["overflowObservations"]
+            scans_at_overflow = after_overflow["recoveryScans"]
+
+            # --- the quiet window: ingestion is suppressed, so no further input at all.
+            time.sleep(2.5)
+            quiet = session.monitor_cmd("statusprobe")
+
+            # The regression: recovery must not keep firing once the input stops. The
+            # latch produced a scan roughly every 200 ms (the rate limit) forever.
+            extra_scans = quiet["recoveryScans"] - scans_at_overflow
+            self.assertLessEqual(
+                extra_scans, 3,
+                f"{extra_scans} extra recovery scans ran during a 2.5s quiet window after a "
+                f"single overflow: the overflow decision is latched rather than delta-based "
+                f"({scans_at_overflow} -> {quiet['recoveryScans']})",
+            )
+
+            # And no NEW overflow was reported, because no new drop happened.
+            self.assertLessEqual(
+                quiet["overflowObservations"], observations_at_overflow + 1,
+                f"overflow evidence kept being emitted with no new drops: "
+                f"{observations_at_overflow} -> {quiet['overflowObservations']}",
+            )
+            self.assertEqual(quiet["droppedEvents"], pushed["droppedEvents"],
+                             "events were dropped during the quiet window, so 'no new overflow "
+                             "evidence' is not the same as 'no new drops'")
+
+            # The monitor is still healthy.
+            self.assertIn("windows", session.cmd("describe", timeout=30))
+        finally:
+            payload = session.stop_and_collect() if session.monitor.poll() is None else {}
+            session.close()
+
+        # The overflow is visible in the event stream with the drop delta recorded, so the
+        # evidence is auditable rather than a bare boolean.
+        events = payload.get("events", [])
+        overflow_events = [e for e in events if e["kind"] == "EventQueueOverflow"]
+        if overflow_events:
+            self.assertIn("droppedSinceLastDrain=", overflow_events[0]["reason"],
+                          f"the overflow evidence does not record the delta: "
+                          f"{overflow_events[0]['reason']}")
+
+    # -- T26 -------------------------------------------------------------- #
+    def test_26_raw_callback_isolation_deterministic(self) -> None:
+        """The raw callback must not wait on the STATE lock - proved deterministically.
+
+        The previous version of this check claimed direction A by inference: it widened a
+        slow identity path and assumed the worker was holding the state lock at that
+        moment. That cannot distinguish "the callback is not serialised behind the state
+        lock" from "the state path happened to be idle".
+
+        Here the hold is real and test-controlled: the harness takes the state lock from a
+        thread the test can observe, reports that it HAS the lock, and only then does the
+        test ingest from another thread. Direction B is likewise made honest - the old
+        assertion (`processedEvents` did not go backwards) permitted zero progress and was
+        measured at 425 -> 425, so it proved nothing. The worker legitimately DOES need the
+        raw lock while draining, so "progress while the raw lock is held" was never the
+        right claim; the right claim is that the raw lock is not held ACROSS the state
+        path, there is no lock-order inversion, and processing RESUMES once it is released.
+        """
+        delay_ms = 100
+
+        session = MonitorSession(HARNESS_EXE, self.work_root / "isolation_det", HARNESS_IMAGE,
+                                 TARGET_CLASS,
+                                 extra_monitor_args=["--identity-delay-ms", str(delay_ms)])
+        try:
+            session.cmd("create 0", timeout=30)
+            session.set_foreground(0)
+
+            # ---------------- A: state lock VERIFIABLY held, then ingest. ----------------
+            held = session.monitor_cmd("holdstate 3000", timeout=20)
+            self.assertTrue(held.get("acquired"),
+                            f"the diagnostic seam did not take the state lock: {held}")
+            self.assertTrue(held.get("stateGateHeld"),
+                            f"the state lock is not reported as held: {held}")
+
+            # The state lock is now held by the harness's own thread, so any latency seen
+            # here cannot be excused as "the worker was idle".
+            injection_count = 400
+            t0 = time.monotonic()
+            injected = session.monitor_cmd(f"inject {injection_count}", timeout=30)
+            ingest_wall_ms = (time.monotonic() - t0) * 1000.0
+            self.assertIn("perEventUs", injected, f"the inject seam did not reply: {injected}")
+            per_event_us = float(injected["perEventUs"])
+            self.assertEqual(injected["count"], injection_count)
+
+            # The state lock is held for 3000 ms; ingestion of 400 events must not be
+            # serialised behind it. The bound is generous but far below the hold, so it can
+            # only fail on genuine serialisation.
+            self.assertLess(
+                per_event_us, 1000.0,
+                f"raw ingestion averaged {per_event_us:.1f}us/event while the state lock was "
+                f"verifiably held: the callback IS serialised behind state-machine work",
+            )
+            self.assertLess(ingest_wall_ms, 3000,
+                            f"ingesting {injection_count} raw events took {ingest_wall_ms:.0f}ms "
+                            f"while the state lock was held: the callback waited on the state lock")
+
+            session.monitor_cmd("releasestate", timeout=20)
+
+            # ---------------- B: raw lock held, then RELEASED, then progress. -------------
+            # While the raw lock is held the worker legitimately cannot drain; the honest
+            # claim is that processing RESUMES afterwards, not that it progressed during.
+            before = session.monitor_cmd("statusprobe")
+            self.assertIn("processedEvents", before, f"statusprobe did not reply: {before}")
+
+            held_raw = session.monitor_cmd("holdraw 600", timeout=20)
+            self.assertGreaterEqual(held_raw.get("requestedMs", 0), 600,
+                                    f"the holdraw seam did not reply: {held_raw}")
+
+            # Push events INTO the queue while the raw lock is held - they must survive the
+            # hold and be processed after the release. `rawpush` bypasses suppression so
+            # this works regardless of the suppression toggle.
+            pushed = 200
+            session.monitor_cmd(f"rawpush {pushed}", timeout=20)
+
+            # Wait past the hold, then require REAL progress (a strict increase).
+            time.sleep(1.2)
+            deadline = time.monotonic() + 10.0
+            after = session.monitor_cmd("statusprobe")
+            while (after["processedEvents"] <= before["processedEvents"]
+                   and time.monotonic() < deadline):
+                time.sleep(0.25)
+                after = session.monitor_cmd("statusprobe")
+
+            self.assertGreater(
+                after["processedEvents"], before["processedEvents"],
+                f"the worker did not resume processing after the raw lock was released "
+                f"({before['processedEvents']} -> {after['processedEvents']}): that is a "
+                f"lock-order inversion or a stalled worker, not isolation",
+            )
+
+            # The monitor is still responsive, and the state lock is free again.
+            snapshot = session.cmd("describe", timeout=30)
+            self.assertIn("windows", snapshot)
+            final_state = session.monitor_cmd("statusprobe")
+            self.assertFalse(final_state["stateGateHeld"],
+                             "the state lock is still reported as held after release")
+        finally:
+            session.close()
+
+        # ---------------- Clean shutdown: the stress must not wedge Dispose. -------------
+        clean = MonitorSession(HARNESS_EXE, self.work_root / "isolation_det_shutdown",
+                               HARNESS_IMAGE, TARGET_CLASS,
+                               extra_monitor_args=["--identity-delay-ms", "60"])
+        try:
+            clean.cmd("create 0", timeout=30)
+            clean.set_foreground(0)
+            clean.monitor_cmd("holdstate 500", timeout=20)
+            clean.monitor_cmd("holdraw 300", timeout=20)
+            injected = clean.monitor_cmd("inject 500", timeout=60)
+            self.assertIn("perEventUs", injected, f"the inject seam did not reply: {injected}")
+            clean.monitor_cmd("releasestate", timeout=20)
+            payload = clean.stop_and_collect()
+        finally:
+            clean.close()
+
+        self.assertTrue(payload["noResidualCallback"],
+                        "a callback still acted on an event after Dispose: the raw counter "
+                        f"moved across teardown {payload['counters']}")
+        self.assertFalse(payload["hookInstalledAfterDispose"])
+        self.assertLess(payload["disposeElapsedUs"], 5_000_000,
+                        f"Dispose took {payload['disposeElapsedUs']:.0f}us: the worker did "
+                        f"not release cleanly, which is the signature of a stuck lock")
+        self.assertEqual(payload["counters"]["droppedEvents"], 0,
+                         f"the bounded queue dropped events under injection stress: "
+                         f"{payload['counters']}")
+
+
+IDENTITY_PROBE_SOURCE = r"""
+// Reader-level identity probe.
+//
+// Exercises the SAME-GENERATION recycle window deterministically, without depending on
+// Windows to actually recycle a pid on cue. It:
+//   1. resolves a REAL pid (this process) so the identity is anchored in reality;
+//   2. builds a recorded identity from it;
+//   3. primes the discovery cache for that pid;
+//   4. drives `Revalidate` with a `FreshProcessQuery` seam that reports what the
+//      authority query would "return" if the pid had been recycled onto a new process.
+//
+// No `InvalidatePid` / `LoseTarget` is performed anywhere, so the cache generation does
+// not move: this is exactly the window in which a cache-reading trust path would answer
+// with the dead process's image.
+
+using System.Runtime.InteropServices;
+using System.Text;
+using System.Text.Json;
+using NteHost.WindowMonitor;
+
+static class Probe
+{
+    // The module's own Win32 surface is internal on purpose, so the probe declares the
+    // two calls it needs for enumeration rather than widening the module's API.
+    private delegate bool EnumWindowsProc(IntPtr hWnd, IntPtr lParam);
+
+    [DllImport("user32.dll", SetLastError = true)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static extern bool EnumWindows(EnumWindowsProc lpEnumFunc, IntPtr lParam);
+
+    [DllImport("user32.dll", SetLastError = true)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static extern bool IsWindowVisible(IntPtr hWnd);
+
+    [DllImport("user32.dll", SetLastError = true)]
+    private static extern uint GetWindowThreadProcessId(IntPtr hWnd, out uint lpdwProcessId);
+
+    [DllImport("user32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
+    private static extern int GetClassNameW(IntPtr hWnd, StringBuilder lpClassName, int nMaxCount);
+
+    static void Main()
+    {
+        var reader = new WindowIdentityReader();
+
+        // A real window so the handle-liveness half of Revalidate passes honestly. The
+        // probe's own console window is not reliably present in a headless run, so a
+        // top-level window is found by enumeration instead.
+        long hwnd = FindAnyRealWindow();
+        if (hwnd == 0)
+        {
+            Console.WriteLine(JsonSerializer.Serialize(new { verdict = "no-window" }));
+            return;
+        }
+
+        var recorded = reader.Read(hwnd);
+        if (!recorded.IsPresent || recorded.Pid == 0 || string.IsNullOrEmpty(recorded.ProcessImageName))
+        {
+            Console.WriteLine(JsonSerializer.Serialize(new { verdict = "no-identity",
+                hwnd, pid = recorded.Pid, image = recorded.ProcessImageName }));
+            return;
+        }
+
+        // Prime the discovery cache for this pid under the current generation.
+        var primed = reader.ResolveImageName(recorded.Pid);
+        var generationBefore = reader.CacheGeneration;
+
+        // (0) Sanity: the unchanged identity is accepted. If this were false the negative
+        //     cases below would carry no information.
+        var unchanged = reader.Revalidate(recorded);
+        var unchangedAccepted = unchanged.IsSame;
+
+        // (1) Same pid, same class, same image, DIFFERENT process instance.
+        //     This is the case a pid+image check cannot see.
+        var sameImageDifferentInstance = reader.Revalidate(recorded, true,
+            new FreshProcessQuery(recorded.ProcessImageName,
+                recorded.ProcessInstanceToken == 0 ? 1 : recorded.ProcessInstanceToken + 1));
+
+        // (2) Different image under the still-current generation: the authority path must
+        //     fresh-query rather than serving the primed cache entry.
+        var differentImage = reader.Revalidate(recorded, true,
+            new FreshProcessQuery(recorded.ProcessImageName + ".other", recorded.ProcessInstanceToken));
+
+        // (3) Unprovable instance: token 0 must be rejected, not assumed to match.
+        var zeroInstance = reader.Revalidate(recorded, true,
+            new FreshProcessQuery(recorded.ProcessImageName, 0));
+
+        var generationAfter = reader.CacheGeneration;
+
+        Console.WriteLine(JsonSerializer.Serialize(new
+        {
+            verdict = "ok",
+            hwnd,
+            pid = recorded.Pid,
+            image = recorded.ProcessImageName,
+            primed,
+            instanceTokenNonZero = recorded.ProcessInstanceToken != 0,
+            unchangedIdentityAccepted = unchangedAccepted,
+            unchangedFailure = unchanged.Failure,
+            sameImageDifferentInstanceAccepted = sameImageDifferentInstance.IsSame,
+            sameImageDifferentInstanceFailure = sameImageDifferentInstance.Failure,
+            differentImageAccepted = differentImage.IsSame,
+            differentImageFailure = differentImage.Failure,
+            zeroInstanceTokenAccepted = zeroInstance.IsSame,
+            zeroInstanceTokenFailure = zeroInstance.Failure,
+            generationBefore,
+            generationAfter,
+        }));
+    }
+
+    static long FindAnyRealWindow()
+    {
+        long found = 0;
+        EnumWindows((hwnd, _) =>
+        {
+            if (!IsWindowVisible(hwnd)) return true;
+            GetWindowThreadProcessId(hwnd, out var pid);
+            if (pid == 0) return true;
+            var name = new StringBuilder(256);
+            if (GetClassNameW(hwnd, name, name.Capacity) <= 0) return true;
+            if (name.ToString().Length == 0) return true;
+            found = hwnd.ToInt64();
+            return false;
+        }, IntPtr.Zero);
+        return found;
+    }
+}
+"""
 
 
 if __name__ == "__main__":

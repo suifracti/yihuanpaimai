@@ -294,6 +294,7 @@ internal static class Program
         var requireVisible = !Flag(args, "--allow-hidden");
         var skipOwn = Flag(args, "--skip-own-process");
         var identityDelayMs = int.Parse(Arg(args, "--identity-delay-ms", "0"));
+        var queueCapacity = int.Parse(Arg(args, "--queue-capacity", "4096"));
 
         var spec = new TargetWindowSpec(specImage, specClass);
         var options = new WindowMonitorOptions
@@ -302,6 +303,7 @@ internal static class Program
             RequireVisible = requireVisible,
             SkipOwnProcessInHook = skipOwn,
             IdentityWorkDelayMsForDiagnostics = identityDelayMs,
+            EventQueueCapacity = queueCapacity,
         };
 
         var monitor = new WindowMonitor(options);
@@ -408,6 +410,84 @@ internal static class Program
                             processedEvents = monitor.ProcessedEventCount,
                             droppedEvents = monitor.DroppedEventCount,
                         });
+                        break;
+                    }
+
+                    case "statusprobe":
+                    {
+                        // Stress seam: the counters the lock-isolation and overflow
+                        // regression tests assert on.
+                        Emit(new
+                        {
+                            phase = "cmd", cmd = "statusprobe",
+                            processedEvents = monitor.ProcessedEventCount,
+                            droppedEvents = monitor.DroppedEventCount,
+                            overflowObservations = monitor.OverflowObservationCount,
+                            recoveryScans = monitor.RecoveryScanCount,
+                            rawCallbackCount = monitor.RawCallbackCount,
+                            stateGateHeld = monitor.IsStateGateHeldForDiagnostics,
+                        });
+                        break;
+                    }
+
+                    case "holdstate":
+                    {
+                        // Stress seam: hold the STATE lock from a test-controlled thread
+                        // and report once it is actually taken. This makes direction A
+                        // deterministic: the hold is proven, not inferred.
+                        var ms = parts.Length > 1 ? int.Parse(parts[1]) : 300;
+                        monitor.HoldStateGateForDiagnostics(ms);
+                        var acquired = monitor.WaitForStateGateAcquiredForDiagnostics(5000);
+                        Emit(new
+                        {
+                            phase = "cmd", cmd = "holdstate", requestedMs = ms,
+                            acquired,
+                            stateGateHeld = monitor.IsStateGateHeldForDiagnostics,
+                        });
+                        break;
+                    }
+
+                    case "releasestate":
+                    {
+                        monitor.ReleaseStateGateForDiagnostics();
+                        Emit(new { phase = "cmd", cmd = "releasestate", released = true });
+                        break;
+                    }
+
+                    case "suppress":
+                    {
+                        var on = parts.Length > 1 && parts[1] == "1";
+                        monitor.SetRawIngestionSuppressedForDiagnostics(on);
+                        Emit(new { phase = "cmd", cmd = "suppress", suppressed = on });
+                        break;
+                    }
+
+                    case "overflow":
+                    {
+                        // Stress seam: push N events straight into the bounded queue,
+                        // bypassing suppression, so a small-capacity queue overflows on
+                        // demand rather than by luck.
+                        var count = parts.Length > 1 ? int.Parse(parts[1]) : 1;
+                        monitor.OverflowQueueForDiagnostics(count);
+                        Emit(new
+                        {
+                            phase = "cmd", cmd = "overflow", count,
+                            droppedEvents = monitor.DroppedEventCount,
+                        });
+                        break;
+                    }
+
+                    case "rawpush":
+                    {
+                        // Stress seam: enqueue through the raw queue without the
+                        // suppression toggle, to prove ingestion resumes after a hold.
+                        var count = parts.Length > 1 ? int.Parse(parts[1]) : 1;
+                        for (var i = 0; i < count; i++)
+                        {
+                            monitor.EnqueueRawEventBypassingSuppressionForDiagnostics(
+                                WindowMonitor.DiagnosticCreateEventType, 0);
+                        }
+                        Emit(new { phase = "cmd", cmd = "rawpush", count });
                         break;
                     }
 
