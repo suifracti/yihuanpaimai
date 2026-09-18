@@ -33,14 +33,25 @@ public sealed class WindowMonitorOptions
     /// so it is rate-limited even if triggers arrive in a burst.
     /// </summary>
     public int RecoveryScanMinIntervalMs { get; init; } = 200;
+
+    /// <summary>
+    /// Test-only seam. When non-zero, the worker deliberately spends this long on
+    /// every identity/state evaluation. It exists so a test can prove that a slow
+    /// state-machine path (the real one performs Win32 and process-identity work)
+    /// cannot serialise raw callback ingestion. Never set in production wiring.
+    /// </summary>
+    public int IdentityWorkDelayMsForDiagnostics { get; init; }
 }
 
 /// <summary>
 /// The V2-2A target window / focus monitor.
 ///
-/// Threading model:
-///   * the WinEvent pump thread only enqueues raw events (never blocks);
-///   * one worker thread owns the state machine, so event ordering is total;
+/// Threading model, and the lock discipline that makes it true:
+///   * the WinEvent pump thread only stamps the time and appends to a bounded queue
+///     it owns jointly with nobody. It does NOT touch the state lock. See
+///     <see cref="RawEventQueue"/> for why that separation is load-bearing.
+///   * one worker thread owns the state machine under <see cref="_gate"/>, and is
+///     the only place where Win32 / process-identity work happens.
 ///   * callers read snapshots, which validate the held handle before answering.
 ///
 /// Steady state is fully event driven. EnumWindows runs only as a bounded recovery
@@ -52,9 +63,12 @@ public sealed class WindowMonitor : IRawWinEventSink, IDisposable
     private readonly WindowIdentityReader _identityReader = new();
     private readonly WindowEnumerator _enumerator;
     private readonly WinEventHookSource _hook;
+    private readonly RawEventQueue _rawQueue;
+
+    /// <summary>State-machine lock. NEVER taken on the WinEvent callback thread.</summary>
     private readonly object _gate = new();
 
-    private readonly Queue<RawWinEvent> _queue = new();
+    private readonly SemaphoreSlim _wake = new(0, int.MaxValue);
     private readonly List<WindowMonitorEvent> _events = new();
 
     private Thread? _worker;
@@ -67,12 +81,12 @@ public sealed class WindowMonitor : IRawWinEventSink, IDisposable
     private bool _needsRecoveryScan;
     private long _lastRecoveryScanTick;
     private long _sequence;
-    private long _droppedEvents;
     private long _processedEvents;
 
     public WindowMonitor(WindowMonitorOptions? options = null)
     {
         _options = options ?? new WindowMonitorOptions();
+        _rawQueue = new RawEventQueue(_options.EventQueueCapacity);
         _enumerator = new WindowEnumerator(_identityReader);
         _hook = new WinEventHookSource(this, _options.SkipOwnProcessInHook);
     }
@@ -81,13 +95,16 @@ public sealed class WindowMonitor : IRawWinEventSink, IDisposable
 
     public long RecoveryScanCount => _enumerator.EnumerationCount;
 
-    public long DroppedEventCount => Interlocked.Read(ref _droppedEvents);
+    public long DroppedEventCount => _rawQueue.DroppedCount;
 
     public long ProcessedEventCount => Interlocked.Read(ref _processedEvents);
 
     public long RawCallbackCount => _hook.RawCallbackCount;
 
     public long ImageNameResolutions => _identityReader.ImageNameResolutions;
+
+    /// <summary>Current identity-cache generation; moves on every identity boundary.</summary>
+    public long IdentityCacheGeneration => _identityReader.CacheGeneration;
 
     public bool IsHookInstalled => _hook.IsHookInstalled;
 
@@ -141,36 +158,52 @@ public sealed class WindowMonitor : IRawWinEventSink, IDisposable
 
         lock (_gate)
         {
-            _queue.Clear();
             _target = null;
             _isTargetForeground = false;
         }
-        _identityReader.ClearCache();
+        _rawQueue.Clear();
+        _identityReader.InvalidateAll();
     }
 
     // ------------------------------------------------------------------ raw sink
 
     /// <summary>
-    /// Called on the WinEvent pump thread. Must not block: it stamps the time,
-    /// enqueues, and returns.
+    /// Called on the WinEvent pump thread. Stamps the monotonic time, appends to the
+    /// bounded raw queue, signals the worker, and returns.
+    ///
+    /// This method deliberately does not take <see cref="_gate"/>. The state machine
+    /// spends time inside Win32 and process-identity calls, so sharing its lock would
+    /// let a busy worker stall desktop-wide WinEvent delivery. The only lock taken
+    /// here is the raw queue's own, which nothing else holds for longer than a queue
+    /// operation.
     /// </summary>
     public void OnRawWinEvent(uint eventType, long hwnd, int idObject)
     {
         var observedAtNs = ProtocolClock.NowNs();
-
-        lock (_gate)
-        {
-            if (_queue.Count >= _options.EventQueueCapacity)
-            {
-                _queue.Dequeue();
-                _droppedEvents++;
-            }
-            _queue.Enqueue(new RawWinEvent(eventType, hwnd, observedAtNs));
-        }
+        _rawQueue.Enqueue(new RawWinEvent(eventType, hwnd, observedAtNs));
         Signal();
     }
 
-    private readonly SemaphoreSlim _wake = new(0, int.MaxValue);
+    /// <summary>
+    /// Diagnostic seam used by the isolation/stress test: enqueue a synthetic raw
+    /// event through exactly the same path the hook callback uses.
+    /// </summary>
+    public void InjectRawEventForDiagnostics(uint eventType, long hwnd) =>
+        OnRawWinEvent(eventType, hwnd, WinEvent.OBJID_WINDOW);
+
+    /// <summary>
+    /// The WinEvent the diagnostic injection seam uses. Exposed so a harness can drive
+    /// the ingestion path without reaching into the module's internal WinEvent table.
+    /// </summary>
+    public static uint DiagnosticCreateEventType => WinEvent.EVENT_OBJECT_CREATE;
+
+    /// <summary>
+    /// Diagnostic seam used by the isolation/stress test: hold the raw queue lock for
+    /// a requested duration, to prove the worker does not need it and cannot deadlock
+    /// against it.
+    /// </summary>
+    public void HoldRawQueueLockForDiagnostics(int milliseconds) =>
+        _rawQueue.HoldQueueLockForDiagnostics(milliseconds);
 
     private void Signal()
     {
@@ -196,14 +229,8 @@ public sealed class WindowMonitor : IRawWinEventSink, IDisposable
                 _wake.Wait(0);
             }
 
-            RawWinEvent[] batch;
-            bool overflowed;
-            lock (_gate)
-            {
-                batch = _queue.ToArray();
-                _queue.Clear();
-                overflowed = _droppedEvents > 0;
-            }
+            var batch = _rawQueue.Drain();
+            var overflowed = _rawQueue.DroppedCount > 0;
 
             if (overflowed)
             {
@@ -212,7 +239,6 @@ public sealed class WindowMonitor : IRawWinEventSink, IDisposable
 
             if (batch.Length == 0)
             {
-                // Nothing to do; if a recovery scan is due, run it now.
                 RunPendingRecoveryScanIfDue();
                 continue;
             }
@@ -240,7 +266,8 @@ public sealed class WindowMonitor : IRawWinEventSink, IDisposable
                     if (raw.Hwnd != 0 && raw.Hwnd == _target.Hwnd &&
                         raw.EventType is WinEvent.EVENT_OBJECT_DESTROY or WinEvent.EVENT_OBJECT_HIDE)
                     {
-                        LoseTarget(WinEvent.Name(raw.EventType), raw.ObservedAtNs, "target window destroy/hide event");
+                        LoseTarget(WinEvent.Name(raw.EventType), raw.ObservedAtNs,
+                            "target window destroy/hide event");
                     }
                 }
             }
@@ -301,10 +328,9 @@ public sealed class WindowMonitor : IRawWinEventSink, IDisposable
             if (_target is null && matches.Count > 0)
             {
                 Adopt(PreferForeground(matches), "recovery-scan", scanNs);
+                EvaluateForegroundInline(scanNs);
             }
         }
-
-        EvaluateForeground(0, scanNs);
     }
 
     /// <summary>
@@ -337,7 +363,7 @@ public sealed class WindowMonitor : IRawWinEventSink, IDisposable
             return;
         }
 
-        var identity = _identityReader.Read(raw.Hwnd);
+        var identity = ReadIdentityWithDiagnosticDelay(raw.Hwnd);
         if (!identity.IsPresent)
         {
             return;
@@ -352,6 +378,21 @@ public sealed class WindowMonitor : IRawWinEventSink, IDisposable
         }
 
         Adopt(identity, $"promoted-from-{WinEvent.Name(raw.EventType)}", raw.ObservedAtNs);
+    }
+
+    /// <summary>
+    /// Identity work is the slow part of the state machine: it opens the process and
+    /// queries its image path. The diagnostic delay hook is applied here so the
+    /// isolation test can widen that window to a duration that is unambiguously
+    /// measurable, instead of relying on a microsecond-scale race.
+    /// </summary>
+    private WindowIdentity ReadIdentityWithDiagnosticDelay(long hwnd)
+    {
+        if (_options.IdentityWorkDelayMsForDiagnostics > 0)
+        {
+            Thread.Sleep(_options.IdentityWorkDelayMsForDiagnostics);
+        }
+        return _identityReader.Read(hwnd);
     }
 
     /// <summary>Caller must hold <see cref="_gate"/>.</summary>
@@ -379,8 +420,14 @@ public sealed class WindowMonitor : IRawWinEventSink, IDisposable
         }
 
         var lost = _target;
+
+        // Identity boundary #1: the pid-&gt;image mapping we cached for this target may
+        // no longer describe the process. Drop it before anything can read it again,
+        // so a recycled pid cannot answer with the old executable's name.
+        _identityReader.InvalidatePid(lost.Pid);
+
         Emit(WindowMonitorEventKind.StaleHandleRejected, reason, lost.Hwnd, observedAtNs,
-            $"rejected handle: {detail}");
+            $"rejected handle: {detail}; identityCacheGeneration={_identityReader.CacheGeneration}");
 
         _target = null;
         _isTargetForeground = false;
@@ -395,34 +442,54 @@ public sealed class WindowMonitor : IRawWinEventSink, IDisposable
     {
         lock (_gate)
         {
-            var foreground = NativeWindowApiForeground();
-
-            if (_target is null)
-            {
-                _isTargetForeground = false;
-                return;
-            }
-
-            // Validate before trusting the handle: an HWND is a recyclable integer.
-            var stillValid = _identityReader.IsStillSameWindow(_target, _options.RequireVisible);
-            if (!stillValid)
-            {
-                LoseTarget(sourceEvent == 0 ? "validation" : WinEvent.Name(sourceEvent), observedAtNs,
-                    "handle failed liveness/identity validation");
-                return;
-            }
-
-            var isForeground = foreground != 0 && foreground == _target.Hwnd;
-            if (isForeground == _isTargetForeground)
-            {
-                return;
-            }
-
-            _isTargetForeground = isForeground;
-            Emit(isForeground ? WindowMonitorEventKind.ForegroundGained : WindowMonitorEventKind.ForegroundLost,
-                sourceEvent == 0 ? "validation" : WinEvent.Name(sourceEvent), _target.Hwnd, observedAtNs,
-                $"foreground=0x{foreground:x} target=0x{_target.Hwnd:x}");
+            EvaluateForegroundInline(sourceEvent, observedAtNs);
         }
+    }
+
+    /// <summary>Caller must hold <see cref="_gate"/>.</summary>
+    private void EvaluateForegroundInline(long observedAtNs) => EvaluateForegroundInline(0, observedAtNs);
+
+    /// <summary>Caller must hold <see cref="_gate"/>.</summary>
+    private void EvaluateForegroundInline(uint sourceEvent, long observedAtNs)
+    {
+        var foreground = NativeWindowApiForeground();
+
+        if (_target is null)
+        {
+            _isTargetForeground = false;
+            return;
+        }
+
+        // Validate before trusting the handle: an HWND is a recyclable integer, and
+        // so is a pid, so the FULL recorded identity is re-checked here.
+        var verdict = RevalidateTargetWithDiagnosticDelay(_target);
+        if (!verdict.IsSame)
+        {
+            LoseTarget(sourceEvent == 0 ? "validation" : WinEvent.Name(sourceEvent), observedAtNs,
+                verdict.Describe());
+            return;
+        }
+
+        var isForeground = foreground != 0 && foreground == _target.Hwnd;
+        if (isForeground == _isTargetForeground)
+        {
+            return;
+        }
+
+        _isTargetForeground = isForeground;
+        Emit(isForeground ? WindowMonitorEventKind.ForegroundGained : WindowMonitorEventKind.ForegroundLost,
+            sourceEvent == 0 ? "validation" : WinEvent.Name(sourceEvent), _target.Hwnd, observedAtNs,
+            $"foreground=0x{foreground:x} target=0x{_target.Hwnd:x} identity={verdict.Describe()}");
+    }
+
+    /// <summary>Caller must hold <see cref="_gate"/>.</summary>
+    private IdentityVerdict RevalidateTargetWithDiagnosticDelay(WindowIdentity target)
+    {
+        if (_options.IdentityWorkDelayMsForDiagnostics > 0)
+        {
+            Thread.Sleep(_options.IdentityWorkDelayMsForDiagnostics);
+        }
+        return _identityReader.Revalidate(target, _options.RequireVisible);
     }
 
     private static long NativeWindowApiForeground() => Win32.NativeWindowApi.GetForegroundWindow().ToInt64();
@@ -438,6 +505,8 @@ public sealed class WindowMonitor : IRawWinEventSink, IDisposable
             SourceEvent = sourceEvent,
             TargetHwnd = _target?.Hwnd ?? 0,
             TargetPid = _target?.Pid ?? 0,
+            TargetImageName = _target?.ProcessImageName ?? string.Empty,
+            TargetClassName = _target?.ClassName ?? string.Empty,
             ForegroundHwnd = NativeWindowApiForeground(),
             IsTargetAlive = _target is not null,
             IsTargetForeground = _isTargetForeground,
@@ -459,10 +528,13 @@ public sealed class WindowMonitor : IRawWinEventSink, IDisposable
         {
             var foreground = NativeWindowApiForeground();
 
-            if (_target is not null && !_identityReader.IsStillSameWindow(_target, _options.RequireVisible))
+            if (_target is not null)
             {
-                LoseTarget("snapshot-validation", ProtocolClock.NowNs(),
-                    "handle failed liveness/identity validation during snapshot");
+                var verdict = RevalidateTargetWithDiagnosticDelay(_target);
+                if (!verdict.IsSame)
+                {
+                    LoseTarget("snapshot-validation", ProtocolClock.NowNs(), verdict.Describe());
+                }
             }
 
             var alive = _target is not null;
@@ -514,7 +586,7 @@ public sealed class WindowMonitor : IRawWinEventSink, IDisposable
             bool empty;
             lock (_gate)
             {
-                empty = _queue.Count == 0;
+                empty = _rawQueue.Count == 0;
             }
             if (empty)
             {
@@ -522,7 +594,7 @@ public sealed class WindowMonitor : IRawWinEventSink, IDisposable
                 Thread.Sleep(15);
                 lock (_gate)
                 {
-                    if (_queue.Count == 0)
+                    if (_rawQueue.Count == 0)
                     {
                         return true;
                     }
@@ -562,6 +634,4 @@ public sealed class WindowMonitor : IRawWinEventSink, IDisposable
             return _events.Count(e => e.Kind == kind);
         }
     }
-
-    private readonly record struct RawWinEvent(uint EventType, long Hwnd, long ObservedAtNs);
 }

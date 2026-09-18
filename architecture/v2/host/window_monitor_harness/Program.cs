@@ -293,6 +293,7 @@ internal static class Program
         var durationMs = int.Parse(Arg(args, "--duration-ms", "15000"));
         var requireVisible = !Flag(args, "--allow-hidden");
         var skipOwn = Flag(args, "--skip-own-process");
+        var identityDelayMs = int.Parse(Arg(args, "--identity-delay-ms", "0"));
 
         var spec = new TargetWindowSpec(specImage, specClass);
         var options = new WindowMonitorOptions
@@ -300,6 +301,7 @@ internal static class Program
             Spec = spec,
             RequireVisible = requireVisible,
             SkipOwnProcessInHook = skipOwn,
+            IdentityWorkDelayMsForDiagnostics = identityDelayMs,
         };
 
         var monitor = new WindowMonitor(options);
@@ -340,9 +342,78 @@ internal static class Program
         {
             while (stop.TryDequeue(out var cmd))
             {
-                if (cmd.Trim() is "stop" or "exit")
+                var parts = cmd.Trim().Split(' ', StringSplitOptions.RemoveEmptyEntries);
+                if (parts.Length == 0)
                 {
-                    stopRequested = true;
+                    continue;
+                }
+
+                switch (parts[0])
+                {
+                    case "stop":
+                    case "exit":
+                        stopRequested = true;
+                        break;
+
+                    case "inject":
+                    {
+                        // Stress seam: push N synthetic raw events through exactly the
+                        // path the WinEvent callback uses, and report how long the
+                        // ingestion took.
+                        var count = parts.Length > 1 ? int.Parse(parts[1]) : 1;
+                        var started = System.Diagnostics.Stopwatch.GetTimestamp();
+                        for (var i = 0; i < count; i++)
+                        {
+                            monitor.InjectRawEventForDiagnostics(
+                                WindowMonitor.DiagnosticCreateEventType, 0);
+                        }
+                        var elapsedUs = System.Diagnostics.Stopwatch.GetElapsedTime(started).TotalMicroseconds;
+                        Emit(new
+                        {
+                            phase = "cmd", cmd = "inject", count,
+                            totalUs = elapsedUs,
+                            perEventUs = count > 0 ? elapsedUs / count : 0.0,
+                            enqueued = monitor.ProcessedEventCount,
+                        });
+                        break;
+                    }
+
+                    case "holdraw":
+                    {
+                        // Stress seam: hold the raw queue lock for a while. Proves the
+                        // worker does not need that lock, so there is no deadlock and no
+                        // mutual serialisation between ingestion and the state machine.
+                        var ms = parts.Length > 1 ? int.Parse(parts[1]) : 100;
+                        var started = System.Diagnostics.Stopwatch.GetTimestamp();
+                        monitor.HoldRawQueueLockForDiagnostics(ms);
+                        Emit(new
+                        {
+                            phase = "cmd", cmd = "holdraw", requestedMs = ms,
+                            actualUs = System.Diagnostics.Stopwatch.GetElapsedTime(started).TotalMicroseconds,
+                        });
+                        break;
+                    }
+
+                    case "identityprobe":
+                    {
+                        // Stress seam: report the identity-cache generation and the
+                        // number of real image resolutions so far, so a test can prove
+                        // cache invalidation actually happened at an identity boundary.
+                        Emit(new
+                        {
+                            phase = "cmd", cmd = "identityprobe",
+                            cacheGeneration = monitor.IdentityCacheGeneration,
+                            imageNameResolutions = monitor.ImageNameResolutions,
+                            rawCallbackCount = monitor.RawCallbackCount,
+                            processedEvents = monitor.ProcessedEventCount,
+                            droppedEvents = monitor.DroppedEventCount,
+                        });
+                        break;
+                    }
+
+                    default:
+                        Emit(new { phase = "cmd", cmd = parts[0], error = "unknown command" });
+                        break;
                 }
             }
             Thread.Sleep(20);
@@ -354,9 +425,23 @@ internal static class Program
 
         var rawBeforeDispose = monitor.RawCallbackCount;
         var hookInstalledBeforeDispose = monitor.IsHookInstalled;
+        var processedBeforeDispose = monitor.ProcessedEventCount;
+        var droppedBeforeDispose = monitor.DroppedEventCount;
+        var cacheGenerationBeforeDispose = monitor.IdentityCacheGeneration;
+        var resolutionsBeforeDispose = monitor.ImageNameResolutions;
+        var recoveryScansBeforeDispose = monitor.RecoveryScanCount;
 
+        var disposeWatch = System.Diagnostics.Stopwatch.GetTimestamp();
         monitor.Dispose();
+        var disposeElapsedUs = System.Diagnostics.Stopwatch.GetElapsedTime(disposeWatch).TotalMicroseconds;
 
+        // Settle point. UnhookWinEvent stops future callbacks but cannot revoke one
+        // that Windows already delivered to the pump thread; that callback may be
+        // executing while we read the counter. Waiting for the module's own idle
+        // signal (rather than sleeping an arbitrary amount) makes "after Dispose"
+        // mean "after the unsubscribe has provably taken effect" instead of racing
+        // the last in-flight callback.
+        monitor.WaitForIdle(2000);
         var rawImmediatelyAfterDispose = monitor.RawCallbackCount;
         var hookInstalledAfterDispose = monitor.IsHookInstalled;
 
@@ -365,6 +450,7 @@ internal static class Program
             phase = "disposed",
             rawCallbackCount = rawBeforeDispose,
             hookInstalledAfterDispose,
+            disposeElapsedUs,
         });
 
         // Phase 2: the parent now generates window churn while we hold no hook. If any
@@ -391,17 +477,20 @@ internal static class Program
             spec = new { processImageName = spec.ProcessImageName, windowClass = spec.WindowClass },
             requireVisible,
             skipOwnProcessInHook = skipOwn,
+            identityWorkDelayMsForDiagnostics = identityDelayMs,
             hookInstalled = hookInstalledBeforeDispose,
             hookInstalledAfterDispose,
+            disposeElapsedUs,
             counters = new
             {
                 rawCallbackCount = rawBeforeDispose,
                 rawCallbackCountImmediatelyAfterDispose = rawImmediatelyAfterDispose,
                 rawCallbackCountAfterExternalChurn = rawAfterChurn,
-                processedEvents = monitor.ProcessedEventCount,
-                droppedEvents = monitor.DroppedEventCount,
-                recoveryScans = monitor.RecoveryScanCount,
-                imageNameResolutions = monitor.ImageNameResolutions,
+                processedEvents = processedBeforeDispose,
+                droppedEvents = droppedBeforeDispose,
+                recoveryScans = recoveryScansBeforeDispose,
+                imageNameResolutions = resolutionsBeforeDispose,
+                identityCacheGeneration = cacheGenerationBeforeDispose,
             },
             noResidualCallback = rawAfterChurn == rawImmediatelyAfterDispose
                                 && rawImmediatelyAfterDispose == rawBeforeDispose,
@@ -415,6 +504,8 @@ internal static class Program
                 sourceEvent = e.SourceEvent,
                 targetHwnd = e.TargetHwnd,
                 targetPid = e.TargetPid,
+                targetImageName = e.TargetImageName,
+                targetClassName = e.TargetClassName,
                 foregroundHwnd = e.ForegroundHwnd,
                 isTargetAlive = e.IsTargetAlive,
                 isTargetForeground = e.IsTargetForeground,

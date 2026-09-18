@@ -54,6 +54,16 @@ public sealed record WindowMonitorEvent
 
     public int TargetPid { get; init; }
 
+    /// <summary>
+    /// The process image of the target at the time of the event. Recorded so an
+    /// auditor can see the complete identity the module was relying on, rather than
+    /// having to reconstruct it from the pid.
+    /// </summary>
+    public string TargetImageName { get; init; } = string.Empty;
+
+    /// <summary>The window class of the target at the time of the event.</summary>
+    public string TargetClassName { get; init; } = string.Empty;
+
     public long ForegroundHwnd { get; init; }
 
     public bool IsTargetAlive { get; init; }

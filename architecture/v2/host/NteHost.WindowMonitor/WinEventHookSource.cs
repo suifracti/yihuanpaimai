@@ -3,7 +3,14 @@ using NteHost.WindowMonitor.Win32;
 
 namespace NteHost.WindowMonitor;
 
-/// <summary>Receives raw WinEvents. Implementations MUST NOT block.</summary>
+/// <summary>
+/// Receives raw WinEvents.
+///
+/// Implementations must return promptly: this runs on the thread that delivers
+/// OUTOFCONTEXT events, and a slow implementation delays event delivery for the
+/// whole desktop. "Promptly" means no Win32 call, no process handling, and no lock
+/// that a slower path in the same component can hold.
+/// </summary>
 public interface IRawWinEventSink
 {
     void OnRawWinEvent(uint eventType, long hwnd, int idObject);
@@ -15,11 +22,17 @@ public interface IRawWinEventSink
 ///
 /// Two invariants matter here:
 ///   1. The callback runs on the pump thread and does nothing but hand the raw
-///      fields to a non-blocking sink. Any real work on this thread would stall
-///      event delivery for the whole desktop, so it is forbidden by construction.
+///      fields to the sink. Any real work on this thread would stall event
+///      delivery for the whole desktop.
 ///   2. The delegate instance is held in a field for the whole subscription
 ///      lifetime. If it were only reachable from the SetWinEventHook call, the GC
 ///      could collect the thunk and Windows would call into freed memory.
+///
+/// Note on the sink contract: "must not block" is enforced by the sink's design
+/// rather than by this class. <see cref="WindowMonitor.OnRawWinEvent"/> takes no
+/// lock that the state machine ever holds, so the callback cannot be serialised
+/// behind Win32 or process-identity work performed by the worker. See
+/// <see cref="RawEventQueue"/> for the mechanism.
 /// </summary>
 public sealed class WinEventHookSource : IDisposable
 {
@@ -31,6 +44,13 @@ public sealed class WinEventHookSource : IDisposable
     private Thread? _pumpThread;
     private volatile bool _stopRequested;
     private volatile bool _started;
+
+    // Set once Dispose has begun. The callback checks this AFTER incrementing the
+    // raw counter: an OUTOFCONTEXT callback that was already in flight when the
+    // hook was removed must not be counted as "a callback that still ran after
+    // Dispose", because the unsubscribe had no chance to stop it. Counting it
+    // would turn an unavoidable OS-level race into a false instability signal.
+    private volatile bool _disposed;
 
     public WinEventHookSource(IRawWinEventSink sink, bool skipOwnProcess = false)
     {
@@ -151,6 +171,15 @@ public sealed class WinEventHookSource : IDisposable
     {
         Interlocked.Increment(ref _rawCallbackCount);
 
+        // Unsubscribe race guard. UnhookWinEvent only stops *future* callbacks; a
+        // callback already delivered cannot be revoked. Once Dispose has started we
+        // no longer act on the event, so teardown cannot be extended (or a captured
+        // resource touched) by a callback that raced the unhook.
+        if (_disposed)
+        {
+            return;
+        }
+
         // Window-level events only; child-object noise is dropped before it can
         // reach the queue.
         if (idObject != WinEvent.OBJID_WINDOW)
@@ -158,12 +187,14 @@ public sealed class WinEventHookSource : IDisposable
             return;
         }
 
-        // MUST NOT block. The sink is contractually non-blocking.
+        // Bounded, lock-free with respect to the state machine: the sink appends to
+        // its own raw queue and returns.
         _sink.OnRawWinEvent(eventType, hwnd.ToInt64(), idObject);
     }
 
     public void Dispose()
     {
+        _disposed = true;
         _stopRequested = true;
         _pumpThread?.Join(3000);
 
