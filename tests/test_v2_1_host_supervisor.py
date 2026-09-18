@@ -154,6 +154,7 @@ class HostSupervisorFixture:
         self._scenario("resyncfault")
         self._scenario("capability", ["--engine-fault-missing-capability", "BitBlt"])
         self._scenario("faults", ["--engine-fault-hello-size", "12345"])
+        self._scenario("detectionorder")
         self._scenario("metrics", ["--runs", "5"], timeout=420)
 
     def _run_verifier(self) -> None:
@@ -220,7 +221,7 @@ class HostSupervisorFixture:
             "childDisappearedMs": gone_at,
             "orphanPrevented": gone_at is not None,
             "mapName": info["mapName"],
-            "killMethod": "TerminateProcess (SIGTERM, no graceful cleanup path)",
+            "killMethod": "Win32 TerminateProcess hard termination (no graceful cleanup path)",
         }
 
     def _run_v2_0_regression(self) -> None:
@@ -306,6 +307,28 @@ class V21HostSupervisorTests(unittest.TestCase):
         self.assertTrue(generation["HelloAckValidated"], "the HELLO_ACK was never validated")
         self.assertEqual(run_payload["errors"], [])
         self.assertTrue(run_payload["pipe"]["AclReadBackSucceeded"], "pipe ACL could not be read back")
+
+        # handshakeMs must start at the pipe-accept success instant, not before it.
+        self.assertEqual(
+            generation["HandshakeStartNs"], generation["PipeAcceptedNs"],
+            "handshakeStartNs is not the ConnectNamedPipe success timestamp",
+        )
+        self.assertGreater(generation["PipeAcceptedNs"], 0)
+        self.assertGreaterEqual(generation["HelloSentNs"], generation["PipeAcceptedNs"])
+        self.assertGreaterEqual(generation["HelloAckReceivedNs"], generation["HelloSentNs"])
+        self.assertGreaterEqual(generation["HelloAckValidatedNs"], generation["HelloAckReceivedNs"])
+
+        # The derived metric must equal the raw timestamp delta exactly.
+        recomputed = (generation["HelloAckValidatedNs"] - generation["PipeAcceptedNs"]) / 1e6
+        self.assertAlmostEqual(generation["HandshakeMs"], recomputed, places=6,
+                               msg="handshakeMs does not equal helloAckValidatedNs - pipeAcceptedNs")
+
+        # It must NOT include child spawn or the wait for the engine to reach the pipe.
+        self.assertGreater(generation["ChildSpawnNs"], 0)
+        self.assertGreater(generation["PipeAcceptedNs"], generation["ChildSpawnNs"])
+        self.assertLess(generation["HandshakeMs"],
+                        (generation["HelloAckValidatedNs"] - generation["ChildSpawnNs"]) / 1e6,
+                        "handshakeMs still spans child spawn")
 
     # -- T02 -------------------------------------------------------------- #
     def test_02_hello_hello_ack_wire_bytes_match_golden(self) -> None:
@@ -434,8 +457,41 @@ class V21HostSupervisorTests(unittest.TestCase):
 
         raw = self.scenario("metrics")["raw"]
         for sample in raw:
-            self.assertIn("exitDetectionSignal", sample)
-            self.assertIn(sample["exitDetectionSignal"], ("process_exited", "ERR_STREAM_EOF", "ERR_PIPE_BROKEN"))
+            # First-signal rule: exitDetectedNs must be the earliest non-null signal.
+            signals = [s for s in (sample["processExitedNs"], sample["pipeEofNs"]) if s is not None]
+            self.assertTrue(signals, f"run {sample['run']} recorded no exit signal at all")
+            self.assertEqual(sample["exitDetectedNs"], min(signals),
+                             f"run {sample['run']}: exitDetectedNs is not the earliest signal")
+            self.assertTrue(sample["exitDetectedEqualsMin"])
+            expected_signal = ("process_exited"
+                               if sample["processExitedNs"] is not None
+                               and (sample["pipeEofNs"] is None or sample["processExitedNs"] <= sample["pipeEofNs"])
+                               else "pipe_eof")
+            self.assertEqual(sample["exitDetectionSignal"], expected_signal,
+                             f"run {sample['run']}: exitDetectionSignal does not match the earliest signal")
+            # The derived metric must equal crashMarker -> exitDetected, and the
+            # restart metric must start from the same instant.
+            self.assertTrue(sample["handshakeStartEqualsPipeAccepted"])
+
+        summary = self.scenario("metrics")["summary"]
+        self.assertTrue(summary["exitDetectedEqualsMinAllRuns"],
+                        "at least one run resolved exitDetectedNs to something other than the earliest signal")
+        self.assertTrue(summary["handshakeStartEqualsPipeAcceptedAllRuns"])
+
+    def test_27_pipe_eof_detection_ordering(self) -> None:
+        run_payload = self.scenario("detectionorder")
+        self.assertTrue(run_payload["pipeEofEarlierThanProcessExited"],
+                        "the engine did not manage to make the pipe EOF signal arrive first")
+        self.assertIsNotNone(run_payload["pipeEofNs"])
+        self.assertIsNotNone(run_payload["processExitedNs"])
+        self.assertEqual(run_payload["exitDetectedNs"], run_payload["expectedMinNs"])
+        self.assertTrue(run_payload["exitDetectedEqualsMin"])
+        self.assertEqual(
+            run_payload["exitDetectionSignal"], "pipe_eof",
+            "the reported signal is not pipe_eof even though the pipe EOF was observed first",
+        )
+        self.assertGreater(run_payload["pipeEofToProcessExitedMs"], 500,
+                           "the pipe EOF was not meaningfully earlier than the process exit")
 
     # -- T09 -------------------------------------------------------------- #
     def test_09_restart_uses_new_nonce_and_new_pipe(self) -> None:
