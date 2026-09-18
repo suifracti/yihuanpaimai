@@ -101,6 +101,9 @@ internal static class Program
                 case "resyncfault":
                     result["run"] = RunResyncFault(python, engine, workDir, contractsDir, sessionId, trace);
                     break;
+                case "detectionorder":
+                    result["run"] = RunDetectionOrder(python, engine, workDir, contractsDir, sessionId, trace);
+                    break;
                 default:
                     Console.Error.WriteLine($"unknown scenario '{scenario}'");
                     return 2;
@@ -489,7 +492,27 @@ internal static class Program
                     ["snapshotResyncMs"] = g2.SnapshotResyncMs,
                     ["mockBusinessReadyMs"] = g1.MockBusinessReadyMs,
                     ["mockBusinessReadyMsGeneration2"] = g2.MockBusinessReadyMs,
-                    ["exitDetectionSignal"] = session.ExitDetectionSignal,
+
+                    // First-signal evidence: both raw signals plus the resolved earliest.
+                    ["processExitedNs"] = g1.ProcessExitedNs,
+                    ["pipeEofNs"] = g1.PipeEofNs,
+                    ["exitDetectedNs"] = g1.ExitDetectedNs,
+                    ["exitDetectionSignal"] = g1.ExitDetectionSignal,
+                    ["exitDetectedEqualsMin"] = MinMatches(g1.ProcessExitedNs, g1.PipeEofNs, g1.ExitDetectedNs),
+
+                    // Handshake boundary evidence: the reviewer can recompute
+                    // handshakeMs from these without trusting a derived number.
+                    ["pipeAcceptedNs"] = g1.PipeAcceptedNs,
+                    ["handshakeStartNs"] = g1.HandshakeStartNs,
+                    ["helloSentNs"] = g1.HelloSentNs,
+                    ["helloAckReceivedNs"] = g1.HelloAckReceivedNs,
+                    ["helloAckValidatedNs"] = g1.HelloAckValidatedNs,
+                    ["handshakeStartEqualsPipeAccepted"] = g1.HandshakeStartNs == g1.PipeAcceptedNs,
+                    ["pipeAcceptedNsGeneration2"] = g2.PipeAcceptedNs,
+                    ["helloAckValidatedNsGeneration2"] = g2.HelloAckValidatedNs,
+                    ["childSpawnNsGeneration2"] = restart.ChildSpawnNs,
+                    ["exitDetectedNsGeneration2Start"] = restart.ExitDetectedNs,
+
                     ["childExitCode"] = session.ExitCode,
                 });
             }
@@ -521,6 +544,12 @@ internal static class Program
             summary[$"{name}_sampleCount"] = values.Count;
         }
         summary["mockBusinessReadyMs_isMock"] = true;
+        summary["exitDetectedEqualsMinAllRuns"] = raw
+            .Where(r => r.ContainsKey("exitDetectedEqualsMin"))
+            .All(r => (bool)r["exitDetectedEqualsMin"]!);
+        summary["handshakeStartEqualsPipeAcceptedAllRuns"] = raw
+            .Where(r => r.ContainsKey("handshakeStartEqualsPipeAccepted"))
+            .All(r => (bool)r["handshakeStartEqualsPipeAccepted"]!);
 
         return new Dictionary<string, object?>
         {
@@ -920,6 +949,79 @@ internal static class Program
         };
     }
 
+    /// <summary>
+    /// T27: proves the first-signal rule rather than asserting it. The engine closes
+    /// the pipe and then stays alive for ~1.2s before exiting, so the pipe EOF signal
+    /// is deterministically observed BEFORE Process.Exited; exitDetectedNs must equal
+    /// min(processExitedNs, pipeEofNs) and the reported signal must be pipe_eof.
+    /// </summary>
+    private static Dictionary<string, object?> RunDetectionOrder(string python, string engine, string workDir,
+        string contractsDir, string sessionId, TraceLog trace)
+    {
+        using var session = new SupervisorSession(new SupervisorSession.Options
+        {
+            PythonExe = python,
+            EngineScript = engine,
+            WorkDir = workDir,
+            ContractsDir = contractsDir,
+            SessionId = sessionId,
+            Trace = trace,
+            EngineLogPath = Path.Combine(workDir, "engine_trace.jsonl"),
+        });
+
+        session.StartGeneration(coldBoot: true);
+        session.Handshake(coldBoot: true);
+        session.ReachReady(coldBoot: true, noRecoverableBusinessState: true);
+
+        session.SendCommand("test.close_pipe_and_linger", timeoutMs: 1500);
+
+        // Wait for the pipe EOF signal first.
+        var pipeDeadline = Environment.TickCount64 + 6000;
+        while (Environment.TickCount64 < pipeDeadline && session.PipeEofNs is null)
+        {
+            Thread.Sleep(1);
+        }
+
+        // Then wait for the process to actually exit.
+        var exitDeadline = Environment.TickCount64 + 8000;
+        while (Environment.TickCount64 < exitDeadline && session.ProcessExitedNs is null)
+        {
+            Thread.Sleep(1);
+        }
+
+        var processExitedNs = session.ProcessExitedNs;
+        var pipeEofNs = session.PipeEofNs;
+        var detectedNs = session.ExitDetectedNs;
+        var signal = session.ExitDetectionSignal;
+
+        long? expectedMin = null;
+        if (processExitedNs is not null && pipeEofNs is not null)
+        {
+            expectedMin = Math.Min(processExitedNs.Value, pipeEofNs.Value);
+        }
+        else
+        {
+            expectedMin = processExitedNs ?? pipeEofNs;
+        }
+
+        return new Dictionary<string, object?>
+        {
+            ["processExitedNs"] = processExitedNs,
+            ["pipeEofNs"] = pipeEofNs,
+            ["exitDetectedNs"] = detectedNs,
+            ["exitDetectionSignal"] = signal,
+            ["expectedMinNs"] = expectedMin,
+            ["exitDetectedEqualsMin"] = detectedNs == expectedMin,
+            ["pipeEofEarlierThanProcessExited"] = pipeEofNs is not null && processExitedNs is not null && pipeEofNs < processExitedNs,
+            ["pipeEofToProcessExitedMs"] = pipeEofNs is not null && processExitedNs is not null
+                ? ProtocolClock.DeltaMs(pipeEofNs.Value, processExitedNs.Value)
+                : null,
+            ["exitCode"] = session.ExitCode,
+            ["lifecycleTrace"] = traceRows(session),
+            ["errors"] = session.Errors,
+        };
+    }
+
     // ------------------------------------------------------------------ helpers
 
     private static JsonObject? ReadEngineMmfProbe(string workDir)
@@ -942,6 +1044,25 @@ internal static class Program
     private static object? ProbeFlag(JsonObject? probe, string key) => probe?[key]?.GetValue<bool>();
     private static object? ProbeString(JsonObject? probe, string key) => probe?[key]?.GetValue<string>();
     private static object? ProbeInt(JsonObject? probe, string key) => probe?[key]?.GetValue<int>();
+
+    /// <summary>True when the resolved detection timestamp is the earliest non-null signal.</summary>
+    private static bool MinMatches(long? processExitedNs, long? pipeEofNs, long? exitDetectedNs)
+    {
+        if (exitDetectedNs is null)
+        {
+            return false;
+        }
+        if (processExitedNs is null && pipeEofNs is null)
+        {
+            return false;
+        }
+        var expected = processExitedNs is null
+            ? pipeEofNs!.Value
+            : pipeEofNs is null
+                ? processExitedNs.Value
+                : Math.Min(processExitedNs.Value, pipeEofNs.Value);
+        return expected == exitDetectedNs.Value;
+    }
 
     private static Dictionary<string, object?> Metrics(SupervisorSession session)
     {

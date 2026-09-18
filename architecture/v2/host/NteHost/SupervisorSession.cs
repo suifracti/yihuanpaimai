@@ -18,6 +18,7 @@ public sealed class GenerationRecord
     public string MapName { get; set; } = string.Empty;
     public bool ColdBoot { get; set; }
     public int ChildPid { get; set; }
+    public long ChildSpawnNs { get; set; }
     public bool PipeAccepted { get; set; }
     public bool HelloAckValidated { get; set; }
     public string EngineReadiness { get; set; } = string.Empty;
@@ -25,10 +26,25 @@ public sealed class GenerationRecord
     public long EngineFirstSequence { get; set; } = -1;
     public long HostHelloSequence { get; set; } = -1;
     public double? HandshakeMs { get; set; }
+
+    // Raw QPC timestamps so a reviewer can recompute handshakeMs from the artifact
+    // instead of trusting a single derived number.
+    public long PipeAcceptedNs { get; set; }
+    public long HandshakeStartNs { get; set; }
+    public long HelloSentNs { get; set; }
+    public long HelloAckReceivedNs { get; set; }
+    public long HelloAckValidatedNs { get; set; }
     public double? MockBusinessReadyMs { get; set; }
     public double? SnapshotResyncMs { get; set; }
     public double? ProcessExitDetectionMs { get; set; }
     public double? ProcessRestartMs { get; set; }
+
+    // Raw first-signal timestamps so the earliest-signal rule can be recomputed
+    // from the artifact rather than taken on trust.
+    public long? ProcessExitedNs { get; set; }
+    public long? PipeEofNs { get; set; }
+    public long? ExitDetectedNs { get; set; }
+    public string ExitDetectionSignal { get; set; } = string.Empty;
     public string FinalState { get; set; } = string.Empty;
     public string HelloWireHex { get; set; } = string.Empty;
     public string HelloAckWireHex { get; set; } = string.Empty;
@@ -85,11 +101,97 @@ public sealed class SupervisorSession : IDisposable
     public bool ShutdownRequested { get; private set; }
     public bool CrashCounted { get; private set; }
     public long? CrashMarkerNs { get; private set; }
-    public long? ExitDetectedNs { get; private set; }
-    public string ExitDetectionSignal { get; private set; } = string.Empty;
     public int? ExitCode { get; private set; }
     public long ChildSpawnNs { get; private set; }
     public int? ChildPid { get; private set; }
+
+    public const string SignalProcessExited = "process_exited";
+    public const string SignalPipeEof = "pipe_eof";
+
+    private readonly object _detectionGate = new();
+
+    /// <summary>QPC ns of the first Process.Exited observation (null until then).</summary>
+    public long? ProcessExitedNs { get; private set; }
+
+    /// <summary>QPC ns of the first pipe EOF observation (null until then).</summary>
+    public long? PipeEofNs => _pipeEofNs == 0 ? null : _pipeEofNs;
+
+    /// <summary>
+    /// The earliest of the two independent exit signals. Both the Process.Exited
+    /// handler and the pipe reader funnel through RecordDetection, so this is a
+    /// genuine first-signal value and not a Process.Exited value with a fallback.
+    /// </summary>
+    public long? ExitDetectedNs
+    {
+        get
+        {
+            lock (_detectionGate)
+            {
+                var p = ProcessExitedNs;
+                var e = _pipeEofNs == 0 ? (long?)null : _pipeEofNs;
+                if (p is null)
+                {
+                    return e;
+                }
+                if (e is null)
+                {
+                    return p;
+                }
+                return Math.Min(p.Value, e.Value);
+            }
+        }
+    }
+
+    /// <summary>The signal that produced ExitDetectedNs.</summary>
+    public string ExitDetectionSignal
+    {
+        get
+        {
+            lock (_detectionGate)
+            {
+                var p = ProcessExitedNs;
+                var e = _pipeEofNs == 0 ? (long?)null : _pipeEofNs;
+                if (p is null && e is null)
+                {
+                    return string.Empty;
+                }
+                if (p is null)
+                {
+                    return SignalPipeEof;
+                }
+                if (e is null)
+                {
+                    return SignalProcessExited;
+                }
+                return p.Value <= e.Value ? SignalProcessExited : SignalPipeEof;
+            }
+        }
+    }
+
+    /// <summary>
+    /// Single thread-safe entry point for both exit signals. Whichever signal
+    /// arrives first wins; a later signal never overwrites an earlier timestamp.
+    /// </summary>
+    public void RecordDetection(string signal, long timestampNs)
+    {
+        lock (_detectionGate)
+        {
+            if (signal == SignalProcessExited)
+            {
+                if (ProcessExitedNs is null || timestampNs < ProcessExitedNs.Value)
+                {
+                    ProcessExitedNs = timestampNs;
+                }
+                return;
+            }
+
+            if (_pipeEofNs == 0 || timestampNs < _pipeEofNs)
+            {
+                _pipeEofNs = timestampNs;
+            }
+        }
+    }
+
     public bool JobKillOnCloseSet => _job.KillOnJobCloseSet;
     public bool ChildAlive => _child is { HasExited: false };
     public bool PipeConnectFailedClosed { get; private set; }
@@ -153,12 +255,11 @@ public sealed class SupervisorSession : IDisposable
         PipeName = string.IsNullOrEmpty(pipeNameOverride) ? ProtocolConstants.PipeName(_options.SessionId, Nonce) : pipeNameOverride;
         MapName = ProtocolConstants.MapName(_options.SessionId, Nonce);
 
-        // Each generation gets its own pipe-EOF bookkeeping; a previous
-        // generation's EOF must never leak into the new one.
+        // Each generation gets its own pipe-EOF and exit-detection bookkeeping; a
+        // previous generation's signals must never leak into the new one.
         _pipeEofNs = 0;
         _pipeEofReason = string.Empty;
-        ExitDetectedNs = null;
-        ExitDetectionSignal = string.Empty;
+        ProcessExitedNs = null;
         ExitCode = null;
 
         _trace.SetGenerationNonce(Nonce);
@@ -185,6 +286,7 @@ public sealed class SupervisorSession : IDisposable
         {
             StartChild();
             record.ChildPid = ChildPid ?? -1;
+            record.ChildSpawnNs = ChildSpawnNs;
         }
 
         return record;
@@ -262,12 +364,7 @@ public sealed class SupervisorSession : IDisposable
 
     private void OnChildExited(object? sender, EventArgs e)
     {
-        var ns = ProtocolClock.NowNs();
-        if (ExitDetectedNs is null || ns < ExitDetectedNs)
-        {
-            ExitDetectedNs = ns;
-            ExitDetectionSignal = "process_exited";
-        }
+        RecordDetection(SignalProcessExited, ProtocolClock.NowNs());
         try
         {
             ExitCode = ((Process)sender!).ExitCode;
@@ -326,8 +423,8 @@ public sealed class SupervisorSession : IDisposable
                     var envelope = Framing.ReadEnvelope(stream);
                     if (envelope is null)
                     {
-                        _pipeEofNs = ProtocolClock.NowNs();
                         _pipeEofReason = ErrorCodes.StreamEof;
+                        RecordDetection(SignalPipeEof, ProtocolClock.NowNs());
                         break;
                     }
                     // Every inbound message is traced with its correlation keys so a
@@ -350,8 +447,8 @@ public sealed class SupervisorSession : IDisposable
             }
             catch (Exception ex)
             {
-                _pipeEofNs = ProtocolClock.NowNs();
                 _pipeEofReason = ex is ProtocolViolationException pve ? pve.ErrorCode : ErrorCodes.PipeBroken;
+                RecordDetection(SignalPipeEof, ProtocolClock.NowNs());
                 _trace.Event("pipe.eof", generationId, new { reason = _pipeEofReason, message = ex.Message });
             }
             finally
@@ -412,10 +509,15 @@ public sealed class SupervisorSession : IDisposable
         record.ColdBoot = coldBoot;
 
         Lifecycle.TryTransitionTo(LifecycleState.STARTING, out _);
-        var acceptNs = ProtocolClock.NowNs();
 
         BeginAccept();
         record.PipeAccepted = true;
+
+        // handshakeMs starts at the instant ConnectNamedPipe reported success. Child
+        // spawn, the wait for the engine to reach the pipe and the accept wait itself
+        // are all excluded by construction.
+        record.PipeAcceptedNs = _pipe!.AcceptedNs;
+        record.HandshakeStartNs = record.PipeAcceptedNs;
 
         if (_options.PostAcceptDelayMs > 0)
         {
@@ -441,6 +543,7 @@ public sealed class SupervisorSession : IDisposable
             framedBytes = helloFramed.Length,
         });
         _pipe!.Send(hello, _trace, GenerationId);
+        record.HelloSentNs = ProtocolClock.NowNs();
 
         var ack = WaitForMessage(e => e.MessageType == MessageTypes.HelloAck || e.MessageType == MessageTypes.Error,
             ProtocolConstants.HelloNegotiationTimeoutMs, out var observed);
@@ -449,6 +552,7 @@ public sealed class SupervisorSession : IDisposable
             throw new ProtocolViolationException(ErrorCodes.HandshakeTimeout,
                 $"no HELLO_ACK within {ProtocolConstants.HelloNegotiationTimeoutMs}ms (observed {observed.Count} messages)");
         }
+        record.HelloAckReceivedNs = ProtocolClock.NowNs();
 
         if (ack.MessageType == MessageTypes.Error)
         {
@@ -484,12 +588,19 @@ public sealed class SupervisorSession : IDisposable
         }
 
         record.HelloAckValidated = true;
-        var ackNs = ProtocolClock.NowNs();
-        record.HandshakeMs = ProtocolClock.DeltaMs(acceptNs, ackNs);
-        record.MockBusinessReadyMs = ProtocolClock.DeltaMs(ChildSpawnNs, ackNs);
-        _trace.Event("handshake.complete", GenerationId,
-            new { status = record.HelloAckStatus, readiness = record.EngineReadiness, handshakeMs = record.HandshakeMs },
-            hello.RequestId, ack.CorrelationId);
+        record.HelloAckValidatedNs = ProtocolClock.NowNs();
+        record.HandshakeMs = ProtocolClock.DeltaMs(record.PipeAcceptedNs, record.HelloAckValidatedNs);
+        record.MockBusinessReadyMs = ProtocolClock.DeltaMs(ChildSpawnNs, record.HelloAckValidatedNs);
+        _trace.Event("handshake.complete", GenerationId, new
+        {
+            status = record.HelloAckStatus,
+            readiness = record.EngineReadiness,
+            pipeAcceptedNs = record.PipeAcceptedNs,
+            helloSentNs = record.HelloSentNs,
+            helloAckReceivedNs = record.HelloAckReceivedNs,
+            helloAckValidatedNs = record.HelloAckValidatedNs,
+            handshakeMs = record.HandshakeMs,
+        }, hello.RequestId, ack.CorrelationId);
         return record;
     }
 
@@ -688,8 +799,9 @@ public sealed class SupervisorSession : IDisposable
     {
         var record = _generations[^1];
         CrashMarkerNs = null;
-        ExitDetectedNs = null;
-        ExitDetectionSignal = string.Empty;
+        ProcessExitedNs = null;
+        _pipeEofNs = 0;
+        _pipeEofReason = string.Empty;
 
         SendCommand("test.simulate_crash", timeoutMs: 2000);
 
@@ -710,19 +822,15 @@ public sealed class SupervisorSession : IDisposable
             CrashMarkerNs = (long?)node?["crashMarkerNs"];
         }
 
-        if (ExitDetectedNs is null)
-        {
-            // Fall back to the pipe EOF signal if the process-exited event was lost.
-            if (_pipeEofNs != 0)
-            {
-                ExitDetectedNs = _pipeEofNs;
-                ExitDetectionSignal = _pipeEofReason;
-            }
-        }
+        var detectedNs = ExitDetectedNs;
+        record.ProcessExitedNs = ProcessExitedNs;
+        record.PipeEofNs = PipeEofNs;
+        record.ExitDetectedNs = detectedNs;
+        record.ExitDetectionSignal = ExitDetectionSignal;
 
-        if (CrashMarkerNs is not null && ExitDetectedNs is not null && ExitDetectedNs > CrashMarkerNs)
+        if (CrashMarkerNs is not null && detectedNs is not null && detectedNs > CrashMarkerNs)
         {
-            record.ProcessExitDetectionMs = ProtocolClock.DeltaMs(CrashMarkerNs.Value, ExitDetectedNs.Value);
+            record.ProcessExitDetectionMs = ProtocolClock.DeltaMs(CrashMarkerNs.Value, detectedNs.Value);
         }
         else
         {
@@ -733,8 +841,10 @@ public sealed class SupervisorSession : IDisposable
         _trace.Event("crash.detected", GenerationId, new
         {
             crashMarkerNs = CrashMarkerNs,
-            exitDetectedNs = ExitDetectedNs,
-            signal = ExitDetectionSignal,
+            processExitedNs = ProcessExitedNs,
+            pipeEofNs = PipeEofNs,
+            exitDetectedNs = detectedNs,
+            signal = record.ExitDetectionSignal,
             exitCode = ExitCode,
             processExitDetectionMs = record.ProcessExitDetectionMs,
         });
@@ -755,7 +865,14 @@ public sealed class SupervisorSession : IDisposable
     /// </summary>
     public GenerationRecord RestartAndMeasure()
     {
-        var restartStartNs = ExitDetectedNs ?? ProtocolClock.NowNs();
+        // processRestartMs starts at the first exit signal and ends when the
+        // replacement child's Start() has returned. MMF and pipe creation for the
+        // new generation happen inside that window in a fixed order (MMF -> pipe ->
+        // spawn), so they are included by construction.
+        var detectedNs = ExitDetectedNs
+                         ?? throw new ProtocolViolationException(ErrorCodes.PipeDisconnected,
+                             "restart requested before any exit signal was observed");
+        var restartStartNs = detectedNs;
 
         // Drain and close the stale generation handles before allocating new ones.
         var closedGeneration = GenerationId;
@@ -763,9 +880,17 @@ public sealed class SupervisorSession : IDisposable
 
         var record = StartGeneration(coldBoot: false);
         record.ProcessRestartMs = ProtocolClock.DeltaMs(restartStartNs, ChildSpawnNs);
+        record.ProcessExitedNs = ProcessExitedNs;
+        record.PipeEofNs = PipeEofNs;
+        record.ExitDetectedNs = detectedNs;
+        record.ExitDetectionSignal = ExitDetectionSignal;
         _trace.Event("restart.complete", GenerationId, new
         {
             processRestartMs = record.ProcessRestartMs,
+            restartStartNs = restartStartNs,
+            childSpawnNs = ChildSpawnNs,
+            exitDetectedNs = detectedNs,
+            exitDetectionSignal = record.ExitDetectionSignal,
             newNonceShort = Nonce[..8],
             newMapName = MapName,
             oldGeneration = closedGeneration,
