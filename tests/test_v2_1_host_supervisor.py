@@ -30,6 +30,18 @@ from pathlib import Path
 REPO_ROOT = Path(__file__).resolve().parents[1]
 HOST_DIR = REPO_ROOT / "architecture" / "v2" / "host"
 CONTRACTS_DIR = REPO_ROOT / "architecture" / "v2" / "contracts"
+
+# V2-1's source scan must cover V2-1's own trees only. `architecture/v2/host/` now
+# also hosts sibling phases (V2-2A window/focus monitoring) that legitimately use
+# EnumWindows / SetWinEventHook / GetForegroundWindow, which V2-1 listed as
+# forbidden because V2-1 itself had to stay out of window management. Scanning the
+# whole host tree would make this assertion fire on a sibling phase's correct code.
+V2_1_SOURCE_DIRS = [
+    HOST_DIR / "NteHost",
+    HOST_DIR / "NteHost.Protocol",
+    HOST_DIR / "engine_ref",
+    HOST_DIR / "verifier",
+]
 HOST_PROJECT = HOST_DIR / "NteHost" / "NteHost.csproj"
 VERIFIER_PROJECT = HOST_DIR / "verifier" / "HostSupervisorVerifier.csproj"
 ENGINE_SCRIPT = HOST_DIR / "engine_ref" / "nte_engine_ref.py"
@@ -678,7 +690,7 @@ class V21HostSupervisorTests(unittest.TestCase):
         forbidden_imports = ("import core", "from core", "import app", "from app")
 
         sources = [
-            p for p in HOST_DIR.rglob("*")
+            p for root in V2_1_SOURCE_DIRS for p in root.rglob("*")
             if p.is_file()
             and p.suffix.lower() in {".cs", ".py", ".csproj"}
             and "bin" not in p.parts and "obj" not in p.parts
@@ -729,9 +741,10 @@ class V21HostSupervisorTests(unittest.TestCase):
 
         # The V2-1 tree must not import anything from the production packages.
         bad_imports = []
-        for path in HOST_DIR.rglob("*.py"):
-            if "bin" in path.parts or "obj" in path.parts:
-                continue
+        for root in V2_1_SOURCE_DIRS:
+            for path in root.rglob("*.py"):
+                if "bin" in path.parts or "obj" in path.parts:
+                    continue
             for lineno, line in enumerate(path.read_text(encoding="utf-8", errors="replace").splitlines(), 1):
                 stripped = line.strip()
                 if stripped.startswith(("import core", "from core", "import app", "from app")):
