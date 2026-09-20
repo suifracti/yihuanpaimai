@@ -1,0 +1,18 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <RootNamespace>NteHost.Integration</RootNamespace>
+    <AssemblyName>NteHost.Integration</AssemblyName>
+    <LangVersion>latest</LangVersion>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\host\NteHost.WindowMonitor\NteHost.WindowMonitor.csproj" />
+    <ProjectReference Include="..\..\input\NteHost.Input\NteHost.Input.csproj" />
+    <ProjectReference Include="..\..\host\NteHost.Freeze\NteHost.Freeze.csproj" />
+  </ItemGroup>
+
+</Project>

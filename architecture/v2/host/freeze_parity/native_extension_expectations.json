@@ -1,0 +1,158 @@
+{
+  "schemaVersion": "v2.2c.freeze.native-extension-expectations.v1",
+  "scope": "NATIVE_EXTENSION only; never used to relax PYTHON_PARITY comparisons",
+  "expectations": [
+    {
+      "scenarioId": "N01_multi_reason_coexist_still_frozen",
+      "assertions": [
+        { "step": 2, "state": { "isFrozen": true, "activeReasons": ["FOCUS_LOST", "USER_TAKEOVER"], "actuatorCallCount": 0 } },
+        { "step": 3, "state": { "isFrozen": true, "activeReasons": ["USER_TAKEOVER"], "actuatorCallCount": 0 } },
+        { "step": 4, "executed": false, "actuatorCalled": false, "state": { "isFrozen": true, "scanPermitted": false } }
+      ],
+      "final": { "isFrozen": true, "scanPermitted": false, "activeReasons": ["USER_TAKEOVER"], "blockedCount": 1, "executedCount": 0, "actuatorCallCount": 0 }
+    },
+    {
+      "scenarioId": "N02_release_last_reason_does_not_auto_resume",
+      "assertions": [
+        { "step": 2, "state": { "isFrozen": true, "activeReasons": [], "awaitingRearm": true, "actuatorCallCount": 0 } },
+        { "step": 3, "executed": false, "actuatorCalled": false },
+        { "step": 4, "outcome": "APPLIED", "state": { "isFrozen": false, "activeReasons": [], "scanPermitted": true } },
+        { "step": 5, "executed": true, "actuatorCalled": true, "state": { "actuatorCallCount": 1 } }
+      ],
+      "final": { "isFrozen": false, "scanPermitted": true, "activeReasons": [], "blockedCount": 1, "executedCount": 1, "actuatorCallCount": 1 }
+    },
+    {
+      "scenarioId": "N03_stale_generation_rearm_fail_closed",
+      "assertions": [
+        { "step": 2, "outcome": "REJECTED_STALE_GENERATION", "state": { "isFrozen": true, "activeReasons": ["SESSION_UNVERIFIED"], "generationId": 2 } },
+        { "step": 3, "executed": false, "actuatorCalled": false, "state": { "blockedCount": 1 } }
+      ],
+      "final": { "isFrozen": true, "scanPermitted": false, "activeReasons": ["SESSION_UNVERIFIED"], "generationId": 2, "blockedCount": 1, "executedCount": 0, "actuatorCallCount": 0 }
+    },
+    {
+      "scenarioId": "N04_session_change_old_token_cannot_unfreeze_new_session",
+      "assertions": [
+        { "step": 3, "outcome": "REJECTED_STALE_TOKEN", "state": { "isFrozen": true, "activeReasons": ["SESSION_UNVERIFIED"], "generationId": 2 } },
+        { "step": 4, "executed": false, "actuatorCalled": false }
+      ],
+      "final": { "isFrozen": true, "scanPermitted": false, "activeReasons": ["SESSION_UNVERIFIED"], "generationId": 2, "blockedCount": 1, "executedCount": 0, "actuatorCallCount": 0 }
+    },
+    {
+      "scenarioId": "N05_session_change_is_frozen_until_rearmed",
+      "assertions": [
+        { "step": 2, "validated": true, "state": { "isFrozen": true, "activeReasons": [], "awaitingRearm": true, "generationId": 7 } },
+        { "step": 3, "executed": false, "actuatorCalled": false },
+        { "step": 5, "outcome": "APPLIED", "state": { "isFrozen": false, "activeReasons": [], "scanPermitted": true, "generationId": 7 } },
+        { "step": 6, "executed": true, "actuatorCalled": true, "state": { "actuatorCallCount": 1 } }
+      ],
+      "final": { "isFrozen": false, "scanPermitted": true, "activeReasons": [], "generationId": 7, "blockedCount": 1, "executedCount": 1, "actuatorCallCount": 1 }
+    },
+    {
+      "scenarioId": "N06_stale_generation_scan_request_denied",
+      "assertions": [
+        { "step": 1, "executed": false, "actuatorCalled": false, "state": { "isFrozen": false, "scanPermitted": true, "blockedCount": 1, "actuatorCallCount": 0 } }
+      ],
+      "final": { "isFrozen": false, "scanPermitted": true, "activeReasons": [], "blockedCount": 1, "executedCount": 0, "actuatorCallCount": 0 }
+    },
+    {
+      "scenarioId": "N07_crash_restart_never_defaults_to_allow",
+      "assertions": [
+        { "step": 0, "state": { "isFrozen": true, "scanPermitted": false, "activeReasons": ["SESSION_UNVERIFIED"], "actuatorCallCount": 0 } },
+        { "step": 1, "executed": false, "actuatorCalled": false }
+      ],
+      "final": { "isFrozen": true, "scanPermitted": false, "activeReasons": ["SESSION_UNVERIFIED"], "blockedCount": 1, "executedCount": 0, "actuatorCallCount": 0 }
+    },
+    {
+      "scenarioId": "N08_snapshot_resync_frozen_stays_frozen",
+      "assertions": [
+        { "step": 1, "state": { "isFrozen": true, "activeReasons": ["FOCUS_LOST", "USER_TAKEOVER", "SESSION_UNVERIFIED"], "actuatorCallCount": 0 } },
+        { "step": 2, "executed": false, "actuatorCalled": false }
+      ],
+      "final": { "isFrozen": true, "scanPermitted": false, "activeReasons": ["FOCUS_LOST", "USER_TAKEOVER", "SESSION_UNVERIFIED"], "blockedCount": 1, "executedCount": 0, "actuatorCallCount": 0 }
+    },
+    {
+      "scenarioId": "N09_snapshot_resync_not_frozen_is_forced_frozen",
+      "assertions": [
+        { "step": 1, "state": { "isFrozen": true, "activeReasons": ["SESSION_UNVERIFIED"], "actuatorCallCount": 0 } },
+        { "step": 2, "executed": false, "actuatorCalled": false }
+      ],
+      "final": { "isFrozen": true, "scanPermitted": false, "activeReasons": ["SESSION_UNVERIFIED"], "blockedCount": 1, "executedCount": 0, "actuatorCallCount": 0 }
+    },
+    {
+      "scenarioId": "N10_snapshot_resync_unvalidated_fail_closed",
+      "assertions": [
+        { "step": 1, "state": { "isFrozen": true, "activeReasons": ["SESSION_UNVERIFIED"], "actuatorCallCount": 0 } },
+        { "step": 2, "executed": false, "actuatorCalled": false }
+      ],
+      "final": { "isFrozen": true, "scanPermitted": false, "activeReasons": ["SESSION_UNVERIFIED"], "blockedCount": 1, "executedCount": 0, "actuatorCallCount": 0 }
+    },
+    {
+      "scenarioId": "N11_snapshot_resync_unknown_reason_token_ignored",
+      "assertions": [
+        { "step": 1, "state": { "isFrozen": true, "activeReasons": ["SESSION_UNVERIFIED"], "actuatorCallCount": 0 } },
+        { "step": 2, "executed": false, "actuatorCalled": false }
+      ],
+      "final": { "isFrozen": true, "scanPermitted": false, "activeReasons": ["SESSION_UNVERIFIED"], "blockedCount": 1, "executedCount": 0, "actuatorCallCount": 0 }
+    },
+    {
+      "scenarioId": "N12_explicit_freeze_reason",
+      "assertions": [
+        { "step": 1, "applied": true, "state": { "isFrozen": true, "activeReasons": ["EXPLICIT_FREEZE"], "actuatorCallCount": 0 } },
+        { "step": 2, "executed": false, "actuatorCalled": false }
+      ],
+      "final": { "isFrozen": true, "scanPermitted": false, "activeReasons": ["EXPLICIT_FREEZE"], "blockedCount": 1, "executedCount": 0, "actuatorCallCount": 0 }
+    },
+    {
+      "scenarioId": "N13_clear_unknown_reason_is_noop",
+      "assertions": [
+        { "step": 2, "applied": false, "state": { "isFrozen": true, "activeReasons": ["GAME_INTERACTION_CONFLICT"], "actuatorCallCount": 0 } },
+        { "step": 3, "executed": false, "actuatorCalled": false }
+      ],
+      "final": { "isFrozen": true, "scanPermitted": false, "activeReasons": ["GAME_INTERACTION_CONFLICT"], "blockedCount": 1, "executedCount": 0, "actuatorCallCount": 0 }
+    },
+    {
+      "scenarioId": "N14_stale_generation_reason_clear_refused",
+      "assertions": [
+        { "step": 2, "applied": false, "state": { "isFrozen": true, "activeReasons": ["SESSION_UNVERIFIED"], "generationId": 5 } },
+        { "step": 3, "executed": false, "actuatorCalled": false }
+      ],
+      "final": { "isFrozen": true, "scanPermitted": false, "activeReasons": ["SESSION_UNVERIFIED"], "generationId": 5, "blockedCount": 1, "executedCount": 0, "actuatorCallCount": 0 }
+    },
+    {
+      "scenarioId": "N15_trace_records_every_event_in_order",
+      "assertions": [
+        { "step": 2, "applied": true, "state": { "isFrozen": true, "activeReasons": [], "awaitingRearm": true } },
+        { "step": 3, "outcome": "REJECTED_CRITERIA", "state": { "isFrozen": true, "activeReasons": [] } },
+        { "step": 4, "outcome": "APPLIED", "state": { "isFrozen": false, "activeReasons": [], "scanPermitted": true } },
+        { "step": 5, "executed": true, "actuatorCalled": true, "state": { "actuatorCallCount": 1 } }
+      ],
+      "final": { "isFrozen": false, "scanPermitted": true, "activeReasons": [], "blockedCount": 0, "executedCount": 1, "actuatorCallCount": 1 }
+    },
+    {
+      "scenarioId": "N16_unknown_reason_and_event_fail_closed",
+      "assertions": [
+        { "step": 2, "rejected": true, "errorCode": "ERR_UNKNOWN_REASON", "state": { "isFrozen": true, "activeReasons": ["FOCUS_LOST"] } },
+        { "step": 3, "rejected": true, "errorCode": "ERR_UNKNOWN_EVENT", "state": { "isFrozen": true, "activeReasons": ["FOCUS_LOST"] } },
+        { "step": 4, "executed": false, "actuatorCalled": false }
+      ],
+      "final": { "isFrozen": true, "scanPermitted": false, "activeReasons": ["FOCUS_LOST"], "blockedCount": 1, "executedCount": 0, "actuatorCallCount": 0 }
+    },
+    {
+      "scenarioId": "N17_missing_session_identity_fails_closed",
+      "assertions": [
+        { "step": 1, "executed": false, "actuatorCalled": false, "denialCode": "ERR_MISSING_SESSION", "state": { "isFrozen": false, "scanPermitted": true } },
+        { "step": 2, "rejected": true, "errorCode": "ERR_MISSING_SESSION" },
+        { "step": 3, "rejected": true, "outcome": "REJECTED_MISSING_SESSION" }
+      ],
+      "final": { "isFrozen": false, "scanPermitted": true, "activeReasons": [], "blockedCount": 1, "executedCount": 0, "actuatorCallCount": 0 }
+    },
+    {
+      "scenarioId": "N18_freeze_round_expires_credential",
+      "assertions": [
+        { "step": 3, "outcome": "REJECTED_EXPIRED_TOKEN", "state": { "isFrozen": true, "activeReasons": ["FOCUS_LOST"] } },
+        { "step": 4, "executed": false, "actuatorCalled": false }
+      ],
+      "final": { "isFrozen": true, "scanPermitted": false, "activeReasons": ["FOCUS_LOST"], "blockedCount": 1, "executedCount": 0, "actuatorCallCount": 0 }
+    }
+  ]
+}

@@ -1,0 +1,17 @@
+{
+  "schemaVersion": "v2.2.integration.i1.scenarios.v1",
+  "scope": "offline fake source/observer/actuator only",
+  "scenarios": [
+    { "id": "I01_happy_path_c_permission_b_final_gate", "coverage": ["C permission", "B final precheck", "ticket", "one raw accepted"], "expected": { "rawCalls": 1, "accepted": 1 } },
+    { "id": "I02_focus_flap_leave_return_rejected", "coverage": ["foreground lost", "foreground returned", "independent B epoch", "no polling"], "expected": { "rawCalls": 0, "reason": "FOCUS_EPOCH_CHANGED" } },
+    { "id": "I03_queue_lag_fail_closed", "coverage": ["pending/unsettled source"], "expected": { "rawCalls": 0, "sourceFence": "SOURCE_PENDING_EVENTS" } },
+    { "id": "I04_queue_overflow_fail_closed", "coverage": ["queue overflow/drop delta"], "expected": { "rawCalls": 0, "sourceFence": "SOURCE_OVERFLOW" } },
+    { "id": "I05_same_hwnd_identity_rebuild_rejected", "coverage": ["same HWND", "new process identity", "B TargetId change"], "expected": { "rawCalls": 0, "reason": "TARGET_ID_MISMATCH" } },
+    { "id": "I06_user_takeover_freezes_c_and_cancels_b", "coverage": ["hardware mouse takeover", "B cancel", "C USER_TAKEOVER"], "expected": { "rawCalls": 0, "accepted": 0 } },
+    { "id": "I07_multiple_reasons_require_independent_clear", "coverage": ["multiple C reasons", "one clear still rejects", "all clear plus rearm"], "expected": { "rawCallsWhileFrozen": 0, "partialRearm": "REJECTED_ACTIVE_REASONS", "finalRearm": "APPLIED" } },
+    { "id": "I08_old_credential_rejected_after_session_change", "coverage": ["C session change", "old credential"], "expected": { "rearm": "REJECTED_STALE_TOKEN", "rawCalls": 0 } },
+    { "id": "I09_restart_resync_retires_credentials", "coverage": ["C resync", "freeze round", "retired credential"], "expected": { "rearm": "REJECTED_STALE_TOKEN", "rawCalls": 0 } },
+    { "id": "I10_freeze_send_commit_competition", "coverage": ["freeze before C commit", "freeze after B final before raw", "freeze after raw submission"], "expected": { "beforeRaw": 0, "middleRaw": 0, "afterRaw": 1, "afterAccepted": 1 } },
+    { "id": "I11_identity_epoch_session_scopes_separate", "coverage": ["A Generation", "B Epoch", "B TargetId", "C Generation"], "expected": { "aInitial": 41, "aRebuilt": 42, "bEpochAfterRebuild": 2, "cAfterRestart": 9, "rawCalls": 0 } }
+  ]
+}

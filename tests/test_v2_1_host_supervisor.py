@@ -30,6 +30,18 @@ from pathlib import Path
 REPO_ROOT = Path(__file__).resolve().parents[1]
 HOST_DIR = REPO_ROOT / "architecture" / "v2" / "host"
 CONTRACTS_DIR = REPO_ROOT / "architecture" / "v2" / "contracts"
+
+# V2-1's source scan must cover V2-1's own trees only. `architecture/v2/host/` now
+# also hosts sibling phases (V2-2A window/focus monitoring) that legitimately use
+# EnumWindows / SetWinEventHook / GetForegroundWindow, which V2-1 listed as
+# forbidden because V2-1 itself had to stay out of window management. Scanning the
+# whole host tree would make this assertion fire on a sibling phase's correct code.
+V2_1_SOURCE_DIRS = [
+    HOST_DIR / "NteHost",
+    HOST_DIR / "NteHost.Protocol",
+    HOST_DIR / "engine_ref",
+    HOST_DIR / "verifier",
+]
 HOST_PROJECT = HOST_DIR / "NteHost" / "NteHost.csproj"
 VERIFIER_PROJECT = HOST_DIR / "verifier" / "HostSupervisorVerifier.csproj"
 ENGINE_SCRIPT = HOST_DIR / "engine_ref" / "nte_engine_ref.py"
@@ -678,7 +690,7 @@ class V21HostSupervisorTests(unittest.TestCase):
         forbidden_imports = ("import core", "from core", "import app", "from app")
 
         sources = [
-            p for p in HOST_DIR.rglob("*")
+            p for root in V2_1_SOURCE_DIRS for p in root.rglob("*")
             if p.is_file()
             and p.suffix.lower() in {".cs", ".py", ".csproj"}
             and "bin" not in p.parts and "obj" not in p.parts
@@ -711,6 +723,75 @@ class V21HostSupervisorTests(unittest.TestCase):
         if truth_matrix.exists():
             self.assertNotIn("V2-1", truth_matrix.read_text(encoding="utf-8", errors="replace")[:200000])
 
+    # -- T27 -------------------------------------------------------------- #
+    def test_27_production_import_scan_covers_every_file(self) -> None:
+        """The T20 scan must inspect EVERY Python file, not just the last one per root.
+
+        Regression guard for a real defect: an earlier revision of T20 hoisted the
+        per-line loop out of the per-file loop by mis-indentation, so only the final
+        ``.py`` file of each source root was ever read. V2-1's Python surface is small
+        (``engine_ref/nte_engine_ref.py`` is the only one), which is exactly why that
+        bug was invisible: the check still "worked" because the single file happened
+        to be the last one.
+
+        This test makes the coverage observable. It plants scratch ``.py`` files inside
+        the REAL scan roots - chosen so that one of them is NOT the last file of its
+        root under T20's own ordering - then runs T20's exact closure and requires the
+        planted violation in the non-last file to be reported.
+        """
+        # Mirror T20's selector exactly, so this test fails if T20's selector loosens.
+        probe_root = V2_1_SOURCE_DIRS[1]  # NteHost.Protocol
+        planted = [
+            probe_root / "_t27_a_scan_probe.py",
+            probe_root / "_t27_b_scan_probe.py",
+            probe_root / "zz_t27_last_scan_probe.py",
+        ]
+        body = "\nimport core  # T27 planted violation\n"
+
+        original_single = {}
+        try:
+            for path in planted:
+                original_single[path] = path.read_text(encoding="utf-8") if path.exists() else None
+                path.write_text(body, encoding="utf-8")
+
+            # T20's exact closure.
+            offenders = []
+            scanned = []
+            for root in V2_1_SOURCE_DIRS:
+                for path in sorted(root.rglob("*.py")):
+                    if "bin" in path.parts or "obj" in path.parts:
+                        continue
+                    scanned.append(path)
+                    for lineno, line in enumerate(
+                            path.read_text(encoding="utf-8", errors="replace").splitlines(), 1):
+                        stripped = line.strip()
+                        if stripped.startswith(("import core", "from core", "import app", "from app")):
+                            offenders.append(f"{path.relative_to(REPO_ROOT)}:{lineno}: {stripped}")
+
+            ordered = sorted(p for p in scanned if p.parent == probe_root and p.name.startswith("_t27"))
+            non_last = [p for p in ordered if p != ordered[-1]] if ordered else []
+            self.assertTrue(non_last,
+                            f"the planted files did not appear in the scan at all: {scanned}")
+
+            reported = " ".join(offenders)
+            for path in non_last:
+                self.assertIn(str(path.relative_to(REPO_ROOT)).replace("\\", "\\"), reported,
+                              f"a production import in NON-last file {path.name} went unreported; "
+                              f"reported={offenders}")
+
+            # And the real file must still be visited: coverage did not shrink to the
+            # probes. T20 scans .py files only, so the real engine file is the anchor.
+            self.assertTrue(any(p.name == "nte_engine_ref.py" for p in scanned),
+                            "the scan stopped covering engine_ref")
+        finally:
+            for path, original in original_single.items():
+                if original is None:
+                    path.unlink(missing_ok=True)
+                else:
+                    path.write_text(original, encoding="utf-8")
+            for path in planted:
+                self.assertFalse(path.exists(), f"the planted probe {path} was not cleaned up")
+
     # -- T20 -------------------------------------------------------------- #
     def test_20_no_production_reachability(self) -> None:
         production_dirs = [REPO_ROOT / "app", REPO_ROOT / "core"]
@@ -728,14 +809,26 @@ class V21HostSupervisorTests(unittest.TestCase):
         self.assertEqual(offenders, [], "V2-1 is reachable from production code:\n" + "\n".join(offenders))
 
         # The V2-1 tree must not import anything from the production packages.
+        # EVERY Python file under every V2-1 source root is scanned. A previous
+        # revision of this test evaluated the per-line loop outside the per-file loop,
+        # so only the last file of each root was actually checked; T27 pins that
+        # regression shut by planting a violation in a non-last file.
         bad_imports = []
-        for path in HOST_DIR.rglob("*.py"):
-            if "bin" in path.parts or "obj" in path.parts:
-                continue
-            for lineno, line in enumerate(path.read_text(encoding="utf-8", errors="replace").splitlines(), 1):
-                stripped = line.strip()
-                if stripped.startswith(("import core", "from core", "import app", "from app")):
-                    bad_imports.append(f"{path.relative_to(REPO_ROOT)}:{lineno}: {stripped}")
+        scanned = []
+        for root in V2_1_SOURCE_DIRS:
+            for path in sorted(root.rglob("*.py")):
+                if "bin" in path.parts or "obj" in path.parts:
+                    continue
+                scanned.append(path.relative_to(REPO_ROOT).as_posix())
+                for lineno, line in enumerate(
+                        path.read_text(encoding="utf-8", errors="replace").splitlines(), 1):
+                    stripped = line.strip()
+                    if stripped.startswith(("import core", "from core", "import app", "from app")):
+                        bad_imports.append(f"{path.relative_to(REPO_ROOT)}:{lineno}: {stripped}")
+        # V2-1's Python surface is small (the reference engine is the only .py file),
+        # so the bound is kept at the real count instead of an invented figure.
+        self.assertGreaterEqual(len(scanned), 1,
+                               f"the V2-1 source scan covered no files at all: {scanned}")
         self.assertEqual(bad_imports, [], "V2-1 imports production modules:\n" + "\n".join(bad_imports))
 
     # -- T21 -------------------------------------------------------------- #

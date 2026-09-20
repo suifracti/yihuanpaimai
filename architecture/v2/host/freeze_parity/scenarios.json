@@ -1,0 +1,455 @@
+{
+  "schemaVersion": "v2.2c.freeze.parity.scenarios.v2",
+  "pythonReference": "core/warehouse_active_scan_freeze.py",
+  "nativeReference": "architecture/v2/host/NteHost.Freeze/FreezeCoordinator.cs",
+  "notes": [
+    "Every scenario is executed twice: once by the real Python PRD-F component (run_python_reference.py) and once by the native state machine (FreezeCoordinatorVerifier --scenarios).",
+    "surface=PYTHON_PARITY  -> both sides must agree on every field in safetySurface.",
+    "surface=NATIVE_EXTENSION -> the Python component cannot express these events at all; the native machine is the only authority. Divergence is expected and must be asserted, never hidden.",
+    "surface=DIVERGENCE -> both sides run, both are correct by their own contract, and the difference is a documented CONTRACT_GAP.",
+    "syncStep=true steps bring both machines to a common ALLOW baseline. Counters are baselined after the last sync step so the sync itself cannot pollute the comparison.",
+    "Native rearm steps use credential=fresh or an issued $nonce reference; missing identity and token cases are explicit native-extension cases.",
+    "The fake actuator call log is authoritative even when the Python callback returns None; wheelEmissionCount must equal actual actuatorCallCount.",
+    "NATIVE_EXTENSION scenarios are also checked against native_extension_expectations.json; final counter equality alone is insufficient."
+  ],
+  "safetySurface": [
+    "isFrozen",
+    "scanPermitted",
+    "blockedCount",
+    "executedCount",
+    "wheelEmissionCount"
+  ],
+  "scenarios": [
+    {
+      "id": "P01_keyboard_freeze_blocks_scroll",
+      "surface": "PYTHON_PARITY",
+      "description": "Soft keyboard active freezes; a subsequent scan request must be denied with zero wheel emissions.",
+      "steps": [
+        { "kind": "SyncToAllow", "syncStep": true },
+        { "kind": "ScanRequest" },
+        { "kind": "SoftKeyboardActive" },
+        { "kind": "ScanRequest" },
+        { "kind": "ScanRequest" }
+      ]
+    },
+    {
+      "id": "P02_focus_lost_freeze_blocks_scroll",
+      "surface": "PYTHON_PARITY",
+      "description": "Foreground/focus lost freezes; scan request denied.",
+      "steps": [
+        { "kind": "SyncToAllow", "syncStep": true },
+        { "kind": "ForegroundLost" },
+        { "kind": "ScanRequest" }
+      ]
+    },
+    {
+      "id": "P03_bid_active_freeze_blocks_scroll",
+      "surface": "PYTHON_PARITY",
+      "description": "Bid active / auction interaction conflict freezes; scan request denied.",
+      "steps": [
+        { "kind": "SyncToAllow", "syncStep": true },
+        { "kind": "BidActive" },
+        { "kind": "ScanRequest" }
+      ]
+    },
+    {
+      "id": "P04_user_takeover_freeze_blocks_scroll",
+      "surface": "PYTHON_PARITY",
+      "description": "User takeover freezes; scan request denied.",
+      "steps": [
+        { "kind": "SyncToAllow", "syncStep": true },
+        { "kind": "UserTakeover" },
+        { "kind": "ScanRequest" }
+      ]
+    },
+    {
+      "id": "P05_repeated_freeze_same_reason_stays_frozen",
+      "surface": "PYTHON_PARITY",
+      "description": "Freeze idempotency on the safety surface: repeating the same reason keeps the machine frozen and keeps blocking.",
+      "steps": [
+        { "kind": "SyncToAllow", "syncStep": true },
+        { "kind": "ForegroundLost" },
+        { "kind": "ForegroundLost" },
+        { "kind": "ForegroundLost" },
+        { "kind": "ScanRequest" }
+      ]
+    },
+    {
+      "id": "P06_rearm_with_invalid_focus_rejected",
+      "surface": "PYTHON_PARITY",
+      "description": "Rearm while target focus is invalid is rejected; machine stays frozen and keeps blocking.",
+      "steps": [
+        { "kind": "SyncToAllow", "syncStep": true },
+        { "kind": "ForegroundLost" },
+        { "kind": "RearmRequest", "credential": "fresh", "manualRearmConfirmed": true, "targetFocusValid": false, "noGameConflict": true, "noUserTakeoverActive": true },
+        { "kind": "ScanRequest" }
+      ]
+    },
+    {
+      "id": "P07_rearm_missing_criteria_rejected",
+      "surface": "PYTHON_PARITY",
+      "description": "Rearm with no criteria at all is rejected; machine stays frozen.",
+      "steps": [
+        { "kind": "SyncToAllow", "syncStep": true },
+        { "kind": "UserTakeover" },
+        { "kind": "RearmRequest", "credential": "fresh" },
+        { "kind": "ScanRequest" }
+      ]
+    },
+    {
+      "id": "P08_legacy_token_never_unfreezes",
+      "surface": "PYTHON_PARITY",
+      "description": "The deprecated arming-token interface must never release the freeze.",
+      "steps": [
+        { "kind": "SyncToAllow", "syncStep": true },
+        { "kind": "BidActive" },
+        { "kind": "LegacyToken", "token": "some_token" },
+        { "kind": "ScanRequest" }
+      ]
+    },
+    {
+      "id": "P09_halt_callback_failure_keeps_scan_blocked",
+      "surface": "PYTHON_PARITY",
+      "description": "A throwing halt sink is recorded but must never unblock the scan.",
+      "steps": [
+        { "kind": "SyncToAllow", "syncStep": true },
+        { "kind": "UserTakeover" },
+        { "kind": "ScanRequest" }
+      ],
+      "haltCallback": "THROWING"
+    },
+    {
+      "id": "P10_valid_rearm_resumes_scan",
+      "surface": "DIVERGENCE",
+      "description": "All four strict criteria true releases the freeze and scanning resumes.",
+      "expectedDivergence": {
+        "contractGap": "CONTRACT_GAP-7",
+        "allowedKinds": ["safety_surface", "actual_actuator_call", "final_safety_surface"],
+        "reason": "Python rearm clears its single active reason; native rearm requires that reason to be independently cleared before recovery."
+      },
+      "steps": [
+        { "kind": "SyncToAllow", "syncStep": true },
+        { "kind": "SoftKeyboardActive" },
+        { "kind": "ScanRequest" },
+        { "kind": "RearmRequest", "credential": "fresh", "manualRearmConfirmed": true, "targetFocusValid": true, "noGameConflict": true, "noUserTakeoverActive": true },
+        { "kind": "ScanRequest" }
+      ]
+    },
+    {
+      "id": "P11_assert_scroll_permitted_contract",
+      "surface": "PYTHON_PARITY",
+      "description": "assert_scan_permitted is silent when allowed and raises when frozen.",
+      "steps": [
+        { "kind": "SyncToAllow", "syncStep": true },
+        { "kind": "AssertScanPermitted" },
+        { "kind": "ForegroundLost" },
+        { "kind": "AssertScanPermitted" }
+      ]
+    },
+    {
+      "id": "P12_precheck_counters_survive_rearm",
+      "surface": "DIVERGENCE",
+      "description": "Denied/executed counters are cumulative and are not reset by a rearm.",
+      "expectedDivergence": {
+        "contractGap": "CONTRACT_GAP-7",
+        "allowedKinds": ["safety_surface", "actual_actuator_call", "final_safety_surface"],
+        "reason": "Python rearm clears its single active reason; native rearm requires that reason to be independently cleared before recovery."
+      },
+      "steps": [
+        { "kind": "SyncToAllow", "syncStep": true },
+        { "kind": "ForegroundLost" },
+        { "kind": "PrecheckOnly" },
+        { "kind": "PrecheckOnly" },
+        { "kind": "RearmRequest", "credential": "fresh", "manualRearmConfirmed": true, "targetFocusValid": true, "noGameConflict": true, "noUserTakeoverActive": true },
+        { "kind": "ScanRequest" }
+      ]
+    },
+    {
+      "id": "P13_rearm_while_not_frozen",
+      "surface": "PYTHON_PARITY",
+      "description": "Rearm attempted while the machine is already ALLOW: the safety surface must not change and scanning must stay permitted.",
+      "steps": [
+        { "kind": "SyncToAllow", "syncStep": true },
+        { "kind": "RearmRequest", "credential": "fresh", "manualRearmConfirmed": true, "targetFocusValid": true, "noGameConflict": true, "noUserTakeoverActive": true },
+        { "kind": "ScanRequest" }
+      ]
+    },
+    {
+      "id": "P14_freeze_after_rearm_blocks_again",
+      "surface": "DIVERGENCE",
+      "description": "After a clean rearm a new freeze condition must block scanning again.",
+      "expectedDivergence": {
+        "contractGap": "CONTRACT_GAP-7",
+        "allowedKinds": ["safety_surface", "actual_actuator_call", "final_safety_surface"],
+        "reason": "Python rearm clears its single active reason; native rearm requires that reason to be independently cleared before recovery."
+      },
+      "steps": [
+        { "kind": "SyncToAllow", "syncStep": true },
+        { "kind": "BidActive" },
+        { "kind": "RearmRequest", "credential": "fresh", "manualRearmConfirmed": true, "targetFocusValid": true, "noGameConflict": true, "noUserTakeoverActive": true },
+        { "kind": "ScanRequest" },
+        { "kind": "UserTakeover" },
+        { "kind": "ScanRequest" }
+      ]
+    },
+
+    {
+      "id": "N01_multi_reason_coexist_still_frozen",
+      "surface": "NATIVE_EXTENSION",
+      "description": "Two reasons coexist; releasing one must keep the machine frozen because the other still holds.",
+      "steps": [
+        { "kind": "SyncToAllow", "syncStep": true },
+        { "kind": "ForegroundLost" },
+        { "kind": "UserTakeover" },
+        { "kind": "ReasonCleared", "reason": "FOCUS_LOST" },
+        { "kind": "ScanRequest" }
+      ]
+    },
+    {
+      "id": "N02_release_last_reason_does_not_auto_resume",
+      "surface": "NATIVE_EXTENSION",
+      "description": "Releasing the final reason must NOT resume scanning: recovery stays explicit and requires a validated rearm.",
+      "steps": [
+        { "kind": "SyncToAllow", "syncStep": true },
+        { "kind": "ForegroundLost" },
+        { "kind": "ReasonCleared", "reason": "FOCUS_LOST" },
+        { "kind": "ScanRequest" },
+        { "kind": "RearmRequest", "credential": "fresh", "manualRearmConfirmed": true, "targetFocusValid": true, "noGameConflict": true, "noUserTakeoverActive": true },
+        { "kind": "ScanRequest" }
+      ]
+    },
+    {
+      "id": "N03_stale_generation_rearm_fail_closed",
+      "surface": "NATIVE_EXTENSION",
+      "description": "A rearm carrying a stale generation is refused and the machine stays frozen.",
+      "steps": [
+        { "kind": "SyncToAllow", "syncStep": true },
+        { "kind": "SessionChanged", "generationId": 2 },
+        { "kind": "RearmRequest", "generationId": 1, "manualRearmConfirmed": true, "targetFocusValid": true, "noGameConflict": true, "noUserTakeoverActive": true },
+        { "kind": "ScanRequest", "generationId": 1 }
+      ]
+    },
+    {
+      "id": "N04_session_change_old_token_cannot_unfreeze_new_session",
+      "surface": "NATIVE_EXTENSION",
+      "description": "A token minted in generation 1 must not release the freeze of generation 2.",
+      "steps": [
+        { "kind": "SyncToAllow", "syncStep": true },
+        { "kind": "IssueRearmToken", "nonce": "alpha" },
+        { "kind": "SessionChanged", "generationId": 2 },
+        { "kind": "RearmRequest", "generationId": 2, "rearmToken": "$alpha", "manualRearmConfirmed": true, "targetFocusValid": true, "noGameConflict": true, "noUserTakeoverActive": true },
+        { "kind": "ScanRequest", "generationId": 2 }
+      ]
+    },
+    {
+      "id": "N05_session_change_is_frozen_until_rearmed",
+      "surface": "NATIVE_EXTENSION",
+      "description": "A generation change always lands frozen; only a fresh generation-bound rearm resumes scanning.",
+      "steps": [
+        { "kind": "SyncToAllow", "syncStep": true },
+        { "kind": "SessionChanged", "generationId": 7 },
+        { "kind": "ValidateSession", "generationId": 7 },
+        { "kind": "ScanRequest", "generationId": 7 },
+        { "kind": "IssueRearmToken", "nonce": "beta" },
+        { "kind": "RearmRequest", "generationId": 7, "rearmToken": "$beta", "manualRearmConfirmed": true, "targetFocusValid": true, "noGameConflict": true, "noUserTakeoverActive": true },
+        { "kind": "ScanRequest", "generationId": 7 }
+      ]
+    },
+    {
+      "id": "N06_stale_generation_scan_request_denied",
+      "surface": "NATIVE_EXTENSION",
+      "description": "A scan request from a stale generation is refused even when the machine is otherwise ALLOW.",
+      "steps": [
+        { "kind": "SyncToAllow", "syncStep": true },
+        { "kind": "ScanRequest", "generationId": 99 }
+      ]
+    },
+    {
+      "id": "N07_crash_restart_never_defaults_to_allow",
+      "surface": "NATIVE_EXTENSION",
+      "description": "A freshly constructed coordinator after a crash/restart is FROZEN, never ALLOW.",
+      "steps": [
+        { "kind": "RestartCoordinator" },
+        { "kind": "ScanRequest" }
+      ]
+    },
+    {
+      "id": "N08_snapshot_resync_frozen_stays_frozen",
+      "surface": "NATIVE_EXTENSION",
+      "description": "A validated snapshot that reports frozen keeps the machine frozen with the reported reasons.",
+      "steps": [
+        { "kind": "SyncToAllow", "syncStep": true },
+        { "kind": "SnapshotResync", "validated": true, "snapshotIsFrozen": true, "snapshotReasons": ["FOCUS_LOST", "USER_TAKEOVER"] },
+        { "kind": "ScanRequest" }
+      ]
+    },
+    {
+      "id": "N09_snapshot_resync_not_frozen_is_forced_frozen",
+      "surface": "NATIVE_EXTENSION",
+      "description": "A validated snapshot claiming NOT frozen must still land frozen: resync is not evidence of safety.",
+      "steps": [
+        { "kind": "SyncToAllow", "syncStep": true },
+        { "kind": "SnapshotResync", "validated": true, "snapshotIsFrozen": false, "snapshotReasons": [] },
+        { "kind": "ScanRequest" }
+      ]
+    },
+    {
+      "id": "N10_snapshot_resync_unvalidated_fail_closed",
+      "surface": "NATIVE_EXTENSION",
+      "description": "An unvalidated snapshot fails closed with ERR_SNAPSHOT_UNVALIDATED.",
+      "steps": [
+        { "kind": "SyncToAllow", "syncStep": true },
+        { "kind": "SnapshotResync", "validated": false, "snapshotIsFrozen": false, "snapshotReasons": [] },
+        { "kind": "ScanRequest" }
+      ]
+    },
+    {
+      "id": "N11_snapshot_resync_unknown_reason_token_ignored",
+      "surface": "NATIVE_EXTENSION",
+      "description": "An unknown reason token in a snapshot is ignored; SESSION_UNVERIFIED is retained.",
+      "steps": [
+        { "kind": "SyncToAllow", "syncStep": true },
+        { "kind": "SnapshotResync", "validated": true, "snapshotIsFrozen": true, "snapshotReasons": ["NOT_A_REAL_REASON"] },
+        { "kind": "ScanRequest" }
+      ]
+    },
+    {
+      "id": "N12_explicit_freeze_reason",
+      "surface": "NATIVE_EXTENSION",
+      "description": "An explicit freeze request freezes the machine with EXPLICIT_FREEZE.",
+      "steps": [
+        { "kind": "SyncToAllow", "syncStep": true },
+        { "kind": "ExplicitFreeze", "reason": "EXPLICIT_FREEZE" },
+        { "kind": "ScanRequest" }
+      ]
+    },
+    {
+      "id": "N13_clear_unknown_reason_is_noop",
+      "surface": "NATIVE_EXTENSION",
+      "description": "Clearing a reason that is not active is a no-op and cannot unfreeze anything.",
+      "steps": [
+        { "kind": "SyncToAllow", "syncStep": true },
+        { "kind": "BidActive" },
+        { "kind": "ReasonCleared", "reason": "USER_TAKEOVER" },
+        { "kind": "ScanRequest" }
+      ]
+    },
+    {
+      "id": "N14_stale_generation_reason_clear_refused",
+      "surface": "NATIVE_EXTENSION",
+      "description": "A reason-clear carrying a stale generation is refused.",
+      "steps": [
+        { "kind": "SyncToAllow", "syncStep": true },
+        { "kind": "SessionChanged", "generationId": 5 },
+        { "kind": "ReasonCleared", "reason": "SESSION_UNVERIFIED", "generationId": 4 },
+        { "kind": "ScanRequest", "generationId": 5 }
+      ]
+    },
+    {
+      "id": "N15_trace_records_every_event_in_order",
+      "surface": "NATIVE_EXTENSION",
+      "description": "Every accepted and refused event appears exactly once in the trace with a monotonic sequence.",
+      "steps": [
+        { "kind": "SyncToAllow", "syncStep": true },
+        { "kind": "ForegroundLost" },
+        { "kind": "ReasonCleared", "reason": "FOCUS_LOST" },
+        { "kind": "RearmRequest", "credential": "fresh", "targetFocusValid": true, "manualRearmConfirmed": false, "noGameConflict": true, "noUserTakeoverActive": true },
+        { "kind": "RearmRequest", "credential": "fresh", "manualRearmConfirmed": true, "targetFocusValid": true, "noGameConflict": true, "noUserTakeoverActive": true },
+        { "kind": "ScanRequest" }
+      ]
+    },
+    {
+      "id": "N16_unknown_reason_and_event_fail_closed",
+      "surface": "NATIVE_EXTENSION",
+      "description": "Unknown reason and event tokens are rejected without fabricating provenance or opening the scan gate.",
+      "steps": [
+        { "kind": "SyncToAllow", "syncStep": true },
+        { "kind": "ForegroundLost" },
+        { "kind": "ReasonCleared", "reason": "NOT_A_REAL_REASON" },
+        { "kind": "UnknownEvent" },
+        { "kind": "ScanRequest" }
+      ]
+    },
+    {
+      "id": "N17_missing_session_identity_fails_closed",
+      "surface": "NATIVE_EXTENSION",
+      "description": "Missing session identity is refused for scan, clear and rearm requests.",
+      "steps": [
+        { "kind": "SyncToAllow", "syncStep": true },
+        { "kind": "ScanRequestMissingSession" },
+        { "kind": "ReasonClearedMissingSession" },
+        { "kind": "RearmMissingSession" }
+      ]
+    },
+    {
+      "id": "N18_freeze_round_expires_credential",
+      "surface": "NATIVE_EXTENSION",
+      "description": "A credential issued before a new freeze round is expired and cannot recover the new freeze.",
+      "steps": [
+        { "kind": "SyncToAllow", "syncStep": true },
+        { "kind": "IssueRearmToken", "nonce": "round-old" },
+        { "kind": "ForegroundLost" },
+        { "kind": "RearmRequest", "generationId": 1, "rearmToken": "$round-old", "manualRearmConfirmed": true, "targetFocusValid": true, "noGameConflict": true, "noUserTakeoverActive": true },
+        { "kind": "ScanRequest" }
+      ]
+    }
+  ],
+  "divergenceScenarios": [
+    {
+      "id": "D01_initial_state",
+      "description": "Python starts ALLOW; the native machine starts FROZEN (SESSION_UNVERIFIED).",
+      "python": { "isFrozen": false, "scanPermitted": true },
+      "native": { "isFrozen": true, "scanPermitted": false },
+      "contractGap": "CONTRACT_GAP-6",
+      "resolution": "Native is fail-closed. Restart / resync must never default to the dangerous ALLOW state."
+    },
+    {
+      "id": "D02_invalid_freeze_reason",
+      "description": "Python silently reclassifies an unknown reason to USER_TAKEOVER and freezes; the native catalog returns null so the caller must refuse the event.",
+      "python": { "freezeReason": "USER_TAKEOVER", "isFrozen": true },
+      "native": { "tryParse": null },
+      "contractGap": "CONTRACT_GAP-4",
+      "resolution": "Native refuses to fabricate provenance. An unknown reason token is never mapped onto an existing reason."
+    },
+    {
+      "id": "D03_repeated_freeze_side_effects",
+      "description": "Python re-fires the halt callback, appends another freeze event and rewrites freeze_reason on every repeat; the native machine is idempotent on repeats.",
+      "python": { "callbackInvocations": 3, "eventCount": 3, "freezeReason": "USER_TAKEOVER" },
+      "native": { "freezeTransitionsApplied": 1, "activeReasons": ["FOCUS_LOST", "USER_TAKEOVER"] },
+      "contractGap": "CONTRACT_GAP-2",
+      "resolution": "Native fires the halt sink only on a real transition or reason-set growth, and keeps the full reason set instead of the last writer."
+    },
+    {
+      "id": "D04_rearm_side_effects_and_counting",
+      "description": "Python returns True and appends a rearm event on every call, including when the machine is not frozen; the native machine reports ALREADY_ALLOW and applies at most one transition.",
+      "python": { "rearmWhileAllowReturns": true, "rearmCountAfterTwoCalls": 2 },
+      "native": { "rearmWhileAllowOutcome": "ALREADY_ALLOW", "rearmAppliedCountAfterTwoCalls": 1 },
+      "contractGap": "CONTRACT_GAP-3",
+      "resolution": "Native treats a repeated rearm as a no-op on state while still recording the attempt."
+    },
+    {
+      "id": "D05_per_reason_release_unavailable_in_python",
+      "description": "Python exposes no API to release a single reason while others remain; the native machine has ReasonCleared.",
+      "python": { "clearCandidates": [] },
+      "native": { "hasReasonCleared": true },
+      "contractGap": "CONTRACT_GAP-1",
+      "resolution": "Native keeps a reason SET and releases per reason; recovery to ALLOW still requires a validated rearm."
+    },
+    {
+      "id": "D06_generation_and_session_scope_absent_in_python",
+      "description": "Python has no generation/session concept, so stale-generation and stale-token fail-closed behaviour cannot be derived from it.",
+      "python": { "generationApi": [], "payloadHasGeneration": false },
+      "native": { "generationScoped": true, "staleGenerationFailClosed": true },
+      "contractGap": "CONTRACT_GAP-5",
+      "resolution": "Native scopes the whole machine and every rearm token to a generation."
+    },
+    {
+      "id": "D07_rearm_does_not_clear_native_reasons",
+      "description": "Python rearm clears its single active reason; native rearm never clears effective reasons and requires independent reason release first.",
+      "python": { "rearmWithActiveReason": "allows" },
+      "native": { "rearmWithActiveReason": "REJECTED_ACTIVE_REASONS" },
+      "contractGap": "CONTRACT_GAP-7",
+      "resolution": "Shared parity excludes this extension; native callers must clear each active reason, validate the current session when required, and then rearm."
+    }
+  ]
+}

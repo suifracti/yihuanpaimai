@@ -1,0 +1,27 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <RootNamespace>NteHost.Input</RootNamespace>
+    <AssemblyName>NteHost.Input</AssemblyName>
+    <LangVersion>latest</LangVersion>
+    <!-- Keep preserved legacy build artifacts out of source compilation when a
+         verifier redirects BaseIntermediateOutputPath outside this tree. -->
+    <DefaultItemExcludes>$(DefaultItemExcludes);**/bin/**;**/obj/**</DefaultItemExcludes>
+    <!-- V2-2B is a Windows-only native input safety layer (WH_KEYBOARD_LL / WH_MOUSE_LL / SendInput). -->
+    <NoWarn>$(NoWarn);CA1416</NoWarn>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!--
+      The verifier must be able to construct a SendInputTicket directly in order to
+      exercise the executor's ticket gate (missing / foreign / expired / reused /
+      action-mismatch) without adding any test-only surface to the production type.
+    -->
+    <InternalsVisibleTo Include="NteInputGuardVerifier" />
+  </ItemGroup>
+
+</Project>
