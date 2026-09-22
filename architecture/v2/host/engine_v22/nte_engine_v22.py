@@ -319,14 +319,15 @@ class RealEngine:
         # time for the capture boundary.
         self._wall_minus_qpc_ns = time.time_ns() - qpc_ns()
 
-        # These are loaded before the Named Pipe handshake.  READY therefore
-        # means the real business objects are present, not merely that IPC works.
+        # These are loaded before HELLO_ACK.  The pipe itself is connected in
+        # run() first so the Host can observe a live child even when business
+        # preload is slower than the accept window.  READY still means the real
+        # business objects are present, not merely that IPC works.
         self.catalog_path = Path(args.catalog).resolve() if args.catalog else REPO_ROOT / "assets" / "catalog_065.json"
         self.pipeline: NTEVisionPipeline
         self.current_match: CurrentMatch
         self.history_store: CanonicalHistoryStore
         self.business_ready = False
-        self.preload()
 
     # -- logging and durable state -----------------------------------------
     def log(self, event: str, **details: Any) -> None:
@@ -1105,6 +1106,15 @@ class RealEngine:
         try:
             self.pipe = PipeClient(self.pipe_name)
             self.log("pipe.connected")
+            # Connect before loading the real business objects.  The Host does
+            # not send HELLO_ACK or enter READY until preload completes, but it
+            # can now distinguish a slow/failing business preload from a child
+            # that never reached the IPC boundary.
+            try:
+                self.preload()
+            except Exception as exc:
+                self.log("business_preload_failed", error=str(exc))
+                return 12
             self.reader = FrameMapReader(self.map_name, self.frame_buffer_size)
             _atomic_json(self.work_dir / "engine_mmf_probe.json", self.reader.probe())
             self.log("mmf.read_only_mapped", mapName=self.map_name, mapSize=MAP_SIZE)

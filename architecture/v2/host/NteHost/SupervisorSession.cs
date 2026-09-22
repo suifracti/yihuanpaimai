@@ -375,6 +375,11 @@ public sealed class SupervisorSession : IDisposable
 
         var process = new Process { StartInfo = psi, EnableRaisingEvents = true };
         process.Exited += OnChildExited;
+        // Attach the asynchronous log readers before Start().  A launcher or
+        // import failure can otherwise write its only diagnostic and exit
+        // between process.Start() and the old subscription point.
+        process.OutputDataReceived += (_, e) => { if (e.Data is not null) _trace.Event("child.stdout", GenerationId, new { line = e.Data }); };
+        process.ErrorDataReceived += (_, e) => { if (e.Data is not null) _trace.Event("child.stderr", GenerationId, new { line = e.Data }); };
         var spawnStartNs = ProtocolClock.NowNs();
         process.Start();
         ChildSpawnNs = ProtocolClock.NowNs();
@@ -383,12 +388,20 @@ public sealed class SupervisorSession : IDisposable
         _trace.Event("child.spawned", GenerationId, new { pid = process.Id, spawnMs = ProtocolClock.DeltaMs(spawnStartNs, ChildSpawnNs) });
 
         // Drain stdout/stderr into the trace: these are logs, not protocol.
-        process.OutputDataReceived += (_, e) => { if (e.Data is not null) _trace.Event("child.stdout", GenerationId, new { line = e.Data }); };
-        process.ErrorDataReceived += (_, e) => { if (e.Data is not null) _trace.Event("child.stderr", GenerationId, new { line = e.Data }); };
         process.BeginOutputReadLine();
         process.BeginErrorReadLine();
 
-        if (!_job.Assign(process))
+        var jobAssigned = _job.Assign(process);
+        _trace.Event("child.startup", GenerationId, new
+        {
+            pid = process.Id,
+            fileName = _options.PythonExe,
+            workingDirectory = _options.WorkDir,
+            jobAssigned,
+            hasExited = process.HasExited,
+            exitCode = process.HasExited ? process.ExitCode : (int?)null,
+        });
+        if (!jobAssigned)
         {
             _errors.Add($"AssignProcessToJobObject failed for pid {process.Id}");
         }
