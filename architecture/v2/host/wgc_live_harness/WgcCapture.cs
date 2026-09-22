@@ -36,8 +36,6 @@ internal sealed class WgcWindowCapture : IDisposable
         new("3628E81B-3CAC-4C60-B7F4-23CE0E0C3356");
     private static readonly Guid D3D11Texture2DGuid =
         new("6F15AAF2-D208-4E89-9AB4-489535D34F9C");
-    private static readonly Guid Direct3DDxgiInterfaceAccessGuid =
-        new("A9B3D012-3DF2-4EE3-B8D1-8695F457D3C1");
 
     private readonly ID3D11Device _device;
     private readonly ID3D11DeviceContext _context;
@@ -270,43 +268,15 @@ internal sealed class WgcWindowCapture : IDisposable
 
     private static ID3D11Texture2D GetTexture(IDirect3DSurface surface)
     {
-        var surfaceUnknown = Marshal.GetIUnknownForObject(surface);
-        try
-        {
-            var accessPointer = IntPtr.Zero;
-            var accessIid = Direct3DDxgiInterfaceAccessGuid;
-            var hr = Marshal.QueryInterface(
-                surfaceUnknown,
-                ref accessIid,
-                out accessPointer);
-            Marshal.ThrowExceptionForHR(hr);
-            try
-            {
-                var access = (IDirect3DDxgiInterfaceAccess)Marshal.GetObjectForIUnknown(accessPointer);
-                var texturePointer = IntPtr.Zero;
-                var textureIid = D3D11Texture2DGuid;
-                hr = access.GetInterface(ref textureIid, out texturePointer);
-                Marshal.ThrowExceptionForHR(hr);
-                try
-                {
-                    return new ID3D11Texture2D(texturePointer);
-                }
-                finally
-                {
-                    // ID3D11Texture2D owns the returned COM reference after its
-                    // wrapper is constructed; do not release it here.
-                    texturePointer = IntPtr.Zero;
-                }
-            }
-            finally
-            {
-                Marshal.Release(accessPointer);
-            }
-        }
-        finally
-        {
-            Marshal.Release(surfaceUnknown);
-        }
+        // The surface is a C#/WinRT projection. CLR Marshal round-trips can
+        // return the managed projection instead of the requested COM interface.
+        // As<T> queries the underlying WinRT object using its projection helper.
+        var access = surface.As<IDirect3DDxgiInterfaceAccess>();
+        var textureIid = D3D11Texture2DGuid;
+        var hr = access.GetInterface(ref textureIid, out var texturePointer);
+        Marshal.ThrowExceptionForHR(hr);
+        // Vortice owns the reference returned by GetInterface.
+        return new ID3D11Texture2D(texturePointer);
     }
 
     private static void ValidateFixedV1Geometry(int width, int height)
@@ -476,6 +446,7 @@ internal sealed class WgcWindowCapture : IDisposable
     [InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
     private interface IDirect3DDxgiInterfaceAccess
     {
+        [PreserveSig]
         int GetInterface([In] ref Guid iid, out IntPtr p);
     }
 }

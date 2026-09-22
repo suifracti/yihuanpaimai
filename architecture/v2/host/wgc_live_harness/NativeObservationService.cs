@@ -152,6 +152,7 @@ internal static class NativeObservationService
                     EmitStatus(sessionId, "PAUSED", "capture-failed", new
                     {
                         error = $"{ex.GetType().Name}: {ex.Message}",
+                        stackTrace = ex.StackTrace,
                         target = TargetEvidence(beforeCapture),
                     });
                     session.ControlledShutdown();
