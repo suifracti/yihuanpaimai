@@ -19,7 +19,8 @@ internal sealed record CapturedBgraFrame(
     int Height,
     int Stride,
     byte[] Pixels,
-    long CaptureTimestampNs);
+    long CaptureTimestampNs,
+    string CapturedAtUtc);
 
 /// <summary>
 /// Minimal WGC -> D3D11 readback for the V2-3 live probe. It deliberately owns
@@ -159,7 +160,13 @@ internal sealed class WgcWindowCapture : IDisposable
                     stride);
             }
 
-            return new CapturedBgraFrame(Width, Height, stride, pixels, ProtocolClock.NowNs());
+            return new CapturedBgraFrame(
+                Width,
+                Height,
+                stride,
+                pixels,
+                ProtocolClock.NowNs(),
+                DateTimeOffset.UtcNow.ToString("O"));
         }
         finally
         {

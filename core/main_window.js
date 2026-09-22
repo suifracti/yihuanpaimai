@@ -1842,11 +1842,30 @@ function renderMatch(currentMatch, overlayVisible) {
   dashboard.lastCurrentMatch = currentMatch;
   const visionHealthStatus = document.getElementById('vision-health-status');
   if (visionHealthStatus) {
-    visionHealthStatus.hidden = currentMatch.visionHealth?.status !== 'ERROR';
+    const health = currentMatch.visionHealth || {};
+    const nativeProfile = currentMatch.observationProfile === 'native-readonly-v1' || health.profile === 'native-readonly-v1';
+    const nativeWaiting = nativeProfile && ['native-starting', 'native-ready'].includes(health.stage);
+    const needsNativeAction = nativeProfile && health.status !== 'READY' && !nativeWaiting;
+    const nativeTelemetry = nativeProfile && health.status === 'READY' && health.freshnessMs != null;
+    visionHealthStatus.hidden = nativeProfile ? !(needsNativeAction || nativeWaiting || nativeTelemetry) : health.status !== 'ERROR';
     visionHealthStatus.textContent = visionHealthStatus.hidden ? '' : '识别暂时异常，正在重试；当前显示为上次结果';
-    if (!visionHealthStatus.hidden && currentMatch.visionHealth.stage === 'process') visionHealthStatus.textContent = '识别进程已退出，点击恢复识别；当前显示为上次结果';
-    if (!visionHealthStatus.hidden && currentMatch.visionHealth.stage === 'starting') visionHealthStatus.textContent = '正在启动识别；当前显示为上次结果';
-    document.getElementById('restore-vision-btn').hidden = visionHealthStatus.hidden || currentMatch.visionHealth.stage !== 'process';
+    if (!visionHealthStatus.hidden && nativeProfile) {
+      if (nativeTelemetry) visionHealthStatus.textContent = `Native WGC · 新鲜度 ${Number(health.freshnessMs).toFixed(0)}ms · 帧 ${health.frameSequence ?? '--'}`;
+      else if (health.stage === 'native-ready') visionHealthStatus.textContent = 'Native Host 已就绪，等待首个业务帧';
+      else if (health.stage === 'native-explicit-start' || health.stage === 'native-stopped') visionHealthStatus.textContent = 'Native 观察未启动，点击开始观察';
+      else if (health.stage === 'native-starting') visionHealthStatus.textContent = '正在启动 Native 观察，请保持游戏窗口可见并置前';
+      else if (health.stage === 'native-paused') visionHealthStatus.textContent = `Native 观察已暂停：${health.reason || '目标窗口或场景边界变化'}；点击重新开始`;
+      else if (health.stage === 'native-error') visionHealthStatus.textContent = `Native 观察异常：${health.reason || '请重新开始观察'}`;
+    } else if (!visionHealthStatus.hidden && health.stage === 'process') {
+      visionHealthStatus.textContent = '识别进程已退出，点击恢复识别；当前显示为上次结果';
+    } else if (!visionHealthStatus.hidden && health.stage === 'starting') {
+      visionHealthStatus.textContent = '正在启动识别；当前显示为上次结果';
+    }
+    const restoreButton = document.getElementById('restore-vision-btn');
+    if (restoreButton) {
+      restoreButton.hidden = nativeProfile ? !needsNativeAction : visionHealthStatus.hidden || health.stage !== 'process';
+      restoreButton.textContent = nativeProfile ? (health.stage === 'native-explicit-start' ? '开始 Native 观察' : '重新开始观察') : '恢复识别';
+    }
   }
   const previousMatchId = dashboard.matchState.matchId;
 

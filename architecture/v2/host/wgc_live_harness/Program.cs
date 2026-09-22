@@ -22,6 +22,11 @@ internal static class Program
 
     public static int Main(string[] args)
     {
+        if (string.Equals(Arg(args, "--mode", "probe"), "live", StringComparison.OrdinalIgnoreCase))
+        {
+            return NativeObservationService.Run(args);
+        }
+
         var outputPath = Path.GetFullPath(Arg(
             args,
             "--output",

@@ -310,6 +310,14 @@ class RealEngine:
         self.processing_errors: list[str] = []
         self.command_records: dict[str, dict] = {}
         self.reader_error: Optional[str] = None
+        self.control_revision = 0
+        self.manual_overrides: dict[str, Any] = {}
+        self.awaiting_exit = False
+        # The frozen frame header carries QPC nanoseconds, while the existing
+        # vision pipeline accepts an aware ISO timestamp.  Associate the two
+        # clock domains once at process start; never substitute OCR completion
+        # time for the capture boundary.
+        self._wall_minus_qpc_ns = time.time_ns() - qpc_ns()
 
         # These are loaded before the Named Pipe handshake.  READY therefore
         # means the real business objects are present, not merely that IPC works.
@@ -459,6 +467,10 @@ class RealEngine:
         except Exception as exc:
             self.log("history.persist_failed", error=str(exc))
             return f"FAILED:{type(exc).__name__}"
+
+    def _capture_iso(self, capture_timestamp_ns: int) -> str:
+        wall_ns = int(capture_timestamp_ns) + self._wall_minus_qpc_ns
+        return dt.datetime.fromtimestamp(wall_ns / 1_000_000_000.0, dt.timezone.utc).isoformat()
 
     # -- envelopes ----------------------------------------------------------
     def next_sequence(self) -> int:
@@ -679,6 +691,98 @@ class RealEngine:
             payload["resultData"] = result
         return payload
 
+    def _apply_manual_control(self, command_id: str, parameters: dict) -> tuple[str, Optional[str], dict]:
+        """Apply one GUI control command inside the sole business worker.
+
+        The GUI keeps its existing presentation state, but the worker remains
+        the only authority that can accept a revision.  A full snapshot is
+        restored with its original field provenance; only the explicit facts
+        patch becomes a manual override for subsequent vision frames.
+        """
+        revision = parameters.get("revision")
+        snapshot = parameters.get("snapshot")
+        if type(revision) is not int or revision < 0:
+            return "REJECT", "invalid control revision", {}
+        if revision <= self.control_revision:
+            return "REJECT", "STALE_CONTROL_REVISION", {"controlRevision": self.control_revision}
+        if not isinstance(snapshot, dict) or not str(snapshot.get("id") or "").strip():
+            return "REJECT", "snapshot must contain a match id", {}
+
+        expected_id = str(parameters.get("expectedMatchId") or "").strip()
+        snapshot_id = str(snapshot.get("id") or "").strip()
+        reset = parameters.get("reset") is True
+        if reset and expected_id and expected_id != self.current_match.id:
+            return "REJECT", "MATCH_CHANGED", {
+                "expectedMatchId": expected_id,
+                "currentMatchId": self.current_match.id,
+            }
+        if (
+            not reset
+            and expected_id
+            and expected_id != self.current_match.id
+            and snapshot_id != self.current_match.id
+        ):
+            return "REJECT", "MATCH_CHANGED", {
+                "expectedMatchId": expected_id,
+                "currentMatchId": self.current_match.id,
+            }
+
+        patch = parameters.get("facts") or {}
+        if not isinstance(patch, dict):
+            return "REJECT", "facts must be an object", {}
+        cleared_fields = [
+            key for key in (parameters.get("clearedFields") or [])
+            if key in FACT_KEYS
+        ]
+        restore_auto_fields = [
+            key for key in (parameters.get("restoreAutoFields") or [])
+            if key in FACT_KEYS
+        ]
+
+        if reset or self.current_match.id != snapshot_id:
+            self.current_match.begin_next_match()
+            self.current_match.id = snapshot_id
+            self.current_match.apply_facts(
+                snapshot,
+                source="manual",
+                intent="snapshot",
+                command_id=command_id,
+            )
+            self.current_match.lifecycle_status = str(snapshot.get("lifecycleStatus") or "DRAFT")
+            self.current_match.data_origin = self.data_origin
+            self.manual_overrides = {}
+
+        for key in restore_auto_fields:
+            self.manual_overrides.pop(key, None)
+        for key, value in patch.items():
+            if key in FACT_KEYS and key not in cleared_fields and not is_missing_observation(key, value):
+                self.manual_overrides[key] = copy.deepcopy(value)
+        for key in cleared_fields:
+            self.manual_overrides[key] = None
+
+        self.current_match.apply_facts(
+            {key: copy.deepcopy(value) for key, value in self.manual_overrides.items()
+             if key not in restore_auto_fields},
+            source="manual",
+            intent="confirm",
+            cleared_fields=cleared_fields,
+            restore_auto_fields=restore_auto_fields,
+            command_id=command_id,
+        )
+        self.control_revision = revision
+        if reset:
+            self.pipeline.reset_session_state()
+            self.awaiting_exit = True
+        self._persist_state(reason="manual_control")
+        return "ACK", None, {
+            "echo": "match.apply_control",
+            "businessReady": self.business_ready,
+            "controlRevision": self.control_revision,
+            "matchId": self.current_match.id,
+            "factsRevision": self.current_match.facts_revision,
+            "reset": reset,
+        }
+
     def handle_command(self, envelope: dict) -> None:
         payload = envelope.get("payload") or {}
         command_id = str(payload.get("commandId") or "")
@@ -734,6 +838,12 @@ class RealEngine:
             # Kept as an explicit command so recovery tests can ask the real
             # Engine for a snapshot without mutating authoritative state.
             pass
+        elif action == "match.apply_control":
+            status, error, result_data = self._apply_manual_control(command_id, parameters)
+            result = self._command_result(command_id, status, error=error, result=result_data)
+            self.command_records[command_id] = {"fingerprint": fingerprint, "result": result}
+            self.send("COMMAND_RESULT", result, "cmdres", correlation_id=envelope.get("requestId"))
+            return
         elif action not in {"state.snapshot", "test.stop_heartbeat", "test.resume_heartbeat", "test.wrong_session_snapshot"}:
             result = self._command_result(command_id, "REJECT", error=f"unsupported action: {action}")
             self.command_records[command_id] = {"fingerprint": fingerprint, "result": result}
@@ -795,7 +905,7 @@ class RealEngine:
                 payload["warehouseSummary"] = summary
         return payload
 
-    def _apply_pipeline_context(self, context: dict) -> None:
+    def _apply_pipeline_context(self, context: dict, observed_at: str) -> None:
         patch = {}
         for key in FACT_KEYS:
             if key not in context:
@@ -805,14 +915,35 @@ class RealEngine:
                 continue
             patch[key] = copy.deepcopy(_safe(value))
         if patch:
-            self.current_match.apply_facts(patch, source="vision", intent="observe", observed_at=_utc_now())
+            self.current_match.apply_facts(patch, source="vision", intent="observe", observed_at=observed_at)
         self.current_match.updated_at = _utc_now()
+
+    def _apply_manual_overrides(self, context: dict) -> dict:
+        """Project accepted GUI overrides into the next business frame."""
+        if self.awaiting_exit:
+            scene = str(context.get("scene") or "")
+            if scene in {"AUCTION_LOBBY", "CITY_TYCOON_HUB", "CITY_LEISURE_MENU", "OPEN_WORLD"}:
+                self.awaiting_exit = False
+            else:
+                context.update({
+                    "scene": "UNKNOWN",
+                    "inAuction": False,
+                    "isSettlement": False,
+                    "controlPendingExit": True,
+                })
+                return context
+        for key, value in self.manual_overrides.items():
+            if value is None:
+                context.pop(key, None)
+            else:
+                context[key] = copy.deepcopy(value)
+        return context
 
     def _process_frame(self, item: dict) -> None:
         started = qpc_ns()
         header = item["header"]
         try:
-            captured_at = _utc_now()
+            captured_at = self._capture_iso(int(header["captureTimestampNs"]))
             context = self.pipeline.process_frame(
                 item["bgr"],
                 captured_at=captured_at,
@@ -824,13 +955,18 @@ class RealEngine:
                 include_heavy_identity=False,
             )
             context = _safe(context)
+            context["capturedAt"] = captured_at
+            context["captureTimestampNs"] = int(header["captureTimestampNs"])
+            context = self._apply_manual_overrides(context)
             self.last_context = copy.deepcopy(context)
-            self._apply_pipeline_context(context)
+            self._apply_pipeline_context(context, captured_at)
             history_status = self._persist_history()
             processing_ms = (qpc_ns() - started) / 1_000_000.0
             self.last_frame = {
                 "frameSequence": int(header["sequence"]),
                 "bufferIndex": int(item["bufferIndex"]),
+                "capturedAt": captured_at,
+                "captureTimestampNs": int(header["captureTimestampNs"]),
                 "pixelSha256": item["rawSha256"],
                 "processingMs": processing_ms,
                 "historyStatus": history_status,
@@ -839,6 +975,8 @@ class RealEngine:
                 "frameSequence": int(header["sequence"]),
                 "bufferIndex": int(item["bufferIndex"]),
                 "header": header,
+                "capturedAt": captured_at,
+                "captureTimestampNs": int(header["captureTimestampNs"]),
                 "pixelSha256": item["rawSha256"],
                 "cornerChecksum": int(header["cornerChecksum"]),
                 "scene": context.get("scene"),

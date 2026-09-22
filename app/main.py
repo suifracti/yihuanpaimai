@@ -88,6 +88,7 @@ from warehouse_capture_host import (
     build_production_warehouse_capture_host,
     set_warehouse_capture_host,
 )
+from native_observation import NativeObservationBridge
 
 
 def get_production_warehouse_bindings() -> Dict[str, Any]:
@@ -639,6 +640,12 @@ LATEST_PAYLOAD: Dict[str, Any] = {}
 LATEST_VISION_PAYLOAD: Dict[str, Any] = {}
 VISION_PROCESS: Optional[subprocess.Popen] = None
 _VISION_PROCESS_LOCK = threading.RLock()
+NATIVE_OBSERVATION_BRIDGE: Optional[NativeObservationBridge] = None
+_NATIVE_OBSERVATION_LOCK = threading.RLock()
+_NATIVE_OBSERVATION_RECEIVER = None
+_NATIVE_OBSERVATION_SESSION: Optional[str] = None
+_NATIVE_OBSERVATION_SEQUENCE = 0
+_NATIVE_OBSERVATION_LAST_FRAME_NS: Optional[int] = None
 HUD_JS_API = None
 PRESENTATION_RUNTIME = PresentationRuntimeState(
     "disabled" if os.environ.get("NTE_DISABLE_VISION") == "1" else "stopped"
@@ -740,8 +747,15 @@ def is_running_as_admin_or_high_integrity() -> bool:
 def check_residual_processes():
     """核查残留子进程"""
     global VISION_PROCESS
+    residual = []
     if VISION_PROCESS is not None and VISION_PROCESS.poll() is None:
-        return 1, [VISION_PROCESS.pid]
+        residual.append(VISION_PROCESS.pid)
+    with _NATIVE_OBSERVATION_LOCK:
+        native = NATIVE_OBSERVATION_BRIDGE
+        if native is not None and native.running and native.process is not None:
+            residual.append(native.process.pid)
+    if residual:
+        return len(residual), residual
     return 0, []
 
 
@@ -749,9 +763,11 @@ def get_presentation_runtime_snapshot():
     """Return a frozen presentation-only snapshot with current process liveness."""
     if os.environ.get("NTE_DISABLE_VISION") == "1":
         process_state = "disabled"
-    elif VISION_PROCESS is None:
+    elif (VISION_PROCESS is None
+          and (NATIVE_OBSERVATION_BRIDGE is None or not NATIVE_OBSERVATION_BRIDGE.running)):
         process_state = "stopped"
-    elif VISION_PROCESS.poll() is None:
+    elif ((VISION_PROCESS is not None and VISION_PROCESS.poll() is None)
+          or (NATIVE_OBSERVATION_BRIDGE is not None and NATIVE_OBSERVATION_BRIDGE.running)):
         process_state = "running"
     else:
         process_state = "exited"
@@ -976,11 +992,29 @@ def get_current_match_presentation_summary() -> dict:
         }
 
         options = _manual_options()
+        vision_health = dict(LATEST_PAYLOAD.get("visionHealth") or {})
+        if native_observation_enabled() and not vision_health:
+            vision_health = {
+                "status": "WAITING",
+                "stage": "native-explicit-start",
+                "profile": "native-readonly-v1",
+                "sourceKind": "native_wgc",
+                "reason": "等待用户显式开始 Native 观察",
+                "inputActions": False,
+                "formalHistoryWriter": False,
+            }
+        native_payload = LATEST_PAYLOAD if isinstance(LATEST_PAYLOAD, dict) else {}
         return {
             "matchId": CURRENT_MATCH.id,
             "recognitionMode": get_recognition_mode(),
+            "observationProfile": native_observation_profile(),
             "configuredPlayerName": get_player_name(),
-            "visionHealth": dict(LATEST_PAYLOAD.get("visionHealth") or {}),
+            "visionHealth": vision_health,
+            "observationStatus": native_payload.get("observationStatus") or vision_health.get("status"),
+            "observationSource": native_payload.get("sourceKind") or vision_health.get("sourceKind"),
+            "observationFreshnessMs": native_payload.get("freshnessMs") or vision_health.get("freshnessMs"),
+            "observationFrameSequence": native_payload.get("frameSequence") or vision_health.get("frameSequence"),
+            "nativeControlResult": dict(native_payload.get("nativeControlResult") or {}),
             "isolatedTrial": is_isolated_trial(),
             "lifecycleStatus": snap.get("lifecycleStatus", "DRAFT"),
             "hasAnyFact": CURRENT_MATCH.has_any_fact(),
@@ -1049,6 +1083,16 @@ def get_current_match_presentation_summary() -> dict:
     except Exception:
         return {
             "matchId": getattr(CURRENT_MATCH, "id", "draft_fallback"),
+            "observationProfile": native_observation_profile(),
+            "visionHealth": ({
+                "status": "WAITING",
+                "stage": "native-explicit-start",
+                "profile": "native-readonly-v1",
+                "sourceKind": "native_wgc",
+                "reason": "等待用户显式开始 Native 观察",
+                "inputActions": False,
+                "formalHistoryWriter": False,
+            } if native_observation_enabled() else {}),
             "lifecycleStatus": "DRAFT",
             "hasAnyFact": False,
             "isComplete": False,
@@ -1281,6 +1325,21 @@ def load_config() -> Dict[str, Any]:
 CONFIG = load_config()
 WS_PORT = CONFIG.get("network", {}).get("wsPort", 8766)
 
+
+def native_observation_profile() -> str:
+    """Return the explicit capture profile selected by the user/config."""
+    raw = os.environ.get("NTE_OBSERVATION_PROFILE")
+    if raw is None:
+        raw = CONFIG.get("app", {}).get("observationProfile", "legacy-python")
+    value = str(raw or "legacy-python").strip().lower()
+    if value in {"native", "native-readonly", "native-readonly-v1", "wgc"}:
+        return "native-readonly-v1"
+    return "legacy-python"
+
+
+def native_observation_enabled() -> bool:
+    return native_observation_profile() == "native-readonly-v1"
+
 _boot_replay_video = str(os.environ.get("NTE_REPLAY_VIDEO") or CONFIG.get("app", {}).get("replayVideo") or "").strip()
 _boot_replay_frames_dir = str(os.environ.get("NTE_REPLAY_FRAMES_DIR") or "").strip()
 if _boot_replay_frames_dir or _boot_replay_video:
@@ -1322,6 +1381,376 @@ async def broadcast_ws(payload: str):
             dead.append(client)
     for client in dead:
         CONNECTED_CLIENTS.discard(client)
+
+
+def _native_health_from_event(event: Dict[str, Any], *, frame: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+    """Translate the Host's safety vocabulary into the existing HUD health shape."""
+    raw_status = str(event.get("status") or "ERROR").upper()
+    reason = str(event.get("reason") or "").strip()
+    if raw_status in {"STARTING", "READY", "STOPPED"}:
+        status = "WAITING"
+    elif raw_status == "FRAME":
+        status = "READY"
+    else:
+        status = "ERROR"
+    stage = {
+        "STARTING": "native-starting",
+        "READY": "native-ready",
+        "FRAME": "native-frame",
+        "PAUSED": "native-paused",
+        "ERROR": "native-error",
+        "STOPPED": "native-stopped",
+        "CONTROL": "native-control",
+    }.get(raw_status, "native-error")
+    health: Dict[str, Any] = {
+        "status": status,
+        "stage": stage,
+        "profile": "native-readonly-v1",
+        "sourceKind": "native_wgc",
+        "reason": reason or None,
+        "inputActions": False,
+        "formalHistoryWriter": False,
+    }
+    details = event.get("details")
+    if isinstance(details, dict):
+        if isinstance(details.get("target"), dict):
+            health["target"] = dict(details["target"])
+        if details.get("engineReadiness") is not None:
+            health["engineReadiness"] = details.get("engineReadiness")
+        if details.get("generation") is not None:
+            health["generation"] = details.get("generation")
+        if details.get("commandStatus") is not None:
+            health["commandStatus"] = details.get("commandStatus")
+    if frame:
+        health.update({
+            "frameSequence": frame.get("sequence"),
+            "capturedAtNs": frame.get("capturedAtNs"),
+            "capturedAtUtc": frame.get("capturedAtUtc"),
+            "freshnessMs": frame.get("freshnessMs"),
+        })
+    return health
+
+
+_NATIVE_MAIN_STATUS_NS = 0
+
+
+def _native_post_main_status(reason: str, *, force: bool = False) -> None:
+    """Refresh the existing Main window without creating a second UI bus."""
+    global _NATIVE_MAIN_STATUS_NS
+    now = time.monotonic_ns()
+    if not force and now - _NATIVE_MAIN_STATUS_NS < 250_000_000:
+        return
+    _NATIVE_MAIN_STATUS_NS = now
+    holder = globals().get("_MAIN_WINDOW_HOLDER") or []
+    if not holder or holder[0] is None:
+        return
+    try:
+        post_status = getattr(holder[0], "post_status", None)
+        if callable(post_status):
+            post_status(reason)
+    except Exception as exc:
+        log_stage("PRESENTATION:NATIVE", f"Main status refresh failed: {type(exc).__name__}: {exc}")
+
+
+def _native_publish_health(event: Dict[str, Any], *, force_main: bool = False) -> Dict[str, Any]:
+    health = _native_health_from_event(event)
+    raw_status = str(event.get("status") or "").upper()
+    LATEST_PAYLOAD["visionHealth"] = health
+    LATEST_PAYLOAD["observationProfile"] = "native-readonly-v1"
+    if raw_status in {"PAUSED", "ERROR", "STOPPED"}:
+        LATEST_PAYLOAD.update({
+            "nativeInvalidated": True,
+            "observationStatus": raw_status,
+            "scene": "UNKNOWN",
+            "inAuction": False,
+            "inLobby": False,
+            "gameDetected": False,
+            "bids": [],
+            "seats": [],
+            "intel": [],
+            "round": None,
+            "leaderBid": None,
+        })
+        LATEST_PAYLOAD.pop("visionState", None)
+        LATEST_VISION_PAYLOAD.clear()
+    PRESENTATION_RUNTIME.set_vision_process_state(
+        "running" if raw_status in {"STARTING", "READY", "FRAME", "CONTROL"} else "stopped"
+    )
+    envelope = {
+        "type": "vision_health",
+        "visionHealth": health,
+        "observationProfile": "native-readonly-v1",
+        "nativeInvalidated": raw_status in {"PAUSED", "ERROR", "STOPPED"},
+    }
+    loop = WS_EVENT_LOOP
+    if loop is not None and loop.is_running():
+        try:
+            asyncio.run_coroutine_threadsafe(
+                broadcast_ws(json.dumps(envelope, ensure_ascii=False)), loop
+            )
+        except Exception as exc:
+            log_stage("PRESENTATION:NATIVE", f"health broadcast failed: {exc}")
+    _native_post_main_status(f"native_{str(event.get('status') or 'event').lower()}", force=force_main)
+    return health
+
+
+def _native_observation_event(event: Dict[str, Any]) -> None:
+    """Consume one versioned native Host line and project it into Main/HUD."""
+    global _NATIVE_OBSERVATION_RECEIVER, _NATIVE_OBSERVATION_SESSION
+    global _NATIVE_OBSERVATION_SEQUENCE, _NATIVE_OBSERVATION_LAST_FRAME_NS
+    global _LIVE_VISION_ACTIVE, _LIVE_VISION_MATCH_ID, _LIVE_CONTROL_WAITING_EXIT
+
+    if not isinstance(event, dict):
+        return
+    if event.get("sourceKind") != "native_wgc" or event.get("inputActions") is not False:
+        _native_publish_health({
+            "status": "ERROR",
+            "reason": "native-envelope-rejected",
+            "details": {"error": "source or input safety flags are invalid"},
+        }, force_main=True)
+        return
+    if event.get("formalHistoryWriter") is not False:
+        _native_publish_health({
+            "status": "ERROR",
+            "reason": "formal-history-writer-rejected",
+        }, force_main=True)
+        return
+
+    status = str(event.get("status") or "").upper()
+    if status != "FRAME":
+        if status == "CONTROL":
+            details = event.get("details") if isinstance(event.get("details"), dict) else {}
+            receipt = {
+                "commandId": details.get("commandId"),
+                "revision": details.get("controlRevision"),
+                "status": details.get("commandStatus") or "ERROR",
+                "messageType": details.get("commandMessageType"),
+                "result": details.get("commandResult"),
+            }
+            LATEST_PAYLOAD["nativeControlResult"] = receipt
+            health = dict(LATEST_PAYLOAD.get("visionHealth") or {})
+            if not health or health.get("profile") != "native-readonly-v1":
+                health = _native_health_from_event(event)
+            health["controlReceipt"] = receipt
+            LATEST_PAYLOAD["visionHealth"] = health
+            control_message = {
+                "type": "vision_control",
+                "nativeControlResult": receipt,
+                "visionHealth": health,
+                "observationProfile": "native-readonly-v1",
+            }
+            loop = WS_EVENT_LOOP
+            if loop is not None and loop.is_running():
+                try:
+                    asyncio.run_coroutine_threadsafe(
+                        broadcast_ws(json.dumps(control_message, ensure_ascii=False)), loop
+                    )
+                except Exception as exc:
+                    log_stage("PRESENTATION:NATIVE", f"control broadcast failed: {exc}")
+            _native_post_main_status("native_control", force=True)
+            return
+        _native_publish_health(event, force_main=status in {"STARTING", "READY", "PAUSED", "ERROR", "STOPPED"})
+        if status in {"PAUSED", "ERROR", "STOPPED"}:
+            _LIVE_VISION_ACTIVE = False
+            _LIVE_VISION_MATCH_ID = None
+        return
+
+    frame = event.get("frame")
+    snapshot = event.get("currentMatch")
+    perception = event.get("perception")
+    session_id = str(event.get("observationSessionId") or "").strip()
+    if not session_id or not isinstance(frame, dict) or not isinstance(snapshot, dict) or not isinstance(perception, dict):
+        _native_publish_health({
+            "status": "ERROR",
+            "reason": "native-frame-envelope-invalid",
+            "details": {"sessionId": session_id},
+        }, force_main=True)
+        return
+    if snapshot.get("schemaVersion") != 7:
+        _native_publish_health({
+            "status": "ERROR",
+            "reason": "native-current-match-schema-invalid",
+        }, force_main=True)
+        return
+    try:
+        sequence = int(frame.get("sequence"))
+        capture_ns = int(frame.get("capturedAtNs"))
+    except (TypeError, ValueError):
+        _native_publish_health({
+            "status": "ERROR",
+            "reason": "native-frame-timestamp-invalid",
+        }, force_main=True)
+        return
+    if sequence <= 0 or capture_ns <= 0:
+        _native_publish_health({
+            "status": "ERROR",
+            "reason": "native-frame-sequence-invalid",
+        }, force_main=True)
+        return
+
+    from live_match_transport import LiveMatchReceiver
+    with _MANUAL_STATE_LOCK:
+        if session_id != _NATIVE_OBSERVATION_SESSION:
+            _NATIVE_OBSERVATION_SESSION = session_id
+            _NATIVE_OBSERVATION_SEQUENCE = 0
+            _NATIVE_OBSERVATION_RECEIVER = LiveMatchReceiver()
+            # A native Host session is a hard observation boundary.  Do not
+            # let a prior session's facts survive a new Engine match id when
+            # the first new frame contains honest nulls.
+            CURRENT_MATCH.begin_next_match()
+            _LIVE_MANUAL_OVERRIDES.clear()
+        receiver = _NATIVE_OBSERVATION_RECEIVER
+        if receiver is None:
+            receiver = LiveMatchReceiver()
+            _NATIVE_OBSERVATION_RECEIVER = receiver
+        vision_state = {
+            "version": 1,
+            "session": f"native:{session_id}",
+            "sequence": sequence,
+            "controlRevision": _LIVE_CONTROL_REVISION,
+            "controlPendingExit": False,
+            "snapshot": snapshot,
+        }
+        previous_match_id = CURRENT_MATCH.id
+        if not receiver.apply(vision_state, CURRENT_MATCH, _LIVE_CONTROL_REVISION):
+            stale_frame = True
+        else:
+            stale_frame = False
+        if stale_frame:
+            pass
+        else:
+            if CURRENT_MATCH.id != previous_match_id:
+                _LIVE_MANUAL_OVERRIDES.clear()
+            _LIVE_CONTROL_WAITING_EXIT = False
+            _LIVE_VISION_MATCH_ID = CURRENT_MATCH.id
+            _LIVE_VISION_ACTIVE = True
+            _NATIVE_OBSERVATION_SEQUENCE = sequence
+
+            context = event.get("pipelineContext")
+            context = dict(context) if isinstance(context, dict) else {}
+            scene = str(perception.get("scene") or context.get("scene") or "UNKNOWN")
+            in_auction = bool(perception.get("inAuction") or context.get("inAuction") or scene == "IN_AUCTION")
+            bids = perception.get("bids") if isinstance(perception.get("bids"), list) else []
+            seats = context.get("seats") if isinstance(context.get("seats"), list) else []
+            if not seats and bids:
+                seats = [
+                    {"slot": row.get("seat"), "currentBid": row.get("price"), "bid": row.get("price"),
+                     "isWinning": row.get("isWinning")}
+                    for row in bids if isinstance(row, dict)
+                ]
+            intel = perception.get("intel") if isinstance(perception.get("intel"), list) else context.get("intelCardReadings")
+            if not isinstance(intel, list):
+                intel = []
+            facts = CURRENT_MATCH.facts
+            leader_bid = context.get("currentLeaderBid")
+            if leader_bid is None:
+                leader_bid = context.get("leaderBid")
+            if leader_bid is None:
+                leader_bid = facts.get("leaderBid")
+            round_no = context.get("round") if context.get("round") is not None else facts.get("roundNo")
+            data: Dict[str, Any] = {
+                key: value for key, value in context.items()
+                if key not in {"frame", "image", "img"}
+            }
+            data.update({
+                "type": "native_observation_frame",
+                "schemaVersion": "native-observation-v1",
+                "observationProfile": "native-readonly-v1",
+                "observationStatus": "FRAME",
+                "nativeInvalidated": False,
+                "observationSessionId": session_id,
+                "sourceKind": "native_wgc",
+                "source": "native_wgc",
+                "dataOrigin": "live-trial",
+                "recognitionMode": get_recognition_mode(),
+                "gameDetected": True,
+                "scene": scene,
+                "sceneLabel": context.get("sceneLabel") or scene,
+                "inAuction": in_auction,
+                "inLobby": scene == "AUCTION_LOBBY",
+                "isSettlement": scene == "SETTLEMENT" or bool(context.get("isSettlement")),
+                "round": round_no,
+                "roundNo": round_no,
+                "leaderBid": leader_bid,
+                "currentLeaderBid": leader_bid,
+                "bids": bids,
+                "seats": seats,
+                "intel": intel,
+                "intelObservations": context.get("intelObservations") or intel,
+                "intelCardReadings": context.get("intelCardReadings") or intel,
+                "frameSequence": sequence,
+                "capturedAtNs": capture_ns,
+                "capturedAtUtc": frame.get("capturedAtUtc"),
+                "freshnessMs": frame.get("freshnessMs"),
+                "target": event.get("target"),
+                "gameHwnd": (event.get("target") or {}).get("targetHwnd") if isinstance(event.get("target"), dict) else None,
+                "foreground": bool((event.get("target") or {}).get("isTargetForeground", False)) if isinstance(event.get("target"), dict) else False,
+                "visible": bool((event.get("target") or {}).get("isTargetAlive", False)) if isinstance(event.get("target"), dict) else False,
+                "warehouseSummary": perception.get("warehouseSummary"),
+                "visionHealth": _native_health_from_event(event, frame=frame),
+                "visionState": vision_state,
+                "currentMatch": get_current_match_presentation_summary(),
+            })
+            if not isinstance(data.get("auctionEvidence"), dict) and intel:
+                data["auctionEvidence"] = {
+                    "ownerMatchId": CURRENT_MATCH.id,
+                    "intel": intel,
+                }
+            if not isinstance(data.get("costs"), dict):
+                data["costs"] = costs_from_facts(facts)
+            else:
+                data["costs"] = {
+                    **costs_from_facts(facts),
+                    **data["costs"],
+                }
+            data["costSummary"] = describe_costs(data.get("costs"))
+            data["hiddenBids"] = bids_hidden_now(facts)
+            data["freeIntelStatus"] = free_intel_status(facts)
+            data["sessionAccounting"] = accounting_from_facts(facts)
+            _sync_payload_with_canonical_facts(data, CURRENT_MATCH)
+            data["overlayState"] = build_canonical_overlay_state(CURRENT_MATCH, data)
+            data["currentMatch"] = get_current_match_presentation_summary()
+            LATEST_VISION_PAYLOAD.clear()
+            LATEST_VISION_PAYLOAD.update(data)
+            LATEST_PAYLOAD.update(data)
+            PRESENTATION_RUNTIME.observe_transport(data)
+            _NATIVE_OBSERVATION_LAST_FRAME_NS = capture_ns
+
+    if stale_frame:
+        _native_publish_health({
+            "status": "ERROR",
+            "reason": "native-frame-stale-or-reordered",
+            "details": {"sequence": sequence, "sessionId": session_id},
+        }, force_main=True)
+        return
+    loop = WS_EVENT_LOOP
+    if loop is not None and loop.is_running():
+        try:
+            asyncio.run_coroutine_threadsafe(
+                broadcast_ws(json.dumps(data, ensure_ascii=False)), loop
+            )
+        except Exception as exc:
+            log_stage("PRESENTATION:NATIVE", f"frame broadcast failed: {exc}")
+    _native_post_main_status("native_frame")
+
+
+def _send_native_manual_control(command: Optional[Dict[str, Any]]) -> Optional[Dict[str, Any]]:
+    if not native_observation_enabled() or not isinstance(command, dict):
+        return None
+    with _NATIVE_OBSERVATION_LOCK:
+        bridge = NATIVE_OBSERVATION_BRIDGE
+    if bridge is None or not bridge.running:
+        return {
+            "status": "REJECTED",
+            "reason": "NATIVE_OBSERVATION_NOT_RUNNING",
+            "revision": command.get("revision"),
+        }
+    sent = bridge.send_control({"type": "native_control", "command": command})
+    return {
+        "status": "SENT" if sent else "REJECTED",
+        "reason": None if sent else "NATIVE_CONTROL_CHANNEL_FAILED",
+        "revision": command.get("revision"),
+    }
 
 
 def _publish_live_shadow_event(event: Dict[str, Any]) -> None:
@@ -1568,7 +1997,13 @@ async def ws_handler(websocket):
                     log_stage("STARTUP:HUD", "WebSocket ready: True")
                     log_stage("STARTUP:HUD", "HUD responsive: True")
                     log_stage("STARTUP:HUD", f"startup duration: {(time.perf_counter() - PROCESS_START_TIME) * 1000:.2f}ms")
-                    start_vision_worker()
+                    if native_observation_enabled():
+                        _native_publish_health({
+                            "status": "STOPPED",
+                            "reason": "explicit-start-required",
+                        }, force_main=True)
+                    else:
+                        start_vision_worker()
                 elif msg_type == "force_refresh":
                     request_force_refresh(data.get("refreshRequestId") or data.get("requestId"))
                 elif msg_type == "start_live_vision":
@@ -1845,6 +2280,8 @@ _DRAFT_WRITE_FAILED = False
 
 
 def draft_write_status():
+    if native_observation_enabled():
+        return "ISOLATED_DRAFT"
     if not DRAFT_ARCHIVER.db_paths:
         return "UNAVAILABLE"
     if _LAST_DRAFT_WRITE == (CURRENT_MATCH.id, CURRENT_MATCH.facts_revision):
@@ -1856,6 +2293,11 @@ def _persist_current_draft_now() -> Optional[Dict[str, Any]]:
     global _DRAFT_TIMER, _LAST_DRAFT_WRITE, _DRAFT_WRITE_FAILED
     with _DRAFT_LOCK:
         _DRAFT_TIMER = None
+    if native_observation_enabled():
+        # Native P1 keeps DRAFT/raw diagnostics in the per-observation Host
+        # work directory.  The product's formal History database is read-only
+        # for this profile.
+        return None
     with _MANUAL_STATE_LOCK:
         if not DRAFT_ARCHIVER.db_paths:
             return None
@@ -2002,6 +2444,9 @@ def build_manual_alpha_payload(include_solver_input: bool = True) -> Dict[str, A
     return {
         "type": "manual_alpha_state",
         "recognitionMode": get_recognition_mode(),
+        "observationProfile": native_observation_profile(),
+        "visionHealth": get_current_match_presentation_summary().get("visionHealth") or {},
+        "nativeControlResult": dict(LATEST_PAYLOAD.get("nativeControlResult") or {}),
         "configuredPlayerName": get_player_name(),
         "source": "manual",
         "fillDefaults": False,
@@ -2200,7 +2645,8 @@ def apply_manual_facts(facts: Optional[Dict[str, Any]]) -> Dict[str, Any]:
                 cleared_fields=cleared_fields,
                 restore_auto_fields=restore_auto_fields,
             )
-            schedule_draft_save(0.5)
+            if not native_observation_enabled():
+                schedule_draft_save(0.5)
             saved = {"id": CURRENT_MATCH.id}
         else:
             saved = {"id": CURRENT_MATCH.id} if CURRENT_MATCH.has_any_fact() else None
@@ -2217,6 +2663,9 @@ def apply_manual_facts(facts: Optional[Dict[str, Any]]) -> Dict[str, Any]:
                 cleared_fields=cleared_fields,
                 restore_auto_fields=restore_auto_fields,
             )
+            native_receipt = _send_native_manual_control(payload["manualControl"])
+            if native_receipt is not None:
+                payload["nativeControlResult"] = native_receipt
         payload["draftId"] = saved.get("id") if saved else CURRENT_MATCH.id
         payload["draftSaved"] = draft_write_status() == "SAVED"
         LATEST_PAYLOAD.update(payload)
@@ -2234,6 +2683,9 @@ def _manual_terminal_payload(result: Dict[str, Any], *, reset: bool) -> Dict[str
     payload = build_manual_alpha_payload()
     if reset:
         payload["manualControl"] = make_live_control_command(previous_id, reset=True)
+        native_receipt = _send_native_manual_control(payload["manualControl"])
+        if native_receipt is not None:
+            payload["nativeControlResult"] = native_receipt
     payload["draftSaved"] = False if reset else draft_write_status() == "SAVED"
     payload["terminalResult"] = result
     LATEST_PAYLOAD.update(payload)
@@ -2255,6 +2707,17 @@ def finalize_manual_match(request: Optional[Dict[str, Any]]) -> Dict[str, Any]:
     raw = dict(request or {})
     expected_id = str(raw.get("expectedMatchId") or "").strip()
     with _MANUAL_STATE_LOCK:
+        if native_observation_enabled():
+            return _manual_terminal_payload(
+                {
+                    "terminalVersion": 1,
+                    "ok": False,
+                    "status": "FORMAL_HISTORY_DISABLED",
+                    "matchId": CURRENT_MATCH.id,
+                    "message": "Native 观察 profile 仅允许隔离 DRAFT，已拒绝正式结算与 FINALIZED 写入。",
+                },
+                reset=False,
+            )
         if expected_id != CURRENT_MATCH.id:
             return _manual_terminal_payload(
                 MANUAL_TERMINAL.stale_result(expected_id, CURRENT_MATCH.id), reset=False
@@ -2285,6 +2748,32 @@ def begin_next_manual_match(request: Optional[Dict[str, Any]] = None) -> Dict[st
     expected_id = str(raw.get("expectedMatchId") or "").strip()
     disposition = str(raw.get("disposition") or "").strip().lower()
     with _MANUAL_STATE_LOCK:
+        if native_observation_enabled():
+            if expected_id != CURRENT_MATCH.id:
+                return _manual_terminal_payload(
+                    MANUAL_TERMINAL.stale_result(expected_id, CURRENT_MATCH.id), reset=False
+                )
+            if disposition not in {"keep_draft", "discard"}:
+                return _manual_terminal_payload(
+                    {
+                        "terminalVersion": 1,
+                        "ok": False,
+                        "status": "TERMINAL_INTENT_REQUIRED",
+                        "matchId": CURRENT_MATCH.id,
+                        "message": "请选择保留隔离 DRAFT 或丢弃当前局",
+                    },
+                    reset=False,
+                )
+            return _manual_terminal_payload(
+                {
+                    "terminalVersion": 1,
+                    "ok": True,
+                    "status": "ISOLATED_DRAFT_RESET",
+                    "matchId": CURRENT_MATCH.id,
+                    "message": "已结束当前隔离观察草稿；未写入正式 History。",
+                },
+                reset=True,
+            )
         if expected_id != CURRENT_MATCH.id:
             return _manual_terminal_payload(
                 MANUAL_TERMINAL.stale_result(expected_id, CURRENT_MATCH.id), reset=False
@@ -4180,7 +4669,13 @@ class HudJsApi:
         log_stage("STARTUP:HUD", "WebSocket ready: True")
         log_stage("STARTUP:HUD", "HUD responsive: True")
         log_stage("STARTUP:HUD", f"startup duration: {(time.perf_counter() - PROCESS_START_TIME) * 1000:.2f}ms")
-        start_vision_worker()
+        if native_observation_enabled():
+            _native_publish_health({
+                "status": "STOPPED",
+                "reason": "explicit-start-required",
+            }, force_main=True)
+        else:
+            start_vision_worker()
         return {"status": "ok"}
 
     def exit_app(self):
@@ -4397,6 +4892,40 @@ class HudJsApi:
         return {"status": "ok", "strategyPanel": panel.to_payload()}
 
 
+def _start_native_observation_locked():
+    global NATIVE_OBSERVATION_BRIDGE
+    if os.environ.get("NTE_DISABLE_VISION") == "1":
+        PRESENTATION_RUNTIME.set_vision_process_state("disabled")
+        log_stage("STARTUP:NATIVE", "Native observation disabled via NTE_DISABLE_VISION=1")
+        return None
+    with _NATIVE_OBSERVATION_LOCK:
+        if NATIVE_OBSERVATION_BRIDGE is not None and NATIVE_OBSERVATION_BRIDGE.running:
+            PRESENTATION_RUNTIME.set_vision_process_state("running")
+            return NATIVE_OBSERVATION_BRIDGE.process
+        bridge = NativeObservationBridge(
+            PROJECT_ROOT,
+            _native_observation_event,
+            log_stage,
+        )
+        NATIVE_OBSERVATION_BRIDGE = bridge
+        _native_publish_health({
+            "status": "STARTING",
+            "reason": "explicit-start",
+            "details": {"inputActions": False, "formalHistoryWriter": False},
+        }, force_main=True)
+        child = bridge.start()
+        if child is None:
+            PRESENTATION_RUNTIME.set_vision_process_state("stopped")
+            _native_publish_health({
+                "status": "ERROR",
+                "reason": "native-host-start-failed",
+                "details": {"inputActions": False, "formalHistoryWriter": False},
+            }, force_main=True)
+            return None
+        PRESENTATION_RUNTIME.set_vision_process_state("running")
+        return child
+
+
 def start_vision_worker():
     with _VISION_PROCESS_LOCK:
         return _start_vision_worker_locked()
@@ -4420,6 +4949,8 @@ def _observe_vision_process_exit(worker):
 def _start_vision_worker_locked():
     """把 RapidOCR 放到完全独立的进程，避免和 WebView2 共享 Python/COM 消息循环。"""
     global VISION_PROCESS
+    if native_observation_enabled():
+        return _start_native_observation_locked()
     if os.environ.get("NTE_DISABLE_VISION") == "1":
         PRESENTATION_RUNTIME.set_vision_process_state("disabled")
         log_stage("STARTUP:VISION", "Vision disabled via NTE_DISABLE_VISION=1")
@@ -4487,11 +5018,20 @@ def stop_vision_worker():
 
 
 def _stop_vision_worker_locked():
-    global VISION_PROCESS
+    global VISION_PROCESS, NATIVE_OBSERVATION_BRIDGE
     worker, VISION_PROCESS = VISION_PROCESS, None
+    with _NATIVE_OBSERVATION_LOCK:
+        native, NATIVE_OBSERVATION_BRIDGE = NATIVE_OBSERVATION_BRIDGE, None
     PRESENTATION_RUNTIME.set_vision_process_state(
         "disabled" if os.environ.get("NTE_DISABLE_VISION") == "1" else "stopped"
     )
+    if native is not None:
+        log_stage("SHUTDOWN:NATIVE", "Stopping native observation host...")
+        try:
+            native.stop()
+            log_stage("SHUTDOWN:NATIVE", "Native observation host stopped cleanly")
+        except Exception as exc:
+            log_stage("SHUTDOWN:NATIVE", f"Native observation stop failed: {exc}")
     if worker is None:
         return
     log_stage("SHUTDOWN:VISION", f"Stopping vision worker (PID={worker.pid})...")
@@ -4887,6 +5427,9 @@ def main():
 
 if __name__ == "__main__":
     if "--vision-worker" in sys.argv:
+        if native_observation_enabled():
+            log_stage("STARTUP:VISION", "Legacy Python vision worker rejected under native-readonly-v1")
+            sys.exit(2)
         vision_capture_worker()
     elif "--smoke-acquisition-video" in sys.argv:
         from runtime_acquisition_smoke import run_from_environment

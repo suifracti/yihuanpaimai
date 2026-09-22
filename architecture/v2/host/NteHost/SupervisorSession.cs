@@ -69,6 +69,14 @@ public sealed class SupervisorSession : IDisposable
         public string? EngineFaultCapability { get; set; }
         public string? EngineFaultHelloSize { get; set; }
         public string? EngineLogPath { get; set; }
+        /// <summary>
+        /// Business-origin label carried into the single Python worker.  The
+        /// transport contract stays unchanged; this only prevents a live
+        /// observation from being restored as a replay observation.
+        /// </summary>
+        public string DataOrigin { get; set; } = "replay";
+        /// <summary>Optional repository catalog selected by the product entry.</summary>
+        public string? CatalogPath { get; set; }
         public string PipeNameOverride { get; set; } = string.Empty;
         public int AcceptTimeoutMs { get; set; } = 15000;
         public int PostAcceptDelayMs { get; set; } = 0;
@@ -339,6 +347,16 @@ public sealed class SupervisorSession : IDisposable
         {
             args.Add("--fault-hello-size");
             args.Add(_options.EngineFaultHelloSize!);
+        }
+        if (!string.IsNullOrWhiteSpace(_options.DataOrigin))
+        {
+            args.Add("--data-origin");
+            args.Add(_options.DataOrigin);
+        }
+        if (!string.IsNullOrWhiteSpace(_options.CatalogPath))
+        {
+            args.Add("--catalog");
+            args.Add(_options.CatalogPath!);
         }
 
         var psi = new ProcessStartInfo

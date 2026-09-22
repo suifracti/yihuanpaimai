@@ -1091,7 +1091,8 @@
       shadowPollCount: 0,
       liveVisionActive: false,
       liveVisionMatchId: "",
-      liveVisionSequence: 0
+      liveVisionSequence: 0,
+      liveVisionSession: ""
     };
     let hudWsClient = null;
     let syncTimer = null;
@@ -2149,14 +2150,58 @@ function sparkleBoundsText(b) {
       }).join("");
     }
 
+    function clearNativeLiveProjection() {
+      manualState.liveVisionActive = false;
+      manualState.liveVisionSession = "";
+      manualState.latestNativePayload = null;
+      manualState.liveVisionSequence = 0;
+      const seatsEl = document.getElementById("liveSeats");
+      const intelEl = document.getElementById("liveIntel");
+      if (seatsEl) seatsEl.textContent = "Native 观察已暂停";
+      if (intelEl) intelEl.textContent = "暂无有效情报";
+      const leadLabel = document.getElementById("leadFactLabel");
+      const leadValue = document.getElementById("leadFactValue");
+      if (leadLabel) leadLabel.textContent = "状态";
+      if (leadValue) leadValue.textContent = "已暂停";
+      ["p50Label", "topRecommendedMax", "recommendedMax"].forEach((id) => {
+        const el = document.getElementById(id);
+        if (el) el.textContent = "—";
+      });
+      const range = document.getElementById("pRange");
+      if (range) range.textContent = "Native 观察暂停 · 不显示旧帧估值";
+      const action = document.getElementById("actionText");
+      if (action) action.textContent = "Native 观察暂停 · 等待重新开始";
+      const reason = document.getElementById("actionReason");
+      if (reason) reason.textContent = "旧帧已失效，不作为当前画面依据";
+    }
+
     function paintVisionHealth(d) {
       if (!d?.visionHealth) return;
+      const nativeProfile = d.observationProfile === 'native-readonly-v1' || d.visionHealth.profile === 'native-readonly-v1';
+      if (nativeProfile && d.nativeInvalidated) clearNativeLiveProjection();
+      const nativeWaiting = nativeProfile && ['native-starting', 'native-ready'].includes(d.visionHealth.stage);
+      const needsNativeAction = nativeProfile && d.visionHealth.status !== 'READY' && !nativeWaiting;
+      const nativeTelemetry = nativeProfile && d.visionHealth.status === 'READY' && d.visionHealth.freshnessMs != null;
       const el = document.getElementById('visionHealthStatus');
-      el.hidden = d.visionHealth.status !== 'ERROR';
+      el.hidden = nativeProfile ? !(needsNativeAction || nativeWaiting || nativeTelemetry) : d.visionHealth.status !== 'ERROR';
       el.textContent = el.hidden ? '' : '识别暂时异常，正在重试；当前显示为上次结果';
-      if (!el.hidden && d.visionHealth.stage === 'process') el.textContent = '识别进程已退出，点击恢复识别；当前显示为上次结果';
-      if (!el.hidden && d.visionHealth.stage === 'starting') el.textContent = '正在启动识别；当前显示为上次结果';
-      document.getElementById('restoreVisionBtn').hidden = el.hidden || d.visionHealth.stage !== 'process';
+      if (!el.hidden && nativeProfile) {
+        if (nativeTelemetry) el.textContent = `Native WGC · 新鲜度 ${Number(d.visionHealth.freshnessMs).toFixed(0)}ms · 帧 ${d.visionHealth.frameSequence ?? '--'}`;
+        else if (d.visionHealth.stage === 'native-ready') el.textContent = 'Native Host 已就绪，等待首个业务帧';
+        else if (d.visionHealth.stage === 'native-explicit-start' || d.visionHealth.stage === 'native-stopped') el.textContent = 'Native 观察未启动，点击开始观察';
+        else if (d.visionHealth.stage === 'native-starting') el.textContent = '正在启动 Native 观察，请保持游戏窗口可见并置前';
+        else if (d.visionHealth.stage === 'native-paused') el.textContent = `Native 观察已暂停：${d.visionHealth.reason || '目标窗口或场景边界变化'}；点击重新开始`;
+        else if (d.visionHealth.stage === 'native-error') el.textContent = `Native 观察异常：${d.visionHealth.reason || '请重新开始观察'}`;
+      } else if (!el.hidden && d.visionHealth.stage === 'process') {
+        el.textContent = '识别进程已退出，点击恢复识别；当前显示为上次结果';
+      } else if (!el.hidden && d.visionHealth.stage === 'starting') {
+        el.textContent = '正在启动识别；当前显示为上次结果';
+      }
+      const restore = document.getElementById('restoreVisionBtn');
+      if (restore) {
+        restore.hidden = nativeProfile ? !needsNativeAction : el.hidden || d.visionHealth.stage !== 'process';
+        restore.textContent = nativeProfile ? (d.visionHealth.stage === 'native-explicit-start' ? '开始 Native 观察' : '重新开始观察') : '恢复识别';
+      }
       document.getElementById('topVisionHealth').hidden = el.hidden;
       document.getElementById('topSupportTag').style.display = el.hidden ? '' : 'none';
       document.getElementById('valuationCaption').textContent = el.hidden ? '估值 (P50)' : '上次估值';
@@ -2374,10 +2419,12 @@ function sparkleBoundsText(b) {
       const snapshot = state.snapshot || {};
       const incomingId = d.matchId || snapshot.id || "";
       const incomingSequence = Number(state.sequence || 0);
-      if (incomingId && incomingId === manualState.liveVisionMatchId && incomingSequence && incomingSequence < manualState.liveVisionSequence) {
+      const incomingSession = String(state.session || "");
+      const sessionChanged = Boolean(incomingSession && incomingSession !== manualState.liveVisionSession);
+      if (!sessionChanged && incomingId && incomingId === manualState.liveVisionMatchId && incomingSequence && incomingSequence < manualState.liveVisionSequence) {
         return true;
       }
-      const resetMatch = Boolean(incomingId && incomingId !== manualState.liveVisionMatchId);
+      const resetMatch = Boolean(sessionChanged || (incomingId && incomingId !== manualState.liveVisionMatchId));
       if (resetMatch) {
         manualState.lastSyncedFacts = {};
         manualState.dirty = false;
@@ -2386,10 +2433,12 @@ function sparkleBoundsText(b) {
         manualState.lastSyncedPredictionId = null;
         manualState.shadowPollCount = 0;
         manualState.liveVisionSequence = 0;
+        manualState.liveVisionSession = incomingSession;
         closePopover();
       }
       manualState.liveVisionActive = true;
       manualState.liveVisionMatchId = incomingId;
+      manualState.liveVisionSession = incomingSession || manualState.liveVisionSession;
       manualState.liveVisionSequence = Math.max(manualState.liveVisionSequence, incomingSequence);
       manualState.matchId = incomingId || manualState.matchId;
       manualState.suppress = true;
