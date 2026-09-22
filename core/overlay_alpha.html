@@ -2202,9 +2202,12 @@ function sparkleBoundsText(b) {
         restore.hidden = nativeProfile ? !needsNativeAction : el.hidden || d.visionHealth.stage !== 'process';
         restore.textContent = nativeProfile ? (d.visionHealth.stage === 'native-explicit-start' ? '开始 Native 观察' : '重新开始观察') : '恢复识别';
       }
-      document.getElementById('topVisionHealth').hidden = el.hidden;
-      document.getElementById('topSupportTag').style.display = el.hidden ? '' : 'none';
-      document.getElementById('valuationCaption').textContent = el.hidden ? '估值 (P50)' : '上次估值';
+      const healthWarning = !el.hidden && !nativeTelemetry && !nativeWaiting;
+      const topHealth = document.getElementById('topVisionHealth');
+      topHealth.hidden = !healthWarning;
+      topHealth.textContent = nativeProfile && d.visionHealth.stage === 'native-paused' ? '观察已暂停' : '识别异常';
+      document.getElementById('topSupportTag').style.display = healthWarning ? 'none' : '';
+      document.getElementById('valuationCaption').textContent = healthWarning ? '上次估值' : '估值 (P50)';
     }
 
     function paintResult(d) {
