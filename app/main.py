@@ -1413,6 +1413,10 @@ def _native_health_from_event(event: Dict[str, Any], *, frame: Optional[Dict[str
     }
     details = event.get("details")
     if isinstance(details, dict):
+        if details.get("error") is not None:
+            health["error"] = str(details.get("error"))
+        if details.get("scene") is not None:
+            health["scene"] = details.get("scene")
         if isinstance(details.get("target"), dict):
             health["target"] = dict(details["target"])
         if details.get("engineReadiness") is not None:

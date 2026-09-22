@@ -11,7 +11,10 @@ echo ========================================================
 echo   Starting NTE Auction HUD (DEBUG)
 echo   Runtime log: %NTE_LOG_FILE%
 echo ========================================================
-python main.py --debug
+set "NTE_PYTHON_EXE=%~dp0..\build\takeover_20260905\repro-venv\Scripts\python.exe"
+if not exist "%NTE_PYTHON_EXE%" set "NTE_PYTHON_EXE=python"
+echo   Python runtime: %NTE_PYTHON_EXE%
+"%NTE_PYTHON_EXE%" main.py --debug
 if errorlevel 1 (
     echo.
     echo Launch failed. See the traceback above.

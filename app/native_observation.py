@@ -172,6 +172,13 @@ class NativeObservationBridge:
                     continue
                 if not isinstance(event, dict) or event.get("type") != "native_observation":
                     continue
+                status = str(event.get("status") or "").upper()
+                if status != "FRAME":
+                    self._record_status_event(event)
+                    self.log(
+                        "OBSERVATION:NATIVE",
+                        json.dumps(event, ensure_ascii=False, separators=(",", ":"))[:4000],
+                    )
                 self.last_status = str(event.get("status") or self.last_status)
                 try:
                     self.on_event(event)
@@ -198,6 +205,23 @@ class NativeObservationBridge:
                     )
                 except Exception:
                     pass
+
+    def _record_status_event(self, event: dict[str, Any]) -> None:
+        """Keep a bounded status/error trail beside the isolated session.
+
+        FRAME payloads already carry the selected raw frame and engine state;
+        status lines are the important evidence when startup or a safety fence
+        fails before the Host creates its protocol trace.
+        """
+        session_dir = self.session_dir
+        if session_dir is None:
+            return
+        try:
+            path = session_dir / "host-status.jsonl"
+            with path.open("a", encoding="utf-8", newline="\n") as stream:
+                stream.write(json.dumps(event, ensure_ascii=False, separators=(",", ":")) + "\n")
+        except Exception as exc:
+            self.log("OBSERVATION:NATIVE", f"status evidence write failed: {type(exc).__name__}: {exc}")
 
     def _read_stderr(self, child: subprocess.Popen[str]) -> None:
         if child.stderr is None:
