@@ -365,6 +365,10 @@ public sealed class SupervisorSession : IDisposable
             WorkingDirectory = _options.WorkDir,
             UseShellExecute = false,
             CreateNoWindow = true,
+            // The Host's stdin is its GUI control pipe and may have a pending
+            // read. Inheriting it can block the Windows venv launcher before
+            // Python enters the script. Engine control uses Named Pipe only.
+            RedirectStandardInput = true,
             RedirectStandardOutput = true,   // logs only - never the protocol transport
             RedirectStandardError = true,    // logs only - never the protocol transport
         };
@@ -375,13 +379,12 @@ public sealed class SupervisorSession : IDisposable
 
         var process = new Process { StartInfo = psi, EnableRaisingEvents = true };
         process.Exited += OnChildExited;
-        // Attach the asynchronous log readers before Start().  A launcher or
-        // import failure can otherwise write its only diagnostic and exit
-        // between process.Start() and the old subscription point.
+        // Subscribe before starting the asynchronous log readers.
         process.OutputDataReceived += (_, e) => { if (e.Data is not null) _trace.Event("child.stdout", GenerationId, new { line = e.Data }); };
         process.ErrorDataReceived += (_, e) => { if (e.Data is not null) _trace.Event("child.stderr", GenerationId, new { line = e.Data }); };
         var spawnStartNs = ProtocolClock.NowNs();
         process.Start();
+        process.StandardInput.Close();
         ChildSpawnNs = ProtocolClock.NowNs();
         _child = process;
         ChildPid = process.Id;
