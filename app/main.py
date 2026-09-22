@@ -2025,7 +2025,14 @@ async def ws_handler(websocket):
                 elif msg_type == "force_refresh":
                     request_force_refresh(data.get("refreshRequestId") or data.get("requestId"))
                 elif msg_type == "start_live_vision":
-                    start_vision_worker()
+                    # Starting from the existing UI is a new observation
+                    # boundary by default.  A transient pause may be resumed
+                    # only when the UI explicitly marks this as same-match
+                    # recovery; otherwise stale facts from the previous Host
+                    # session must not seed a newly opened game.
+                    start_vision_worker(
+                        resume_same_match=bool(data.get("resumeSameMatch"))
+                    )
                 elif msg_type == "drag_delta":
                     dx = int(data.get("dx", 0))
                     dy = int(data.get("dy", 0))
@@ -4568,8 +4575,10 @@ class HudJsApi:
             pass
         return None
 
-    def start_live_vision(self):
-        return start_vision_worker() is not None
+    def start_live_vision(self, resume_same_match=False):
+        return start_vision_worker(
+            resume_same_match=bool(resume_same_match)
+        ) is not None
 
     def begin_drag(self):
         if self.form and hasattr(self.form, "ActivateOverlay"):
@@ -4910,7 +4919,7 @@ class HudJsApi:
         return {"status": "ok", "strategyPanel": panel.to_payload()}
 
 
-def _start_native_observation_locked():
+def _start_native_observation_locked(*, resume_same_match: bool = False):
     global NATIVE_OBSERVATION_BRIDGE
     if os.environ.get("NTE_DISABLE_VISION") == "1":
         PRESENTATION_RUNTIME.set_vision_process_state("disabled")
@@ -4922,7 +4931,7 @@ def _start_native_observation_locked():
             return NATIVE_OBSERVATION_BRIDGE.process
         resume_state = None
         health = LATEST_PAYLOAD.get("visionHealth") or {}
-        if health.get("reason") in {"focus-lost", "capture-failed"}:
+        if resume_same_match and health.get("reason") in {"focus-lost", "capture-failed"}:
             target = LATEST_PAYLOAD.get("target")
             if isinstance(target, dict) and target.get("identity"):
                 with _MANUAL_STATE_LOCK:
@@ -4957,9 +4966,9 @@ def _start_native_observation_locked():
         return child
 
 
-def start_vision_worker():
+def start_vision_worker(*, resume_same_match: bool = False):
     with _VISION_PROCESS_LOCK:
-        return _start_vision_worker_locked()
+        return _start_vision_worker_locked(resume_same_match=resume_same_match)
 
 
 def _set_vision_process_health(stage):
@@ -4977,11 +4986,11 @@ def _observe_vision_process_exit(worker):
             _set_vision_process_health('process')
 
 
-def _start_vision_worker_locked():
+def _start_vision_worker_locked(*, resume_same_match: bool = False):
     """把 RapidOCR 放到完全独立的进程，避免和 WebView2 共享 Python/COM 消息循环。"""
     global VISION_PROCESS
     if native_observation_enabled():
-        return _start_native_observation_locked()
+        return _start_native_observation_locked(resume_same_match=resume_same_match)
     if os.environ.get("NTE_DISABLE_VISION") == "1":
         PRESENTATION_RUNTIME.set_vision_process_state("disabled")
         log_stage("STARTUP:VISION", "Vision disabled via NTE_DISABLE_VISION=1")
@@ -5299,7 +5308,9 @@ def run_hud_app():
                 elif action in ("triggered_snapshot", "capture_hud"):
                     js_api.triggered_snapshot()
                 elif action == "start_live_vision":
-                    start_vision_worker()
+                    start_vision_worker(
+                        resume_same_match=bool(data.get("resumeSameMatch"))
+                    )
                 elif action == "begin_drag":
                     if hasattr(overlay_form, "ActivateOverlay"):
                         overlay_form.ActivateOverlay()
@@ -5393,7 +5404,9 @@ def run_hud_app():
             settlement_review_service=settlement_review_service,
             legacy_archive_provider=lambda: legacy_archive,
             manual_facts_provider=lambda facts: publish_manual_payload(apply_manual_facts(facts)),
-            start_vision_provider=lambda: start_vision_worker() is not None,
+            start_vision_provider=lambda resume_same_match=False: start_vision_worker(
+                resume_same_match=bool(resume_same_match)
+            ) is not None,
             manual_next_match_provider=lambda req: publish_manual_payload(begin_next_manual_match(req)),
             manual_finalize_provider=lambda req: publish_manual_payload(finalize_manual_match(req)),
             manual_bootstrap_provider=lambda: publish_manual_payload(build_manual_alpha_payload()),

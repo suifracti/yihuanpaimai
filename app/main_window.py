@@ -848,7 +848,21 @@ class MainWindowBridge:
 
         if action == 'start_live_vision':
             try:
-                response['visionStartResult'] = {'ok': bool(self._start_vision_provider and self._start_vision_provider())}
+                resume_same_match = bool(payload.get('resumeSameMatch'))
+                provider = self._start_vision_provider
+                if provider is None:
+                    started = False
+                else:
+                    try:
+                        started = provider(resume_same_match=resume_same_match)
+                    except TypeError as exc:
+                        # Keep older embedders with a zero-argument provider
+                        # compatible; the native app provider accepts the
+                        # explicit recovery flag above.
+                        if 'resume_same_match' not in str(exc):
+                            raise
+                        started = provider()
+                response['visionStartResult'] = {'ok': bool(started)}
             except Exception as exc:
                 response['visionStartResult'] = {'ok': False, 'error': str(exc)}
 

@@ -31,7 +31,7 @@ class LiveMatchTransportTests(unittest.TestCase):
                  patch.object(main, "_native_publish_health"), \
                  patch.object(main, "LATEST_PAYLOAD", {"visionHealth": {"reason": reason}, "target": target}), \
                  patch.dict(os.environ, {"NTE_DISABLE_VISION": "0"}):
-                main._start_native_observation_locked()
+                main._start_native_observation_locked(resume_same_match=should_resume)
                 seed = bridge.start.call_args.kwargs["resume_state"]
                 if should_resume:
                     self.assertEqual(seed["currentMatch"]["id"], current.id)
@@ -40,6 +40,16 @@ class LiveMatchTransportTests(unittest.TestCase):
                     self.assertEqual(seed["target"], target)
                 else:
                     self.assertIsNone(seed)
+
+        bridge = Mock()
+        with patch.object(main, "CURRENT_MATCH", current), \
+             patch.object(main, "NATIVE_OBSERVATION_BRIDGE", None), \
+             patch.object(main, "NativeObservationBridge", return_value=bridge), \
+             patch.object(main, "_native_publish_health"), \
+             patch.object(main, "LATEST_PAYLOAD", {"visionHealth": {"reason": "focus-lost"}, "target": target}), \
+             patch.dict(os.environ, {"NTE_DISABLE_VISION": "0"}):
+            main._start_native_observation_locked()
+            self.assertIsNone(bridge.start.call_args.kwargs["resume_state"])
 
     def test_native_resume_seed_restores_manual_protection_in_engine(self):
         import importlib.util

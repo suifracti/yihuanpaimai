@@ -1864,7 +1864,13 @@ function renderMatch(currentMatch, overlayVisible) {
     const restoreButton = document.getElementById('restore-vision-btn');
     if (restoreButton) {
       restoreButton.hidden = nativeProfile ? !needsNativeAction : visionHealthStatus.hidden || health.stage !== 'process';
-      restoreButton.textContent = nativeProfile ? (health.stage === 'native-explicit-start' ? '开始 Native 观察' : '重新开始观察') : '恢复识别';
+      const sameMatchRecovery = nativeProfile
+        && health.stage === 'native-paused'
+        && ['focus-lost', 'capture-failed'].includes(String(health.reason || ''));
+      restoreButton.dataset.resumeSameMatch = sameMatchRecovery ? 'true' : 'false';
+      restoreButton.textContent = nativeProfile
+        ? (sameMatchRecovery ? '恢复同局观察' : '开始新局观察')
+        : '恢复识别';
     }
   }
   const previousMatchId = dashboard.matchState.matchId;
