@@ -231,12 +231,39 @@ internal static class NativeObservationService
                 if (scene is "SETTLEMENT" or "AUCTION_LOBBY" or "CITY_TYCOON_HUB"
                     or "CITY_LEISURE_MENU" or "OPEN_WORLD" or "UNKNOWN")
                 {
+                    // Preserve the exact frame that caused the boundary.  A
+                    // hash in frame_records is not enough to distinguish a
+                    // real game transition from a scene-classification error.
+                    var boundaryRawPath = Path.Combine(workDir, "boundary-frame.bmp");
+                    var boundaryStatePath = Path.Combine(workDir, "boundary-frame-state.json");
+                    string? boundaryEvidenceError = null;
+                    try
+                    {
+                        WriteBmp(boundaryRawPath, frame.Width, frame.Height, frame.Pixels);
+                        File.WriteAllText(boundaryStatePath,
+                            JsonSerializer.Serialize(new
+                            {
+                                frameSequence,
+                                frame.CaptureTimestampNs,
+                                frame.CapturedAtUtc,
+                                scene,
+                                state,
+                                perception,
+                            }, JsonLineOptions));
+                    }
+                    catch (Exception evidenceEx)
+                    {
+                        boundaryEvidenceError = $"{evidenceEx.GetType().Name}: {evidenceEx.Message}";
+                    }
                     EmitStatus(sessionId, "PAUSED", $"scene-boundary:{scene}", new
                     {
                         scene,
                         frameSequence,
                         capturedAtNs = frame.CaptureTimestampNs,
                         capturedAtUtc = frame.CapturedAtUtc,
+                        boundaryRawPath = boundaryEvidenceError is null ? boundaryRawPath : null,
+                        boundaryStatePath = boundaryEvidenceError is null ? boundaryStatePath : null,
+                        boundaryEvidenceError,
                         target = TargetEvidence(afterEngine),
                     });
                     session.ControlledShutdown();

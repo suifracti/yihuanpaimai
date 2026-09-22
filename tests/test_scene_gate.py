@@ -43,6 +43,10 @@ def _paint_lobby_orange(w=1920, h=1080):
     return img
 
 
+def _box(x, y, w=120, h=30):
+    return [[x, y], [x + w, y], [x + w, y + h], [x, y + h]]
+
+
 def _lock_in_auction(pipe):
     pipe.current_context["scene"] = SCENE_IN_AUCTION
     pipe.current_context["sceneLabel"] = "拍卖进行中"
@@ -71,6 +75,18 @@ def _lock_settlement(pipe):
 
 
 class TestSceneGateHysteresis(unittest.TestCase):
+    def test_live_round_evidence_wins_over_conflicting_lobby_ocr(self):
+        pipe = NTEVisionPipeline()
+        _lock_in_auction(pipe)
+        mock_ocr = [
+            (_box(1600, 900), "开始匹配", 0.99),
+            (_box(780, 120), "竞拍第1回合", 0.99),
+            (_box(860, 170), "00:38", 0.99),
+            (_box(760, 300), "拍卖师公开情报", 0.99),
+            (_box(1580, 900), "放弃  出价", 0.99),
+        ]
+        self.assertTrue(pipe._has_live_auction_evidence(mock_ocr))
+
     def test_fast_open_world_does_not_drop_in_auction(self):
         pipe = NTEVisionPipeline()
         _lock_in_auction(pipe)

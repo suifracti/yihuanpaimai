@@ -1218,9 +1218,23 @@ class NTEVisionPipeline:
                     self._apply_pre_auction_scene(scene_info)
                     return self.current_context
 
-            # 1. 绝对优先：拍卖大厅
+            # 1. 拍卖大厅
+            #
+            # A locked IN_AUCTION frame may still contain a transient OCR
+            # hallucination of a lobby anchor (for example, a button/venue
+            # token from the animated side panels).  The old "absolute
+            # priority" rule let that single OCR result overwrite a known
+            # live round and made the Host pause the observation immediately.
+            # A live-round anchor from this same frame is stronger evidence
+            # than a conflicting lobby token, so keep the locked match and
+            # let the normal round/intel parser consume the frame below.
             lobby_info = self._parse_lobby(mapped_res, w, h)
-            if lobby_info["inLobby"]:
+            live_round_evidence = (
+                self.current_context.get("scene") == SCENE_IN_AUCTION
+                and not self.current_context.get("isSettlement")
+                and self._has_live_auction_evidence(mapped_res, w, h)
+            )
+            if lobby_info["inLobby"] and not live_round_evidence:
                 self._apply_lobby_loadout(lobby_info)
                 self._end_match_on_lobby_or_egress()
                 return self.current_context
@@ -3713,6 +3727,41 @@ class NTEVisionPipeline:
         data["inLobby"] = True
         data.update({k: v for k, v in self._parse_lobby_loadout(ocr_results).items() if v is not None})
         return data
+
+    def _has_live_auction_evidence(
+        self,
+        ocr_results: List[Any],
+        screen_w: int = 1920,
+        screen_h: int = 1080,
+    ) -> bool:
+        """Return whether one OCR frame visibly belongs to a live round.
+
+        This is deliberately an evidence gate, not a scene classifier.  It is
+        used only to resolve a conflict while the prior frame is already a
+        locked IN_AUCTION match.  Settlement/lobby frames without live-round
+        text therefore keep the existing fail-closed boundary behavior.
+        """
+        for box, text, _score in ocr_results or []:
+            raw = str(text or "")
+            compact = re.sub(r"\s+", "", raw)
+            x_min = min((point[0] for point in box), default=0)
+            y_min = min((point[1] for point in box), default=0)
+            nx = x_min / max(1, screen_w)
+            ny = y_min / max(1, screen_h)
+
+            # The round label and public-information cards are unique to the
+            # in-auction canvas.  The action labels are included because the
+            # user's fixed 1920x1080 scene visibly exposes 放弃/出价 even
+            # before any non-zero bid exists.
+            if re.search(r"(?:竞拍)?第\s*[1-9]\s*回[合回合]", raw):
+                return True
+            if any(marker in compact for marker in ("公开情报", "千眼其一")):
+                return True
+            if any(marker in compact for marker in ("放弃", "出价", "跟注", "加价")):
+                return True
+            if re.search(r"00[:：]\d{2}", compact) and 0.15 <= nx <= 0.85 and ny <= 0.40:
+                return True
+        return False
 
     def _parse_lobby_loadout(self, ocr_results: List[Any]) -> Dict[str, Any]:
         """从 OCR 文本提取会场 / 仪器组 / 助手。不依赖「开始匹配」硬锚点。"""
