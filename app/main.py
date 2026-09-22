@@ -15,6 +15,7 @@ import sys
 import os
 import io
 import math
+import copy
 
 # 运行时路径分两种情况：源码运行时 app/ 是入口目录，打包后
 # BASE_DIR 是发行目录，BUNDLE_DIR 是资源包目录 (_internal)。
@@ -644,6 +645,7 @@ NATIVE_OBSERVATION_BRIDGE: Optional[NativeObservationBridge] = None
 _NATIVE_OBSERVATION_LOCK = threading.RLock()
 _NATIVE_OBSERVATION_RECEIVER = None
 _NATIVE_OBSERVATION_SESSION: Optional[str] = None
+_NATIVE_EXPECTED_SESSION: Optional[str] = None
 _NATIVE_OBSERVATION_SEQUENCE = 0
 _NATIVE_OBSERVATION_LAST_FRAME_NS: Optional[int] = None
 HUD_JS_API = None
@@ -1502,6 +1504,7 @@ def _native_observation_event(event: Dict[str, Any]) -> None:
     """Consume one versioned native Host line and project it into Main/HUD."""
     global _NATIVE_OBSERVATION_RECEIVER, _NATIVE_OBSERVATION_SESSION
     global _NATIVE_OBSERVATION_SEQUENCE, _NATIVE_OBSERVATION_LAST_FRAME_NS
+    global _NATIVE_EXPECTED_SESSION
     global _LIVE_VISION_ACTIVE, _LIVE_VISION_MATCH_ID, _LIVE_CONTROL_WAITING_EXIT
 
     if not isinstance(event, dict):
@@ -1521,6 +1524,14 @@ def _native_observation_event(event: Dict[str, Any]) -> None:
         return
 
     status = str(event.get("status") or "").upper()
+    incoming_session = str(event.get("observationSessionId") or "").strip()
+    if status == "STARTING":
+        _NATIVE_EXPECTED_SESSION = incoming_session or None
+    elif incoming_session and incoming_session != _NATIVE_EXPECTED_SESSION:
+        # An old reader/result must not revive or invalidate the new session.
+        return
+    if status in {"PAUSED", "ERROR", "STOPPED"}:
+        _NATIVE_EXPECTED_SESSION = None
     if status != "FRAME":
         if status == "CONTROL":
             details = event.get("details") if isinstance(event.get("details"), dict) else {}
@@ -1563,6 +1574,8 @@ def _native_observation_event(event: Dict[str, Any]) -> None:
     snapshot = event.get("currentMatch")
     perception = event.get("perception")
     session_id = str(event.get("observationSessionId") or "").strip()
+    if not session_id or session_id != _NATIVE_EXPECTED_SESSION:
+        return
     if not session_id or not isinstance(frame, dict) or not isinstance(snapshot, dict) or not isinstance(perception, dict):
         _native_publish_health({
             "status": "ERROR",
@@ -1601,8 +1614,9 @@ def _native_observation_event(event: Dict[str, Any]) -> None:
             # A native Host session is a hard observation boundary.  Do not
             # let a prior session's facts survive a new Engine match id when
             # the first new frame contains honest nulls.
-            CURRENT_MATCH.begin_next_match()
-            _LIVE_MANUAL_OVERRIDES.clear()
+            if str(snapshot.get("id") or "") != CURRENT_MATCH.id:
+                CURRENT_MATCH.begin_next_match()
+                _LIVE_MANUAL_OVERRIDES.clear()
         receiver = _NATIVE_OBSERVATION_RECEIVER
         if receiver is None:
             receiver = LiveMatchReceiver()
@@ -4906,9 +4920,22 @@ def _start_native_observation_locked():
         if NATIVE_OBSERVATION_BRIDGE is not None and NATIVE_OBSERVATION_BRIDGE.running:
             PRESENTATION_RUNTIME.set_vision_process_state("running")
             return NATIVE_OBSERVATION_BRIDGE.process
+        resume_state = None
+        health = LATEST_PAYLOAD.get("visionHealth") or {}
+        if health.get("reason") in {"focus-lost", "capture-failed"}:
+            target = LATEST_PAYLOAD.get("target")
+            if isinstance(target, dict) and target.get("identity"):
+                with _MANUAL_STATE_LOCK:
+                    resume_state = {
+                        "currentMatch": CURRENT_MATCH.snapshot(),
+                        "target": copy.deepcopy(target),
+                        "controlRevision": _LIVE_CONTROL_REVISION,
+                        "manualOverrides": copy.deepcopy(_LIVE_MANUAL_OVERRIDES),
+                    }
         bridge = NativeObservationBridge(
             PROJECT_ROOT,
-            _native_observation_event,
+            lambda event: _native_observation_event(event)
+                if NATIVE_OBSERVATION_BRIDGE is bridge else None,
             log_stage,
         )
         NATIVE_OBSERVATION_BRIDGE = bridge
@@ -4917,7 +4944,7 @@ def _start_native_observation_locked():
             "reason": "explicit-start",
             "details": {"inputActions": False, "formalHistoryWriter": False},
         }, force_main=True)
-        child = bridge.start()
+        child = bridge.start(resume_state=resume_state)
         if child is None:
             PRESENTATION_RUNTIME.set_vision_process_state("stopped")
             _native_publish_health({

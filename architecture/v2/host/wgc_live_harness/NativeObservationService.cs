@@ -84,6 +84,18 @@ internal static class NativeObservationService
                 return 2;
             }
 
+            var resumePath = Path.Combine(workDir, "resume-state.json");
+            if (File.Exists(resumePath))
+            {
+                var resume = ReadJsonObject(resumePath)!;
+                var identity = resume["target"]?["identity"];
+                if (identity is null
+                    || (long?)identity["Hwnd"] != target.TargetHwnd
+                    || (int?)identity["Pid"] != target.TargetPid
+                    || (long?)identity["ProcessInstanceToken"] != target.TargetIdentity?.ProcessInstanceToken)
+                    throw new InvalidOperationException("resume-target-identity-mismatch: start a new match explicitly");
+                File.WriteAllText(Path.Combine(workDir, "engine_state.json"), resume.ToJsonString());
+            }
             using var capture = new WgcWindowCapture(new IntPtr(target.TargetHwnd));
             using var trace = new TraceLog(tracePath, sessionId, "bootstrap");
             using var session = new SupervisorSession(new SupervisorSession.Options
@@ -234,8 +246,17 @@ internal static class NativeObservationService
                 if (!firstFrameWritten)
                 {
                     WriteBmp(Path.Combine(workDir, "first-frame.bmp"), frame.Width, frame.Height, frame.Pixels);
+                    File.WriteAllText(Path.Combine(workDir, "first-frame-state.json"),
+                        JsonSerializer.Serialize(new { frameSequence, frame.CaptureTimestampNs, state }, JsonLineOptions));
                     firstFrameWritten = true;
                 }
+
+                // Bounded paired evidence: first and latest accepted business
+                // frame, not a recording of every game frame.
+                var latestRawPath = Path.Combine(workDir, "latest-business-frame.bmp");
+                WriteBmp(latestRawPath, frame.Width, frame.Height, frame.Pixels);
+                File.WriteAllText(Path.Combine(workDir, "latest-business-state.json"),
+                    JsonSerializer.Serialize(new { frameSequence, frame.CaptureTimestampNs, state }, JsonLineOptions));
 
                 acceptedFrames++;
                 EmitObservation(
@@ -245,7 +266,7 @@ internal static class NativeObservationService
                     transfer,
                 state,
                 acceptedFrames,
-                    Path.Combine(workDir, "first-frame.bmp"),
+                    latestRawPath,
                     capture);
                 Thread.Sleep(intervalMs);
             }

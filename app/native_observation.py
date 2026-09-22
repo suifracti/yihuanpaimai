@@ -40,7 +40,7 @@ class NativeObservationBridge:
         with self._lock:
             return self.process is not None and self.process.poll() is None
 
-    def start(self) -> Optional[subprocess.Popen[str]]:
+    def start(self, *, resume_state: Optional[dict[str, Any]] = None) -> Optional[subprocess.Popen[str]]:
         with self._lock:
             if self.process is not None and self.process.poll() is None:
                 return self.process
@@ -54,6 +54,10 @@ class NativeObservationBridge:
             )
             session_dir.mkdir(parents=True, exist_ok=True)
             self.session_dir = session_dir
+            if resume_state is not None:
+                (session_dir / "resume-state.json").write_text(
+                    json.dumps(resume_state, ensure_ascii=False), encoding="utf-8"
+                )
             command.extend(
                 [
                     "--mode",
@@ -179,6 +183,10 @@ class NativeObservationBridge:
                         "OBSERVATION:NATIVE",
                         json.dumps(event, ensure_ascii=False, separators=(",", ":"))[:4000],
                     )
+                else:
+                    # Preserve the actual handoff, not just engine counters.
+                    # The session is isolated under build/; no formal history.
+                    self._record_frame_event(event)
                 self.last_status = str(event.get("status") or self.last_status)
                 try:
                     self.on_event(event)
@@ -205,6 +213,30 @@ class NativeObservationBridge:
                     )
                 except Exception:
                     pass
+
+    def _record_frame_event(self, event: dict[str, Any]) -> None:
+        if self.session_dir is None:
+            return
+        try:
+            with (self.session_dir / "ui-frame-events.jsonl").open(
+                "a", encoding="utf-8", newline="\n"
+            ) as stream:
+                match = event.get("currentMatch") or {}
+                summary = {
+                    "stage": "bridge-received",
+                    "observationSessionId": event.get("observationSessionId"),
+                    "frame": event.get("frame"),
+                    "matchId": match.get("id"),
+                    "factsRevision": match.get("factsRevision"),
+                    "q": match.get("q"),
+                    "historicalBids": match.get("historicalBids"),
+                }
+                stream.write(json.dumps(summary, ensure_ascii=False, separators=(",", ":")) + "\n")
+            (self.session_dir / "ui-last-frame.json").write_text(
+                json.dumps(event, ensure_ascii=False), encoding="utf-8"
+            )
+        except Exception as exc:
+            self.log("OBSERVATION:NATIVE", f"frame evidence write failed: {exc}")
 
     def _record_status_event(self, event: dict[str, Any]) -> None:
         """Keep a bounded status/error trail beside the isolated session.

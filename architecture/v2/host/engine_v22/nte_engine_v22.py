@@ -407,6 +407,11 @@ class RealEngine:
                 self.current_match.facts.setdefault(key, copy.deepcopy(value))
             self.current_match.facts_revision = int(snap.get("factsRevision") or 0)
             self.current_match.restore_field_states(snap.get("fieldStates"))
+            self.control_revision = int(state.get("controlRevision") or 0)
+            self.manual_overrides = copy.deepcopy(state.get("manualOverrides") or {})
+            for key, field in self.current_match.field_states.items():
+                if field.protected and key in FACT_KEYS:
+                    self.manual_overrides[key] = copy.deepcopy(self.current_match.facts.get(key))
             prior_context = state.get("pipelineContext")
             if isinstance(prior_context, dict):
                 self.pipeline.current_context.update(copy.deepcopy(prior_context))
@@ -432,6 +437,8 @@ class RealEngine:
             "reason": reason,
             "updatedAtUtc": _utc_now(),
             "currentMatch": snapshot,
+            "controlRevision": self.control_revision,
+            "manualOverrides": copy.deepcopy(self.manual_overrides),
             "pipelineContext": copy.deepcopy(self.last_context or self.pipeline.current_context),
             "lastFrame": frame_record or self.last_frame,
         }

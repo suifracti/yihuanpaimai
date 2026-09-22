@@ -22,6 +22,10 @@ internal static class Program
 
     public static int Main(string[] args)
     {
+        // Main's redirected control/observation pipes are UTF-8, independent
+        // of the Windows console code page (including CREATE_NO_WINDOW).
+        Console.InputEncoding = new UTF8Encoding(false);
+        Console.OutputEncoding = new UTF8Encoding(false);
         if (string.Equals(Arg(args, "--mode", "probe"), "live", StringComparison.OrdinalIgnoreCase))
         {
             return NativeObservationService.Run(args);

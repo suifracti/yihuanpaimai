@@ -18,6 +18,86 @@ from live_match_transport import LiveMatchPublisher, LiveMatchReceiver, LiveMatc
 
 
 class LiveMatchTransportTests(unittest.TestCase):
+    def test_native_restart_seeds_only_temporary_pause(self):
+        from unittest.mock import Mock
+        current = CurrentMatch()
+        current.apply_facts({"q": 19}, source="manual", intent="confirm")
+        target = {"identity": {"Hwnd": 11, "Pid": 22, "ProcessInstanceToken": 33}}
+        for reason, should_resume in (("focus-lost", True), ("scene-boundary:SETTLEMENT", False)):
+            bridge = Mock()
+            with patch.object(main, "CURRENT_MATCH", current), \
+                 patch.object(main, "NATIVE_OBSERVATION_BRIDGE", None), \
+                 patch.object(main, "NativeObservationBridge", return_value=bridge), \
+                 patch.object(main, "_native_publish_health"), \
+                 patch.object(main, "LATEST_PAYLOAD", {"visionHealth": {"reason": reason}, "target": target}), \
+                 patch.dict(os.environ, {"NTE_DISABLE_VISION": "0"}):
+                main._start_native_observation_locked()
+                seed = bridge.start.call_args.kwargs["resume_state"]
+                if should_resume:
+                    self.assertEqual(seed["currentMatch"]["id"], current.id)
+                    self.assertEqual(seed["currentMatch"]["q"], 19)
+                    self.assertTrue(seed["currentMatch"]["fieldStates"]["q"]["protected"])
+                    self.assertEqual(seed["target"], target)
+                else:
+                    self.assertIsNone(seed)
+
+    def test_native_resume_seed_restores_manual_protection_in_engine(self):
+        import importlib.util
+        import tempfile
+        from types import SimpleNamespace
+        spec = importlib.util.spec_from_file_location(
+            "native_resume_engine", ROOT / "architecture/v2/host/engine_v22/nte_engine_v22.py")
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        current = CurrentMatch()
+        current.apply_facts({"box": "琉璃宝箱", "q": 17}, source="vision", intent="observe")
+        current.apply_facts({"q": 19}, source="manual", intent="confirm")
+        with tempfile.TemporaryDirectory() as directory:
+            engine = module.RealEngine.__new__(module.RealEngine)
+            engine.state_path = Path(directory) / "engine_state.json"
+            engine.state_path.write_text(json.dumps({
+                "currentMatch": current.snapshot(), "controlRevision": 4,
+            }, ensure_ascii=False), encoding="utf-8")
+            engine.current_match = CurrentMatch()
+            engine.pipeline = SimpleNamespace(current_context={})
+            engine.log = lambda *args, **kwargs: None
+            engine.data_origin = "live-trial"
+            engine.awaiting_exit = False
+            engine._restore_state_if_present()
+            self.assertEqual(engine.current_match.id, current.id)
+            self.assertEqual(engine.current_match.facts["box"], "琉璃宝箱")
+            self.assertTrue(engine.current_match.field_states["q"].protected)
+            self.assertEqual(engine._apply_manual_overrides({"q": 3})["q"], 19)
+            self.assertEqual(engine.control_revision, 4)
+
+    def test_native_pause_preserves_facts_and_rejects_late_session(self):
+        current = CurrentMatch()
+        current.apply_facts({"q": 17}, source="manual", intent="confirm")
+        before = copy.deepcopy(current.snapshot())
+        def event(status, session):
+            return {"sourceKind": "native_wgc", "inputActions": False,
+                    "formalHistoryWriter": False, "status": status,
+                    "observationSessionId": session}
+        with patch.object(main, "CURRENT_MATCH", current), \
+             patch.object(main, "LATEST_PAYLOAD", {}), \
+             patch.object(main, "LATEST_VISION_PAYLOAD", {}), \
+             patch.object(main, "_NATIVE_EXPECTED_SESSION", "old"), \
+             patch.object(main, "_LIVE_VISION_ACTIVE", True), \
+             patch.object(main, "_LIVE_VISION_MATCH_ID", current.id), \
+             patch.object(main, "_native_post_main_status"), \
+             patch.object(main, "WS_EVENT_LOOP", None):
+            main._native_observation_event(event("PAUSED", "old"))
+            self.assertEqual(current.snapshot(), before)
+            self.assertTrue(main.LATEST_PAYLOAD["nativeInvalidated"])
+            paused = copy.deepcopy(main.LATEST_PAYLOAD)
+            main._native_observation_event(event("FRAME", "old"))
+            self.assertEqual(main.LATEST_PAYLOAD, paused)
+            main._native_observation_event(event("STARTING", "new"))
+            started = copy.deepcopy(main.LATEST_PAYLOAD)
+            main._native_observation_event(event("PAUSED", "old"))
+            self.assertEqual(main.LATEST_PAYLOAD, started)
+            self.assertEqual(main._NATIVE_EXPECTED_SESSION, "new")
+
     def test_reconnect_handshake_restores_gui_corrections_and_retires_old_socket(self):
         async def run():
             current = CurrentMatch()
