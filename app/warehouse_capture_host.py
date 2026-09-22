@@ -72,6 +72,7 @@ REASON_BINDING_CHANGED = "BINDING_CHANGED"
 REASON_STORE_UNAVAILABLE = "STORE_UNAVAILABLE"
 REASON_START_REQUIRES_TOP = "START_REQUIRES_TOP"
 REASON_INPUT_GUARD_FAILED = "INPUT_GUARD_FAILED"
+REASON_OBSERVATION_PROFILE_READONLY = "OBSERVATION_PROFILE_READONLY"
 
 DISABLED_REASON_GAME_NOT_DETECTED = "GAME_NOT_DETECTED"
 DISABLED_REASON_SETTLEMENT_NOT_DETECTED = "SETTLEMENT_NOT_DETECTED"
@@ -314,6 +315,7 @@ class WarehouseCaptureHost:
         frame_provider_factory: Optional[Callable[[], Any]] = None,
         occupancy_sink: Optional[Callable[[Dict[str, Any]], None]] = None,
         history_store_factory: Optional[Callable[[], Any]] = None,
+        input_execution_allowed: Optional[Callable[[], bool]] = None,
     ):
         self._session_factory = session_factory
         self._driver_available = bool(driver_available)
@@ -329,6 +331,7 @@ class WarehouseCaptureHost:
         self._frame_provider_factory = frame_provider_factory
         self._occupancy_sink = occupancy_sink
         self._history_store_factory = history_store_factory
+        self._input_execution_allowed = input_execution_allowed
         self._pending_token = None
         self._arming_required = bool(arming_required)
         self._confirmed_once = False
@@ -359,11 +362,21 @@ class WarehouseCaptureHost:
     def factory_ready(self) -> bool:
         return self._session_factory is not None and self._driver_available
 
+    def _game_input_allowed(self) -> bool:
+        """Fail closed when the active observation profile is read-only."""
+        callback = self._input_execution_allowed
+        if callback is None:
+            return True
+        try:
+            return bool(callback())
+        except Exception:
+            return False
+
     @property
     def available(self) -> bool:
         if not self.factory_ready:
             return False
-        return bool(self._running) or self._settlement_eligible()
+        return bool(self._running) or (self._game_input_allowed() and self._settlement_eligible())
 
     @property
     def running(self) -> bool:
@@ -414,6 +427,8 @@ class WarehouseCaptureHost:
 
     def start(self, arming_token: Optional[Any] = None) -> Dict[str, Any]:
         with self._lock:
+            if not self._game_input_allowed():
+                return {"ok": False, "reason": REASON_OBSERVATION_PROFILE_READONLY}
             if self._arming_required and not self._confirmed_once:
                 return {"ok": False, "reason": REASON_TOKEN_INVALID}
             self._confirmed_once = False
@@ -471,6 +486,8 @@ class WarehouseCaptureHost:
     def prepare(self) -> Dict[str, Any]:
         from warehouse_capture_arming import CONFIRM_CAPTION, issue_arming_token
 
+        if not self._game_input_allowed():
+            return {"ok": False, "reason": REASON_OBSERVATION_PROFILE_READONLY, "armingToken": None}
         if self._running:
             return {"ok": False, "reason": REASON_ALREADY_RUNNING, "armingToken": None}
         if not self.factory_ready:
@@ -1055,6 +1072,8 @@ class WarehouseCaptureHost:
     def confirm(self, token_id: str) -> Dict[str, Any]:
         from warehouse_capture_arming import bindings_match
 
+        if not self._game_input_allowed():
+            return {"ok": False, "reason": REASON_OBSERVATION_PROFILE_READONLY}
         with self._lock:
             pending = self._pending_token
         if pending is None:
@@ -2139,6 +2158,7 @@ def build_production_warehouse_capture_host(**overrides) -> WarehouseCaptureHost
         store_factory=store_factory,
         frame_provider_factory=frame_provider_factory,
         history_store_factory=overrides.get("history_store_factory"),
+        input_execution_allowed=overrides.get("input_execution_allowed"),
     )
 
 

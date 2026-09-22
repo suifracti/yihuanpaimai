@@ -87,9 +87,31 @@ from field_intel_status import free_intel_status
 from warehouse_capture_host import (
     attach_warehouse_capture_presentation,
     build_production_warehouse_capture_host,
+    REASON_OBSERVATION_PROFILE_READONLY,
     set_warehouse_capture_host,
 )
 from native_observation import NativeObservationBridge
+
+
+def _native_profile_selected_before_config_load() -> bool:
+    """Resolve the safety profile before the later CONFIG initialization."""
+    raw = os.environ.get("NTE_OBSERVATION_PROFILE")
+    if raw is None:
+        try:
+            with open(os.path.join(BASE_DIR, "config.json"), "r", encoding="utf-8") as handle:
+                raw = json.load(handle).get("app", {}).get("observationProfile", "legacy-python")
+        except Exception:
+            raw = "legacy-python"
+    return str(raw or "legacy-python").strip().lower() in {
+        "native",
+        "native-readonly",
+        "native-readonly-v1",
+        "wgc",
+    }
+
+
+def _game_input_execution_allowed() -> bool:
+    return not _native_profile_selected_before_config_load()
 
 
 def get_production_warehouse_bindings() -> Dict[str, Any]:
@@ -213,7 +235,8 @@ def get_production_warehouse_bindings() -> Dict[str, Any]:
 
 
 WAREHOUSE_CAPTURE_HOST = build_production_warehouse_capture_host(
-    bindings_probe=get_production_warehouse_bindings
+    bindings_probe=get_production_warehouse_bindings,
+    input_execution_allowed=_game_input_execution_allowed,
 )
 set_warehouse_capture_host(WAREHOUSE_CAPTURE_HOST)
 
@@ -265,6 +288,8 @@ def maybe_trigger_auto_warehouse_capture(
     5. Set existing captureSafetyOverride
     6. Call existing host.confirm(token_id)
     """
+    if not _game_input_execution_allowed():
+        return {"ok": False, "reason": REASON_OBSERVATION_PROFILE_READONLY}
     if host is None:
         try:
             from warehouse_capture_host import get_warehouse_capture_host
