@@ -14,12 +14,38 @@ public sealed record IntegrationWindowObservation(
     bool HasPendingEvents,
     long DroppedSinceLastRead,
     WindowMonitorSnapshot Snapshot,
-    IReadOnlyList<IntegrationWindowEvent> Events)
+    IReadOnlyList<IntegrationWindowEvent> Events,
+    IReadOnlyList<long>? RawEventRevisions = null)
 {
-    public bool HasGap => Events.Count > 0
-        ? Events[0].RawRevision != RawRevisionBeforeBatch + 1
-          || Events[^1].RawRevision != RawRevision
-        : RawRevision != RawRevisionBeforeBatch;
+    public bool HasGap
+    {
+        get
+        {
+            // Legacy/fake sources do not yet expose every raw revision. Preserve
+            // their original endpoint check while production sources use the full
+            // raw revision list below, which catches internal gaps and reordering.
+            if (RawEventRevisions is null)
+            {
+                return Events.Count > 0
+                    ? Events[0].RawRevision != RawRevisionBeforeBatch + 1
+                      || Events[^1].RawRevision != RawRevision
+                    : RawRevision != RawRevisionBeforeBatch;
+            }
+
+            long expected = RawRevisionBeforeBatch + 1;
+            foreach (long revision in RawEventRevisions)
+            {
+                if (revision != expected)
+                {
+                    return true;
+                }
+
+                expected++;
+            }
+
+            return expected - 1 != RawRevision;
+        }
+    }
 
     public bool Overflowed => DroppedSinceLastRead > 0;
 }

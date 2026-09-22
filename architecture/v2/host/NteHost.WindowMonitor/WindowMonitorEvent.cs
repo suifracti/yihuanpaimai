@@ -45,6 +45,13 @@ public sealed record WindowMonitorEvent
     /// <summary>Monotonic per-monitor event sequence, starting at 1.</summary>
     public long Sequence { get; init; }
 
+    /// <summary>
+    /// Revision of the raw WinEvent batch that caused this derived transition.
+    /// Zero denotes a validation/recovery transition that was not caused by one
+    /// specific raw callback.
+    /// </summary>
+    public long RawRevision { get; init; }
+
     public WindowMonitorEventKind Kind { get; init; }
 
     /// <summary>The WinEvent that caused this event, or "synthetic"/"scan" for non-hook causes.</summary>

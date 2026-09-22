@@ -142,6 +142,7 @@ internal static class Program
             ("I09_restart_resync_retires_credentials", "C resync is fail-closed and retires pre-resync credentials.", I09),
             ("I10_freeze_send_commit_competition", "Before raw submission freeze yields zero; after submission it cannot retract one raw call.", I10),
             ("I11_identity_epoch_session_scopes_separate", "A Generation, B Epoch/TargetId and C Generation remain separately observable.", I11),
+            ("I12_internal_raw_revision_gap_fail_closed", "An internal raw revision gap is rejected even when the batch endpoints are monotonic.", I12),
         })
         {
             raw.Write(new { kind = "scenario_start", scenarioId = scenario.Id, description = scenario.Description });
@@ -513,6 +514,32 @@ internal static class Program
             initial.AGeneration != rebuilt.FocusEpoch && rebuilt.AGeneration != rig.Coordinator.Freeze.GenerationId);
         return rig.Finish(Result("I11_identity_epoch_session_scopes_separate", "A Generation, B Epoch/TargetId and C Generation remain separately observable.", assertions,
             $"a={initial.AGeneration}->{rebuilt.AGeneration};bEpoch={initial.FocusEpoch}->{rebuilt.FocusEpoch};c={rig.Coordinator.Freeze.GenerationId}"));
+    }
+
+    private static ScenarioExecution I12()
+    {
+        var rig = new Rig();
+        var assertions = new List<AssertionRecord>();
+        var prepared = rig.Prepare();
+        rig.Source.AfterRead = (read, source) =>
+        {
+            if (read == 3)
+            {
+                source.MarkInternalRevisionGap();
+                source.AfterRead = null;
+            }
+        };
+
+        var action = rig.Coordinator.Execute(InputAction.Wheel(120));
+        IntegrationFocusView view = rig.Coordinator.FocusAdapter.Last;
+        Check(assertions, "arm_ok", true, prepared.Arm.Ok);
+        Check(assertions, "internal_gap_rejected", true,
+            view.SourceFenceBroken && view.Reason.StartsWith("SOURCE_REVISION_GAP:", StringComparison.Ordinal));
+        Check(assertions, "gap_reason", "SOURCE_REVISION_GAP:0->2", view.Reason);
+        Check(assertions, "raw_zero", 0L, action.RawSendCallDelta);
+        Check(assertions, "c_frozen", true, action.ActiveFreezeReasons.Contains(FreezeReason.FOCUS_LOST));
+        return rig.Finish(Result("I12_internal_raw_revision_gap_fail_closed", "An internal raw revision gap is rejected even when the batch endpoints are monotonic.", assertions,
+            $"reason={view.Reason};raw={action.RawSendCallDelta}"));
     }
 
     private static ScenarioResult Result(

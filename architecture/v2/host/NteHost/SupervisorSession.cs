@@ -72,6 +72,8 @@ public sealed class SupervisorSession : IDisposable
         public string PipeNameOverride { get; set; } = string.Empty;
         public int AcceptTimeoutMs { get; set; } = 15000;
         public int PostAcceptDelayMs { get; set; } = 0;
+        /// <summary>Opt-in real frame transport; false preserves V2-1 guard semantics.</summary>
+        public bool EnableFrameTransport { get; set; }
     }
 
     private readonly Options _options;
@@ -91,6 +93,7 @@ public sealed class SupervisorSession : IDisposable
     public SequenceTracker EngineSequences { get; private set; } = null!;
     public SequenceTracker HostSequences { get; private set; } = null!;
     public MmfRingGuard Mmf { get; } = new();
+    public MmfFrameRingWriter? FrameRing { get; private set; }
     public IReadOnlyList<GenerationRecord> Generations => _generations;
     public IReadOnlyList<string> Errors => _errors;
     public PipeSecurityFacts? PipeFacts => _pipe?.SecurityFacts;
@@ -204,6 +207,7 @@ public sealed class SupervisorSession : IDisposable
     public long HostHeartbeatSequence { get; private set; }
     public string LastSnapshotRequestId { get; private set; } = string.Empty;
     public string LastSnapshotCorrelationId { get; private set; } = string.Empty;
+    public JsonObject? LastSnapshotPayload { get; private set; }
 
     /// <summary>
     /// Validates an inbound operational payload against the catalog before it is
@@ -218,6 +222,8 @@ public sealed class SupervisorSession : IDisposable
             case MessageTypes.StateSnapshot:
             case MessageTypes.CommandResult:
             case MessageTypes.Heartbeat:
+            case MessageTypes.FrameAck:
+            case MessageTypes.PerceptionResult:
             case MessageTypes.Error:
                 _catalog.ValidatePayload(envelope.MessageType, envelope.Payload);
                 break;
@@ -276,8 +282,16 @@ public sealed class SupervisorSession : IDisposable
         _generations.Add(record);
 
         // 1. Job Object already owns KILL_ON_JOB_CLOSE for the whole Host lifetime.
-        // 2. Real fixed-v1 MMF for this generation (created, zero-initialised, never written to).
-        Mmf.Create(GenerationId, _options.SessionId, Nonce);
+        // 2. Keep the V2-1 lifecycle probe separate from the opt-in real producer.
+        if (_options.EnableFrameTransport)
+        {
+            FrameRing = new MmfFrameRingWriter();
+            FrameRing.Create(_options.SessionId, Nonce);
+        }
+        else
+        {
+            Mmf.Create(GenerationId, _options.SessionId, Nonce);
+        }
 
         // 3. Named Pipe (single transport, no stdio fallback).
         _pipe = PipeControlChannel.Create(_options.SessionId, Nonce);
@@ -396,6 +410,30 @@ public sealed class SupervisorSession : IDisposable
         }
         _inbox.Dispose();
         _inbox = new BlockingCollection<Envelope>();
+        if (FrameRing is not null)
+        {
+            var stats = FrameRing.SnapshotStats();
+            FrameRing.Dispose();
+            FrameRing = null;
+            return new MmfGenerationRecord(
+                GenerationId,
+                stats.MapName,
+                ProtocolConstants.MapTotalSizeBytes,
+                true,
+                true,
+                true,
+                0,
+                false,
+                -1,
+                false,
+                false,
+                0,
+                true,
+                true,
+                0,
+                stats.FrameHeadersWritten,
+                0);
+        }
         return Mmf.DisposeGeneration(GenerationId);
     }
 
@@ -701,6 +739,7 @@ public sealed class SupervisorSession : IDisposable
         ValidateInbound(snapshot);
         EngineSequences.CheckAndUpdate("engine", snapshot.SessionId, Nonce, snapshot.Sequence);
         _catalog.ValidateStateSnapshot(snapshot, _options.SessionId);
+        LastSnapshotPayload = snapshot.Payload.DeepClone() as JsonObject;
         LastSnapshotCorrelationId = snapshot.CorrelationId ?? string.Empty;
 
         if (!string.Equals(snapshot.CorrelationId, request.RequestId, StringComparison.Ordinal))
@@ -764,9 +803,25 @@ public sealed class SupervisorSession : IDisposable
 
     public Envelope SendCommand(string action, JsonObject? parameters = null, int timeoutMs = 3000)
     {
-        var commandId = Guid.NewGuid().ToString();
+        return SendCommandWithId(Guid.NewGuid().ToString(), action, parameters, timeoutMs,
+            ProtocolClock.NowNs() + 60L * 1_000_000_000L);
+    }
+
+    /// <summary>
+    /// Testable/production command boundary. The caller supplies the id and
+    /// expiry so the Engine's session-scoped idempotency contract is exercised
+    /// without bypassing the real Named Pipe path.
+    /// </summary>
+    public Envelope SendCommandWithId(
+        string commandId,
+        string action,
+        JsonObject? parameters = null,
+        int timeoutMs = 3000,
+        long? expiresAtNs = null,
+        string? envelopeSessionId = null)
+    {
         var request = Envelope.Create(
-            _options.SessionId,
+            envelopeSessionId ?? _options.SessionId,
             MessageTypes.Command,
             NextRequestId("cmd"),
             NextHostSequence(),
@@ -776,7 +831,7 @@ public sealed class SupervisorSession : IDisposable
                 ["commandId"] = commandId,
                 ["action"] = action,
                 ["parameters"] = parameters ?? new JsonObject(),
-                ["expiresAtNs"] = ProtocolClock.NowNs() + 60L * 1_000_000_000L,
+                ["expiresAtNs"] = expiresAtNs ?? (ProtocolClock.NowNs() + 60L * 1_000_000_000L),
             },
             correlationId: NextRequestId("corr-cmd"));
         _pipe!.Send(request, _trace, GenerationId);
@@ -788,6 +843,170 @@ public sealed class SupervisorSession : IDisposable
             EngineSequences.TryCheckAndUpdate("engine", result.SessionId, Nonce, result.Sequence, out _);
         }
         return result ?? request;
+    }
+
+    /// <summary>
+    /// Publishes one real BGRA8 frame through the opt-in Host-owned ring and waits
+    /// for the exact FRAME_ACK release token plus the corresponding perception
+    /// result. A failed or missing ACK leaves the slot locked by design.
+    /// </summary>
+    public Dictionary<string, object?> SendFrame(
+        byte[] bgraPixels,
+        int width,
+        int height,
+        int stride,
+        long captureTimestampNs,
+        int timeoutMs = 5000)
+    {
+        if (FrameRing is null)
+        {
+            throw new InvalidOperationException("frame transport is not enabled for this session");
+        }
+
+        var outcome = new Dictionary<string, object?>();
+        FramePublishReceipt? receipt;
+        try
+        {
+            receipt = FrameRing.Publish(_options.SessionId, bgraPixels, width, height, stride, captureTimestampNs);
+        }
+        catch (ProtocolViolationException ex)
+        {
+            outcome["published"] = false;
+            outcome["publishErrorCode"] = ex.ErrorCode;
+            outcome["publishError"] = ex.Message;
+            return outcome;
+        }
+
+        if (receipt is null)
+        {
+            outcome["published"] = false;
+            outcome["publishErrorCode"] = ErrorCodes.BufferUnavailable;
+            outcome["bufferUnavailable"] = true;
+            return outcome;
+        }
+
+        outcome["published"] = true;
+        outcome["bufferIndex"] = receipt.BufferIndex;
+        outcome["sequence"] = receipt.Header.Sequence;
+        outcome["width"] = receipt.Header.Width;
+        outcome["height"] = receipt.Header.Height;
+        outcome["stride"] = receipt.Header.Stride;
+        outcome["bufferLength"] = receipt.Header.BufferLength;
+        outcome["captureTimestampNs"] = receipt.Header.CaptureTimestampNs;
+        outcome["producerTimestampNs"] = receipt.Header.ProducerTimestampNs;
+        outcome["cornerChecksum"] = receipt.Header.CornerChecksum;
+
+        var framePayload = new JsonObject
+        {
+            ["sessionId"] = _options.SessionId,
+            ["bufferIndex"] = receipt.BufferIndex,
+            ["sequence"] = receipt.Header.Sequence,
+            ["width"] = receipt.Header.Width,
+            ["height"] = receipt.Header.Height,
+            ["stride"] = receipt.Header.Stride,
+            ["pixelFormat"] = receipt.Header.PixelFormat,
+            ["bufferLength"] = receipt.Header.BufferLength,
+            ["captureTimestampNs"] = receipt.Header.CaptureTimestampNs,
+            ["cornerChecksum"] = receipt.Header.CornerChecksum,
+        };
+        var request = Envelope.Create(
+            _options.SessionId,
+            MessageTypes.FrameReady,
+            NextRequestId("frame"),
+            NextHostSequence(),
+            ProtocolClock.NowNs(),
+            framePayload,
+            correlationId: NextRequestId("corr-frame"));
+        _pipe!.Send(request, _trace, GenerationId);
+
+        var ack = WaitForMessage(
+            e => e.MessageType is MessageTypes.FrameAck or MessageTypes.Error,
+            Math.Min(timeoutMs, ProtocolConstants.FrameAckTimeoutMs),
+            out var ackObserved);
+        if (ack is null)
+        {
+            FrameRing.RecordNoAck();
+            outcome["ackReceived"] = false;
+            outcome["ackErrorCode"] = ErrorCodes.FrameAckTimeout;
+            outcome["ackObservedCount"] = ackObserved.Count;
+            return outcome;
+        }
+
+        outcome["ackReceived"] = true;
+        outcome["ackMessageType"] = ack.MessageType;
+        ValidateInbound(ack);
+        EngineSequences.CheckAndUpdate("engine", ack.SessionId, Nonce, ack.Sequence);
+        if (ack.MessageType == MessageTypes.Error)
+        {
+            outcome["ackErrorCode"] = (string?)ack.Payload["errorCode"] ?? ErrorCodes.SchemaValidationFailed;
+            return outcome;
+        }
+
+        var ackSession = (string?)ack.Payload["sessionId"] ?? string.Empty;
+        var ackIndex = (int?)ack.Payload["bufferIndex"] ?? -1;
+        var ackSequence = (long?)ack.Payload["sequence"] ?? -1;
+        var ackOk = FrameRing.TryRelease(ackSession, ackIndex, ackSequence, out var ackErrorCode);
+        outcome["ackSessionIdMatches"] = string.Equals(ackSession, _options.SessionId, StringComparison.Ordinal);
+        outcome["ackBufferIndex"] = ackIndex;
+        outcome["ackSequence"] = ackSequence;
+        outcome["ackStatus"] = (string?)ack.Payload["status"];
+        outcome["ackAccepted"] = ackOk;
+        outcome["ackErrorCode"] = ackErrorCode;
+        if (!ackOk)
+        {
+            return outcome;
+        }
+
+        if (string.Equals((string?)ack.Payload["status"], "SKIPPED", StringComparison.Ordinal))
+        {
+            outcome["perceptionReceived"] = false;
+            outcome["perceptionSkipped"] = true;
+            return outcome;
+        }
+
+        var perception = WaitForMessage(
+            e => e.MessageType is MessageTypes.PerceptionResult or MessageTypes.Error,
+            timeoutMs,
+            out var perceptionObserved);
+        if (perception is null)
+        {
+            outcome["perceptionReceived"] = false;
+            outcome["perceptionErrorCode"] = ErrorCodes.FrameAckTimeout;
+            outcome["perceptionObservedCount"] = perceptionObserved.Count;
+            return outcome;
+        }
+
+        var duplicateAckResults = new List<Dictionary<string, object?>>();
+        foreach (var observedEnvelope in perceptionObserved.Where(e => e.MessageType == MessageTypes.FrameAck))
+        {
+            var duplicateSession = (string?)observedEnvelope.Payload["sessionId"] ?? string.Empty;
+            var duplicateIndex = (int?)observedEnvelope.Payload["bufferIndex"] ?? -1;
+            var duplicateSequence = (long?)observedEnvelope.Payload["sequence"] ?? -1;
+            var duplicateAccepted = FrameRing.TryRelease(
+                duplicateSession, duplicateIndex, duplicateSequence, out var duplicateErrorCode);
+            duplicateAckResults.Add(new Dictionary<string, object?>
+            {
+                ["sessionId"] = duplicateSession,
+                ["bufferIndex"] = duplicateIndex,
+                ["sequence"] = duplicateSequence,
+                ["accepted"] = duplicateAccepted,
+                ["errorCode"] = duplicateErrorCode,
+            });
+        }
+        outcome["duplicateAckResults"] = duplicateAckResults;
+        outcome["duplicateAcksRejected"] = duplicateAckResults.Count == 0
+            || duplicateAckResults.All(row => row["accepted"] is false);
+
+        ValidateInbound(perception);
+        EngineSequences.CheckAndUpdate("engine", perception.SessionId, Nonce, perception.Sequence);
+        outcome["perceptionReceived"] = perception.MessageType == MessageTypes.PerceptionResult;
+        outcome["perceptionMessageType"] = perception.MessageType;
+        outcome["perceptionPayload"] = perception.Payload;
+        if (perception.MessageType == MessageTypes.Error)
+        {
+            outcome["perceptionErrorCode"] = (string?)perception.Payload["errorCode"] ?? ErrorCodes.SchemaValidationFailed;
+        }
+        return outcome;
     }
 
     /// <summary>
@@ -1105,6 +1324,8 @@ public sealed class SupervisorSession : IDisposable
         }
 
         _job.Dispose();
+        FrameRing?.Dispose();
+        FrameRing = null;
         Mmf.Dispose();
         try
         {

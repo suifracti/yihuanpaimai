@@ -34,8 +34,10 @@ internal static class Program
         {
             "serve" => Serve(args),
             "monitor" => Monitor(args),
+            "integration" => ControlledIntegrationHarness.Run(args),
+            "integration-live" => LiveIntegrationHarness.Run(args),
             "specprobe" => SpecProbe(),
-            _ => Fail($"unknown --mode '{mode}' (expected serve|monitor)"),
+            _ => Fail($"unknown --mode '{mode}' (expected serve|monitor|integration|integration-live)"),
         };
     }
 
@@ -70,8 +72,10 @@ internal static class Program
         var otherClassName = Arg(args, "--other-class", className + "Other");
         var titlePrefix = Arg(args, "--title-prefix", "nte-controlled");
         var initialCount = int.Parse(Arg(args, "--count", "2"));
+        var width = int.Parse(Arg(args, "--width", "340"));
+        var height = int.Parse(Arg(args, "--height", "220"));
 
-        var host = new ControlledWindowHost(className, otherClassName, titlePrefix);
+        var host = new ControlledWindowHost(className, otherClassName, titlePrefix, width, height);
         if (!host.TryRegisterClass(out var registerError))
         {
             Emit(new { phase = "error", error = registerError });
@@ -110,6 +114,8 @@ internal static class Program
             imageName = System.Diagnostics.Process.GetCurrentProcess().ProcessName + ".exe",
             className,
             otherClassName,
+            width,
+            height,
             windows = host.Describe(),
             grabForeground = grabResult,
         });
@@ -310,7 +316,8 @@ internal static class Program
         monitor.Start();
         monitor.WaitForIdle(1500);
 
-        var initialSnapshot = monitor.Snapshot();
+        var initialObservation = monitor.ReadIntegrationObservation();
+        var initialSnapshot = initialObservation.Snapshot;
 
         Emit(new
         {
@@ -319,6 +326,7 @@ internal static class Program
             spec = new { processImageName = spec.ProcessImageName, windowClass = spec.WindowClass },
             hookInstalled = monitor.IsHookInstalled,
             initialSnapshot = Describe(initialSnapshot),
+            initialObservation = DescribeIntegrationObservation(initialObservation),
         });
 
         // Run until the duration elapses or the parent says stop.
@@ -472,6 +480,17 @@ internal static class Program
                         break;
                     }
 
+                    case "observe":
+                    {
+                        var observation = monitor.ReadIntegrationObservation();
+                        Emit(new
+                        {
+                            phase = "cmd", cmd = "observe",
+                            observation = DescribeIntegrationObservation(observation),
+                        });
+                        break;
+                    }
+
                     case "holdstate":
                     {
                         // Stress seam: hold the STATE lock from a test-controlled thread
@@ -558,7 +577,8 @@ internal static class Program
         }
 
         monitor.WaitForIdle(2000);
-        var runSnapshot = monitor.Snapshot();
+        var runObservation = monitor.ReadIntegrationObservation();
+        var runSnapshot = runObservation.Snapshot;
         var events = monitor.Events;
 
         var rawBeforeDispose = monitor.RawCallbackCount;
@@ -633,24 +653,11 @@ internal static class Program
             noResidualCallback = rawAfterChurn == rawImmediatelyAfterDispose
                                 && rawImmediatelyAfterDispose == rawBeforeDispose,
             initialSnapshot = Describe(initialSnapshot),
+            initialObservation = DescribeIntegrationObservation(initialObservation),
             finalSnapshot = Describe(runSnapshot),
+            finalObservation = DescribeIntegrationObservation(runObservation),
             eventCount = events.Count,
-            events = events.Select(e => new
-            {
-                sequence = e.Sequence,
-                kind = e.Kind.ToString(),
-                sourceEvent = e.SourceEvent,
-                targetHwnd = e.TargetHwnd,
-                targetPid = e.TargetPid,
-                targetImageName = e.TargetImageName,
-                targetClassName = e.TargetClassName,
-                foregroundHwnd = e.ForegroundHwnd,
-                isTargetAlive = e.IsTargetAlive,
-                isTargetForeground = e.IsTargetForeground,
-                generation = e.Generation,
-                observedAtNs = e.ObservedAtNs,
-                reason = e.Reason,
-            }),
+            events = events.Select(DescribeEvent),
         };
 
         var json = JsonSerializer.Serialize(payload, new JsonSerializerOptions { WriteIndented = true });
@@ -677,6 +684,35 @@ internal static class Program
         targetClassName = s.TargetIdentity?.ClassName ?? string.Empty,
     };
 
+    private static object DescribeIntegrationObservation(WindowMonitorIntegrationObservation observation) => new
+    {
+        rawRevisionBeforeBatch = observation.RawRevisionBeforeBatch,
+        rawRevision = observation.RawRevision,
+        hasPendingEvents = observation.HasPendingEvents,
+        droppedSinceLastRead = observation.DroppedSinceLastRead,
+        snapshot = Describe(observation.Snapshot),
+        rawEventRevisions = observation.RawEventRevisions,
+        events = observation.Events.Select(DescribeEvent),
+    };
+
+    private static object DescribeEvent(WindowMonitorEvent e) => new
+    {
+        sequence = e.Sequence,
+        rawRevision = e.RawRevision,
+        kind = e.Kind.ToString(),
+        sourceEvent = e.SourceEvent,
+        targetHwnd = e.TargetHwnd,
+        targetPid = e.TargetPid,
+        targetImageName = e.TargetImageName,
+        targetClassName = e.TargetClassName,
+        foregroundHwnd = e.ForegroundHwnd,
+        isTargetAlive = e.IsTargetAlive,
+        isTargetForeground = e.IsTargetForeground,
+        generation = e.Generation,
+        observedAtNs = e.ObservedAtNs,
+        reason = e.Reason,
+    };
+
     // ================================================= controlled window host ===
 
     private sealed class ControlledWindowHost
@@ -684,14 +720,18 @@ internal static class Program
         private readonly string _className;
         private readonly string _otherClassName;
         private readonly string _titlePrefix;
+        private readonly int _width;
+        private readonly int _height;
         private readonly Dictionary<int, IntPtr> _windows = new();
         private readonly WndProcDelegate _wndProc;
 
-        public ControlledWindowHost(string className, string otherClassName, string titlePrefix)
+        public ControlledWindowHost(string className, string otherClassName, string titlePrefix, int width, int height)
         {
             _className = className;
             _otherClassName = otherClassName;
             _titlePrefix = titlePrefix;
+            _width = Math.Max(64, width);
+            _height = Math.Max(64, height);
             _wndProc = WindowProc;
         }
 
@@ -727,7 +767,7 @@ internal static class Program
         {
             var hwnd = CreateWindowExW(
                 0, className, $"{_titlePrefix}-{id}", WS_OVERLAPPEDWINDOW,
-                120 + (id * 60), 120 + (id * 40), 340, 220,
+                120 + (id * 60), 120 + (id * 40), _width, _height,
                 IntPtr.Zero, IntPtr.Zero, GetModuleHandleW(null), IntPtr.Zero);
 
             if (hwnd == IntPtr.Zero)
@@ -846,8 +886,52 @@ internal static class Program
             }
         }
 
-        private IntPtr WindowProc(IntPtr hwnd, uint msg, IntPtr wParam, IntPtr lParam) =>
-            DefWindowProcW(hwnd, msg, wParam, lParam);
+        private IntPtr WindowProc(IntPtr hwnd, uint msg, IntPtr wParam, IntPtr lParam)
+        {
+            if (msg == WM_PAINT)
+            {
+                var hdc = GetDC(hwnd);
+                if (hdc != IntPtr.Zero)
+                {
+                    var client = default(RECT);
+                    GetClientRect(hwnd, ref client);
+                    var whole = CreateSolidBrush(0x00202020);
+                    FillRect(hdc, ref client, whole);
+                    DeleteObject(whole);
+
+                    var cells = new[]
+                    {
+                        (0x00D05A3A, 24, 24, 300, 150),
+                        (0x0030A0D0, 330, 24, 620, 150),
+                        (0x0050B050, 650, 24, 940, 150),
+                        (0x00C0A040, 970, 24, 1240, 150),
+                        (0x009050C0, 24, 190, 620, 470),
+                        (0x0040A0A0, 650, 190, 1240, 470),
+                    };
+                    foreach (var (color, left, top, right, bottom) in cells)
+                    {
+                        var rect = new RECT
+                        {
+                            left = Math.Min(left, client.right),
+                            top = Math.Min(top, client.bottom),
+                            right = Math.Min(right, client.right),
+                            bottom = Math.Min(bottom, client.bottom),
+                        };
+                        if (rect.right > rect.left && rect.bottom > rect.top)
+                        {
+                            var brush = CreateSolidBrush((uint)color);
+                            FillRect(hdc, ref rect, brush);
+                            DeleteObject(brush);
+                        }
+                    }
+                    ReleaseDC(hwnd, hdc);
+                }
+                ValidateRect(hwnd, IntPtr.Zero);
+                return IntPtr.Zero;
+            }
+
+            return DefWindowProcW(hwnd, msg, wParam, lParam);
+        }
     }
 
     // ---- Win32 surface (harness-local; the library keeps its own narrow copy) ----
@@ -856,6 +940,7 @@ internal static class Program
     private const int SW_SHOW = 5;
     private const int SW_HIDE = 0;
     private const uint PM_REMOVE = 0x0001;
+    private const uint WM_PAINT = 0x000F;
 
     private delegate IntPtr WndProcDelegate(IntPtr hwnd, uint msg, IntPtr wParam, IntPtr lParam);
 
@@ -887,6 +972,15 @@ internal static class Program
         public int ptX;
         public int ptY;
         public uint lPrivate;
+    }
+
+    [StructLayout(LayoutKind.Sequential)]
+    private struct RECT
+    {
+        public int left;
+        public int top;
+        public int right;
+        public int bottom;
     }
 
     [DllImport("user32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
@@ -926,6 +1020,27 @@ internal static class Program
 
     [DllImport("user32.dll", CharSet = CharSet.Unicode)]
     private static extern IntPtr DefWindowProcW(IntPtr hWnd, uint msg, IntPtr wParam, IntPtr lParam);
+
+    [DllImport("user32.dll", SetLastError = true)]
+    private static extern IntPtr GetDC(IntPtr hWnd);
+
+    [DllImport("user32.dll", SetLastError = true)]
+    private static extern int ReleaseDC(IntPtr hWnd, IntPtr hDC);
+
+    [DllImport("user32.dll", SetLastError = true)]
+    private static extern bool GetClientRect(IntPtr hWnd, ref RECT lpRect);
+
+    [DllImport("user32.dll", SetLastError = true)]
+    private static extern bool ValidateRect(IntPtr hWnd, IntPtr lpRect);
+
+    [DllImport("gdi32.dll", SetLastError = true)]
+    private static extern IntPtr CreateSolidBrush(uint colorRef);
+
+    [DllImport("user32.dll", SetLastError = true)]
+    private static extern int FillRect(IntPtr hDC, ref RECT lprc, IntPtr hbr);
+
+    [DllImport("gdi32.dll", SetLastError = true)]
+    private static extern bool DeleteObject(IntPtr hObject);
 
     [DllImport("user32.dll", CharSet = CharSet.Unicode)]
     private static extern bool PeekMessageW(ref MSG lpMsg, IntPtr hWnd, uint wMsgFilterMin, uint wMsgFilterMax,

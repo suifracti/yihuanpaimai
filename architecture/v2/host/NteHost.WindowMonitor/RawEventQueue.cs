@@ -28,6 +28,8 @@ public sealed class RawEventQueue
     private long _enqueued;
     private long _droppedSinceLastDrain;
     private long _droppedAcknowledged;
+    private long _revision;
+    private long _lastDrainRevision;
 
     public RawEventQueue(int capacity)
     {
@@ -40,6 +42,14 @@ public sealed class RawEventQueue
     public long DroppedCount => Interlocked.Read(ref _dropped);
 
     public long EnqueuedCount => Interlocked.Read(ref _enqueued);
+
+    /// <summary>
+    /// Monotonic revision assigned at the raw-event enqueue boundary. The revision
+    /// advances even when the bounded queue has to discard an older record, so a
+    /// consumer can prove that its batch is incomplete instead of treating the
+    /// freshest surviving records as a complete history.
+    /// </summary>
+    public long Revision => Interlocked.Read(ref _revision);
 
     /// <summary>
     /// Diagnostic seam: the number of records dropped during the most recent
@@ -60,12 +70,13 @@ public sealed class RawEventQueue
     {
         lock (_sync)
         {
+            var stamped = raw with { Revision = ++_revision };
             while (_queue.Count >= _capacity)
             {
                 _queue.Dequeue();
                 _dropped++;
             }
-            _queue.Enqueue(raw);
+            _queue.Enqueue(stamped);
             _enqueued++;
         }
     }
@@ -89,7 +100,14 @@ public sealed class RawEventQueue
             var droppedSinceLastDrain = _dropped - _droppedAcknowledged;
             _droppedAcknowledged = _dropped;
             Interlocked.Exchange(ref _droppedSinceLastDrain, droppedSinceLastDrain);
-            return new RawEventBatch(events, droppedSinceLastDrain);
+            var revisionBeforeDrain = _lastDrainRevision;
+            var revisionAfterDrain = _revision;
+            _lastDrainRevision = revisionAfterDrain;
+            return new RawEventBatch(
+                events,
+                droppedSinceLastDrain,
+                revisionBeforeDrain,
+                revisionAfterDrain);
         }
     }
 
@@ -171,7 +189,11 @@ public sealed class RawEventQueue
 }
 
 /// <summary>One raw observation from the WinEvent pump thread.</summary>
-public readonly record struct RawWinEvent(uint EventType, long Hwnd, long ObservedAtNs)
+public readonly record struct RawWinEvent(
+    uint EventType,
+    long Hwnd,
+    long ObservedAtNs,
+    long Revision = 0)
 {
     public static RawWinEvent Synthetic(uint eventType, long hwnd) =>
         new(eventType, hwnd, ProtocolClock.NowNs());
@@ -183,7 +205,11 @@ public readonly record struct RawWinEvent(uint EventType, long Hwnd, long Observ
 /// can distinguish "a drop just happened" from "a drop happened at some point in the
 /// past".
 /// </summary>
-public readonly record struct RawEventBatch(RawWinEvent[] Events, long DroppedSinceLastDrain)
+public readonly record struct RawEventBatch(
+    RawWinEvent[] Events,
+    long DroppedSinceLastDrain,
+    long RawRevisionBeforeDrain = 0,
+    long RawRevisionAfterDrain = 0)
 {
     public bool OverflowedSinceLastDrain => DroppedSinceLastDrain > 0;
 

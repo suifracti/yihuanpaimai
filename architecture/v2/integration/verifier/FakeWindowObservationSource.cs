@@ -11,6 +11,7 @@ internal sealed class FakeWindowObservationSource : IWindowObservationSource
 {
     private readonly object _gate = new();
     private readonly List<IntegrationWindowEvent> _events = new();
+    private readonly List<long> _rawRevisions = new();
     private WindowMonitorSnapshot _snapshot;
     private long _revision;
     private long _eventSequence;
@@ -56,10 +57,12 @@ internal sealed class FakeWindowObservationSource : IWindowObservationSource
                 _pending,
                 _dropped,
                 _snapshot,
-                _events.ToArray());
+                _events.ToArray(),
+                _rawRevisions.ToArray());
             _readLog.Add(result);
             _lastReadRevision = _revision;
             _events.Clear();
+            _rawRevisions.Clear();
             _pending = false;
             _dropped = 0;
         }
@@ -74,6 +77,7 @@ internal sealed class FakeWindowObservationSource : IWindowObservationSource
         {
             uint eventType = isForeground ? 0x0003u : 0x0004u;
             _revision++;
+            _rawRevisions.Add(_revision);
             _eventSequence++;
             _events.Add(new IntegrationWindowEvent(
                 _revision,
@@ -101,6 +105,7 @@ internal sealed class FakeWindowObservationSource : IWindowObservationSource
         {
             WindowIdentity old = _snapshot.TargetIdentity ?? WindowIdentity.None;
             _revision++;
+            _rawRevisions.Add(_revision);
             _eventSequence++;
             _events.Add(new IntegrationWindowEvent(
                 _revision,
@@ -114,6 +119,7 @@ internal sealed class FakeWindowObservationSource : IWindowObservationSource
             };
 
             _revision++;
+            _rawRevisions.Add(_revision);
             _eventSequence++;
             _events.Add(new IntegrationWindowEvent(
                 _revision,
@@ -140,6 +146,15 @@ internal sealed class FakeWindowObservationSource : IWindowObservationSource
     public void MarkRevisionGap()
     {
         lock (_gate) _revision++;
+    }
+
+    public void MarkInternalRevisionGap()
+    {
+        lock (_gate)
+        {
+            _revision += 2;
+            _rawRevisions.Add(_revision);
+        }
     }
 
     private WindowMonitorEvent Event(WindowMonitorEventKind kind, uint source, string reason)

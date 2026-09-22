@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
 using System.Linq;
+using System.Runtime.InteropServices;
 using System.Text.Json.Nodes;
 using System.Threading;
 using NteHost.Protocol;
@@ -36,6 +37,8 @@ internal static class Program
         var runs = int.Parse(Arg(args, "--runs", "5"));
         var holdMs = int.Parse(Arg(args, "--hold-ms", "0"));
         var postAcceptDelayMs = int.Parse(Arg(args, "--post-accept-delay-ms", "0"));
+        var frameRawPath = Arg(args, "--frame-raw", string.Empty);
+        var frameMetaPath = Arg(args, "--frame-meta", string.Empty);
         _engineFault = Arg(args, "--engine-fault", string.Empty);
         _engineFaultCapability = Arg(args, "--engine-fault-missing-capability", string.Empty);
         _engineFaultHelloSize = Arg(args, "--engine-fault-hello-size", string.Empty);
@@ -85,6 +88,23 @@ internal static class Program
                     break;
                 case "mmf":
                     result["run"] = RunMmfLifecycle(python, engine, workDir, contractsDir, sessionId, trace);
+                    break;
+                case "framepipe":
+                    result["run"] = RunFramePipe(python, engine, workDir, contractsDir, sessionId, trace,
+                        frameRawPath, frameMetaPath);
+                    break;
+                case "frameprobe":
+                    result["run"] = RunFrameProbe(workDir, contractsDir, sessionId, trace);
+                    break;
+                case "partialwrite":
+                    result["run"] = RunPartialWriteProbe(sessionId);
+                    break;
+                case "commandprobe":
+                    result["run"] = RunCommandProbe(python, engine, workDir, contractsDir, sessionId, trace);
+                    break;
+                case "recoveryprobe":
+                    result["run"] = RunRecoveryProbe(python, engine, workDir, contractsDir, sessionId, trace,
+                        frameRawPath, frameMetaPath);
                     break;
                 case "golden":
                     result["run"] = RunGoldenParity(contractsDir);
@@ -642,6 +662,340 @@ internal static class Program
             ["metrics"] = Metrics(session),
         };
     }
+
+    private static Dictionary<string, object?> RunFramePipe(
+        string python,
+        string engine,
+        string workDir,
+        string contractsDir,
+        string sessionId,
+        TraceLog trace,
+        string frameRawPath,
+        string frameMetaPath)
+    {
+        if (string.IsNullOrWhiteSpace(frameRawPath) || string.IsNullOrWhiteSpace(frameMetaPath))
+        {
+            throw new InvalidDataException("framepipe requires --frame-raw and --frame-meta");
+        }
+
+        var metadata = JsonNode.Parse(File.ReadAllText(frameMetaPath)) as JsonObject
+                       ?? throw new InvalidDataException("frame metadata must be a JSON object");
+        var width = (int?)metadata["width"] ?? throw new InvalidDataException("frame metadata missing width");
+        var height = (int?)metadata["height"] ?? throw new InvalidDataException("frame metadata missing height");
+        var stride = (int?)metadata["stride"] ?? throw new InvalidDataException("frame metadata missing stride");
+        var captureTimestampNs = (long?)metadata["captureTimestampNs"] ?? ProtocolClock.NowNs();
+        var pixels = File.ReadAllBytes(frameRawPath);
+
+        using var session = new SupervisorSession(new SupervisorSession.Options
+        {
+            PythonExe = python,
+            EngineScript = engine,
+            WorkDir = workDir,
+            ContractsDir = contractsDir,
+            SessionId = sessionId,
+            Trace = trace,
+            EngineFault = _engineFault,
+            EngineLogPath = Path.Combine(workDir, "engine_trace.jsonl"),
+            EnableFrameTransport = true,
+            AcceptTimeoutMs = _engineFault is "model_load_fail" or "state_unwritable" ? 4000 : 15000,
+        });
+
+        var generation = session.StartGeneration(coldBoot: true);
+        var handshake = session.Handshake(coldBoot: true);
+        session.ReachReady(coldBoot: true, noRecoverableBusinessState: true);
+        // The FRAME_ACK SLA remains the frozen 500 ms protocol timeout; the
+        // separate perception wait allows the first real OCR/model pass to
+        // finish without holding an MMF slot (the Engine ACKs after copying).
+        Dictionary<string, object?> frame;
+        string? hostExceptionCode = null;
+        try
+        {
+            frame = session.SendFrame(pixels, width, height, stride, captureTimestampNs, timeoutMs: 30000);
+        }
+        catch (ProtocolViolationException ex)
+        {
+            hostExceptionCode = ex.ErrorCode;
+            frame = new Dictionary<string, object?>
+            {
+                ["published"] = true,
+                ["hostException"] = ex.Message,
+                ["hostExceptionCode"] = ex.ErrorCode,
+                ["failClosed"] = true,
+            };
+        }
+        var stats = session.FrameRing!.SnapshotStats();
+        var shutdown = session.ControlledShutdown();
+
+        return new Dictionary<string, object?>
+        {
+            ["productionReachable"] = true,
+            ["realFrameTransport"] = true,
+            ["realInputExecuted"] = false,
+            ["generationId"] = generation.GenerationId,
+            ["mapName"] = generation.MapName,
+            ["engineReadiness"] = handshake.EngineReadiness,
+            ["engineBusinessReady"] = handshake.EngineBusinessReady,
+            ["frameSourcePath"] = frameRawPath,
+            ["frameMetadataPath"] = frameMetaPath,
+            ["frameMetadata"] = metadata,
+            ["sourcePixelBytes"] = pixels.Length,
+            ["frameTransfer"] = frame,
+            ["hostExceptionCode"] = hostExceptionCode,
+            ["frameRingStats"] = stats,
+            ["shutdown"] = shutdown,
+            ["lifecycleTrace"] = traceRows(session),
+        };
+    }
+
+    /// <summary>
+    /// Small in-process ownership probe for the real frame ring. It deliberately
+    /// does not start an Engine: the invariant under test is Host-side slot
+    /// ownership, not a second end-to-end business run.
+    /// </summary>
+    private static Dictionary<string, object?> RunFrameProbe(
+        string workDir,
+        string contractsDir,
+        string sessionId,
+        TraceLog trace)
+    {
+        using var session = new SupervisorSession(new SupervisorSession.Options
+        {
+            PythonExe = "probe-not-used",
+            EngineScript = "probe-not-used",
+            WorkDir = workDir,
+            ContractsDir = contractsDir,
+            SessionId = sessionId,
+            Trace = trace,
+            EnableFrameTransport = true,
+        });
+
+        session.StartGeneration(coldBoot: true, spawnChild: false);
+        var ring = session.FrameRing ?? throw new InvalidOperationException("frame ring was not created");
+        var first = new List<FramePublishReceipt>();
+        for (var i = 0; i < ProtocolConstants.SlotCount; i++)
+        {
+            var pixel = new byte[] { (byte)(10 + i), (byte)(20 + i), (byte)(30 + i), 255 };
+            var receipt = ring.Publish(sessionId, pixel, 1, 1, 4, ProtocolClock.NowNs());
+            if (receipt is null)
+            {
+                throw new InvalidOperationException($"slot {i} unexpectedly unavailable during fill");
+            }
+            first.Add(receipt);
+        }
+
+        var beforeRelease = ring.SnapshotStats();
+        var fifth = ring.Publish(sessionId, new byte[] { 1, 2, 3, 255 }, 1, 1, 4, ProtocolClock.NowNs());
+        var wrongSession = ring.TryRelease("foreign-session", first[0].BufferIndex, first[0].Header.Sequence, out var wrongSessionError);
+        var wrongSequence = ring.TryRelease(sessionId, first[0].BufferIndex, first[0].Header.Sequence + 1, out var wrongSequenceError);
+        var exactRelease = ring.TryRelease(sessionId, first[0].BufferIndex, first[0].Header.Sequence, out var exactReleaseError);
+        var duplicateRelease = ring.TryRelease(sessionId, first[0].BufferIndex, first[0].Header.Sequence, out var duplicateReleaseError);
+        var afterReleasePublish = ring.Publish(sessionId, new byte[] { 9, 8, 7, 255 }, 1, 1, 4, ProtocolClock.NowNs());
+        var oversizedRejected = false;
+        var oversizedError = string.Empty;
+        try
+        {
+            ring.Publish(sessionId, new byte[4], ProtocolConstants.MaxFrameWidth + 1, 1,
+                (ProtocolConstants.MaxFrameWidth + 1) * 4, ProtocolClock.NowNs());
+        }
+        catch (ProtocolViolationException ex)
+        {
+            oversizedRejected = ex.ErrorCode == ErrorCodes.FrameCapacityExceeded;
+            oversizedError = ex.ErrorCode;
+        }
+
+        var after = ring.SnapshotStats();
+        var allOriginalLocksRemain = beforeRelease.Slots
+            .Where(slot => slot.BufferIndex != first[0].BufferIndex)
+            .All(slot => slot.State == FrameRingSlotState.ConsumerLocked);
+
+        return new Dictionary<string, object?>
+        {
+            ["fixedSlotCount"] = ProtocolConstants.SlotCount,
+            ["filledSlots"] = first.Count,
+            ["fullRingDroppedNewFrame"] = fifth is null,
+            ["originalLockedSlotsNotOverwritten"] = allOriginalLocksRemain,
+            ["wrongSessionRejected"] = !wrongSession,
+            ["wrongSessionErrorCode"] = wrongSessionError,
+            ["wrongSequenceRejected"] = !wrongSequence,
+            ["wrongSequenceErrorCode"] = wrongSequenceError,
+            ["exactAckReleased"] = exactRelease,
+            ["exactAckErrorCode"] = exactReleaseError,
+            ["duplicateAckRejected"] = !duplicateRelease,
+            ["duplicateAckErrorCode"] = duplicateReleaseError,
+            ["slotReusableOnlyAfterExactAck"] = afterReleasePublish is not null
+                && afterReleasePublish.BufferIndex == first[0].BufferIndex,
+            ["oversizedFrameRejected"] = oversizedRejected,
+            ["oversizedFrameErrorCode"] = oversizedError,
+            ["beforeReleaseStats"] = beforeRelease,
+            ["afterReleaseStats"] = after,
+        };
+    }
+
+    private static Dictionary<string, object?> RunCommandProbe(
+        string python,
+        string engine,
+        string workDir,
+        string contractsDir,
+        string sessionId,
+        TraceLog trace)
+    {
+        using var session = new SupervisorSession(new SupervisorSession.Options
+        {
+            PythonExe = python,
+            EngineScript = engine,
+            WorkDir = workDir,
+            ContractsDir = contractsDir,
+            SessionId = sessionId,
+            Trace = trace,
+            EngineLogPath = Path.Combine(workDir, "engine_trace.jsonl"),
+        });
+
+        session.StartGeneration(coldBoot: true);
+        session.Handshake(coldBoot: true);
+        session.ReachReady(coldBoot: true, noRecoverableBusinessState: true);
+
+        var first = session.SendCommandWithId(
+            "command-probe-001", "test.stop_heartbeat", timeoutMs: 2000);
+        var duplicate = session.SendCommandWithId(
+            "command-probe-001", "test.stop_heartbeat", timeoutMs: 2000);
+        var mismatch = session.SendCommandWithId(
+            "command-probe-001", "test.resume_heartbeat", timeoutMs: 2000);
+        var expired = session.SendCommandWithId(
+            "command-probe-expired", "test.resume_heartbeat", timeoutMs: 2000,
+            expiresAtNs: ProtocolClock.NowNs() - 1);
+        var staleSession = session.SendCommandWithId(
+            "command-probe-stale", "test.resume_heartbeat", timeoutMs: 2000,
+            envelopeSessionId: "old-session-0001");
+
+        var shutdown = session.ControlledShutdown();
+        return new Dictionary<string, object?>
+        {
+            ["engineReady"] = session.Lifecycle.EngineBusinessReady,
+            ["first"] = CommandOutcome(first),
+            ["duplicate"] = CommandOutcome(duplicate),
+            ["mismatch"] = CommandOutcome(mismatch),
+            ["expired"] = CommandOutcome(expired),
+            ["staleSession"] = CommandOutcome(staleSession),
+            ["shutdown"] = shutdown,
+        };
+    }
+
+    private static Dictionary<string, object?> RunPartialWriteProbe(string sessionId)
+    {
+        var copyCalls = 0;
+        using var ring = new MmfFrameRingWriter((source, startIndex, destination, length) =>
+        {
+            copyCalls++;
+            if (copyCalls == 2)
+            {
+                // Pixels have already been copied; the header write fails before
+                // any FRAME_READY can be emitted.
+                throw new InvalidOperationException("injected header copy failure");
+            }
+            Marshal.Copy(source, startIndex, destination, length);
+        });
+
+        ring.Create(sessionId, "partial-write-probe");
+        var failedClosed = false;
+        var errorCode = string.Empty;
+        try
+        {
+            ring.Publish(sessionId, new byte[] { 1, 2, 3, 255 }, 1, 1, 4, ProtocolClock.NowNs());
+        }
+        catch (ProtocolViolationException ex)
+        {
+            failedClosed = true;
+            errorCode = ex.ErrorCode;
+        }
+
+        var stats = ring.SnapshotStats();
+        var firstSlot = stats.Slots[0];
+        return new Dictionary<string, object?>
+        {
+            ["pixelCopyCompletedBeforeInjectedHeaderFailure"] = copyCalls == 2,
+            ["failedClosed"] = failedClosed,
+            ["errorCode"] = errorCode,
+            ["captureFailureCount"] = stats.CaptureFailureCount,
+            ["frameHeadersWritten"] = stats.FrameHeadersWritten,
+            ["slotReturnedFree"] = firstSlot.State == FrameRingSlotState.Free,
+            ["noLockedSlotRemains"] = stats.Slots.All(slot => slot.State == FrameRingSlotState.Free),
+        };
+    }
+
+    private static Dictionary<string, object?> RunRecoveryProbe(
+        string python,
+        string engine,
+        string workDir,
+        string contractsDir,
+        string sessionId,
+        TraceLog trace,
+        string frameRawPath,
+        string frameMetaPath)
+    {
+        if (string.IsNullOrWhiteSpace(frameRawPath) || string.IsNullOrWhiteSpace(frameMetaPath))
+        {
+            throw new InvalidDataException("recoveryprobe requires --frame-raw and --frame-meta");
+        }
+        var metadata = JsonNode.Parse(File.ReadAllText(frameMetaPath)) as JsonObject
+                       ?? throw new InvalidDataException("frame metadata must be a JSON object");
+        var width = (int?)metadata["width"] ?? throw new InvalidDataException("frame metadata missing width");
+        var height = (int?)metadata["height"] ?? throw new InvalidDataException("frame metadata missing height");
+        var stride = (int?)metadata["stride"] ?? throw new InvalidDataException("frame metadata missing stride");
+        var captureTimestampNs = (long?)metadata["captureTimestampNs"] ?? ProtocolClock.NowNs();
+        var pixels = File.ReadAllBytes(frameRawPath);
+
+        using var session = new SupervisorSession(new SupervisorSession.Options
+        {
+            PythonExe = python,
+            EngineScript = engine,
+            WorkDir = workDir,
+            ContractsDir = contractsDir,
+            SessionId = sessionId,
+            Trace = trace,
+            EngineLogPath = Path.Combine(workDir, "engine_trace.jsonl"),
+            EnableFrameTransport = true,
+        });
+
+        session.StartGeneration(coldBoot: true);
+        var firstHandshake = session.Handshake(coldBoot: true);
+        session.ReachReady(coldBoot: true, noRecoverableBusinessState: true);
+        var frame = session.SendFrame(pixels, width, height, stride, captureTimestampNs, timeoutMs: 30000);
+        var crash = session.CrashAndMeasure();
+        session.TransitionToEngineDownOnCrash();
+        var restart = session.RestartAndMeasure();
+        var secondHandshake = session.Handshake(coldBoot: false);
+        session.ReachReady(coldBoot: false, noRecoverableBusinessState: false);
+        var recoveredSnapshot = session.LastSnapshotPayload;
+        var shutdown = session.ControlledShutdown();
+
+        var recoveredProjection = recoveredSnapshot?["currentMatchProjection"] as JsonObject;
+        return new Dictionary<string, object?>
+        {
+            ["firstEngineReady"] = firstHandshake.EngineBusinessReady,
+            ["frameTransfer"] = frame,
+            ["crash"] = crash,
+            ["restart"] = restart,
+            ["secondEngineReady"] = secondHandshake.EngineBusinessReady,
+            ["snapshotResynced"] = recoveredSnapshot is not null,
+            ["recoveredSnapshot"] = recoveredSnapshot,
+            ["recoveredMatchId"] = (string?)recoveredProjection?["matchId"],
+            ["recoveredScene"] = (string?)recoveredProjection?["auctionPhase"],
+            ["sameSessionId"] = string.Equals(sessionId, (string?)recoveredSnapshot?["snapshotSessionId"], StringComparison.Ordinal),
+            ["generationNonceChanged"] = crash.Nonce != restart.Nonce,
+            ["shutdown"] = shutdown,
+        };
+    }
+
+    private static Dictionary<string, object?> CommandOutcome(Envelope envelope) =>
+        new()
+        {
+            ["messageType"] = envelope.MessageType,
+            ["sessionId"] = envelope.SessionId,
+            ["commandId"] = (string?)envelope.Payload["commandId"],
+            ["status"] = (string?)envelope.Payload["status"],
+            ["errorCode"] = (string?)envelope.Payload["errorCode"],
+            ["errorDetails"] = (string?)envelope.Payload["errorDetails"],
+        };
 
     /// <summary>
     /// Re-encodes every frozen golden message vector through the host's own encoder

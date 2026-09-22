@@ -69,6 +69,11 @@ public sealed class WindowMonitor : IRawWinEventSink, IDisposable
 
     private readonly SemaphoreSlim _wake = new(0, int.MaxValue);
     private readonly List<WindowMonitorEvent> _events = new();
+    private readonly List<long> _rawRevisionsSinceIntegrationRead = new();
+    private long _integrationEventSequence;
+    private long _integrationRawRevision;
+    private long _integrationDroppedSinceRead;
+    private long _lastProcessedRawRevision;
 
     private Thread? _worker;
     private volatile bool _stopRequested;
@@ -468,6 +473,14 @@ public sealed class WindowMonitor : IRawWinEventSink, IDisposable
                 var drained = _rawQueue.DrainWithDelta();
                 var batch = drained.Events;
 
+                if (drained.DroppedSinceLastDrain > 0)
+                {
+                    lock (_gate)
+                    {
+                        _integrationDroppedSinceRead += drained.DroppedSinceLastDrain;
+                    }
+                }
+
                 // React to a drop that just happened, NOT to the cumulative total. The
                 // total never decreases, so `DroppedCount > 0` would latch the monitor
                 // into requesting recovery on every loop iteration forever after the very
@@ -478,7 +491,8 @@ public sealed class WindowMonitor : IRawWinEventSink, IDisposable
                     Emit(WindowMonitorEventKind.EventQueueOverflow, "event-queue-overflow", 0,
                         ProtocolClock.NowNs(),
                         $"droppedSinceLastDrain={drained.DroppedSinceLastDrain} " +
-                        $"totalDropped={_rawQueue.DroppedCount} capacity={_rawQueue.Capacity}");
+                        $"totalDropped={_rawQueue.DroppedCount} capacity={_rawQueue.Capacity}",
+                        rawRevision: drained.RawRevisionAfterDrain);
                     RequestRecoveryScan("event-queue-overflow");
                 }
 
@@ -504,6 +518,12 @@ public sealed class WindowMonitor : IRawWinEventSink, IDisposable
         {
             lock (_gate)
             {
+                if (raw.Revision > 0)
+                {
+                    _rawRevisionsSinceIntegrationRead.Add(raw.Revision);
+                    _lastProcessedRawRevision = Math.Max(_lastProcessedRawRevision, raw.Revision);
+                }
+
                 if (_target is null)
                 {
                     // Cheap path first: promote the event HWND if it matches, before
@@ -517,13 +537,13 @@ public sealed class WindowMonitor : IRawWinEventSink, IDisposable
                         raw.EventType is WinEvent.EVENT_OBJECT_DESTROY or WinEvent.EVENT_OBJECT_HIDE)
                     {
                         LoseTarget(WinEvent.Name(raw.EventType), raw.ObservedAtNs,
-                            "target window destroy/hide event");
+                            "target window destroy/hide event", raw.Revision);
                     }
                 }
             }
 
             // Foreground is authoritative from the OS, not from the event payload.
-            EvaluateForeground(raw.EventType, raw.ObservedAtNs);
+            EvaluateForeground(raw.EventType, raw.ObservedAtNs, raw.Revision);
         }
 
         RunPendingRecoveryScanIfDue();
@@ -627,7 +647,7 @@ public sealed class WindowMonitor : IRawWinEventSink, IDisposable
             return;
         }
 
-        Adopt(identity, $"promoted-from-{WinEvent.Name(raw.EventType)}", raw.ObservedAtNs);
+        Adopt(identity, $"promoted-from-{WinEvent.Name(raw.EventType)}", raw.ObservedAtNs, raw.Revision);
     }
 
     /// <summary>
@@ -646,7 +666,7 @@ public sealed class WindowMonitor : IRawWinEventSink, IDisposable
     }
 
     /// <summary>Caller must hold <see cref="_gate"/>.</summary>
-    private void Adopt(WindowIdentity identity, string reason, long observedAtNs)
+    private void Adopt(WindowIdentity identity, string reason, long observedAtNs, long rawRevision = 0)
     {
         var reacquire = _generation > 0;
         _target = identity;
@@ -654,7 +674,7 @@ public sealed class WindowMonitor : IRawWinEventSink, IDisposable
 
         Emit(reacquire ? WindowMonitorEventKind.TargetReacquired : WindowMonitorEventKind.TargetAcquired,
             reason, identity.Hwnd, observedAtNs,
-            $"identity: {identity.Describe()}");
+            $"identity: {identity.Describe()}", rawRevision);
 
         // A brand new target has an unknown foreground relationship; evaluate it
         // immediately so the snapshot is never stale after acquisition.
@@ -662,7 +682,7 @@ public sealed class WindowMonitor : IRawWinEventSink, IDisposable
     }
 
     /// <summary>Caller must hold <see cref="_gate"/>.</summary>
-    private void LoseTarget(string reason, long observedAtNs, string detail)
+    private void LoseTarget(string reason, long observedAtNs, string detail, long rawRevision = 0)
     {
         if (_target is null)
         {
@@ -677,7 +697,8 @@ public sealed class WindowMonitor : IRawWinEventSink, IDisposable
         _identityReader.InvalidatePid(lost.Pid);
 
         Emit(WindowMonitorEventKind.StaleHandleRejected, reason, lost.Hwnd, observedAtNs,
-            $"rejected handle: {detail}; identityCacheGeneration={_identityReader.CacheGeneration}");
+            $"rejected handle: {detail}; identityCacheGeneration={_identityReader.CacheGeneration}",
+            rawRevision);
 
         _target = null;
         _isTargetForeground = false;
@@ -685,22 +706,23 @@ public sealed class WindowMonitor : IRawWinEventSink, IDisposable
         _pendingRecoveryReason = "target-lost";
 
         Emit(WindowMonitorEventKind.TargetLost, reason, lost.Hwnd, observedAtNs,
-            $"lost identity: {lost.Describe()}");
+            $"lost identity: {lost.Describe()}", rawRevision);
     }
 
-    private void EvaluateForeground(uint sourceEvent, long observedAtNs)
+    private void EvaluateForeground(uint sourceEvent, long observedAtNs, long rawRevision = 0)
     {
         lock (_gate)
         {
-            EvaluateForegroundInline(sourceEvent, observedAtNs);
+            EvaluateForegroundInline(sourceEvent, observedAtNs, rawRevision);
         }
     }
 
     /// <summary>Caller must hold <see cref="_gate"/>.</summary>
-    private void EvaluateForegroundInline(long observedAtNs) => EvaluateForegroundInline(0, observedAtNs);
+    private void EvaluateForegroundInline(long observedAtNs) =>
+        EvaluateForegroundInline(0, observedAtNs, _lastProcessedRawRevision);
 
     /// <summary>Caller must hold <see cref="_gate"/>.</summary>
-    private void EvaluateForegroundInline(uint sourceEvent, long observedAtNs)
+    private void EvaluateForegroundInline(uint sourceEvent, long observedAtNs, long rawRevision = 0)
     {
         var foreground = NativeWindowApiForeground();
 
@@ -729,7 +751,8 @@ public sealed class WindowMonitor : IRawWinEventSink, IDisposable
         _isTargetForeground = isForeground;
         Emit(isForeground ? WindowMonitorEventKind.ForegroundGained : WindowMonitorEventKind.ForegroundLost,
             sourceEvent == 0 ? "validation" : WinEvent.Name(sourceEvent), _target.Hwnd, observedAtNs,
-            $"foreground=0x{foreground:x} target=0x{_target.Hwnd:x} identity={verdict.Describe()}");
+            $"foreground=0x{foreground:x} target=0x{_target.Hwnd:x} identity={verdict.Describe()}",
+            rawRevision);
     }
 
     /// <summary>Caller must hold <see cref="_gate"/>.</summary>
@@ -745,7 +768,13 @@ public sealed class WindowMonitor : IRawWinEventSink, IDisposable
     private static long NativeWindowApiForeground() => Win32.NativeWindowApi.GetForegroundWindow().ToInt64();
 
     /// <summary>Caller must hold <see cref="_gate"/>.</summary>
-    private void Emit(WindowMonitorEventKind kind, string sourceEvent, long hwnd, long observedAtNs, string reason)
+    private void Emit(
+        WindowMonitorEventKind kind,
+        string sourceEvent,
+        long hwnd,
+        long observedAtNs,
+        string reason,
+        long rawRevision = 0)
     {
         // Ordering discipline: the event list is a total order (sequence), so the
         // timestamps carried in it must be non-decreasing in that order. `observedAtNs`
@@ -767,6 +796,7 @@ public sealed class WindowMonitor : IRawWinEventSink, IDisposable
         _events.Add(new WindowMonitorEvent
         {
             Sequence = _sequence,
+            RawRevision = rawRevision,
             Kind = kind,
             SourceEvent = sourceEvent,
             TargetHwnd = _target?.Hwnd ?? 0,
@@ -818,6 +848,68 @@ public sealed class WindowMonitor : IRawWinEventSink, IDisposable
                 Reason = alive ? "snapshot" : "no-target",
                 TargetIdentity = _target,
             };
+        }
+    }
+
+    /// <summary>
+    /// Captures the production observation boundary consumed by Integration.
+    ///
+    /// The read is intentionally a fence, not a best-effort combination of
+    /// <see cref="Snapshot"/> and <see cref="Events"/>. A concurrent raw callback,
+    /// worker drain, or still-pending queue makes this read pending; the caller must
+    /// fail closed and retry after the source settles. A pending read does not retire
+    /// the integration cursor, so the next stable read still contains every raw
+    /// revision and derived transition since the last stable fence.
+    /// </summary>
+    public WindowMonitorIntegrationObservation ReadIntegrationObservation()
+    {
+        lock (_gate)
+        {
+            // Keep the last stable cursor as the LEFT endpoint of this read. The
+            // endpoint must be captured before committing the current fence; using
+            // the updated cursor here makes a complete batch [1,2,3] look like a
+            // gap from 3 -> 3 to the Integration adapter.
+            var rawRevisionBeforeBatch = _integrationRawRevision;
+            var rawAtStart = _rawQueue.Revision;
+            var snapshot = Snapshot();
+            var rawAfterSnapshot = _rawQueue.Revision;
+
+            var events = _events
+                .Where(item => item.Sequence > _integrationEventSequence)
+                .ToArray();
+            var rawRevisions = _rawRevisionsSinceIntegrationRead.ToArray();
+            var dropped = _integrationDroppedSinceRead;
+
+            var pending = rawAfterSnapshot != rawAtStart
+                || _rawQueue.Count > 0
+                || IsWorkerBusyForDiagnostics
+                || rawAfterSnapshot > _lastProcessedRawRevision;
+
+            var rawAtEnd = _rawQueue.Revision;
+            if (rawAtEnd != rawAfterSnapshot)
+            {
+                pending = true;
+            }
+
+            if (!pending)
+            {
+                _integrationRawRevision = rawAtEnd;
+                if (_events.Count > 0)
+                {
+                    _integrationEventSequence = _events[^1].Sequence;
+                }
+                _rawRevisionsSinceIntegrationRead.Clear();
+                _integrationDroppedSinceRead = 0;
+            }
+
+            return new WindowMonitorIntegrationObservation(
+                rawRevisionBeforeBatch,
+                rawAtEnd,
+                pending,
+                dropped,
+                snapshot,
+                events,
+                rawRevisions);
         }
     }
 

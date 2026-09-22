@@ -13,6 +13,9 @@
 
   <ItemGroup>
     <ProjectReference Include="..\NteHost.WindowMonitor\NteHost.WindowMonitor.csproj" />
+    <ProjectReference Include="..\NteHost.Freeze\NteHost.Freeze.csproj" />
+    <ProjectReference Include="..\..\input\NteHost.Input\NteHost.Input.csproj" />
+    <ProjectReference Include="..\..\integration\NteHost.Integration\NteHost.Integration.csproj" />
   </ItemGroup>
 
 </Project>

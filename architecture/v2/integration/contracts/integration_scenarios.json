@@ -12,6 +12,7 @@
     { "id": "I08_old_credential_rejected_after_session_change", "coverage": ["C session change", "old credential"], "expected": { "rearm": "REJECTED_STALE_TOKEN", "rawCalls": 0 } },
     { "id": "I09_restart_resync_retires_credentials", "coverage": ["C resync", "freeze round", "retired credential"], "expected": { "rearm": "REJECTED_STALE_TOKEN", "rawCalls": 0 } },
     { "id": "I10_freeze_send_commit_competition", "coverage": ["freeze before C commit", "freeze after B final before raw", "freeze after raw submission"], "expected": { "beforeRaw": 0, "middleRaw": 0, "afterRaw": 1, "afterAccepted": 1 } },
-    { "id": "I11_identity_epoch_session_scopes_separate", "coverage": ["A Generation", "B Epoch", "B TargetId", "C Generation"], "expected": { "aInitial": 41, "aRebuilt": 42, "bEpochAfterRebuild": 2, "cAfterRestart": 9, "rawCalls": 0 } }
+    { "id": "I11_identity_epoch_session_scopes_separate", "coverage": ["A Generation", "B Epoch", "B TargetId", "C Generation"], "expected": { "aInitial": 41, "aRebuilt": 42, "bEpochAfterRebuild": 2, "cAfterRestart": 9, "rawCalls": 0 } },
+    { "id": "I12_internal_raw_revision_gap_fail_closed", "coverage": ["internal raw revision gap", "monotonic endpoints", "fail-closed source fence"], "expected": { "rawCalls": 0, "reason": "SOURCE_REVISION_GAP:0->2" } }
   ]
 }
