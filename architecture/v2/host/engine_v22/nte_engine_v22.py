@@ -921,6 +921,50 @@ class RealEngine:
             if is_missing_observation(key, value):
                 continue
             patch[key] = copy.deepcopy(_safe(value))
+        round_no = context.get("round")
+        if round_no is not None and context.get("scene") == "IN_AUCTION":
+            patch["roundNo"] = int(round_no)
+        seats = context.get("seats")
+        live_seats = []
+        if isinstance(seats, list):
+            normalized_seats = []
+            for seat in seats:
+                if not isinstance(seat, dict):
+                    continue
+                row = copy.deepcopy(_safe(seat))
+                current_bid = row.get("currentBid")
+                if current_bid is None or row.get("observationStatus") == "UNOBSERVED":
+                    row.update(bid=None, currentBid=None, observationStatus="UNOBSERVED")
+                else:
+                    row.update(bid=current_bid, observationStatus="VISIBLE")
+                    live_seats.append(row)
+                normalized_seats.append(row)
+            if live_seats:
+                patch["seats"] = normalized_seats
+            elif patch.get("roundNo") != self.current_match.facts.get("roundNo") and patch.get("roundNo"):
+                # CurrentMatch's existing seat rollover clears last round's quotes.
+                patch["seats"] = normalized_seats
+            else:
+                patch.pop("seats", None)
+        if live_seats:
+            patch["leaderBid"] = max(int(seat["currentBid"]) for seat in live_seats)
+            my_seat = next((seat for seat in live_seats if seat.get("slot") == 4), None)
+            if my_seat is not None:
+                patch["myBid"] = int(my_seat["currentBid"])
+            else:
+                patch.pop("myBid", None)
+        else:
+            for key in ("leaderBid", "myBid", "leaderName", "leaderTies", "isMyLead"):
+                patch.pop(key, None)
+            if patch.get("roundNo") != self.current_match.facts.get("roundNo") and patch.get("roundNo"):
+                patch.update(leaderBid=None, myBid=None, leaderName=None, leaderTies=[], isMyLead=None)
+        if "auctionEvidence" not in patch:
+            readings = context.get("intelCardReadings")
+            if isinstance(readings, list) and readings:
+                patch["auctionEvidence"] = {
+                    "ownerMatchId": self.current_match.id,
+                    "intel": copy.deepcopy(_safe(readings)),
+                }
         if patch:
             self.current_match.apply_facts(patch, source="vision", intent="observe", observed_at=observed_at)
         self.current_match.updated_at = _utc_now()

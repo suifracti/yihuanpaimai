@@ -186,6 +186,25 @@ class TestP2SeatsIntelProjection(unittest.TestCase):
         self.assertEqual(match.facts["seats"][2]["currentBid"], 555555)
         self.assertEqual(match.facts["seats"][3]["currentBid"], 666666)
 
+    def test_engine_round_number_clears_current_quote_not_history_or_manual_fact(self):
+        match = CurrentMatch()
+        match.apply_facts({
+            "roundNo": 4, "leaderBid": 711111,
+            "seats": [{"slot": 1, "currentBid": 711111, "observationStatus": "VISIBLE"}],
+            "historicalBids": {"3": {"seat1": 555555}},
+            "q": 22,
+        }, source="vision")
+        match.apply_facts({"q": 23}, source="manual", intent="confirm")
+        match.apply_facts({
+            "roundNo": 5, "leaderBid": None, "myBid": None,
+            "seats": [{"slot": 1, "currentBid": None, "observationStatus": "UNOBSERVED"}],
+            "q": 22,
+        }, source="vision")
+        self.assertIsNone(match.facts["leaderBid"])
+        self.assertIsNone(match.facts["seats"][0]["currentBid"])
+        self.assertEqual(match.facts["historicalBids"], {"3": {"seat1": 555555}})
+        self.assertEqual(match.facts["q"], 23)
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -1985,7 +1985,7 @@ function sparkleBoundsText(b) {
       const calculating = pending && d?.shadowUpdating === true;
       const settling = d?.scene === "SETTLEMENT" || d?.isSettlement === true;
       const waitingScene = d?.scene !== "IN_AUCTION" && !settling;
-      const pendingLabel = settling ? "本局已结算" : waitingScene ? "等待进入拍卖" : calculating ? "计算中" : infeasible ? "约束冲突" : "情报不足";
+      const pendingLabel = settling ? "本局已结算" : waitingScene ? "等待进入拍卖" : calculating ? "计算中" : infeasible ? "约束冲突" : (d?.solverMissingReason || "情报不足");
       const modeLabels = {
         "full_shadow": "先验支持",
         "FULL_SHADOW": "先验支持",
@@ -2143,7 +2143,7 @@ function sparkleBoundsText(b) {
         const name = raw.name || (`座位 ${slot}`);
         const me = raw.isMe ? " is-me" : "";
         const bidText = d.hiddenBids ? "金额隐藏" : bid == null ? "未识别" : String(bid);
-        return `<div class="live-seat${me}"><span>${name}</span><strong>${bidText}</strong></div>`;
+        return `<div class="live-seat${me}"><span>${escapeHtml(name)}</span><strong>${escapeHtml(bidText)}</strong></div>`;
       });
       seatsEl.innerHTML = projected.join("");
       const evidence = (d && d.auctionEvidence) || {};
@@ -2153,9 +2153,9 @@ function sparkleBoundsText(b) {
         return;
       }
       intelEl.innerHTML = intel.slice(-6).map((row) => {
-        const texts = (row.lines || []).map((line) => (line && line.text) || line).filter(Boolean).join("；");
+        const texts = (row.lines || []).map((line) => (line && line.text) || line).filter(Boolean).join("；") || row.rawText || row.text || "";
         const round = row.round != null ? `第${row.round}回合` : "";
-        return `<p>${round} ${texts}</p>`;
+        return `<p>${escapeHtml(round)} ${escapeHtml(texts)}</p>`;
       }).join("");
     }
 

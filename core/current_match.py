@@ -659,6 +659,12 @@ class CurrentMatch:
         restore_set = {key for key in (restore_auto_fields or []) if key in FACT_KEYS}
         accepted: Dict[str, Any] = {}
         next_facts = dict(self.facts)
+        incoming_round = flat_patch.get("roundNo")
+        previous_round = next_facts.get("roundNo")
+        vision_round_rollover = (
+            source == "vision" and incoming_round is not None and previous_round is not None
+            and incoming_round != previous_round
+        )
 
         def audit(field_name: str, decision: str, reason: str, old: Any, new: Any) -> None:
             self._record_audit({
@@ -786,6 +792,17 @@ class CurrentMatch:
                     new_value = merged_seats
 
             state = self.field_states.get(key)
+            if (vision_round_rollover and key in {"leaderBid", "myBid", "leaderName", "isMyLead"}
+                    and new_value is None and not (state and state.protected)):
+                # A new round has no current leader until a visible quote arrives.
+                # This does not clear manually protected facts or past-round bids.
+                self._write_field(
+                    next_facts, key, None, source=source, status="empty",
+                    protected=False, observed_at=stamp, evidence_refs=evidence_refs,
+                )
+                accepted[key] = None
+                audit(key, "accept", "ROUND_ROLLOVER_EMPTY", old_value, None)
+                continue
             missing = is_missing_observation(key, raw if key in KNOWN_KEYS else new_value)
             if key == "seats" and locals().get("round_changed"):
                 missing = False

@@ -14,6 +14,8 @@ import numpy as np
 NORMALIZED_ROIS = {
     # 1. 顶栏：回合与倒计时
     "header_round_timer": (0.42, 0.02, 0.58, 0.10),
+    # 局内中央的「竞拍第 N 回合」标题；已确认局内时用于跳过阻塞全画布 OCR。
+    "auction_round_title": (0.4375, 0.1546, 0.5340, 0.1898),
     # 1b. 右上角：当前估价胶囊与实时估值
     "current_estimate_chip": (0.775, 0.130, 0.940, 0.180),
     "current_estimate_digits": (0.853, 0.137, 0.925, 0.173),

@@ -61,7 +61,7 @@ LOCKED_MATCH_SCENES = frozenset({
 })
 MATCH_EXIT_HOLD_FRAMES = 8
 SETTLEMENT_STABLE_FRAMES = 2
-# RapidOCR itself is ~3s; dynamic facts cannot be polled faster than that.
+# The slow full-canvas pass is periodic; seat ROI runs on every auction frame.
 AUCTION_DYNAMIC_OCR_INTERVAL_S = 3.5
 
 def parse_bid_text(text: str) -> int:
@@ -294,6 +294,8 @@ class NTEVisionPipeline:
         self._slot_finals = {1: {}, 2: {}, 3: {}, 4: {}}
         self._slot_cur_bids = {1: None, 2: None, 3: None, 4: None}
         self._slot_bid_candidates = {1: {"val": None, "count": 0}, 2: {"val": None, "count": 0}, 3: {"val": None, "count": 0}, 4: {"val": None, "count": 0}}
+        self._slot_bid_evidence = {}
+        self._frame_bid_captured_at = None
         self._leader_slot = None
         self._full_canvas_frame_count = 0
         self._df_shadow_estimate = None
@@ -436,6 +438,7 @@ class NTEVisionPipeline:
         self._slot_finals = {s: {} for s in (1, 2, 3, 4)}
         self._slot_cur_bids = {s: None for s in (1, 2, 3, 4)}
         self._slot_bid_candidates = {s: {"val": None, "count": 0} for s in (1, 2, 3, 4)}
+        self._slot_bid_evidence = {}
         self._leader_slot = None
         self._reset_auction_ocr_scheduler()
         if self._warehouse_vision is not None:
@@ -561,6 +564,7 @@ class NTEVisionPipeline:
         self._slot_finals = {1: {}, 2: {}, 3: {}, 4: {}}
         self._slot_cur_bids = {1: None, 2: None, 3: None, 4: None}
         self._slot_bid_candidates = {1: {"val": None, "count": 0}, 2: {"val": None, "count": 0}, 3: {"val": None, "count": 0}, 4: {"val": None, "count": 0}}
+        self._slot_bid_evidence = {}
         self._leader_slot = None
         self._match_gen += 1
         self._df_shadow_estimate = None
@@ -679,13 +683,13 @@ class NTEVisionPipeline:
         return bool(np.any(delta >= 1.5))
 
     def _intel_region_sig(self, frame: np.ndarray) -> Optional[np.ndarray]:
-        """Title / intel cards / left seats. Timer is excluded. Not a round parser."""
+        """Title and intel cards; seat changes have their own fast ROI reader."""
         if frame is None or frame.size == 0:
             return None
         h, w = frame.shape[:2]
         bands = []
-        # title, intel stack, left bid column
-        for box in ((0.40, 0.14, 0.58, 0.22), (0.38, 0.28, 0.64, 0.68), (0.06, 0.16, 0.20, 0.72)):
+        # A bid change must not schedule a full-canvas OCR pass.
+        for box in ((0.40, 0.14, 0.58, 0.22), (0.38, 0.28, 0.64, 0.68)):
             x1, y1, x2, y2 = int(w * box[0]), int(h * box[1]), int(w * box[2]), int(h * box[3])
             if y2 <= y1 or x2 <= x1:
                 continue
@@ -957,6 +961,7 @@ class NTEVisionPipeline:
         live loop can publish OCR facts before the slow catalog match.
         """
         self._bind_acquisition_record(record_stable_key)
+        self._frame_bid_captured_at = captured_at
         self._acquisition_frame = getattr(self, "_acquisition_frame", 0) + 1
         self._frame_ocr_rows = []
 
@@ -1052,7 +1057,14 @@ class NTEVisionPipeline:
         df_timer = None
         df_seat_bids = None
         df_seat_success = False
+        round_title_confirmed = False
         if is_auction_scene:
+            observed_round = self._read_df_auction_round_title(frame)
+            if observed_round is not None:
+                previous_round = int(self.current_context.get("round") or 0)
+                if observed_round >= previous_round:
+                    self.current_context["round"] = observed_round
+                    round_title_confirmed = True
             try:
                 df_est, df_timer = self._read_df_numeric_batch(frame)
             except Exception:
@@ -1086,6 +1098,10 @@ class NTEVisionPipeline:
         intel_worker = self._get_async_intel_worker()
         completed_intel_evs = intel_worker.poll_results(getattr(self, "_session_generation", 0))
         for ev in completed_intel_evs:
+            current_round = int(self.current_context.get("round") or 0)
+            if ev.round and current_round and int(ev.round) < current_round:
+                # A previous round's late OCR cannot become this round's card.
+                continue
             if self._intel_ledger is None:
                 from intel_card_evidence import IntelCardEvidenceLedger
                 self._intel_ledger = IntelCardEvidenceLedger()
@@ -1150,7 +1166,12 @@ class NTEVisionPipeline:
             or timer_force
             or non_auction_scene
         )
-        if is_auction_scene and not self._should_run_auction_canvas_ocr(frame, force_refresh):
+        if is_auction_scene and round_title_confirmed and not force_refresh:
+            # A strict, visible current-round title keeps bid capture on the
+            # fast ROI path. Async card extraction owns new auction intel.
+            should_run_full_canvas = False
+            self.ocr_skip_count += 1
+        elif is_auction_scene and not self._should_run_auction_canvas_ocr(frame, force_refresh):
             should_run_full_canvas = False
 
         detected_feature = False
@@ -1568,7 +1589,10 @@ class NTEVisionPipeline:
                 df_seat_bids = self._run_df_seat_bids_shadow(frame)
                 df_seat_success = any(value is not None for value in df_seat_bids)
                 if df_seat_success:
-                    self._update_seat_current_bids_from_df(df_seat_bids, int(self.current_context.get("round") or 0))
+                    self._update_seat_current_bids_from_df(
+                        df_seat_bids, int(self.current_context.get("round") or 0),
+                        trusted_slots=self._trusted_df_bid_slots(df_seat_bids),
+                    )
                     self._derive_seat_leader_and_context(int(self.current_context.get("round") or 0), self._slot_cur_bids)
             except Exception:
                 self._df_shadow_seat_bids = [None, None, None, None]
@@ -1806,7 +1830,7 @@ class NTEVisionPipeline:
         Detection-Free 4-slot recognition shadow for seat current bids (4D2D1L-L3Z.2).
         Runs strictly when scene == IN_AUCTION.
         Executes exactly 1 batch call (4 text crops) per auction frame.
-        Maintains private shadow observation state without altering production authority.
+        Keeps raw OCR and confidence for the current-round seat projection.
         """
         if frame is None or getattr(frame, "size", 0) == 0:
             self._df_shadow_seat_bids = [None, None, None, None]
@@ -1893,6 +1917,28 @@ class NTEVisionPipeline:
     def _run_df_numeric_shadow(self, frame: Optional[np.ndarray]) -> None:
         """Backward-compatible helper calling _read_df_numeric_batch."""
         self._read_df_numeric_batch(frame)
+
+    def _read_df_auction_round_title(self, frame: Optional[np.ndarray]) -> Optional[int]:
+        """Accept only a high-confidence, whole-token visible auction title."""
+        if frame is None or getattr(frame, "size", 0) == 0:
+            return None
+        self._ensure_ocr()
+        if not self._ocr_engine or not hasattr(self._ocr_engine, "text_rec"):
+            return None
+        crop = ROIScaler.crop_roi(frame, "auction_round_title")
+        if crop.size == 0:
+            return None
+        try:
+            rows, _ = self._ocr_engine.text_rec([crop])
+            if not rows or not rows[0]:
+                return None
+            raw, confidence = rows[0]
+            if float(confidence or 0.0) < 0.90:
+                return None
+            match = re.fullmatch(r"竞拍第([1-5])回合", re.sub(r"\s+", "", str(raw or "")))
+            return int(match.group(1)) if match else None
+        except Exception:
+            return None
 
     def _read_shadow_header_round_timer(self, frame: Optional[np.ndarray]) -> Dict[str, Any]:
         """Shadow dual-read of header_round_timer small ROI for diagnostics/testing without mutating production authority."""
@@ -2449,11 +2495,25 @@ class NTEVisionPipeline:
 
     def _empty_seats(self) -> List[Dict[str, Any]]:
         return [
-            {"slot": 1, "name": None, "bid": 0, "currentBid": None, "isMe": False},
-            {"slot": 2, "name": None, "bid": 0, "currentBid": None, "isMe": False},
-            {"slot": 3, "name": None, "bid": 0, "currentBid": None, "isMe": False},
-            {"slot": 4, "name": None, "bid": 0, "currentBid": None, "isMe": False},
+            {"slot": 1, "name": None, "bid": None, "currentBid": None, "observationStatus": "UNOBSERVED", "isMe": False},
+            {"slot": 2, "name": None, "bid": None, "currentBid": None, "observationStatus": "UNOBSERVED", "isMe": False},
+            {"slot": 3, "name": None, "bid": None, "currentBid": None, "observationStatus": "UNOBSERVED", "isMe": False},
+            {"slot": 4, "name": None, "bid": None, "currentBid": None, "observationStatus": "UNOBSERVED", "isMe": False},
         ]
+
+    def _trusted_df_bid_slots(self, df_bids: List[Optional[int]]) -> set[int]:
+        """A full numeric ROI token with strong OCR confidence can be used now.
+
+        Sparse live captures rarely contain two identical consecutive quotes. The
+        older two-frame gate still applies to weaker readings and panel fallback.
+        """
+        raw_bids = getattr(self, "_df_shadow_seat_bids", [])
+        confs = getattr(self, "_df_shadow_seat_bids_conf", [])
+        return {
+            i + 1 for i, value in enumerate(df_bids[:4])
+            if value is not None and i < len(raw_bids) and raw_bids[i] == value
+            and i < len(confs) and confs[i] >= 0.90
+        }
 
     def _parse_seat_amount(self, compact: str) -> int:
         bid_val = parse_bid_text(compact)
@@ -2723,6 +2783,7 @@ class NTEVisionPipeline:
                 "currentBid": cur_bids.get(s),
                 "observationStatus": "VISIBLE" if cur_bids.get(s) is not None else "UNOBSERVED",
                 "isMe": bool(my_name and s == 4),
+                **(self._slot_bid_evidence.get(s, {}) if cur_bids.get(s) is not None else {}),
             }
             for s in (1, 2, 3, 4)
         ]
@@ -2799,14 +2860,29 @@ class NTEVisionPipeline:
         self,
         df_bids: List[Optional[int]],
         cur_round: int,
+        trusted_slots: Optional[set[int]] = None,
     ) -> Dict[int, Optional[int]]:
         """
         Detection-Free Current-Bid Authority (4D2D1L-L3Z.7) with N=2 Confirmation (4D2D1M-C2.22):
         Applies DF numeric bids to self._slot_cur_bids using N=2 candidate confirmation.
         """
+        trusted_slots = trusted_slots or set()
         for i, val in enumerate(df_bids):
             slot_id = i + 1
-            self._apply_seat_bid_observation(slot_id, val)
+            if slot_id in trusted_slots and val is not None and val >= 0:
+                self._slot_cur_bids[slot_id] = val
+                self._slot_bid_candidates[slot_id] = {"val": None, "count": 0}
+            else:
+                self._apply_seat_bid_observation(slot_id, val)
+            if val is not None and self._slot_cur_bids.get(slot_id) == val:
+                captured_at = getattr(self, "_frame_bid_captured_at", None)
+                if captured_at:
+                    self._slot_bid_evidence[slot_id] = {
+                        "round": cur_round,
+                        "capturedAt": captured_at,
+                        "bidRawText": self._df_shadow_seat_bids_raw_text[i],
+                        "bidOcrConfidence": self._df_shadow_seat_bids_conf[i],
+                    }
 
         if cur_round:
             live = {s: int(b) for s, b in self._slot_cur_bids.items() if b is not None}
@@ -2850,6 +2926,7 @@ class NTEVisionPipeline:
                 self._commit_slot_finals(prev_round, carried)
             self._slot_cur_bids = {1: None, 2: None, 3: None, 4: None}
             self._slot_bid_candidates = {1: {"val": None, "count": 0}, 2: {"val": None, "count": 0}, 3: {"val": None, "count": 0}, 4: {"val": None, "count": 0}}
+            self._slot_bid_evidence = {}
         if cur_round:
             self._seat_round = cur_round
 
@@ -2905,7 +2982,9 @@ class NTEVisionPipeline:
 
         # 4. Apply DF current-bid authority if DF succeeded (overrides OCR current bids)
         if df_seat_success and df_seat_bids is not None and not is_mocked:
-            self._update_seat_current_bids_from_df(df_seat_bids, cur_round)
+            self._update_seat_current_bids_from_df(
+                df_seat_bids, cur_round, trusted_slots=self._trusted_df_bid_slots(df_seat_bids)
+            )
             self._derive_seat_leader_and_context(cur_round, self._slot_cur_bids)
             if not should_run_heavy_panel:
                 panel_bound = True
@@ -2942,6 +3021,7 @@ class NTEVisionPipeline:
                 self._commit_slot_finals(prev_round, carried)
             self._slot_cur_bids = {1: None, 2: None, 3: None, 4: None}
             self._slot_bid_candidates = {1: {"val": None, "count": 0}, 2: {"val": None, "count": 0}, 3: {"val": None, "count": 0}, 4: {"val": None, "count": 0}}
+            self._slot_bid_evidence = {}
         if cur_round:
             self._seat_round = cur_round
 

@@ -340,6 +340,11 @@ def _profile_cache_key(ctx: Dict[str, Any], history_gen: int) -> str:
     payload = {
         "historyGen": history_gen,
         "matchId": ctx.get("matchId") or ctx.get("id"),
+        "observationSessionId": ctx.get("observationSessionId"),
+        "targetHwnd": (ctx.get("target") or {}).get("targetHwnd") if isinstance(ctx.get("target"), dict) else None,
+        "targetPid": (ctx.get("target") or {}).get("targetPid") if isinstance(ctx.get("target"), dict) else None,
+        "round": ctx.get("round") if ctx.get("round") is not None else ctx.get("roundNo"),
+        "factsRevision": ctx.get("factsRevision"),
         "venue": ctx.get("lobbyVenue") or ctx.get("venue"),
         "box": ctx.get("box"),
         "fieldCondition": ctx.get("fieldCondition") or "unknown",
@@ -896,6 +901,10 @@ def _shadow_worker_loop() -> None:
                     publish_event = {
                         "matchId": (pending_ctx or {}).get("matchId") or (pending_ctx or {}).get("id"),
                         "matchGeneration": int((pending_ctx or {}).get("matchGeneration") or 0),
+                        "observationSessionId": (pending_ctx or {}).get("observationSessionId"),
+                        "target": copy.deepcopy((pending_ctx or {}).get("target")),
+                        "round": (pending_ctx or {}).get("round") if (pending_ctx or {}).get("round") is not None else (pending_ctx or {}).get("roundNo"),
+                        "factsRevision": (pending_ctx or {}).get("factsRevision"),
                         "presentationSource": (pending_ctx or {}).get("presentationSource"),
                         "shadowGen": pending_gen,
                         "probabilityProfile": copy.deepcopy(profile),

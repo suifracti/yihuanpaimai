@@ -16,6 +16,7 @@ vm.runInContext(html.slice(start,end),sandbox);
 for(const [payload,label] of [
   [{scene:'OPEN_WORLD',shadowUpdating:false},'等待进入拍卖'],
   [{scene:'IN_AUCTION',shadowUpdating:false},'情报不足'],
+  [{scene:'IN_AUCTION',shadowUpdating:false,solverMissingReason:'缺失会场'},'缺失会场'],
   [{scene:'IN_AUCTION',shadowUpdating:true},'正在计算'],
   [{scene:'SETTLEMENT',shadowUpdating:false},'本局已结算'],
 ]) {
@@ -23,4 +24,20 @@ for(const [payload,label] of [
   vm.runInContext('paintTrustedLiveResult(payload)',sandbox);
   assert(elements.get('topActionBadge').textContent.includes(label));
 }
+const escapeStart = html.indexOf('    function escapeHtml(str)');
+const seatsStart = html.indexOf('    function paintLiveSeatsAndIntel(d)');
+vm.runInContext(html.slice(escapeStart, html.indexOf('\n    function ', escapeStart + 10)), sandbox);
+vm.runInContext(html.slice(seatsStart, html.indexOf('\n    function ', seatsStart + 10)), sandbox);
+sandbox.auctionPayload = {
+  seats: [
+    {slot:1, currentBid:999999}, {slot:2, currentBid:1088888},
+    {slot:3, currentBid:999999}, {slot:4, currentBid:1000000, isMe:true},
+  ],
+  auctionEvidence: {intel:[{round:5, rawText:'本局内所有金色品质藏品的平均价值为85，410。'}]},
+};
+vm.runInContext('paintLiveSeatsAndIntel(auctionPayload)', sandbox);
+for(const amount of ['999999','1088888','1000000']) {
+  assert(elements.get('liveSeats').innerHTML.includes(amount));
+}
+assert(elements.get('liveIntel').innerHTML.includes('85，410'));
 console.log('overlay distinguishes navigation, missing facts, active calculation and settlement: passed');

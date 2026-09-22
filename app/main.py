@@ -930,10 +930,10 @@ def get_current_match_presentation_summary() -> dict:
                 "theoreticalMax": dec.get("theoreticalMax"),
                 "goldInference": formal.get("goldInference"),
                 "componentBreakdown": formal.get("breakdown") or {
-                    "gold": (gold_val or 0) * (facts.get("goldCount") or 1) if gold_val else 0,
-                    "purple": (purple_avg or 3904) * (purple_val or 0) if purple_val else 0,
-                    "red": 0,
-                    "lowTier": 0,
+                    "gold": gold_val * facts["goldCount"] if gold_val is not None and facts.get("goldCount") is not None else None,
+                    "purple": purple_avg * purple_val if purple_avg is not None and purple_val is not None else None,
+                    "red": None,
+                    "lowTier": None,
                 },
                 "costs": costs_from_facts(facts),
             }
@@ -1525,6 +1525,52 @@ def _native_publish_health(event: Dict[str, Any], *, force_main: bool = False) -
     return health
 
 
+def _native_solver_admission(facts: Dict[str, Any]) -> tuple[Optional[Dict[str, Any]], Optional[str]]:
+    """Use the existing catalog translation and observed value facts."""
+    if not facts.get("venueId"):
+        return None, "缺失会场"
+    if facts.get("q") is None:
+        return None, "缺失总高阶件数 Q"
+    if facts.get("goldAvg") is None:
+        return None, "缺失金色均价"
+    if facts.get("entryCost") is None:
+        return None, "缺失入场费"
+    try:
+        if float(facts["q"]) <= 0 or float(facts["goldAvg"]) <= 0:
+            return None, "总高阶件数或金色均价无效"
+    except (TypeError, ValueError):
+        return None, "总高阶件数或金色均价无效"
+    if str(facts.get("fieldCondition") or "unknown") == "unknown":
+        return None, "缺失场地规则"
+    if facts.get("box") and not facts.get("boxId"):
+        return None, "宝箱身份未映射"
+    mapped = dict(solver_context_translation(
+        VENUE_BOX_CATALOG, venue_id=facts.get("venueId"), box_id=facts.get("boxId")
+    ))
+    if mapped.get("status") != "COMPATIBILITY_TRANSLATION":
+        return None, "会场或宝箱不满足正式映射"
+    return mapped, None
+
+
+def _native_project_current_quote(data: Dict[str, Any], match: Any) -> None:
+    """Use accepted current seats while honoring protected manual bid fields."""
+    facts = match.facts
+    accepted_seats = [row for row in data.get("seats", []) if isinstance(row, dict)]
+    current_amounts = [row["currentBid"] for row in accepted_seats if row.get("currentBid") is not None]
+    leader_state = match.field_states.get("leaderBid")
+    my_bid_state = match.field_states.get("myBid")
+    if leader_state and leader_state.protected:
+        data["leaderBid"] = facts.get("leaderBid")
+    else:
+        data["leaderBid"] = max(current_amounts) if current_amounts else None
+    data["currentLeaderBid"] = data["leaderBid"]
+    if my_bid_state and my_bid_state.protected:
+        data["myBid"] = facts.get("myBid")
+    else:
+        my_seat = next((row for row in accepted_seats if row.get("slot") == 4), None)
+        data["myBid"] = my_seat.get("currentBid") if my_seat else None
+
+
 def _native_observation_event(event: Dict[str, Any]) -> None:
     """Consume one versioned native Host line and project it into Main/HUD."""
     global _NATIVE_OBSERVATION_RECEIVER, _NATIVE_OBSERVATION_SESSION
@@ -1629,9 +1675,26 @@ def _native_observation_event(event: Dict[str, Any]) -> None:
             "reason": "native-frame-sequence-invalid",
         }, force_main=True)
         return
-
     from live_match_transport import LiveMatchReceiver
     with _MANUAL_STATE_LOCK:
+        prior = LATEST_PAYLOAD if LATEST_PAYLOAD.get("observationSessionId") == session_id else {}
+        prior_engine_revision = prior.get("engineFactsRevision")
+        current_engine_revision = snapshot.get("factsRevision")
+        try:
+            stale_business = bool(prior) and (
+                (prior_engine_revision is not None and current_engine_revision is not None
+                 and int(current_engine_revision) < int(prior_engine_revision))
+                or (prior.get("capturedAtNs") is not None and capture_ns <= int(prior["capturedAtNs"]))
+                or (prior.get("matchId") == snapshot.get("id") and prior.get("round") is not None
+                    and snapshot.get("roundNo") is not None and int(snapshot["roundNo"]) < int(prior["round"]))
+            )
+        except (TypeError, ValueError):
+            stale_business = True
+        if stale_business:
+            # A late frame is discarded, not a live-source failure: reporting
+            # ERROR here would invalidate the newer frame already on screen.
+            log_stage("PRESENTATION:NATIVE", f"stale business result dropped sequence={sequence} session={session_id}")
+            return
         if session_id != _NATIVE_OBSERVATION_SESSION:
             _NATIVE_OBSERVATION_SESSION = session_id
             _NATIVE_OBSERVATION_SEQUENCE = 0
@@ -1674,22 +1737,18 @@ def _native_observation_event(event: Dict[str, Any]) -> None:
             scene = str(perception.get("scene") or context.get("scene") or "UNKNOWN")
             in_auction = bool(perception.get("inAuction") or context.get("inAuction") or scene == "IN_AUCTION")
             bids = perception.get("bids") if isinstance(perception.get("bids"), list) else []
-            seats = context.get("seats") if isinstance(context.get("seats"), list) else []
-            if not seats and bids:
-                seats = [
-                    {"slot": row.get("seat"), "currentBid": row.get("price"), "bid": row.get("price"),
-                     "isWinning": row.get("isWinning")}
-                    for row in bids if isinstance(row, dict)
-                ]
+            seats = [dict(row) for row in context.get("seats", []) if isinstance(row, dict)] if isinstance(context.get("seats"), list) else []
+            by_slot = {row.get("slot"): row for row in seats}
+            for row in bids:
+                if not isinstance(row, dict) or row.get("seat") not in (1, 2, 3, 4):
+                    continue
+                seat = by_slot.setdefault(row["seat"], {"slot": row["seat"]})
+                seat.update(currentBid=row.get("price"), bid=row.get("price"), observationStatus="VISIBLE")
+            seats = list(by_slot.values())
             intel = perception.get("intel") if isinstance(perception.get("intel"), list) else context.get("intelCardReadings")
             if not isinstance(intel, list):
                 intel = []
             facts = CURRENT_MATCH.facts
-            leader_bid = context.get("currentLeaderBid")
-            if leader_bid is None:
-                leader_bid = context.get("leaderBid")
-            if leader_bid is None:
-                leader_bid = facts.get("leaderBid")
             round_no = context.get("round") if context.get("round") is not None else facts.get("roundNo")
             data: Dict[str, Any] = {
                 key: value for key, value in context.items()
@@ -1714,14 +1773,17 @@ def _native_observation_event(event: Dict[str, Any]) -> None:
                 "isSettlement": scene == "SETTLEMENT" or bool(context.get("isSettlement")),
                 "round": round_no,
                 "roundNo": round_no,
-                "leaderBid": leader_bid,
-                "currentLeaderBid": leader_bid,
+                "leaderBid": None,
+                "currentLeaderBid": None,
                 "bids": bids,
                 "seats": seats,
                 "intel": intel,
                 "intelObservations": context.get("intelObservations") or intel,
                 "intelCardReadings": context.get("intelCardReadings") or intel,
                 "frameSequence": sequence,
+                "matchId": CURRENT_MATCH.id,
+                "factsRevision": CURRENT_MATCH.facts_revision,
+                "engineFactsRevision": snapshot.get("factsRevision"),
                 "capturedAtNs": capture_ns,
                 "capturedAtUtc": frame.get("capturedAtUtc"),
                 "freshnessMs": frame.get("freshnessMs"),
@@ -1751,6 +1813,48 @@ def _native_observation_event(event: Dict[str, Any]) -> None:
             data["freeIntelStatus"] = free_intel_status(facts)
             data["sessionAccounting"] = accounting_from_facts(facts)
             _sync_payload_with_canonical_facts(data, CURRENT_MATCH)
+            # Project accepted CurrentMatch seats, not raw OCR over a protected
+            # manual correction. Null current seats cannot revive an old round.
+            _native_project_current_quote(data, CURRENT_MATCH)
+            previous_identity = (
+                LATEST_PAYLOAD.get("observationSessionId"), LATEST_PAYLOAD.get("round"),
+                LATEST_PAYLOAD.get("factsRevision"),
+            )
+            current_identity = (session_id, round_no, CURRENT_MATCH.facts_revision)
+            if previous_identity != current_identity:
+                ACTIVE_SNAPSHOT_HOLDER.clear()
+            mapped, missing_reason = _native_solver_admission(facts)
+            data.update(
+                predictionSnapshot=None, frozenPrediction=None, probabilityProfile=None,
+                solverStatus="incomplete", solverMissingReason=missing_reason,
+                shadowUpdating=False,
+            )
+            if in_auction and mapped is not None:
+                from live_shadow import attach_live_shadow
+                solver_ctx = dict(data)
+                solver_ctx.update(
+                    venue=mapped.get("venue"), lobbyVenue=mapped.get("venue"),
+                    box=mapped.get("box"), avg=facts.get("goldAvg"),
+                    presentationSource="live_vision",
+                )
+                shadow = attach_live_shadow(solver_ctx, db_path=CANONICAL_DATABASE)
+                for key in ("predictionSnapshot", "frozenPrediction", "probabilityProfile", "shadowMeta", "shadowStates", "shadowUpdating"):
+                    data[key] = shadow.get(key)
+                snapshot_result = shadow.get("predictionSnapshot")
+                if isinstance(snapshot_result, dict):
+                    data["solverStatus"] = (snapshot_result.get("status") or {}).get("solverStatus") or "incomplete"
+                    if data["solverStatus"] == "valid":
+                        ACTIVE_SNAPSHOT_HOLDER.update(
+                            CURRENT_MATCH.id, snapshot=snapshot_result,
+                            frozen_prediction=shadow.get("frozenPrediction"),
+                        )
+                    else:
+                        data["predictionSnapshot"] = None
+                        data["frozenPrediction"] = None
+                        data["probabilityProfile"] = None
+                        data["solverMissingReason"] = "求解未得到可发布的正式结果"
+                elif shadow.get("shadowUpdating"):
+                    data["solverStatus"] = "pending"
             data["overlayState"] = build_canonical_overlay_state(CURRENT_MATCH, data)
             data["currentMatch"] = get_current_match_presentation_summary()
             LATEST_VISION_PAYLOAD.clear()
@@ -1830,11 +1934,29 @@ def _publish_live_shadow_event(event: Dict[str, Any]) -> None:
         or ""
     )
     dedupe_key = f"{match_id}:{prediction_id}"
-    with _SHADOW_PRESENTATION_LOCK:
-        if _SHADOW_PRESENTATION_KEYS.get(match_id) == dedupe_key:
-            return
-        _SHADOW_PRESENTATION_KEYS[match_id] = dedupe_key
     with _MANUAL_STATE_LOCK:
+        payload = globals().get("LATEST_PAYLOAD")
+        if not isinstance(payload, dict) or payload.get("scene") != "IN_AUCTION":
+            return
+        if payload.get("observationProfile") == "native-readonly-v1":
+            if not isinstance(snapshot, dict) or (snapshot.get("status") or {}).get("solverStatus") != "valid":
+                return
+            target = payload.get("target") if isinstance(payload.get("target"), dict) else {}
+            event_target = event.get("target") if isinstance(event.get("target"), dict) else {}
+            if (
+                event.get("observationSessionId") != payload.get("observationSessionId")
+                or event.get("factsRevision") != payload.get("factsRevision")
+                or event.get("round") != payload.get("round")
+                or event.get("matchGeneration") != payload.get("matchGeneration")
+                or event_target.get("targetHwnd") != target.get("targetHwnd")
+                or event_target.get("targetPid") != target.get("targetPid")
+                or payload.get("nativeInvalidated")
+            ):
+                return
+        with _SHADOW_PRESENTATION_LOCK:
+            if _SHADOW_PRESENTATION_KEYS.get(match_id) == dedupe_key:
+                return
+            _SHADOW_PRESENTATION_KEYS[match_id] = dedupe_key
         merged = dict(payload)
         shadow_meta = event.get("shadowMeta") or {
             "cache": "completed",
@@ -1897,6 +2019,10 @@ def _publish_live_shadow_event(event: Dict[str, Any]) -> None:
                 }
         if isinstance(snapshot, dict):
             ACTIVE_SNAPSHOT_HOLDER.update(match_id, snapshot=snapshot, frozen_prediction=event.get("frozenPrediction"))
+            merged["solverStatus"] = (snapshot.get("status") or {}).get("solverStatus") or "incomplete"
+            merged["solverMissingReason"] = None
+        if merged.get("observationProfile") == "native-readonly-v1":
+            merged["currentMatch"] = get_current_match_presentation_summary()
         LATEST_PAYLOAD.update(merged)
     loop = WS_EVENT_LOOP
     if loop is not None and loop.is_running():
@@ -3736,7 +3862,7 @@ def build_in_auction_hud_payload(ctx: Dict[str, Any], *, compute_shadow: bool = 
     seats = ctx.get("seats") or []
     opponents = ctx.get("opponents")
     if opponents is None:
-        opponents = [{"slot": s.get("slot"), "name": s.get("name"), "bid": s.get("bid") or 0} for s in seats if s.get("name")]
+        opponents = [{"slot": s.get("slot"), "name": s.get("name"), "bid": s.get("currentBid")} for s in seats if s.get("name")]
     # Shadow consumes the context object, not the later presentation payload.
     # Carry the already-authoritative live cost contract into that context when
     # the vision path omitted it.  A missing entry cost remains None; the
@@ -3755,9 +3881,21 @@ def build_in_auction_hud_payload(ctx: Dict[str, Any], *, compute_shadow: bool = 
         ctx["predictionSnapshot"] = snap
         ctx["frozenPrediction"] = frozen
     shadow_updating = bool(shadowed.get("shadowUpdating"))
+    solver_status = ((snap.get("status") or {}).get("solverStatus") if isinstance(snap, dict) else None)
+    if solver_status is None:
+        solver_status = "pending" if shadow_updating else "incomplete"
+    solver_missing_reason = None
+    if solver_status == "incomplete":
+        if ctx.get("q") is None:
+            solver_missing_reason = "缺失总高阶件数 Q"
+        elif ctx.get("goldAvg") is None and ctx.get("avg") is None:
+            solver_missing_reason = "缺失金色均价"
+        else:
+            solver_missing_reason = (shadowed.get("shadowMeta") or {}).get("cache") or "求解结果未就绪"
     purple_count = ctx.get("purpleCount") if ctx.get("purpleCount") is not None else ctx.get("purple")
     payload = {
-        "solverStatus": "valid" if int(round_no or 0) > 0 else "incomplete",
+        "solverStatus": solver_status,
+        "solverMissingReason": solver_missing_reason,
         "scene": ctx.get("scene") or "IN_AUCTION",
         "sceneLabel": ctx.get("sceneLabel") or "局内",
         "inAuction": True,

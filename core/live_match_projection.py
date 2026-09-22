@@ -71,6 +71,7 @@ def project_four_seats(
     seats: Optional[List[Any]] = None,
     *,
     evidence: Optional[Dict[str, Any]] = None,
+    current_round: Optional[int] = None,
 ) -> List[Dict[str, Any]]:
     """Always return four seats. Unknown names stay None; 0 remains 0."""
     source = seats if isinstance(seats, list) and seats else None
@@ -79,6 +80,9 @@ def project_four_seats(
         rows = evidence.get("bids") or []
         if rows:
             final_round = rows[-1].get("round") if isinstance(rows[-1], dict) else None
+            if current_round is not None and final_round != current_round:
+                rows = []
+        if rows:
             by_slot_ev = {}
             for r in rows:
                 if not isinstance(r, dict):
@@ -131,7 +135,7 @@ def project_four_seats(
         name = str(name).strip() if name not in (None, "") else None
         shown = _shown_bid(raw)
         status = raw.get("observationStatus")
-        if shown is None and ev_raw:
+        if shown is None and not raw and ev_raw:
             ev_shown = _shown_bid(ev_raw)
             if ev_shown is not None:
                 shown = ev_shown
@@ -145,6 +149,10 @@ def project_four_seats(
             "currentBid": shown,
             "observationStatus": status,
         })
+        if shown is not None:
+            for key in ("round", "capturedAt", "bidRawText", "bidOcrConfidence"):
+                if key in raw:
+                    seat[key] = raw[key]
     return out
 
 
@@ -165,14 +173,20 @@ def project_intel(
         if not isinstance(row, dict):
             continue
         lines = row.get("lines") or []
+        if not lines and (row.get("rawText") or row.get("text")):
+            lines = [{"text": row.get("rawText") or row.get("text")}]
         texts = [text for text in (_intel_line_text(line) for line in lines) if text]
         if not texts:
             continue
         observations.append({
             "round": row.get("round"),
-            "capturedAt": row.get("capturedAt"),
+            "capturedAt": row.get("capturedAt") or row.get("frameId"),
             "text": "；".join(texts),
             "lines": lines,
+            "rawText": row.get("rawText") or "；".join(texts),
+            "cardSource": row.get("cardSource"),
+            "field": row.get("field"),
+            "value": row.get("value"),
             "participation": "recorded",
         })
     structured: List[Dict[str, Any]] = []
@@ -210,11 +224,12 @@ def project_bidding_summary(
     facts = facts if isinstance(facts, dict) else {}
     ctx = ctx if isinstance(ctx, dict) else {}
     evidence = facts.get("auctionEvidence") or ctx.get("auctionEvidence")
+    round_no = ctx.get("round") if ctx.get("round") is not None else facts.get("roundNo")
     seats = project_four_seats(
         ctx.get("seats") or facts.get("seats"),
         evidence=evidence if isinstance(evidence, dict) else None,
+        current_round=round_no,
     )
-    round_no = ctx.get("round") or facts.get("roundNo") or 1
     leader = ctx.get("leaderName") or facts.get("leaderName")
     return {
         "seats": seats,
