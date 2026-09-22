@@ -259,6 +259,7 @@ internal static class NativeObservationService
             EmitStatus(sessionId, "ERROR", "native-observation-failed", new
             {
                 error = $"{ex.GetType().Name}: {ex.Message}",
+                stackTrace = ex.StackTrace,
                 inputActions = false,
                 formalHistoryWriter = false,
             });
@@ -302,7 +303,8 @@ internal static class NativeObservationService
                 ["freshnessMs"] = Math.Max(0.0, (ProtocolClock.NowNs() - frame.CaptureTimestampNs) / 1_000_000.0),
                 ["rawFramePath"] = rawFramePath,
             },
-            ["perception"] = transfer.GetValueOrDefault("perceptionPayload") as JsonObject,
+            // The received envelope retains ownership of its payload node.
+            ["perception"] = (transfer.GetValueOrDefault("perceptionPayload") as JsonObject)?.DeepClone(),
             ["currentMatch"] = state?["currentMatch"]?.DeepClone(),
             ["pipelineContext"] = state?["pipelineContext"]?.DeepClone(),
             ["lastFrame"] = state?["lastFrame"]?.DeepClone(),
