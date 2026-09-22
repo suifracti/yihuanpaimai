@@ -111,6 +111,14 @@ internal static class NativeObservationService
                 engineBusinessReady = handshake.EngineBusinessReady,
                 generation = session.GenerationId,
                 geometry = ProtocolConstants.FixedGeometry(),
+                captureItem = new { width = capture.CaptureItemWidth, height = capture.CaptureItemHeight },
+                customerArea = new
+                {
+                    width = capture.Width,
+                    height = capture.Height,
+                    offsetX = capture.ClientOffsetX,
+                    offsetY = capture.ClientOffsetY,
+                },
                 inputActions = false,
                 formalHistoryWriter = false,
             });
@@ -234,9 +242,10 @@ internal static class NativeObservationService
                     afterEngine,
                     frame,
                     transfer,
-                    state,
-                    acceptedFrames,
-                    Path.Combine(workDir, "first-frame.bmp"));
+                state,
+                acceptedFrames,
+                    Path.Combine(workDir, "first-frame.bmp"),
+                    capture);
                 Thread.Sleep(intervalMs);
             }
 
@@ -263,7 +272,8 @@ internal static class NativeObservationService
         IReadOnlyDictionary<string, object?> transfer,
         JsonObject? state,
         int acceptedFrames,
-        string rawFramePath)
+        string rawFramePath,
+        WgcWindowCapture capture)
     {
         var line = new JsonObject
         {
@@ -284,6 +294,10 @@ internal static class NativeObservationService
                 ["width"] = frame.Width,
                 ["height"] = frame.Height,
                 ["stride"] = frame.Stride,
+                ["captureItemWidth"] = capture.CaptureItemWidth,
+                ["captureItemHeight"] = capture.CaptureItemHeight,
+                ["clientOffsetX"] = capture.ClientOffsetX,
+                ["clientOffsetY"] = capture.ClientOffsetY,
                 ["freshnessMs"] = Math.Max(0.0, (ProtocolClock.NowNs() - frame.CaptureTimestampNs) / 1_000_000.0),
                 ["rawFramePath"] = rawFramePath,
             },

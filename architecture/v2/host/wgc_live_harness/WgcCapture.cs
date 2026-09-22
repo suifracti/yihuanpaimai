@@ -23,9 +23,10 @@ internal sealed record CapturedBgraFrame(
     string CapturedAtUtc);
 
 /// <summary>
-/// Minimal WGC -> D3D11 readback for the V2-3 live probe. It deliberately owns
-/// no input path and does not resize frames: the frozen V2-0 geometry is the
-/// acceptance boundary.
+/// Minimal WGC -> D3D11 readback for the Native observation profile. It
+/// deliberately owns no input path and never resizes pixels. WGC may expose a
+/// top-level HWND including non-client chrome; the explicit client-area map
+/// below removes only those pixels before the result enters fixed-v1 MMF.
 /// </summary>
 internal sealed class WgcWindowCapture : IDisposable
 {
@@ -44,10 +45,16 @@ internal sealed class WgcWindowCapture : IDisposable
     private readonly Direct3D11CaptureFramePool _framePool;
     private readonly GraphicsCaptureSession _session;
     private readonly AutoResetEvent _frameArrived = new(false);
+    private readonly IntPtr _hwnd;
+    private readonly ClientAreaMapping _clientArea;
     private bool _disposed;
 
     public int Width { get; }
     public int Height { get; }
+    public int CaptureItemWidth { get; }
+    public int CaptureItemHeight { get; }
+    public int ClientOffsetX => _clientArea.X;
+    public int ClientOffsetY => _clientArea.Y;
 
     public WgcWindowCapture(IntPtr hwnd)
     {
@@ -56,14 +63,19 @@ internal sealed class WgcWindowCapture : IDisposable
             throw new InvalidOperationException("WGC target HWND is zero");
         }
 
+        _hwnd = hwnd;
         var stage = "create-d3d11-device";
         try
         {
             (_device, _context) = CreateD3D11Device();
             stage = "create-capture-item";
             _item = CreateCaptureItem(hwnd);
-            Width = _item.Size.Width;
-            Height = _item.Size.Height;
+            CaptureItemWidth = _item.Size.Width;
+            CaptureItemHeight = _item.Size.Height;
+            ValidateCaptureSourceGeometry(CaptureItemWidth, CaptureItemHeight);
+            _clientArea = ResolveClientAreaMapping(hwnd, CaptureItemWidth, CaptureItemHeight);
+            Width = _clientArea.Width;
+            Height = _clientArea.Height;
             ValidateFixedV1Geometry(Width, Height);
 
             stage = "create-winrt-direct3d-device";
@@ -109,12 +121,19 @@ internal sealed class WgcWindowCapture : IDisposable
         }
 
         var size = frame.ContentSize;
-        ValidateFixedV1Geometry(size.Width, size.Height);
-        if (size.Width != Width || size.Height != Height)
+        ValidateCaptureSourceGeometry(size.Width, size.Height);
+        if (size.Width != CaptureItemWidth || size.Height != CaptureItemHeight)
         {
             throw new InvalidOperationException(
-                $"WGC content size changed from {Width}x{Height} to {size.Width}x{size.Height}; " +
-                "fixed-v1 probe fails closed instead of resizing or changing the contract");
+                $"WGC capture item size changed from {CaptureItemWidth}x{CaptureItemHeight} " +
+                $"to {size.Width}x{size.Height}; client-area map is no longer stable");
+        }
+        var currentClientArea = ResolveClientAreaMapping(_hwnd, size.Width, size.Height);
+        if (currentClientArea != _clientArea)
+        {
+            throw new InvalidOperationException(
+                $"WGC client-area map changed from {_clientArea} to {currentClientArea}; " +
+                "fail-closed instead of publishing a frame with uncertain coordinates");
         }
 
         using var sourceTexture = GetTexture(frame.Surface);
@@ -124,17 +143,18 @@ internal sealed class WgcWindowCapture : IDisposable
             throw new InvalidOperationException(
                 $"WGC surface format {sourceDescription.Format} is not BGRA8");
         }
-        if (sourceDescription.Width != (uint)Width || sourceDescription.Height != (uint)Height)
+        if (sourceDescription.Width != (uint)CaptureItemWidth
+            || sourceDescription.Height != (uint)CaptureItemHeight)
         {
             throw new InvalidOperationException(
                 $"WGC texture description is {sourceDescription.Width}x{sourceDescription.Height}, " +
-                $"expected {Width}x{Height}");
+                $"expected capture item {CaptureItemWidth}x{CaptureItemHeight}");
         }
 
         var stagingDescription = new Texture2DDescription(
             Format.B8G8R8A8_UNorm,
-            (uint)Width,
-            (uint)Height,
+            (uint)CaptureItemWidth,
+            (uint)CaptureItemHeight,
             1,
             1,
             BindFlags.None,
@@ -154,7 +174,9 @@ internal sealed class WgcWindowCapture : IDisposable
             for (var y = 0; y < Height; y++)
             {
                 Marshal.Copy(
-                    IntPtr.Add(mapped.DataPointer, checked(y * (int)mapped.RowPitch)),
+                    IntPtr.Add(
+                        mapped.DataPointer,
+                        checked(((_clientArea.Y + y) * (int)mapped.RowPitch) + (_clientArea.X * 4))),
                     pixels,
                     checked(y * stride),
                     stride);
@@ -299,6 +321,86 @@ internal sealed class WgcWindowCapture : IDisposable
         }
     }
 
+    private static void ValidateCaptureSourceGeometry(int width, int height)
+    {
+        // The fixed protocol applies to the mapped customer-area payload. A
+        // small bounded allowance is permitted only for top-level non-client
+        // chrome; it is never sent through MMF and never changes the protocol.
+        var sourceMaxWidth = checked(ProtocolConstants.MaxFrameWidth + 256);
+        var sourceMaxHeight = checked(ProtocolConstants.MaxFrameHeight + 256);
+        if (width <= 0 || height <= 0 || width > sourceMaxWidth || height > sourceMaxHeight)
+        {
+            throw new InvalidOperationException(
+                $"WGC capture item is {width}x{height}, outside bounded customer-area " +
+                $"mapping capacity {sourceMaxWidth}x{sourceMaxHeight}; fail-closed");
+        }
+    }
+
+    private static ClientAreaMapping ResolveClientAreaMapping(
+        IntPtr hwnd,
+        int captureWidth,
+        int captureHeight)
+    {
+        if (!GetClientRect(hwnd, out var clientRect))
+        {
+            throw new InvalidOperationException(
+                $"GetClientRect failed for HWND {hwnd}");
+        }
+
+        var clientWidth = clientRect.Right - clientRect.Left;
+        var clientHeight = clientRect.Bottom - clientRect.Top;
+        if (clientWidth <= 0 || clientHeight <= 0)
+        {
+            throw new InvalidOperationException(
+                $"target client area is {clientWidth}x{clientHeight}; fail-closed");
+        }
+        ValidateFixedV1Geometry(clientWidth, clientHeight);
+
+        // A borderless/fullscreen item may already be exactly the client area.
+        if (captureWidth == clientWidth && captureHeight == clientHeight)
+        {
+            return new ClientAreaMapping(0, 0, clientWidth, clientHeight);
+        }
+
+        var clientOrigin = new Point32();
+        if (!ClientToScreen(hwnd, ref clientOrigin))
+        {
+            throw new InvalidOperationException(
+                $"ClientToScreen failed for HWND {hwnd}");
+        }
+
+        var bounds = new List<Rect32>();
+        if (GetWindowRect(hwnd, out var windowRect))
+        {
+            bounds.Add(windowRect);
+        }
+        if (DwmGetWindowAttribute(
+                hwnd,
+                DwmExtendedFrameBounds,
+                out var extendedBounds,
+                (uint)Marshal.SizeOf<Rect32>()) == 0)
+        {
+            bounds.Add(extendedBounds);
+        }
+
+        foreach (var candidate in bounds.Distinct())
+        {
+            var x = clientOrigin.X - candidate.Left;
+            var y = clientOrigin.Y - candidate.Top;
+            if (x >= 0 && y >= 0
+                && x + clientWidth <= captureWidth
+                && y + clientHeight <= captureHeight)
+            {
+                return new ClientAreaMapping(x, y, clientWidth, clientHeight);
+            }
+        }
+
+        throw new InvalidOperationException(
+            $"cannot map client area {clientWidth}x{clientHeight} at screen " +
+            $"({clientOrigin.X},{clientOrigin.Y}) into WGC item {captureWidth}x{captureHeight}; " +
+            "fail-closed without resizing or guessing coordinates");
+    }
+
     public void Dispose()
     {
         if (_disposed)
@@ -333,6 +435,32 @@ internal sealed class WgcWindowCapture : IDisposable
 
     [DllImport("combase.dll")]
     private static extern int WindowsDeleteString(IntPtr hstring);
+
+    private const uint DwmExtendedFrameBounds = 9;
+
+    [DllImport("user32.dll", SetLastError = true)]
+    private static extern bool GetClientRect(IntPtr hwnd, out Rect32 rect);
+
+    [DllImport("user32.dll", SetLastError = true)]
+    private static extern bool ClientToScreen(IntPtr hwnd, ref Point32 point);
+
+    [DllImport("user32.dll", SetLastError = true)]
+    private static extern bool GetWindowRect(IntPtr hwnd, out Rect32 rect);
+
+    [DllImport("dwmapi.dll", PreserveSig = true)]
+    private static extern int DwmGetWindowAttribute(
+        IntPtr hwnd,
+        uint attribute,
+        out Rect32 value,
+        uint valueSize);
+
+    [StructLayout(LayoutKind.Sequential)]
+    private readonly record struct Point32(int X, int Y);
+
+    [StructLayout(LayoutKind.Sequential)]
+    private readonly record struct Rect32(int Left, int Top, int Right, int Bottom);
+
+    private readonly record struct ClientAreaMapping(int X, int Y, int Width, int Height);
 
     [ComImport]
     [Guid("3628E81B-3CAC-4C60-B7F4-23CE0E0C3356")]
