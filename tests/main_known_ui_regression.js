@@ -3,8 +3,10 @@ class Element {
   constructor() { this.value=''; this.dataset={}; this.hidden=true; this.handlers={}; this.children=[]; this.style={}; }
   addEventListener(name, fn) { (this.handlers[name] ||= []).push(fn); }
   fire(name, event={}) { for(const fn of this.handlers[name] || []) fn(event); }
-  set innerHTML(value) { this.html=value; this.children=[...value.matchAll(/class="suggest-item known-suggest-item" data-index="(\d+)"/g)].map(m=>{ const e=new Element();e.dataset.index=m[1];return e; }); }
+  set innerHTML(value) { this.html=value; this._textContent=''; this.children=[...value.matchAll(/class="suggest-item known-suggest-item" data-index="(\d+)"/g)].map(m=>{ const e=new Element();e.dataset.index=m[1];return e; }); }
   get innerHTML() { return this.html || ''; }
+  set textContent(value) { this._textContent=String(value ?? ''); this.html=''; this.children=[]; }
+  get textContent() { return this._textContent || ''; }
   querySelectorAll(selector) {
     if (selector === '.suggest-item') return this.children;
     const result=[];
@@ -25,6 +27,33 @@ const sandbox={console,setTimeout,clearTimeout,URLSearchParams,document:{addEven
 sandbox.window.AuctionEngineV06=require('../core/auction_engine_v06.js');
 vm.createContext(sandbox);
 vm.runInContext(fs.readFileSync(require.resolve('../core/main_window.js'),'utf8'),sandbox);
+const liveSeatsGrid=new Element(), liveIntelTimeline=new Element();
+elements.set('match-seats-grid',liveSeatsGrid);
+elements.set('match-intel-timeline',liveIntelTimeline);
+const observedAuction={
+  observationProfile:'native-readonly-v1', observationStatus:'FRAME',
+  visionHealth:{profile:'native-readonly-v1',status:'READY',stage:'native-frame'},
+  bidding:{hiddenBids:false,seats:[
+    {slot:1,name:'旅行的意义',currentBid:450000},
+    {slot:2,name:'何海良',currentBid:708520},
+    {slot:3,name:'枫',currentBid:400000},
+    {slot:4,name:'PLAYER_LOCAL',currentBid:0,isMe:true}
+  ]},
+  publicIntel:{timeline:{observations:[
+    {round:3,participation:'recorded',text:'金品均价仪器 本局内所有金色品质藏品的平均价值为40，615。'}
+  ]}}
+};
+sandbox.observedAuction=observedAuction;
+vm.runInContext('renderCurrentAuctionDetails(observedAuction)',sandbox);
+for(const amount of ['450,000','708,520','400,000','>0<']) assert(liveSeatsGrid.innerHTML.includes(amount),amount);
+assert(liveSeatsGrid.innerHTML.includes('何海良'));
+assert(liveSeatsGrid.innerHTML.includes('>0<'));
+assert(liveIntelTimeline.innerHTML.includes('40，615'));
+vm.runInContext("renderCurrentAuctionDetails({...observedAuction,observationStatus:'PAUSED',visionHealth:{profile:'native-readonly-v1',status:'ERROR',stage:'native-paused'}})",sandbox);
+assert(liveSeatsGrid.textContent.includes('观察已暂停'));
+assert(!liveSeatsGrid.innerHTML.includes('708,520'));
+assert(liveIntelTimeline.textContent.includes('保留在本局草稿中'));
+console.log('live Main shows current four-seat bids and raw intel only for a fresh Native frame, then hides paused values: passed');
 vm.runInContext('syncMatchFacts=()=>{}; setupKnownItemsAutocomplete();',sandbox);
 const input=elements.get('match-input-known-gold'), suggestions=elements.get('match-suggest-gold');
 input.value='电话';input.fire('input');

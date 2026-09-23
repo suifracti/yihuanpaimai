@@ -1908,8 +1908,66 @@ function renderManualCommandReceipt(result) {
   statusEl.hidden = !statusEl.textContent;
 }
 
+function renderCurrentAuctionDetails(currentMatch) {
+  const health = currentMatch.visionHealth || {};
+  const isNative = currentMatch.observationProfile === "native-readonly-v1" || health.profile === "native-readonly-v1";
+  const nativeFrameIsLive = !isNative || (
+    currentMatch.observationStatus === "FRAME"
+    && health.status === "READY"
+    && health.stage === "native-frame"
+  );
+  const bidding = currentMatch.bidding || {};
+  const seatsGrid = document.getElementById("match-seats-grid");
+  if (seatsGrid) {
+    if (!nativeFrameIsLive) {
+      const waitingForFrame = isNative && ["native-ready", "native-starting", "native-refreshing"].includes(health.stage);
+      seatsGrid.textContent = waitingForFrame
+        ? "等待当前局的新鲜观察帧；当前出价暂不可用"
+        : "观察已暂停；上一有效帧的出价不作为当前出价";
+    } else if (!Array.isArray(bidding.seats) || bidding.seats.length === 0) {
+      seatsGrid.textContent = "暂无当前出价观察";
+    } else {
+      seatsGrid.innerHTML = bidding.seats.map(seat => {
+        const slot = seat.slot || seat.seat;
+        const bid = seat.currentBid != null ? seat.currentBid : seat.bid;
+        const label = escapeHtml(seat.name || `座位 ${slot}`);
+        const bidText = bidding.hiddenBids ? "金额隐藏" : bid != null ? formatCurrency(bid) : "未识别";
+        return `
+        <div class="seat-pill ${seat.isMe ? "is-me" : ""}">
+          <span class="seat-name">${label}</span>
+          <span class="seat-bid">${escapeHtml(bidText)}</span>
+        </div>`;
+      }).join("");
+    }
+  }
+
+  const intelEl = document.getElementById("match-intel-timeline");
+  if (intelEl) {
+    if (!nativeFrameIsLive) {
+      intelEl.textContent = isNative
+        ? "观察已暂停；已采集情报保留在本局草稿中"
+        : "暂无情报原文";
+    } else {
+      const timeline = currentMatch.publicIntel?.timeline || {};
+      const rows = Array.isArray(timeline.observations) ? timeline.observations : [];
+      if (!rows.length) {
+        intelEl.textContent = "暂无情报原文";
+      } else {
+        intelEl.innerHTML = rows.map(row => {
+          const mark = row.participation === "valuation" ? "已参与估价" : row.participation === "pending" ? "待解析" : "仅记录";
+          const round = row.round != null ? `第 ${row.round} 回合` : "";
+          return `<p class="intel-line">${escapeHtml(round)} · ${mark} · ${escapeHtml(row.text || row.rawText || "")}</p>`;
+        }).join("");
+      }
+    }
+  }
+}
+
 function renderMatch(currentMatch, overlayVisible) {
   if (!currentMatch) return;
+  // Keep live auction facts visible even if an unrelated details widget fails
+  // later in this large renderer. Native values are hidden until a fresh FRAME.
+  renderCurrentAuctionDetails(currentMatch);
   const playerNameInput = document.getElementById('player-display-name');
   const trialLabel = document.getElementById('isolated-trial-label');
   if (trialLabel) trialLabel.hidden = currentMatch.isolatedTrial !== true;
@@ -2470,33 +2528,6 @@ function renderMatch(currentMatch, overlayVisible) {
   freeIntel.textContent = currentMatch.freeIntelStatus?.message || "";
   const bidding = currentMatch.bidding || {};
   document.getElementById("match-dark-controls").hidden = !bidding.hiddenBids && !["match-input-private-bid-cap", "match-input-bid-action-count"].some(id => document.getElementById(id).getAttribute("aria-invalid") === "true");
-  const seatsGrid = document.getElementById("match-seats-grid");
-  if (seatsGrid && bidding.seats) {
-    seatsGrid.innerHTML = bidding.seats.map(s => {
-      const slot = s.slot || s.seat;
-      const bid = s.currentBid != null ? s.currentBid : s.bid;
-      const label = s.name || `座位 ${slot}`;
-      return `
-      <div class="seat-pill ${s.isMe ? "is-me" : ""}">
-        <span class="seat-name">${label}</span>
-        <span class="seat-bid">${bidding.hiddenBids ? "金额隐藏" : bid != null ? formatCurrency(bid) : "—"}</span>
-      </div>`;
-    }).join("");
-  }
-  const intelEl = document.getElementById("match-intel-timeline");
-  if (intelEl) {
-    const timeline = (currentMatch.publicIntel && currentMatch.publicIntel.timeline) || {};
-    const rows = timeline.observations || [];
-    if (!rows.length) {
-      intelEl.textContent = "暂无情报原文";
-    } else {
-      intelEl.innerHTML = rows.map((row) => {
-        const mark = row.participation === "valuation" ? "已参与估价" : row.participation === "pending" ? "待解析" : "仅记录";
-        const round = row.round != null ? `第 ${row.round} 回合` : "";
-        return `<p class="intel-line">${round} · ${mark} · ${row.text || ""}</p>`;
-      }).join("");
-    }
-  }
 
   // Section F: Settlement & Warehouse
   const settle = currentMatch.settlement;
