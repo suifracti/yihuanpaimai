@@ -23,6 +23,9 @@ for(const [payload,label] of [
   sandbox.payload=payload;
   vm.runInContext('paintTrustedLiveResult(payload)',sandbox);
   assert(elements.get('topActionBadge').textContent.includes(label));
+  if (payload.solverMissingReason) {
+    assert.equal(elements.get('actionReason').textContent, `暂不生成出价建议：${payload.solverMissingReason}`);
+  }
 }
 const escapeStart = html.indexOf('    function escapeHtml(str)');
 const seatsStart = html.indexOf('    function paintLiveSeatsAndIntel(d)');
