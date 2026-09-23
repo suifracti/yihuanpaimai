@@ -54,6 +54,24 @@ class LiveMatchTransportTests(unittest.TestCase):
         self.assertTrue(settled["nativeInvalidated"])
         self.assertEqual(settled["solverMissingReason"], "本局已结算，实时建议已停止")
 
+    def test_native_match_summary_error_fallback_never_invents_rule_or_fee(self):
+        current = CurrentMatch()
+        with patch.object(main, "CURRENT_MATCH", current), \
+             patch.object(main, "native_observation_enabled", return_value=True), \
+             patch.object(main, "_current_match_solver_sidecar", side_effect=RuntimeError("projection failure")):
+            payload = main.get_current_match_presentation_summary()
+
+        self.assertEqual(payload["solverStatus"], "paused")
+        self.assertIn("建议已暂停", payload["solverMissingReason"])
+        self.assertIsNone(payload["environment"]["fieldCondition"])
+        self.assertEqual(payload["environment"]["fieldConditionName"], "待确认规则")
+        self.assertIsNone(payload["environment"]["entryCost"])
+        self.assertIsNone(payload["lobby"]["entryCost"])
+        self.assertEqual(payload["lobby"]["lobbyToolGroup"], "未知/待识别")
+        self.assertIsNone(payload["facts"]["fieldCondition"])
+        self.assertIsNone(payload["facts"]["entryCost"])
+        self.assertIsNone(payload["prediction"])
+
     def test_native_restart_seeds_only_temporary_pause(self):
         from unittest.mock import Mock
         current = CurrentMatch()

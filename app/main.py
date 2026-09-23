@@ -1182,9 +1182,15 @@ def get_current_match_presentation_summary() -> dict:
             "fieldStates": snap.get("fieldStates") or {},
         }
     except Exception:
+        native_fallback = native_observation_enabled()
         return {
             "matchId": getattr(CURRENT_MATCH, "id", "draft_fallback"),
             "observationProfile": native_observation_profile(),
+            "scene": "UNKNOWN",
+            "inAuction": False,
+            "solverStatus": "paused" if native_fallback else "incomplete",
+            "solverMissingReason": "本局状态暂不可用，实时竞拍建议已暂停" if native_fallback else None,
+            "shadowUpdating": False,
             "visionHealth": ({
                 "status": "WAITING",
                 "stage": "native-explicit-start",
@@ -1197,8 +1203,8 @@ def get_current_match_presentation_summary() -> dict:
             "lifecycleStatus": "DRAFT",
             "hasAnyFact": False,
             "isComplete": False,
-            "environment": {"venueId": None, "venueName": None, "boxId": None, "box": None, "fieldCondition": "standard", "fieldConditionName": "标准规则"},
-            "lobby": {"character": "未识别/默认", "lobbyToolGroup": "标准仪器", "entryCost": 0},
+            "environment": {"venueId": None, "venueName": None, "boxId": None, "box": None, "fieldCondition": None if native_fallback else "standard", "fieldConditionName": "待确认规则" if native_fallback else "标准规则", "entryCost": None},
+            "lobby": {"character": "未识别/默认", "lobbyToolGroup": "未知/待识别" if native_fallback else "标准仪器", "entryCost": None if native_fallback else 0},
             "publicIntel": {"q": None, "totalItems": None, "totalGrid": None, "avgValueBasis": None, "timeline": {"observations": [], "structured": [], "observationCount": 0}},
             "auctionEvidence": None,
             "qualities": {
@@ -1211,7 +1217,7 @@ def get_current_match_presentation_summary() -> dict:
             },
             "missingValueFacts": ["缺失会场", "缺失宝箱", "缺失总高阶件数 Q", "缺失金色均价", "缺失紫色数量"],
             "missingDecisionFacts": [],
-            "facts": {"venueId": None, "venue": None, "boxId": None, "box": None, "fieldCondition": "standard", "q": None, "goldAvg": None, "purpleCount": None, "purpleAvg": None, "purpleGrid": None, "goldGrid": None, "redCount": None, "knownGold": "", "knownPurple": "", "knownRed": "", "leaderBid": None, "targetProfit": None},
+            "facts": {"venueId": None, "venue": None, "boxId": None, "box": None, "fieldCondition": None if native_fallback else "standard", "entryCost": None, "q": None, "goldAvg": None, "purpleCount": None, "purpleAvg": None, "purpleGrid": None, "goldGrid": None, "redCount": None, "knownGold": "", "knownPurple": "", "knownRed": "", "leaderBid": None, "targetProfit": None},
             "options": {"venues": [], "fieldConditions": []},
             "prediction": None,
             "decisionLines": None,
