@@ -841,12 +841,21 @@ def get_current_match_presentation_summary() -> dict:
         gold_val = facts.get("goldAvg")
         purple_val = facts.get("purpleCount") if facts.get("purpleCount") is not None else facts.get("purple")
         purple_avg = facts.get("purpleAvg")
+        if native_observation_enabled():
+            _admission_mapping, _admission_reason, solver_admission = _native_solver_admission_details(facts)
+        else:
+            _admission_reason, solver_admission = None, None
 
         is_complete = bool(has_venue and has_box and q_val is not None and gold_val is not None and purple_val is not None)
 
         venue_display = facts.get("venue") or facts.get("venueName") or (facts.get("venueId") if facts.get("venueId") else "未选择")
         box_display = facts.get("box") or (facts.get("boxId") if facts.get("boxId") else "未选择")
-        field_condition = facts.get("fieldConditionName") or facts.get("fieldCondition") or "标准规则"
+        field_condition_value = facts.get("fieldCondition")
+        field_condition_known = str(field_condition_value or "unknown") != "unknown"
+        field_condition = (
+            facts.get("fieldConditionName") or field_condition_value
+            if field_condition_known else "待确认规则"
+        )
 
         # Missing Facts Categorization
         missing_value_facts = []
@@ -1056,6 +1065,30 @@ def get_current_match_presentation_summary() -> dict:
                 "formalHistoryWriter": False,
             }
         native_payload = LATEST_PAYLOAD if isinstance(LATEST_PAYLOAD, dict) else {}
+        native_profile = native_observation_enabled()
+        native_scene = str(native_payload.get("scene") or "").upper()
+        native_projection_current = bool(
+            native_profile
+            and native_scene == "IN_AUCTION"
+            and native_payload.get("inAuction") is True
+            and _native_solver_lease_matches(native_payload)
+        )
+        if native_profile and not native_projection_current:
+            solver_status = "paused"
+            if snap.get("lifecycleStatus") == "FINALIZED" or "SETTLEMENT" in native_scene:
+                solver_missing_reason = "本局已结算，实时建议已停止"
+            elif native_scene and native_scene != "UNKNOWN":
+                solver_missing_reason = "当前画面不在局内竞拍；进入新的有效竞拍帧后才会重新评估"
+            else:
+                solver_missing_reason = "实时观察未就绪；恢复后等待新的有效局内帧"
+        else:
+            solver_status = (
+                native_payload.get("solverStatus") if native_profile
+                else ((prediction_summary or {}).get("solverStatus") or ("incomplete" if _admission_reason else "idle"))
+            )
+            solver_missing_reason = (
+                native_payload.get("solverMissingReason") if native_profile else None
+            ) or _admission_reason
         return {
             "matchId": CURRENT_MATCH.id,
             "factsRevision": CURRENT_MATCH.facts_revision,
@@ -1072,6 +1105,13 @@ def get_current_match_presentation_summary() -> dict:
             "observationSource": native_payload.get("sourceKind") or vision_health.get("sourceKind"),
             "observationFreshnessMs": native_payload.get("freshnessMs") or vision_health.get("freshnessMs"),
             "observationFrameSequence": native_payload.get("frameSequence") or vision_health.get("frameSequence"),
+            "scene": native_payload.get("scene") or "UNKNOWN",
+            "inAuction": bool(native_payload.get("inAuction")) if native_profile else True,
+            "nativeInvalidated": native_profile and not native_projection_current,
+            "solverStatus": solver_status,
+            "solverMissingReason": solver_missing_reason,
+            "solverAdmission": solver_admission,
+            "shadowUpdating": bool(native_payload.get("shadowUpdating")) if native_profile else False,
             "nativeControlResult": dict(native_payload.get("nativeControlResult") or {}),
             "manualCommandResult": dict(native_payload.get("manualCommandResult") or {}),
             "isolatedTrial": is_isolated_trial(),
@@ -1083,8 +1123,9 @@ def get_current_match_presentation_summary() -> dict:
                 "venueName": venue_display if venue_display != "未选择" else None,
                 "boxId": facts.get("boxId"),
                 "box": box_display if box_display != "未选择" else None,
-                "fieldCondition": facts.get("fieldCondition") or "standard",
+                "fieldCondition": field_condition_value,
                 "fieldConditionName": field_condition,
+                "entryCost": facts.get("entryCost"),
             },
             "lobby": lobby_summary,
             "publicIntel": {
@@ -1103,7 +1144,8 @@ def get_current_match_presentation_summary() -> dict:
                 "venue": venue_display if venue_display != "未选择" else None,
                 "boxId": facts.get("boxId"),
                 "box": box_display if box_display != "未选择" else None,
-                "fieldCondition": facts.get("fieldCondition") or "standard",
+                "fieldCondition": field_condition_value,
+                "entryCost": facts.get("entryCost"),
                 "q": q_val,
                 "goldAvg": gold_val,
                 "purpleCount": purple_val,
@@ -1822,31 +1864,89 @@ def _native_publish_health(event: Dict[str, Any], *, force_main: bool = False) -
     return health
 
 
+def _native_solver_admission_details(
+    facts: Dict[str, Any],
+) -> tuple[Optional[Dict[str, Any]], Optional[str], Dict[str, Any]]:
+    """Evaluate the existing solver gate once and return a presentation explanation."""
+    venue_value = facts.get("venue") or facts.get("venueName") or facts.get("venueId")
+    condition_value = facts.get("fieldConditionName") or facts.get("fieldCondition")
+    requirements = [
+        {"key": "venueId", "label": "会场", "status": "available" if facts.get("venueId") else "missing", "value": venue_value},
+        {"key": "q", "label": "总高阶件数 Q", "status": "available" if facts.get("q") is not None else "missing", "value": facts.get("q")},
+        {"key": "goldAvg", "label": "金色均价", "status": "available" if facts.get("goldAvg") is not None else "missing", "value": facts.get("goldAvg")},
+        {"key": "entryCost", "label": "入场费", "status": "available" if facts.get("entryCost") is not None else "missing", "value": facts.get("entryCost")},
+        {
+            "key": "fieldCondition",
+            "label": "场地规则",
+            "status": "missing" if str(facts.get("fieldCondition") or "unknown") == "unknown" else "available",
+            "value": condition_value,
+        },
+    ]
+    blocking_reasons: list[str] = []
+    action_keys: list[str] = []
+    for key, reason in (
+        ("venueId", "缺失会场"),
+        ("q", "缺失总高阶件数 Q"),
+        ("goldAvg", "缺失金色均价"),
+        ("entryCost", "缺失入场费"),
+    ):
+        missing = not facts.get(key) if key == "venueId" else facts.get(key) is None
+        if missing:
+            blocking_reasons.append(reason)
+            action_keys.append("venueId" if key == "entryCost" else key)
+
+    # Keep the solver's existing validation order: positivity is checked only
+    # after the required count and average are present.
+    q_present = facts.get("q") is not None
+    gold_present = facts.get("goldAvg") is not None
+    if q_present and gold_present:
+        invalid_keys = {}
+        for key in ("q", "goldAvg"):
+            try:
+                invalid_keys[key] = float(facts[key]) <= 0
+            except (TypeError, ValueError):
+                invalid_keys[key] = True
+        numeric_values_invalid = any(invalid_keys.values())
+        if numeric_values_invalid:
+            blocking_reasons.append("总高阶件数或金色均价无效")
+            action_keys.extend(key for key, invalid in invalid_keys.items() if invalid)
+            for item in requirements:
+                if item["key"] in invalid_keys and invalid_keys[item["key"]]:
+                    item["status"] = "invalid"
+
+    if requirements[-1]["status"] == "missing":
+        blocking_reasons.append("缺失场地规则")
+        action_keys.append("fieldCondition")
+
+    mapped = None
+    if not blocking_reasons:
+        if facts.get("box") and not facts.get("boxId"):
+            blocking_reasons.append("宝箱身份未映射")
+            action_keys.append("boxId")
+        else:
+            mapped = dict(solver_context_translation(
+                VENUE_BOX_CATALOG, venue_id=facts.get("venueId"), box_id=facts.get("boxId")
+            ))
+            if mapped.get("status") != "COMPATIBILITY_TRANSLATION":
+                mapped = None
+                blocking_reasons.append("会场或宝箱不满足正式映射")
+                action_keys.extend(("venueId", "boxId"))
+
+    reason = blocking_reasons[0] if blocking_reasons else None
+    details = {
+        "eligible": mapped is not None and reason is None,
+        "requirements": requirements,
+        "blockingReasons": blocking_reasons,
+        "actionKeys": list(dict.fromkeys(action_keys)),
+        "reason": reason,
+    }
+    return mapped, reason, details
+
+
 def _native_solver_admission(facts: Dict[str, Any]) -> tuple[Optional[Dict[str, Any]], Optional[str]]:
-    """Use the existing catalog translation and observed value facts."""
-    if not facts.get("venueId"):
-        return None, "缺失会场"
-    if facts.get("q") is None:
-        return None, "缺失总高阶件数 Q"
-    if facts.get("goldAvg") is None:
-        return None, "缺失金色均价"
-    if facts.get("entryCost") is None:
-        return None, "缺失入场费"
-    try:
-        if float(facts["q"]) <= 0 or float(facts["goldAvg"]) <= 0:
-            return None, "总高阶件数或金色均价无效"
-    except (TypeError, ValueError):
-        return None, "总高阶件数或金色均价无效"
-    if str(facts.get("fieldCondition") or "unknown") == "unknown":
-        return None, "缺失场地规则"
-    if facts.get("box") and not facts.get("boxId"):
-        return None, "宝箱身份未映射"
-    mapped = dict(solver_context_translation(
-        VENUE_BOX_CATALOG, venue_id=facts.get("venueId"), box_id=facts.get("boxId")
-    ))
-    if mapped.get("status") != "COMPATIBILITY_TRANSLATION":
-        return None, "会场或宝箱不满足正式映射"
-    return mapped, None
+    """Keep the established admission API while sharing its UI explanation."""
+    mapped, reason, _details = _native_solver_admission_details(facts)
+    return mapped, reason
 
 
 def _native_project_current_quote(data: Dict[str, Any], match: Any) -> None:
@@ -3291,7 +3391,7 @@ def build_manual_alpha_payload(include_solver_input: bool = True) -> Dict[str, A
         "venue": snap.get("venue"),
         "boxId": snap.get("boxId"),
         "box": snap.get("box"),
-        "fieldCondition": snap.get("fieldCondition") or "standard",
+        "fieldCondition": snap.get("fieldCondition") if native_observation_enabled() else (snap.get("fieldCondition") or "standard"),
         "knownGold": snap.get("knownGold") or "",
         "knownPurple": snap.get("knownPurple") or "",
         **{key: snap.get(key) for key in ("privateBidCap", "bidActionCount")},

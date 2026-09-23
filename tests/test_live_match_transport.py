@@ -18,6 +18,42 @@ from live_match_transport import LiveMatchPublisher, LiveMatchReceiver, LiveMatc
 
 
 class LiveMatchTransportTests(unittest.TestCase):
+    def test_native_match_summary_explains_gate_and_never_defaults_unknown_rule(self):
+        current = CurrentMatch()
+        current.apply_facts({"q": 17, "goldAvg": 55444, "purpleCount": 9}, source="vision", intent="observe")
+        event = {
+            "observationProfile": "native-readonly-v1",
+            "observationStatus": "FRAME",
+            "scene": "IN_AUCTION",
+            "inAuction": True,
+            "solverStatus": "incomplete",
+            "solverMissingReason": "缺失会场",
+            "visionHealth": {"status": "READY", "profile": "native-readonly-v1", "stage": "native-ready", "freshnessMs": 40},
+        }
+        with patch.object(main, "CURRENT_MATCH", current), \
+             patch.object(main, "LATEST_PAYLOAD", event), \
+             patch.object(main, "native_observation_enabled", return_value=True), \
+             patch.object(main, "_native_solver_lease_matches", return_value=True), \
+             patch.object(main, "_current_match_solver_sidecar", return_value=(None, None)):
+            payload = main.get_current_match_presentation_summary()
+
+        self.assertEqual(payload["solverStatus"], "incomplete")
+        self.assertEqual(payload["solverAdmission"]["blockingReasons"], ["缺失会场", "缺失入场费", "缺失场地规则"])
+        self.assertIsNone(payload["environment"]["fieldCondition"])
+        self.assertEqual(payload["environment"]["fieldConditionName"], "待确认规则")
+        self.assertEqual(payload["facts"]["purpleCount"], 9)
+
+        settled_event = {**event, "scene": "SETTLEMENT", "inAuction": False, "solverStatus": "valid"}
+        with patch.object(main, "CURRENT_MATCH", current), \
+             patch.object(main, "LATEST_PAYLOAD", settled_event), \
+             patch.object(main, "native_observation_enabled", return_value=True), \
+             patch.object(main, "_native_solver_lease_matches", return_value=True), \
+             patch.object(main, "_current_match_solver_sidecar", return_value=(None, None)):
+            settled = main.get_current_match_presentation_summary()
+        self.assertEqual(settled["solverStatus"], "paused")
+        self.assertTrue(settled["nativeInvalidated"])
+        self.assertEqual(settled["solverMissingReason"], "本局已结算，实时建议已停止")
+
     def test_native_restart_seeds_only_temporary_pause(self):
         from unittest.mock import Mock
         current = CurrentMatch()
@@ -95,6 +131,15 @@ class LiveMatchTransportTests(unittest.TestCase):
 
         observed_intel_only = {"q": 17, "goldAvg": 55444, "purpleCount": 9}
         self.assertEqual(main._native_solver_admission(observed_intel_only)[1], "缺失会场")
+        _, reason, explanation = main._native_solver_admission_details(observed_intel_only)
+        self.assertEqual(reason, "缺失会场")
+        self.assertEqual(explanation["blockingReasons"], ["缺失会场", "缺失入场费", "缺失场地规则"])
+        requirement_status = {item["key"]: item["status"] for item in explanation["requirements"]}
+        self.assertEqual(requirement_status["q"], "available")
+        self.assertEqual(requirement_status["goldAvg"], "available")
+        self.assertEqual(requirement_status["venueId"], "missing")
+        self.assertEqual(requirement_status["entryCost"], "missing")
+        self.assertEqual(requirement_status["fieldCondition"], "missing")
 
         engine = module.RealEngine.__new__(module.RealEngine)
         engine.current_match = CurrentMatch()
@@ -121,9 +166,15 @@ class LiveMatchTransportTests(unittest.TestCase):
         self.assertEqual(facts["purpleCount"], 9)
         without_rule = dict(facts, fieldCondition=None)
         self.assertEqual(main._native_solver_admission(without_rule)[1], "缺失场地规则")
+        _, _, rule_explanation = main._native_solver_admission_details(without_rule)
+        self.assertEqual(rule_explanation["blockingReasons"], ["缺失场地规则"])
+        self.assertTrue(rule_explanation["eligible"] is False)
         mapped, reason = main._native_solver_admission(facts)
         self.assertIsNone(reason)
         self.assertEqual(mapped["status"], "COMPATIBILITY_TRANSLATION")
+        _, _, admitted_explanation = main._native_solver_admission_details(facts)
+        self.assertTrue(admitted_explanation["eligible"])
+        self.assertEqual(admitted_explanation["blockingReasons"], [])
 
         unknown_engine = module.RealEngine.__new__(module.RealEngine)
         unknown_engine.current_match = CurrentMatch()

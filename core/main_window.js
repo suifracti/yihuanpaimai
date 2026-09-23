@@ -42,6 +42,14 @@ const dashboard = {
   lastAutomaticMascotState: null,
   statusPollTimer: null,
   lastMainViewState: null,
+  guidebookCatalog: null,
+  guidebookSearch: "",
+  guidebookRarity: "all",
+  guidebookSelectedItem: null,
+  guidebookTab: "catalog",
+  guidebookRecordsSignature: null,
+  pendingFieldCondition: null,
+  pendingFieldConditionReceiptRevision: null,
   selectedRecordId: null,
   selectedLegacyKey: null,
   legacyRecords: null,
@@ -760,6 +768,7 @@ function applyHistoryFilters() {
 
 function renderHistory(mainViewState) {
   dashboard.lastMainViewState = mainViewState;
+  renderGuidebook();
   const history = mainViewState && mainViewState.history;
   const availability = history ? history.availability : "UNAVAILABLE";
   const errorState = document.getElementById("history-error-state");
@@ -1145,6 +1154,329 @@ function showLegacyReviewDetail(legacyKey) {
   loadSettlementReview(legacyKey, "legacy");
 }
 
+const GUIDEBOOK_RARITIES = ["gold", "purple", "red", "blue", "green", "white"];
+const GUIDEBOOK_RARITY_LABELS = { gold: "金", purple: "紫", red: "红", blue: "蓝", green: "绿", white: "白" };
+const GUIDEBOOK_FACT_LABELS = {
+  q: "总高阶件数 Q", goldAvg: "金色均价", purpleCount: "紫色数量",
+  purpleAvg: "紫色均价", goldCount: "金色数量", redCount: "红色数量",
+  totalItems: "总件数", totalGrid: "总占格"
+};
+
+function guidebookCatalogRows() {
+  if (Array.isArray(dashboard.guidebookCatalog)) return dashboard.guidebookCatalog;
+  const engine = window.AuctionEngineV06;
+  if (!engine || typeof engine.baseCatalogFor !== "function") return [];
+  const context = { playedAt: new Date().toISOString() };
+  const catalog = engine.baseCatalogFor(context) || {};
+  const version = typeof engine.catalogVersionFor === "function" ? engine.catalogVersionFor(context) : "当前目录";
+  const rows = [];
+  for (const rarity of GUIDEBOOK_RARITIES) {
+    for (const [index, item] of (Array.isArray(catalog[rarity]) ? catalog[rarity] : []).entries()) {
+      const name = String(item?.[0] || "").trim();
+      if (!name) continue;
+      const price = item[1] == null || item[1] === "" ? null : Number(item[1]);
+      rows.push({
+        key: `${rarity}:${index}:${name}`,
+        rarity,
+        name,
+        price: Number.isFinite(price) ? price : null,
+        footprint: item[2] == null ? "" : String(item[2]),
+        catalogVersion: version
+      });
+    }
+  }
+  dashboard.guidebookCatalog = rows;
+  return rows;
+}
+
+function renderGuidebookCatalog() {
+  const grid = document.getElementById("guidebook-catalog-grid");
+  const count = document.getElementById("guidebook-catalog-count");
+  const detail = document.getElementById("guidebook-item-detail");
+  const sourceNote = document.getElementById("guidebook-catalog-source");
+  if (!grid || !count || !detail) return;
+  const rows = guidebookCatalogRows();
+  const query = String(dashboard.guidebookSearch || "").trim().toLowerCase();
+  const filtered = rows.filter(item =>
+    (dashboard.guidebookRarity === "all" || item.rarity === dashboard.guidebookRarity)
+    && (!query || item.name.toLowerCase().includes(query))
+  );
+  count.textContent = rows.length ? `${filtered.length} / ${rows.length} 件` : "本地估值目录不可用";
+  if (sourceNote && rows.length) sourceNote.textContent = `来源：现有求解器本地基础目录 ${rows[0].catalogVersion}。目录价格是估值输入参考值，不等于当前局估值或建议出价；只读浏览。`;
+  grid.innerHTML = filtered.length
+    ? filtered.map((item, index) => `<button type="button" role="listitem" class="guidebook-item-card${item.key === dashboard.guidebookSelectedItem ? " is-selected" : ""}" data-guidebook-item-index="${index}" aria-pressed="${item.key === dashboard.guidebookSelectedItem}"><span class="rarity-tag is-${item.rarity}">${GUIDEBOOK_RARITY_LABELS[item.rarity]}</span><strong>${escapeHtml(item.name)}</strong><small>${item.price == null ? "目录未提供参考价" : `目录参考 ${formatCurrency(item.price)}`}</small></button>`).join("")
+    : `<p class="guidebook-empty">${rows.length ? "没有符合筛选条件的藏品。" : "当前内置估值目录无法读取。"}</p>`;
+  const selected = filtered.find(item => item.key === dashboard.guidebookSelectedItem) || filtered[0] || null;
+  if (selected) dashboard.guidebookSelectedItem = selected.key;
+  detail.innerHTML = selected
+    ? `<span class="rarity-tag is-${selected.rarity}">${GUIDEBOOK_RARITY_LABELS[selected.rarity]}</span><h2>${escapeHtml(selected.name)}</h2><p>${selected.price == null ? "本地目录没有保存参考价。" : `基础参考价：${formatCurrency(selected.price)}`}</p><p>${selected.footprint ? `目录规格：${escapeHtml(selected.footprint)}。` : "目录未提供占格规格。"}此处为目录条目，不代表本局已经识别或确认了该藏品。</p><small>目录版本：${escapeHtml(selected.catalogVersion)}</small>`
+    : `<span class="tag">本地目录</span><h2>没有匹配条目</h2><p>可清除搜索词或更换品质筛选。</p>`;
+  grid.querySelectorAll("[data-guidebook-item-index]").forEach(button => {
+    button.addEventListener("click", () => {
+      const item = filtered[Number(button.dataset.guidebookItemIndex)];
+      if (!item) return;
+      dashboard.guidebookSelectedItem = item.key;
+      renderGuidebookCatalog();
+    });
+  });
+}
+
+function guidebookDrafts() {
+  const rows = dashboard.lastMainViewState?.history?.liveTrialDrafts;
+  if (!Array.isArray(rows)) return [];
+  return rows.filter(record => record && String(record.lifecycleStatus || "").toUpperCase() === "DRAFT"
+    && String(record.dataOrigin || "").toLowerCase() === "live-trial");
+}
+
+function guidebookRecognitionSlots(record) {
+  return [
+    ...(Array.isArray(record?.warehouse?.slots) ? record.warehouse.slots : []),
+    ...(Array.isArray(record?.observedFacts?.warehouse?.slots) ? record.observedFacts.warehouse.slots : []),
+    ...(Array.isArray(record?.warehouseSummary?.slots) ? record.warehouseSummary.slots : []),
+    ...(Array.isArray(record?.auctionEvidence?.warehouse?.slots) ? record.auctionEvidence.warehouse.slots : []),
+    ...(Array.isArray(record?.auctionEvidence?.warehouseEvidence?.slots) ? record.auctionEvidence.warehouseEvidence.slots : [])
+  ];
+}
+
+function guidebookConfirmedItems(record) {
+  const confirmed = [];
+  for (const item of guidebookRecognitionSlots(record)) {
+    const exactEvidence = ["EXACT_IDENTIFIED", "UNIQUE_IN_CATALOG"].includes(String(item?.evidenceLevel || ""));
+    const identityConfirmed = item?.status === "CONFIRMED" || item?.confirmed === true || exactEvidence;
+    const catalogId = item?.catalogId || item?.selectedCandidate?.catalogId;
+    const identifiedName = item?.identifiedName || item?.name || item?.selectedCandidateName;
+    if (identityConfirmed && catalogId && identifiedName) confirmed.push({
+      catalogId: String(catalogId), identifiedName: String(identifiedName), rarity: item.rarity
+    });
+  }
+  const reviewRows = [
+    ...(Array.isArray(record?.identityEvidence) ? record.identityEvidence : []),
+    ...(Array.isArray(record?.settlement?.identityEvidence) ? record.settlement.identityEvidence : [])
+  ];
+  for (const item of reviewRows) {
+    const identityConfirmed = item?.status === "CONFIRMED" || item?.identityStatus === "EXACT_IDENTIFIED";
+    const identifiedName = item?.identifiedName || item?.name || item?.selectedCandidateName;
+    if (identityConfirmed && item?.catalogId && identifiedName) confirmed.push({
+      catalogId: String(item.catalogId), identifiedName: String(identifiedName), rarity: item.rarity
+    });
+  }
+  return confirmed.filter((item, index, rows) => rows.findIndex(other =>
+    other.catalogId === item.catalogId && other.identifiedName === item.identifiedName
+  ) === index);
+}
+
+function guidebookUnresolvedItemNotes(record) {
+  return guidebookRecognitionSlots(record).map(item => {
+    if (!item || item.confirmed === true || item.status === "CONFIRMED"
+      || ["EXACT_IDENTIFIED", "UNIQUE_IN_CATALOG"].includes(String(item.evidenceLevel || ""))) return "";
+    const candidates = Array.isArray(item.candidates) ? item.candidates : [];
+    const candidateNames = candidates.map(candidate => candidate?.name || candidate?.catalogId).filter(Boolean).slice(0, 4);
+    if (candidateNames.length) return `候选身份（待确认）：${candidateNames.join(" / ")}`;
+    if (item.w != null || item.h != null) return `几何信息已记录：${item.w ?? "?"} × ${item.h ?? "?"}；身份未知`;
+    if (item.rarity && item.rarity !== "unknown") return `已知品质：${item.rarity}；藏品身份待确认`;
+    return "藏品身份未知，待确认";
+  }).filter((note, index, rows) => note && rows.indexOf(note) === index);
+}
+
+function guidebookObservationValue(field, value) {
+  if (field === "goldAvg" || field === "purpleAvg") return formatCurrency(value);
+  return String(value);
+}
+
+function renderGuidebookRecords() {
+  const list = document.getElementById("guidebook-recognition-list");
+  const count = document.getElementById("guidebook-record-count");
+  const empty = document.getElementById("guidebook-records-empty");
+  if (!list || !count || !empty) return;
+  const records = guidebookDrafts();
+  const signature = records.map(record => {
+    const observations = record.intelCardEvidence?.observations || [];
+    const frames = record.auctionEvidence?.nativeObservation?.sourceFrames || [];
+    return `${record.id}:${record.updatedAt || ""}:${record.factsRevision ?? ""}:${observations.length}:${frames.length}`;
+  }).join("|");
+  if (signature === dashboard.guidebookRecordsSignature && list.dataset.rendered === "true") return;
+  dashboard.guidebookRecordsSignature = signature;
+  list.dataset.rendered = "true";
+  count.textContent = `${records.length} 条隔离草稿`;
+  empty.hidden = records.length > 0;
+  list.innerHTML = records.map((record, index) => {
+    const facts = record.intelCardEvidence || {};
+    const observations = Array.isArray(facts.observations) ? facts.observations : [];
+    const usable = observations.filter(item => item && item.value != null).slice(0, 10);
+    const storedFields = ["q", "goldAvg", "purpleCount", "purpleAvg", "goldCount", "redCount", "totalItems", "totalGrid"];
+    const observedFields = new Set(usable.map(item => item.field));
+    for (const field of storedFields) {
+      const value = record[field] ?? (field === "purpleCount" ? record.purple : null);
+      if (value != null && !observedFields.has(field)) usable.push({ field, value, status: "STORED_FACT" });
+    }
+    const frames = record.auctionEvidence?.nativeObservation?.sourceFrames || [];
+    const environment = record.environment || {};
+    const title = [environment.venueName || environment.venue || record.venue, environment.box || record.box].filter(Boolean).join(" · ") || "会场/宝箱未记录";
+    const knownNames = GUIDEBOOK_RARITIES.map(rarity => ({ rarity, value: record[`known${rarity[0].toUpperCase()}${rarity.slice(1)}`] }))
+      .filter(item => item.value != null && String(item.value).trim());
+    const confirmedItems = guidebookConfirmedItems(record);
+    const unresolvedItemNotes = guidebookUnresolvedItemNotes(record);
+    const observationMarkup = usable.length ? usable.map(item => {
+      const label = GUIDEBOOK_FACT_LABELS[item.field] || item.field || "局内事实";
+      const state = item.status === "OBSERVED" ? "原图观察" : item.status === "CONFIRMED" ? "已确认" : item.status === "STORED_FACT" ? "草稿事实" : "待核对";
+      return `<div class="guidebook-observation"><strong>${escapeHtml(label)} · ${escapeHtml(state)}${item.round != null ? ` · 第 ${escapeHtml(item.round)} 回合` : ""}</strong><p>${escapeHtml(guidebookObservationValue(item.field, item.value))}${item.rawText ? `　｜　${escapeHtml(item.rawText)}` : ""}</p></div>`;
+    }).join("") : `<p class="guidebook-identity-note">本草稿没有单件身份事实；不会从品质、轮廓或置信度推定藏品名称。</p>`;
+    const identityMarkup = confirmedItems.length
+      ? confirmedItems.map(item => {
+        const catalogMatches = guidebookCatalogRows().filter(row => row.name === item.identifiedName
+          && (!item.rarity || row.rarity === item.rarity));
+        const catalogMatch = catalogMatches.length === 1 ? catalogMatches[0] : null;
+        return `<span class="guidebook-item-confirmed">已确认：${escapeHtml(item.identifiedName)}${catalogMatch ? ` <button type="button" class="btn-review-action" data-guidebook-confirmed-item="${escapeHtml(catalogMatch.key)}">查看图鉴条目</button>` : "（当前估值目录无同名条目）"}</span>`;
+      }).join(" ")
+      : `<span class="guidebook-identity-note">未保存可关联到正式目录的身份确认项。</span>`;
+    const unresolvedMarkup = unresolvedItemNotes.map(note => `<p class="guidebook-identity-note">${escapeHtml(note)}</p>`).join("");
+    const namesMarkup = knownNames.length
+      ? `<p class="guidebook-identity-note">局内名称字段（未附图鉴身份确认）：${knownNames.map(item => `${GUIDEBOOK_RARITY_LABELS[item.rarity]}色 ${escapeHtml(item.value)}`).join("；")}</p>`
+      : "";
+    return `<article class="guidebook-record-card"><div class="guidebook-record-top"><div><h3>${escapeHtml(title)}</h3><p class="guidebook-record-meta">${escapeHtml(record.playedAt || record.updatedAt || "时间未记录")} · ${escapeHtml(record.id || "未知局")}</p></div><span class="tag">live-trial DRAFT</span></div><div class="guidebook-observation-list">${observationMarkup}</div><div class="guidebook-identity-note">藏品身份：${identityMarkup}</div>${unresolvedMarkup}${namesMarkup}<p class="guidebook-record-meta">保存原图：${frames.length} 张 · 隔离草稿，不进入正式 History</p><button type="button" class="btn-review-action" data-guidebook-original="${index}" data-record-id="${escapeHtml(record.id || "")}">查看本局保存原图</button><div class="guidebook-evidence" id="guidebook-source-${index}" data-record-id="" data-source="live-trial"></div></article>`;
+  }).join("");
+  list.querySelectorAll("[data-guidebook-original]").forEach(button => {
+    button.addEventListener("click", () => {
+      const index = Number(button.dataset.guidebookOriginal);
+      const record = records[index];
+      const containerId = `guidebook-source-${index}`;
+      if (record?.id) requestOriginalScreenshots(record.id, containerId, "live-trial");
+    });
+  });
+  list.querySelectorAll("[data-guidebook-confirmed-item]").forEach(button => {
+    button.addEventListener("click", () => {
+      dashboard.guidebookRarity = "all";
+      dashboard.guidebookSearch = "";
+      dashboard.guidebookSelectedItem = button.dataset.guidebookConfirmedItem;
+      setGuidebookTab("catalog");
+      renderGuidebook();
+    });
+  });
+}
+
+function setGuidebookTab(tab) {
+  dashboard.guidebookTab = tab === "records" ? "records" : "catalog";
+  document.querySelectorAll("[data-guidebook-tab]").forEach(button => {
+    const active = button.dataset.guidebookTab === dashboard.guidebookTab;
+    button.classList.toggle("is-active", active);
+    if (active) button.setAttribute("aria-current", "page");
+    else button.removeAttribute("aria-current");
+  });
+  const catalogPanel = document.getElementById("guidebook-catalog-panel");
+  const recordsPanel = document.getElementById("guidebook-records-panel");
+  if (catalogPanel) catalogPanel.hidden = dashboard.guidebookTab !== "catalog";
+  if (recordsPanel) recordsPanel.hidden = dashboard.guidebookTab !== "records";
+}
+
+function renderGuidebook() {
+  if (dashboard.currentView !== "guidebook") return;
+  setGuidebookTab(dashboard.guidebookTab);
+  renderGuidebookCatalog();
+  renderGuidebookRecords();
+}
+
+function renderSolverAdmissionStatus(currentMatch) {
+  const card = document.getElementById("match-admission-card");
+  if (!card) return;
+  const gate = currentMatch.solverAdmission || {};
+  const requirements = Array.isArray(gate.requirements) ? gate.requirements : [];
+  const blockers = Array.isArray(gate.blockingReasons) ? gate.blockingReasons : [];
+  const status = String(currentMatch.solverStatus || currentMatch.prediction?.solverStatus || "").toLowerCase();
+  const native = currentMatch.observationProfile === "native-readonly-v1";
+  const paused = currentMatch.lifecycleStatus === "FINALIZED" || currentMatch.nativeInvalidated === true || status === "paused";
+  let title = "等待当前局信息";
+  let state = "等待中";
+  let summary = "只使用已进入本局的事实；缺项不会以历史值或默认值补齐。";
+  if (paused) {
+    title = currentMatch.lifecycleStatus === "FINALIZED" ? "本局已结算" : "实时竞拍建议已暂停";
+    state = "未发布建议";
+    summary = currentMatch.solverMissingReason || "恢复观察后，收到新的有效局内帧才会重新评估；旧结果不会自动恢复。";
+  } else if (blockers.length || gate.eligible === false) {
+    title = "当前局尚不满足建议条件";
+    state = "缺少必要条件";
+    summary = currentMatch.solverMissingReason || "补齐下方所列事实后，系统才会重新判断；已识别情报不会替代缺项。";
+  } else if (status === "pending" || status === "refreshing" || currentMatch.shadowUpdating === true) {
+    title = "本局信息已提交，正在计算";
+    state = "计算中";
+    summary = "当前计算完成前不沿用旧建议。";
+  } else if (status === "stale" || status === "expired") {
+    title = "当前建议结果已过期";
+    state = "结果已过期";
+    summary = currentMatch.solverMissingReason || "事实或版本已经变化；旧结果不会作为本局建议，请等待新鲜局内帧和重新计算。";
+  } else if (status === "fallback") {
+    title = "当前只有降级计算结果";
+    state = "降级结果不可用作建议";
+    summary = currentMatch.solverMissingReason || "降级或近似结果不作为实时竞拍建议发布；等待完整计算。";
+  } else if (status === "valid" && currentMatch.prediction?.recommendedMax != null
+      && (!native || gate.eligible === true)) {
+    title = "当前局建议可用";
+    state = "本局有效结果";
+    summary = "金额对应当前局事实与版本；回合变化后会重新评估。";
+  } else if (status === "no-match") {
+    title = "当前事实约束冲突";
+    state = "暂不建议";
+    summary = currentMatch.solverMissingReason || currentMatch.prediction?.actionReason || "请核对已显示的当前局事实。";
+  } else if (["error", "failed", "timeout"].includes(status)) {
+    title = "本局计算未完成";
+    state = status === "timeout" ? "计算超时" : "计算失败";
+    summary = currentMatch.solverMissingReason || (status === "timeout"
+      ? "本次计算超时，没有可发布的当前局结果；请等待后续有效帧重算。"
+      : "没有可发布的当前局结果；请等下一帧重算。");
+  } else if (gate.eligible === true && status !== "valid") {
+    title = "必要事实已齐，暂无可发布结果";
+    state = status === "incomplete" ? "等待当前结果" : "未发布建议";
+    summary = currentMatch.solverMissingReason || "需要本局有效观察与合格计算结果后才显示建议。";
+  }
+
+  document.getElementById("match-admission-title").textContent = title;
+  document.getElementById("match-admission-state").textContent = state;
+  document.getElementById("match-admission-summary").textContent = summary;
+  const calcStatus = document.getElementById("match-live-calc-status");
+  if (calcStatus) calcStatus.textContent = state;
+  const known = requirements.filter(item => item.status === "available");
+  document.getElementById("match-admission-known").innerHTML = known.length
+    ? known.map(item => {
+      const value = item.value == null ? "" : (item.key === "goldAvg" || item.key === "entryCost" ? formatCurrency(item.value) : String(item.value));
+      return `<span class="match-admission-chip">${escapeHtml(item.label)}${value ? `：${escapeHtml(value)}` : ""}</span>`;
+    }).join("")
+    : `<span class="match-admission-chip">暂无已接收的必要事实</span>`;
+  const invalid = requirements.filter(item => item.status === "invalid").map(item => `${item.label}无效`);
+  const missing = [...blockers, ...invalid].filter((item, index, rows) => rows.indexOf(item) === index);
+  document.getElementById("match-admission-blockers").innerHTML = missing.length
+    ? missing.map(item => `<span class="match-admission-chip is-blocking">${escapeHtml(item)}</span>`).join("")
+    : `<span class="match-admission-chip">无事实门禁缺项</span>`;
+  const actionContainer = document.getElementById("match-admission-actions");
+  const actionLabels = {
+    venueId: ["选择/核对会场", "match-venue-trigger"],
+    entryCost: ["核对会场费用", "match-venue-trigger"],
+    fieldCondition: ["选择/核对规则", "match-cond-trigger"],
+    boxId: ["选择/核对宝箱", "match-box-trigger"],
+    q: ["定位 Q 情报", "match-input-q"],
+    goldAvg: ["定位金色均价", "match-input-gold-avg"]
+  };
+  const actionKeys = Array.isArray(gate.actionKeys) ? gate.actionKeys : [];
+  const canSendManual = !paused && (!native || currentMatch.nativeInvalidated !== true);
+  const actions = canSendManual ? actionKeys.filter(key => actionLabels[key]) : [];
+  if (actionContainer) {
+    actionContainer.hidden = actions.length === 0;
+    actionContainer.innerHTML = actions.map(key => `<button type="button" data-admission-jump="${escapeHtml(actionLabels[key][1])}">${escapeHtml(actionLabels[key][0])}</button>`).join("");
+  }
+  const purpleCount = currentMatch.facts?.purpleCount ?? currentMatch.qualities?.purple?.count;
+  document.getElementById("match-admission-auxiliary").textContent = purpleCount == null
+    ? ""
+    : `已接收紫色数量 ${purpleCount}，作为当前情报约束；它本身不替代会场、入场费或规则条件。`;
+}
+
+function focusAdmissionControl(id) {
+  const target = document.getElementById(id);
+  if (!target) return;
+  const details = target.closest("details");
+  if (details) details.open = true;
+  target.scrollIntoView?.({ behavior: "smooth", block: "center" });
+  if (target.matches("button")) target.click();
+  else target.focus?.();
+}
+
 function showView(viewName) {
   if (viewName !== "history" && dashboard.historicalWarehouseReview) resetHistoricalWarehouseReview();
   const page = document.querySelector(`[data-view-page="${viewName}"]`);
@@ -1169,6 +1501,8 @@ function showView(viewName) {
   if (captureConfirm) captureConfirm.hidden = true;
   if (viewName === "match" && dashboard.lastCurrentMatch) {
     renderMatch(dashboard.lastCurrentMatch, dashboard.overlayVisible);
+  } else if (viewName === "guidebook") {
+    renderGuidebook();
   } else if (viewName === "history" && dashboard.lastMainViewState) {
     renderHistory(dashboard.lastMainViewState);
   } else if (viewName === "analysis" && dashboard.lastMainViewState) {
@@ -1360,6 +1694,12 @@ function setMatchBox(boxId, boxName) {
 }
 
 function setMatchCondition(condId, condName) {
+  if (dashboard.matchState.observationProfile === "native-readonly-v1") {
+    const prior = dashboard.lastCurrentMatch?.manualCommandResult || dashboard.lastCurrentMatch?.nativeControlResult || {};
+    const revision = Number(prior.revision);
+    dashboard.pendingFieldConditionReceiptRevision = Number.isFinite(revision) ? revision : -1;
+    dashboard.pendingFieldCondition = condId;
+  }
   dashboard.matchState.fieldCondition = condId;
   const condDisplay = document.getElementById("match-cond-display");
   if (condDisplay) condDisplay.textContent = condName || "标准对局";
@@ -1891,7 +2231,12 @@ function renderManualCommandReceipt(result) {
     STALE_FACTS_REVISION: "局内事实已变化，请按当前画面重试",
     STALE_ROUND: "回合已变化，请按当前画面重试",
     MATCH_CHANGED: "当前局已变化，修改未生效",
-    NATIVE_OBSERVATION_NOT_RUNNING: "观察未运行，修改未生效"
+    NATIVE_OBSERVATION_NOT_RUNNING: "观察未运行，修改未生效",
+    OBSERVATION_INVALIDATED: "观察已暂停或失联，修改未生效",
+    OBSERVATION_SCOPE_CHANGED: "观察目标或局内版本已变化，修改未生效",
+    "observation-frame-timeout": "局内画面长时间未更新，修改未生效",
+    NATIVE_CONTROL_CHANNEL_FAILED: "未能发送到观察 worker，修改未生效",
+    TIMEOUT: "观察 worker 未及时确认，修改未生效"
   }[reason] || reason;
   if (status === "PENDING" || status === "SENT") {
     statusEl.textContent = "修改已发送，等待观察 worker 确认";
@@ -1899,7 +2244,7 @@ function renderManualCommandReceipt(result) {
   } else if (status === "ACK" || status === "ACCEPTED") {
     statusEl.textContent = "观察 worker 已确认修改";
     statusEl.style.color = "#34d399";
-  } else if (["REJECT", "REJECTED", "ERROR"].includes(status)) {
+  } else if (["REJECT", "REJECTED", "ERROR", "TIMEOUT"].includes(status)) {
     statusEl.textContent = `修改未生效：${reasonText || "当前状态不允许修改"}`;
     statusEl.style.color = "#f87171";
   } else {
@@ -2077,6 +2422,8 @@ function renderMatch(currentMatch, overlayVisible) {
   const incomingBoxId = env.boxId || facts.boxId || null;
   const rawBox = env.box || facts.box || null;
   const incomingBox = isMissingVal(rawBox) ? null : rawBox;
+  const conditionRequirement = currentMatch.solverAdmission?.requirements?.find(item => item.key === "fieldCondition");
+  const conditionIsMissing = conditionRequirement?.status === "missing";
 
   if (currentMatch.matchId !== previousMatchId) {
     dashboard.matchState.matchId = currentMatch.matchId;
@@ -2084,7 +2431,9 @@ function renderMatch(currentMatch, overlayVisible) {
     dashboard.matchState.venue = incomingVenue;
     dashboard.matchState.boxId = incomingBoxId;
     dashboard.matchState.box = incomingBox;
-    dashboard.matchState.fieldCondition = env.fieldCondition || facts.fieldCondition || "standard";
+    dashboard.matchState.fieldCondition = conditionIsMissing ? null : (env.fieldCondition || facts.fieldCondition || "standard");
+    dashboard.pendingFieldCondition = null;
+    dashboard.pendingFieldConditionReceiptRevision = null;
   } else {
     // Same match: preserve manual inputs across refreshes / null states
     if (incomingVenue) {
@@ -2112,7 +2461,24 @@ function renderMatch(currentMatch, overlayVisible) {
       currentMatch.fieldStates?.fieldCondition?.protected
     );
     const incFieldCond = env.fieldCondition || facts.fieldCondition;
-    if (!isFieldCondManual && incFieldCond && incFieldCond !== "unknown") {
+    const receipt = currentMatch.manualCommandResult || currentMatch.nativeControlResult || {};
+    const receiptRevision = Number(receipt.revision);
+    const receiptStatus = String(receipt.status || "").toUpperCase();
+    const hasNewConditionReceipt = dashboard.pendingFieldCondition != null
+      && Number.isFinite(receiptRevision)
+      && receiptRevision > Number(dashboard.pendingFieldConditionReceiptRevision ?? -1)
+      && ["ACK", "ACCEPTED", "REJECT", "REJECTED", "ERROR"].includes(receiptStatus);
+    if (hasNewConditionReceipt) {
+      dashboard.pendingFieldCondition = null;
+      dashboard.pendingFieldConditionReceiptRevision = null;
+      if (["REJECT", "REJECTED", "ERROR"].includes(receiptStatus)) {
+        dashboard.matchState.fieldCondition = facts.fieldCondition || null;
+        dashboard.lastSyncedFacts.fieldCondition = dashboard.matchState.fieldCondition;
+      }
+    }
+    if (conditionIsMissing && !isFieldCondManual && dashboard.pendingFieldCondition == null) {
+      dashboard.matchState.fieldCondition = null;
+    } else if (!isFieldCondManual && incFieldCond && incFieldCond !== "unknown") {
       dashboard.matchState.fieldCondition = incFieldCond;
     } else if (isFieldCondManual && currentMatch.fieldStates?.fieldCondition?.value) {
       dashboard.matchState.fieldCondition = currentMatch.fieldStates.fieldCondition.value;
@@ -2144,7 +2510,7 @@ function renderMatch(currentMatch, overlayVisible) {
 
   if (venueDisplay) venueDisplay.textContent = venueDisplayName;
   if (boxDisplay) boxDisplay.textContent = boxDisplayName;
-  if (condDisplay) condDisplay.textContent = env.fieldConditionName || "标准对局";
+  if (condDisplay) condDisplay.textContent = env.fieldConditionName || (dashboard.matchState.fieldCondition ? "标准对局" : "待确认规则");
 
   // Task-flow Header update
   const headingEl = document.getElementById("match-live-heading");
@@ -2154,7 +2520,7 @@ function renderMatch(currentMatch, overlayVisible) {
   const headingVenue = dashboard.matchState.venue || "未选择会场";
   const headingBox = dashboard.matchState.box || "未选择宝箱";
   if (headingEl) headingEl.textContent = `${headingVenue} · ${headingBox}`;
-  if (ruleTagEl) ruleTagEl.textContent = env.fieldConditionName || "标准规则";
+  if (ruleTagEl) ruleTagEl.textContent = env.fieldConditionName || (dashboard.matchState.fieldCondition ? "标准规则" : "待确认规则");
   if (statusBadgeEl) {
     const isFinalized = currentMatch.lifecycleStatus === "FINALIZED";
     statusBadgeEl.textContent = isFinalized ? "已结算" : (currentMatch.isComplete ? "估值已生成" : "正在收集情报");
@@ -2278,6 +2644,7 @@ function renderMatch(currentMatch, overlayVisible) {
     missingDecRow.hidden = missingDecList.length === 0;
     missingDecBox.innerHTML = missingDecList.map(t => `<span class="missing-tag">${t}</span>`).join(" ");
   }
+  renderSolverAdmissionStatus(currentMatch);
 
   // Adaptive Snapshot Button State (Without Jumpy Layout)
   const snapBtn = document.getElementById("match-btn-snapshot");
@@ -4293,6 +4660,30 @@ function handleNativeMessage(event) {
 document.addEventListener("DOMContentLoaded", () => {
   document.querySelectorAll("[data-view-target]").forEach((button) => {
     button.addEventListener("click", () => showView(button.dataset.viewTarget));
+  });
+  document.querySelectorAll("[data-guidebook-tab]").forEach(button => {
+    button.addEventListener("click", () => setGuidebookTab(button.dataset.guidebookTab));
+  });
+  document.querySelectorAll("[data-guidebook-rarity]").forEach(button => {
+    button.addEventListener("click", () => {
+      dashboard.guidebookRarity = button.dataset.guidebookRarity || "all";
+      document.querySelectorAll("[data-guidebook-rarity]").forEach(candidate => {
+        candidate.classList.toggle("is-active", candidate === button);
+      });
+      renderGuidebookCatalog();
+    });
+  });
+  const guidebookSearch = document.getElementById("guidebook-catalog-search");
+  if (guidebookSearch) guidebookSearch.addEventListener("input", () => {
+    dashboard.guidebookSearch = guidebookSearch.value || "";
+    renderGuidebookCatalog();
+  });
+  const guidebookAssistant = document.getElementById("guidebook-open-assistant");
+  if (guidebookAssistant) guidebookAssistant.addEventListener("click", () => showView("match"));
+  const admissionActions = document.getElementById("match-admission-actions");
+  if (admissionActions) admissionActions.addEventListener("click", event => {
+    const button = event.target.closest("[data-admission-jump]");
+    if (button) focusAdmissionControl(button.dataset.admissionJump);
   });
   document.querySelectorAll("[data-nav-action]").forEach((button) => {
     button.addEventListener("click", () => showView(button.dataset.navAction));

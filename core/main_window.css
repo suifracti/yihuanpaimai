@@ -1893,3 +1893,62 @@ input, select { font: inherit; color: var(--text); }
   font-size: 12px;
   user-select: none;
 }
+
+.match-admission-card {
+  margin: 12px 0;
+  padding: 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md, 8px);
+  background: var(--surface-raised);
+}
+.match-admission-heading { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.match-admission-card > p { margin: 8px 0; color: var(--text-secondary); font-size: 12px; line-height: 1.5; }
+.match-admission-facts { display: grid; gap: 8px; grid-template-columns: 1fr 1fr; }
+.match-admission-facts > div > span { display: block; color: var(--text-muted); font-size: 11px; margin-bottom: 4px; }
+.match-admission-chip { display: inline-flex; margin: 2px 4px 2px 0; padding: 3px 7px; border: 1px solid var(--border); border-radius: 12px; color: var(--text-secondary); font-size: 11px; }
+.match-admission-chip.is-blocking { color: #e6bd78; border-color: rgba(212,163,89,.4); }
+.match-admission-actions { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; }
+.match-admission-actions button { border: 1px solid var(--border); border-radius: 5px; padding: 5px 8px; background: var(--surface); color: var(--text); font-size: 11px; cursor: pointer; }
+.match-admission-actions button:hover { background: var(--surface-hover); }
+.match-admission-card .match-admission-auxiliary { color: var(--text-muted); font-size: 11px; margin-bottom: 0; }
+
+.guidebook-page { padding: 10px 0 28px; overflow: auto; }
+.guidebook-shell { max-width: 1200px; margin: 0 auto; }
+.guidebook-header, .guidebook-records-heading { display: flex; align-items: center; justify-content: space-between; gap: 16px; }
+.guidebook-header h1, .guidebook-records-heading h2 { margin: 0; color: var(--text); }
+.guidebook-header p, .guidebook-records-heading p { margin: 6px 0 0; color: var(--text-muted); font-size: 12px; }
+.guidebook-tabs { display: flex; gap: 8px; margin: 20px 0 12px; border-bottom: 1px solid var(--border); }
+.guidebook-tab { padding: 8px 12px; border: 0; border-bottom: 2px solid transparent; background: transparent; color: var(--text-secondary); cursor: pointer; }
+.guidebook-tab.is-active { color: var(--text); border-bottom-color: var(--accent-hover); }
+.guidebook-panel { padding: 14px; border: 1px solid var(--border); border-radius: var(--radius-md, 8px); background: var(--surface); }
+.guidebook-toolbar { display: flex; align-items: center; gap: 10px; }
+.guidebook-search-label { color: var(--text-secondary); font-size: 12px; }
+.guidebook-toolbar .form-control { max-width: 340px; }
+.guidebook-rarity-filters { display: flex; flex-wrap: wrap; gap: 6px; margin: 12px 0; }
+.guidebook-rarity-filters button { border: 1px solid var(--border); border-radius: 14px; padding: 4px 10px; background: transparent; color: var(--text-secondary); cursor: pointer; }
+.guidebook-rarity-filters button.is-active { background: var(--surface-hover); color: var(--text); }
+.guidebook-catalog-layout { display: grid; grid-template-columns: minmax(0, 1fr) 260px; gap: 12px; align-items: start; }
+.guidebook-catalog-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 8px; max-height: min(58vh, 620px); overflow: auto; padding-right: 3px; }
+.guidebook-item-card { display: flex; flex-direction: column; gap: 6px; min-height: 76px; padding: 10px; border: 1px solid var(--border); border-radius: 7px; background: var(--bg); color: var(--text); text-align: left; cursor: pointer; }
+.guidebook-item-card:hover, .guidebook-item-card.is-selected { border-color: var(--border-focus); background: var(--surface-hover); }
+.guidebook-item-card small { color: var(--text-muted); }
+.guidebook-item-detail { position: sticky; top: 0; padding: 14px; border: 1px solid var(--border); border-radius: 7px; background: var(--bg); }
+.guidebook-item-detail h2 { margin: 10px 0 6px; font-size: 17px; }
+.guidebook-item-detail p, .guidebook-source-note { color: var(--text-muted); font-size: 11px; line-height: 1.5; }
+.guidebook-source-note { margin: 12px 0 0; }
+.guidebook-record-list { display: grid; gap: 10px; margin-top: 14px; }
+.guidebook-record-card { padding: 13px; border: 1px solid var(--border); border-radius: 7px; background: var(--bg); }
+.guidebook-record-top { display: flex; justify-content: space-between; align-items: start; gap: 12px; }
+.guidebook-record-card h3 { margin: 0; font-size: 14px; }
+.guidebook-record-meta { margin: 5px 0 10px; color: var(--text-muted); font-size: 11px; }
+.guidebook-observation-list { display: grid; gap: 6px; margin: 8px 0; }
+.guidebook-observation { padding: 7px 9px; border-left: 2px solid var(--border-focus); background: rgba(255,255,255,.02); }
+.guidebook-observation strong { font-size: 11px; }
+.guidebook-observation p { margin: 3px 0 0; color: var(--text-secondary); font-size: 11px; }
+.guidebook-identity-note, .guidebook-empty { color: var(--text-muted); font-size: 12px; }
+.guidebook-record-card .btn-review-action { margin-top: 6px; }
+@media (max-width: 900px) {
+  .match-admission-facts { grid-template-columns: 1fr; }
+  .guidebook-catalog-layout { grid-template-columns: 1fr; }
+  .guidebook-item-detail { position: static; }
+}

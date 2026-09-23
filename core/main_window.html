@@ -22,6 +22,7 @@
         <button class="nav-item is-active" type="button" data-view-target="overview" aria-current="page">首页</button>
         <button class="nav-item" type="button" data-view-target="match">对局</button>
         <button class="nav-item" type="button" data-view-target="history">记录</button>
+        <button class="nav-item" type="button" data-view-target="guidebook">图鉴</button>
         <button class="nav-item" type="button" data-view-target="analysis">分析</button>
       </nav>
 
@@ -638,13 +639,27 @@
                   <span class="section-caption-sub" id="match-live-calc-status">根据当前情报推演</span>
                 </div>
 
+                <section class="match-admission-card" id="match-admission-card" aria-live="polite">
+                  <div class="match-admission-heading">
+                    <strong id="match-admission-title">正在核对当前局信息</strong>
+                    <span id="match-admission-state" class="tag">等待状态</span>
+                  </div>
+                  <p id="match-admission-summary">这里会说明建议是否可用，以及当前局缺少的必要条件。</p>
+                  <div class="match-admission-facts">
+                    <div><span>已进入本局</span><div id="match-admission-known"></div></div>
+                    <div><span>阻断建议的条件</span><div id="match-admission-blockers"></div></div>
+                  </div>
+                  <div id="match-admission-actions" class="match-admission-actions" hidden></div>
+                  <p id="match-admission-auxiliary" class="match-admission-auxiliary"></p>
+                </section>
+
                 <!-- 等待情报状态 -->
                 <div class="match-prediction-empty" id="match-live-prediction-empty">
                   <div class="empty-icon-wrap">
                     <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M15 14c.2-1 .7-1.7 1.5-2.5 1-.9 1.5-2.2 1.5-3.5A6 6 0 0 0 6 8c0 1 .2 2.2 1.5 3.5.7.7 1.3 1.5 1.5 2.5"/><path d="M9 18h6"/><path d="M10 22h4"/></svg>
                   </div>
-                  <div class="empty-primary-text">等待录入情报</div>
-                  <div class="empty-sub-text">点击左侧 [快照识别] 或选择会场与件数后，系统将自动推演出估值与建议最高出价。</div>
+                  <div class="empty-primary-text">暂不显示本局建议</div>
+                  <div class="empty-sub-text">先查看上方状态说明。缺失值不会使用历史金额或默认事实补齐。</div>
                 </div>
 
                 <!-- 估值结果呈现区 -->
@@ -844,6 +859,61 @@
 
         </div>
       </aside>
+
+      <section class="view-page guidebook-page" data-view-page="guidebook" aria-label="图鉴" hidden>
+        <div class="guidebook-shell">
+          <header class="guidebook-header">
+            <div>
+              <h1>图鉴</h1>
+              <p>查看本地估值目录与已保存的隔离识别记录。</p>
+            </div>
+            <button class="btn-primary" id="guidebook-open-assistant" type="button">进入拍卖助手</button>
+          </header>
+
+          <nav class="guidebook-tabs" aria-label="图鉴内容">
+            <button class="guidebook-tab is-active" type="button" data-guidebook-tab="catalog" aria-current="page">藏品图鉴</button>
+            <button class="guidebook-tab" type="button" data-guidebook-tab="records">识别记录</button>
+          </nav>
+
+          <section class="guidebook-panel" id="guidebook-catalog-panel" aria-label="藏品图鉴">
+            <div class="guidebook-toolbar">
+              <label class="guidebook-search-label" for="guidebook-catalog-search">搜索藏品</label>
+              <input class="form-control" id="guidebook-catalog-search" type="search" placeholder="按名称筛选" autocomplete="off">
+              <span class="tag" id="guidebook-catalog-count">加载本地目录中</span>
+            </div>
+            <div class="guidebook-rarity-filters" role="group" aria-label="按品质筛选">
+              <button type="button" class="is-active" data-guidebook-rarity="all">全部</button>
+              <button type="button" data-guidebook-rarity="gold">金</button>
+              <button type="button" data-guidebook-rarity="purple">紫</button>
+              <button type="button" data-guidebook-rarity="red">红</button>
+              <button type="button" data-guidebook-rarity="blue">蓝</button>
+              <button type="button" data-guidebook-rarity="green">绿</button>
+              <button type="button" data-guidebook-rarity="white">白</button>
+            </div>
+            <div class="guidebook-catalog-layout">
+              <div class="guidebook-catalog-grid" id="guidebook-catalog-grid" role="list"></div>
+              <aside class="guidebook-item-detail" id="guidebook-item-detail" aria-live="polite">
+                <span class="tag">本地目录</span>
+                <h2>选择一件藏品</h2>
+                <p>目录价格是求解器使用的基础参考值；本局估值仍受已确认规则与事实约束。</p>
+              </aside>
+            </div>
+            <p class="guidebook-source-note" id="guidebook-catalog-source">来源：与现有估值路径相同的本地 AuctionEngine 目录。只读浏览，不会改变当前对局。</p>
+          </section>
+
+          <section class="guidebook-panel" id="guidebook-records-panel" aria-label="识别记录" hidden>
+            <div class="guidebook-records-heading">
+              <div>
+                <h2>已保存的识别记录</h2>
+                <p>只读取隔离 live-trial DRAFT 及其来源关联；不启动观察、不写入正式 History。</p>
+              </div>
+              <span class="tag" id="guidebook-record-count">0 条</span>
+            </div>
+            <div class="guidebook-record-list" id="guidebook-recognition-list"></div>
+            <p class="guidebook-empty" id="guidebook-records-empty" hidden>当前没有可浏览的隔离识别草稿。</p>
+          </section>
+        </div>
+      </section>
 
       <!-- ======================================================= -->
       <!-- 3. 记录页 (History - 人话优先双栏)                       -->
