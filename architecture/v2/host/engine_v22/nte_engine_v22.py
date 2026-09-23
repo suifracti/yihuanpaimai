@@ -30,7 +30,7 @@ import threading
 import time
 from ctypes import wintypes
 from pathlib import Path
-from typing import Any, Dict, Optional
+from typing import Any, Dict, Mapping, Optional
 
 import cv2
 import numpy as np
@@ -57,6 +57,12 @@ from nte_engine_ref import (  # noqa: E402
 )
 from canonical_history_store import CanonicalHistoryStore, HistoryStoreError  # noqa: E402
 from current_match import FACT_KEYS, CurrentMatch, is_missing_observation  # noqa: E402
+from venue_box_catalog import (  # noqa: E402
+    canonical_catalog_provenance,
+    catalog_selection,
+    load_catalog as load_venue_box_catalog,
+    normalize_vision_venue,
+)
 from vision_pipeline import NTEVisionPipeline  # noqa: E402
 
 # PipeClient's reference reader is intentionally blocking for V2-1 tests.  The
@@ -322,6 +328,8 @@ class RealEngine:
         # These are loaded before the Named Pipe handshake.  READY therefore
         # means the real business objects are present, not merely that IPC works.
         self.catalog_path = Path(args.catalog).resolve() if args.catalog else REPO_ROOT / "assets" / "catalog_065.json"
+        self.venue_catalog = None
+        self.venue_catalog_provenance = None
         self.pipeline: NTEVisionPipeline
         self.current_match: CurrentMatch
         self.history_store: CanonicalHistoryStore
@@ -353,6 +361,8 @@ class RealEngine:
             raise RuntimeError("test fault: model initialization failed before READY")
         if not self.catalog_path.is_file():
             raise RuntimeError(f"catalog missing: {self.catalog_path}")
+        self.venue_catalog = load_venue_box_catalog()
+        self.venue_catalog_provenance = canonical_catalog_provenance(self.venue_catalog)
         self.pipeline = NTEVisionPipeline(catalog_path=str(self.catalog_path))
         # The property constructs the real RapidOCR runtime and its ONNX model.
         ocr_engine = self.pipeline.ocr
@@ -940,6 +950,47 @@ class RealEngine:
                 payload["warehouseSummary"] = summary
         return payload
 
+    def _catalog_venue_facts(self, context: dict) -> dict:
+        """Promote an observed lobby venue through the approved current catalog."""
+        if context.get("scene") != "IN_AUCTION":
+            return {}
+        catalog = self.venue_catalog
+        provenance = self.venue_catalog_provenance
+        if not isinstance(catalog, Mapping) or not isinstance(provenance, Mapping):
+            return {}
+        venue_id = context.get("venueId")
+        if not venue_id:
+            observation = (
+                context.get("lobbyVenueKey")
+                or context.get("lobbyVenue")
+                or context.get("venue")
+            )
+            normalized = normalize_vision_venue(catalog, observation)
+            if normalized.get("status") != "NORMALIZED":
+                return {}
+            venue_id = normalized.get("venueId")
+        try:
+            selection = catalog_selection(catalog, venue_id, None)
+        except (KeyError, TypeError, ValueError):
+            return {}
+        if selection.get("status") not in {"VALIDATED", "BOX_UNKNOWN"}:
+            return {}
+        return {
+            "venueId": selection["venueId"],
+            "venue": selection["venue"],
+            "entryCost": selection["entryCost"],
+            "venueEvidenceClass": selection["venueEvidenceClass"],
+            **{
+                key: provenance.get(key)
+                for key in (
+                    "catalogVersion",
+                    "catalogApprovalStatus",
+                    "catalogSha256",
+                    "gameEvidenceCohort",
+                )
+            },
+        }
+
     def _apply_pipeline_context(self, context: dict, observed_at: str) -> None:
         patch = {}
         for key in FACT_KEYS:
@@ -949,6 +1000,7 @@ class RealEngine:
             if is_missing_observation(key, value):
                 continue
             patch[key] = copy.deepcopy(_safe(value))
+        patch.update(self._catalog_venue_facts(context))
         round_no = context.get("round")
         if round_no is not None and context.get("scene") == "IN_AUCTION":
             patch["roundNo"] = int(round_no)

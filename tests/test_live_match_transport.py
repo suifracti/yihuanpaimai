@@ -84,6 +84,58 @@ class LiveMatchTransportTests(unittest.TestCase):
             self.assertEqual(engine._apply_manual_overrides({"q": 3})["q"], 19)
             self.assertEqual(engine.control_revision, 4)
 
+    def test_native_worker_promotes_observed_lobby_venue_to_solver_facts(self):
+        import importlib.util
+        from venue_box_catalog import canonical_catalog_provenance, load_catalog
+
+        spec = importlib.util.spec_from_file_location(
+            "native_venue_projection_engine", ROOT / "architecture/v2/host/engine_v22/nte_engine_v22.py")
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+
+        observed_intel_only = {"q": 17, "goldAvg": 55444, "purpleCount": 9}
+        self.assertEqual(main._native_solver_admission(observed_intel_only)[1], "缺失会场")
+
+        engine = module.RealEngine.__new__(module.RealEngine)
+        engine.current_match = CurrentMatch()
+        engine.venue_catalog = load_catalog()
+        engine.venue_catalog_provenance = canonical_catalog_provenance(engine.venue_catalog)
+        context = {
+            "scene": "IN_AUCTION",
+            "lobbyVenueKey": "shanhu",
+            "lobbyVenue": "珊瑚场",
+            "lobbyEntryCost": 5000,
+            "fieldCondition": "standard",
+            "q": 17,
+            "goldAvg": 55444,
+            "purpleCount": 9,
+        }
+        engine._apply_pipeline_context(context, "2026-09-23T12:00:00+00:00")
+
+        facts = engine.current_match.facts
+        self.assertEqual(facts["venueId"], "venue-shanhu")
+        self.assertEqual(facts["venue"], "珊瑚场")
+        self.assertEqual(facts["entryCost"], 5000)
+        self.assertEqual(facts["q"], 17)
+        self.assertEqual(facts["goldAvg"], 55444)
+        self.assertEqual(facts["purpleCount"], 9)
+        without_rule = dict(facts, fieldCondition=None)
+        self.assertEqual(main._native_solver_admission(without_rule)[1], "缺失场地规则")
+        mapped, reason = main._native_solver_admission(facts)
+        self.assertIsNone(reason)
+        self.assertEqual(mapped["status"], "COMPATIBILITY_TRANSLATION")
+
+        unknown_engine = module.RealEngine.__new__(module.RealEngine)
+        unknown_engine.current_match = CurrentMatch()
+        unknown_engine.venue_catalog = engine.venue_catalog
+        unknown_engine.venue_catalog_provenance = engine.venue_catalog_provenance
+        unknown_engine._apply_pipeline_context(
+            {"scene": "IN_AUCTION", "lobbyVenueKey": "unrecognized", "venue": "未知场地"},
+            "2026-09-23T12:00:01+00:00",
+        )
+        self.assertIsNone(unknown_engine.current_match.facts["venueId"])
+        self.assertIsNone(unknown_engine.current_match.facts["entryCost"])
+
     def test_native_pause_preserves_facts_and_rejects_late_session(self):
         current = CurrentMatch()
         current.apply_facts({"q": 17}, source="manual", intent="confirm")
