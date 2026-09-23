@@ -178,6 +178,8 @@ assert.match(get("match-admission-blockers").innerHTML, /缺失入场费/);
 assert.match(get("match-admission-blockers").innerHTML, /缺失场地规则/);
 assert.match(get("match-admission-auxiliary").textContent, /紫色数量 9/);
 assert.equal(get("match-admission-actions").hidden, false);
+assert.match(get("match-admission-actions").innerHTML, /手动选择\/核对规则/);
+assert.match(get("match-admission-actions").innerHTML, /手动选择\/核对会场与费用/);
 sandbox.renderSolverAdmissionStatus({
   observationProfile: "native-readonly-v1", nativeInvalidated: true,
   solverStatus: "paused", solverMissingReason: "实时观察未就绪；恢复后等待新的有效局内帧",

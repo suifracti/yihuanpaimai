@@ -1447,12 +1447,12 @@ function renderSolverAdmissionStatus(currentMatch) {
     : `<span class="match-admission-chip">无事实门禁缺项</span>`;
   const actionContainer = document.getElementById("match-admission-actions");
   const actionLabels = {
-    venueId: ["选择/核对会场", "match-venue-trigger"],
-    entryCost: ["核对会场费用", "match-venue-trigger"],
-    fieldCondition: ["选择/核对规则", "match-cond-trigger"],
-    boxId: ["选择/核对宝箱", "match-box-trigger"],
-    q: ["定位 Q 情报", "match-input-q"],
-    goldAvg: ["定位金色均价", "match-input-gold-avg"]
+    venueId: ["手动选择/核对会场与费用", "match-venue-trigger"],
+    entryCost: ["手动核对会场与费用", "match-venue-trigger"],
+    fieldCondition: ["手动选择/核对规则", "match-cond-trigger"],
+    boxId: ["手动选择/核对宝箱", "match-box-trigger"],
+    q: ["等待观察或核对 Q 情报", "match-input-q"],
+    goldAvg: ["等待观察或核对金色均价", "match-input-gold-avg"]
   };
   const actionKeys = Array.isArray(gate.actionKeys) ? gate.actionKeys : [];
   const canSendManual = !paused && (!native || currentMatch.nativeInvalidated !== true);
