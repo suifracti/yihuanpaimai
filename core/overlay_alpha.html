@@ -1087,6 +1087,7 @@
       fieldStates: {},
       latestEngineResult: null,
       latestNativePayload: null,
+      nativeCommandScope: null,
       lastSyncedPredictionId: null,
       shadowPollCount: 0,
       liveVisionActive: false,
@@ -1100,25 +1101,43 @@
     let shadowRefreshTimer = null;
 
     function sendHost(payload) {
+      const outgoing = { ...payload };
+      if (outgoing.action === "manual_facts" && manualState.nativeCommandScope) {
+        Object.assign(outgoing, manualState.nativeCommandScope);
+      }
       if (window.chrome && window.chrome.webview) {
-        window.chrome.webview.postMessage(JSON.stringify(payload));
+        window.chrome.webview.postMessage(JSON.stringify(outgoing));
         return true;
       }
       const api = window.pywebview && window.pywebview.api;
       if (api) {
-        if (payload.action === "manual_facts" && api.apply_manual_facts) { api.apply_manual_facts(payload); return true; }
-        if (payload.action === "manual_finalize" && api.finalize_manual_match) { api.finalize_manual_match(payload); return true; }
-        if (payload.action === "manual_next_match" && api.begin_next_manual_match) { api.begin_next_manual_match(payload); return true; }
-        if (payload.action === "manual_bootstrap" && api.manual_bootstrap) { api.manual_bootstrap(); return true; }
-        if (payload.action === "triggered_snapshot" && api.triggered_snapshot) { api.triggered_snapshot(); return true; }
-        if (payload.action === "resize_hud" && api.resize_hud) { api.resize_hud(payload.w, payload.h); return true; }
-        if (payload.action === "capture_hud" && (api.triggered_snapshot || api.capture_game)) { (api.triggered_snapshot || api.capture_game)(); return true; }
+        if (outgoing.action === "manual_facts" && api.apply_manual_facts) { api.apply_manual_facts(outgoing); return true; }
+        if (outgoing.action === "manual_finalize" && api.finalize_manual_match) { api.finalize_manual_match(outgoing); return true; }
+        if (outgoing.action === "manual_next_match" && api.begin_next_manual_match) { api.begin_next_manual_match(outgoing); return true; }
+        if (outgoing.action === "manual_bootstrap" && api.manual_bootstrap) { api.manual_bootstrap(); return true; }
+        if (outgoing.action === "triggered_snapshot" && api.triggered_snapshot) { api.triggered_snapshot(); return true; }
+        if (outgoing.action === "resize_hud" && api.resize_hud) { api.resize_hud(outgoing.w, outgoing.h); return true; }
+        if (outgoing.action === "capture_hud" && (api.triggered_snapshot || api.capture_game)) { (api.triggered_snapshot || api.capture_game)(); return true; }
       }
       if (hudWsClient && hudWsClient.readyState === WebSocket.OPEN) {
-        hudWsClient.send(JSON.stringify({ ...payload, type: payload.action || payload.type }));
+        hudWsClient.send(JSON.stringify({ ...outgoing, type: outgoing.action || outgoing.type }));
         return true;
       }
       return false;
+    }
+
+    function rememberNativeCommandScope(d, matchId) {
+      if (!d || d.observationProfile !== "native-readonly-v1" || !matchId) return;
+      const rawRevision = d.factsRevision !== undefined
+        ? d.factsRevision
+        : (d.overlayState?.factsRevision ?? d.currentMatch?.observationFactsRevision);
+      const revision = rawRevision == null ? null : Number(rawRevision);
+      if (revision !== null && !Number.isInteger(revision)) return;
+      manualState.nativeCommandScope = {
+        expectedMatchId: String(matchId),
+        expectedFactsRevision: revision,
+        expectedObservationSessionId: String(d.observationSessionId || "")
+      };
     }
 
     function startNativeObservation() {
@@ -2188,7 +2207,7 @@ function sparkleBoundsText(b) {
       if (!d?.visionHealth) return;
       const nativeProfile = d.observationProfile === 'native-readonly-v1' || d.visionHealth.profile === 'native-readonly-v1';
       if (nativeProfile && d.nativeInvalidated) clearNativeLiveProjection();
-      const nativeWaiting = nativeProfile && ['native-starting', 'native-ready'].includes(d.visionHealth.stage);
+      const nativeWaiting = nativeProfile && ['native-starting', 'native-ready', 'native-refreshing'].includes(d.visionHealth.stage);
       const needsNativeAction = nativeProfile && d.visionHealth.status !== 'READY' && !nativeWaiting;
       const nativeTelemetry = nativeProfile && d.visionHealth.status === 'READY' && d.visionHealth.freshnessMs != null;
       const el = document.getElementById('visionHealthStatus');
@@ -2197,6 +2216,7 @@ function sparkleBoundsText(b) {
       if (!el.hidden && nativeProfile) {
         if (nativeTelemetry) el.textContent = `Native WGC · 新鲜度 ${Number(d.visionHealth.freshnessMs).toFixed(0)}ms · 帧 ${d.visionHealth.frameSequence ?? '--'}`;
         else if (d.visionHealth.stage === 'native-ready') el.textContent = 'Native Host 已就绪，等待首个业务帧';
+        else if (d.visionHealth.stage === 'native-refreshing') el.textContent = `等待当前局的新观察帧：${d.visionHealth.reason || '实时建议暂不可用'}`;
         else if (d.visionHealth.stage === 'native-explicit-start' || d.visionHealth.stage === 'native-stopped') el.textContent = 'Native 观察未启动，点击开始观察';
         else if (d.visionHealth.stage === 'native-starting') el.textContent = '正在启动 Native 观察，请保持游戏窗口可见并置前';
         else if (d.visionHealth.stage === 'native-paused') el.textContent = `Native 观察已暂停：${d.visionHealth.reason || '目标窗口或场景边界变化'}；点击重新开始`;
@@ -2211,7 +2231,7 @@ function sparkleBoundsText(b) {
         restore.hidden = nativeProfile ? !needsNativeAction : el.hidden || d.visionHealth.stage !== 'process';
         const sameMatchRecovery = nativeProfile
           && d.visionHealth.stage === 'native-paused'
-          && ['focus-lost', 'capture-failed'].includes(String(d.visionHealth.reason || ''));
+          && ['focus-lost', 'capture-failed', 'observation-frame-timeout'].includes(String(d.visionHealth.reason || ''));
         restore.dataset.resumeSameMatch = sameMatchRecovery ? 'true' : 'false';
         restore.textContent = nativeProfile
           ? (sameMatchRecovery ? '恢复同局观察' : '开始新局观察')
@@ -2459,6 +2479,7 @@ function sparkleBoundsText(b) {
       manualState.liveVisionSession = incomingSession || manualState.liveVisionSession;
       manualState.liveVisionSequence = Math.max(manualState.liveVisionSequence, incomingSequence);
       manualState.matchId = incomingId || manualState.matchId;
+      rememberNativeCommandScope(d, incomingId);
       manualState.suppress = true;
       const src = d.overlayState || d;
       const isMissingVal = (v) => !v || v === "未选择" || v === "等待选择会场" || v === "请选择会场" || v === "未知场地" || v === "未知会场";
@@ -2530,6 +2551,7 @@ function sparkleBoundsText(b) {
       const incomingId = d.matchId || (d.canonical && d.canonical.id) || "";
       const resetMatch = Boolean(force) || (incomingId && incomingId !== manualState.matchId);
       if (incomingId) manualState.matchId = incomingId;
+      rememberNativeCommandScope(d, incomingId);
       if (resetMatch) {
         manualState.lastSyncedFacts = {};
         manualState.dirty = false;

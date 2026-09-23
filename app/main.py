@@ -673,6 +673,14 @@ _NATIVE_OBSERVATION_SESSION: Optional[str] = None
 _NATIVE_EXPECTED_SESSION: Optional[str] = None
 _NATIVE_OBSERVATION_SEQUENCE = 0
 _NATIVE_OBSERVATION_LAST_FRAME_NS: Optional[int] = None
+_NATIVE_CONTROL_BINDINGS: Dict[int, Dict[str, Any]] = {}
+# Solver eligibility is a Main-side lease over the latest worker-accepted
+# observation.  It is intentionally local to presentation/admission and does
+# not extend the frozen Host/Engine protocol.
+_NATIVE_SOLVER_INVALIDATION_GENERATION = 0
+_NATIVE_SOLVER_LEASE: Optional[Dict[str, Any]] = None
+_NATIVE_FRAME_WATCHDOG_THREAD: Optional[threading.Thread] = None
+_NATIVE_FRAME_TIMEOUT_SECONDS = 31.0  # Host's SendFrame deadline is 30 seconds.
 HUD_JS_API = None
 PRESENTATION_RUNTIME = PresentationRuntimeState(
     "disabled" if os.environ.get("NTE_DISABLE_VISION") == "1" else "stopped"
@@ -802,13 +810,22 @@ def get_presentation_runtime_snapshot():
     return PRESENTATION_RUNTIME.snapshot()
 
 
+def _current_match_solver_sidecar(match_id: str) -> tuple[Optional[Dict[str, Any]], Dict[str, Any]]:
+    with _MANUAL_STATE_LOCK:
+        if native_observation_enabled() and not _native_solver_lease_matches_locked(LATEST_PAYLOAD):
+            return None, {}
+        return (
+            ACTIVE_SNAPSHOT_HOLDER.get_snapshot_for_match(match_id),
+            ACTIVE_SNAPSHOT_HOLDER.get_frozen_for_match(match_id) or {},
+        )
+
+
 def get_current_match_presentation_summary() -> dict:
     """Return an immutable, presentation-only projection of the live match draft."""
     try:
         snap = CURRENT_MATCH.snapshot()
         facts = snap if ("venue" in snap or "q" in snap) else (snap.get("facts", {}) if isinstance(snap, dict) else {})
-        prediction = ACTIVE_SNAPSHOT_HOLDER.get_snapshot_for_match(CURRENT_MATCH.id)
-        frozen = ACTIVE_SNAPSHOT_HOLDER.get_frozen_for_match(CURRENT_MATCH.id) or {}
+        prediction, frozen = _current_match_solver_sidecar(CURRENT_MATCH.id)
 
         has_venue = bool(facts.get("venue") or facts.get("venueId"))
         has_box = bool(facts.get("box") or facts.get("boxId"))
@@ -1033,11 +1050,15 @@ def get_current_match_presentation_summary() -> dict:
         native_payload = LATEST_PAYLOAD if isinstance(LATEST_PAYLOAD, dict) else {}
         return {
             "matchId": CURRENT_MATCH.id,
+            "factsRevision": CURRENT_MATCH.facts_revision,
             "recognitionMode": get_recognition_mode(),
             "observationProfile": native_observation_profile(),
             "configuredPlayerName": get_player_name(),
             "visionHealth": vision_health,
             "observationStatus": native_payload.get("observationStatus") or vision_health.get("status"),
+            "observationSessionId": native_payload.get("observationSessionId"),
+            "observationFactsRevision": native_payload.get("factsRevision"),
+            "target": copy.deepcopy(native_payload.get("target")) if native_payload.get("observationProfile") == "native-readonly-v1" else None,
             "observationSource": native_payload.get("sourceKind") or vision_health.get("sourceKind"),
             "observationFreshnessMs": native_payload.get("freshnessMs") or vision_health.get("freshnessMs"),
             "observationFrameSequence": native_payload.get("frameSequence") or vision_health.get("frameSequence"),
@@ -1483,15 +1504,67 @@ def _native_post_main_status(reason: str, *, force: bool = False) -> None:
         log_stage("PRESENTATION:NATIVE", f"Main status refresh failed: {type(exc).__name__}: {exc}")
 
 
-def _native_publish_health(event: Dict[str, Any], *, force_main: bool = False) -> Dict[str, Any]:
-    health = _native_health_from_event(event)
-    raw_status = str(event.get("status") or "").upper()
-    LATEST_PAYLOAD["visionHealth"] = health
-    LATEST_PAYLOAD["observationProfile"] = "native-readonly-v1"
-    if raw_status in {"PAUSED", "ERROR", "STOPPED"}:
-        LATEST_PAYLOAD.update({
+def _native_target_instance(target: Any) -> Optional[Dict[str, Any]]:
+    if not isinstance(target, dict):
+        return None
+    try:
+        hwnd = int(target.get("targetHwnd"))
+        pid = int(target.get("targetPid"))
+    except (TypeError, ValueError):
+        return None
+    identity = target.get("identity") if isinstance(target.get("identity"), dict) else {}
+    process_token = identity.get("ProcessInstanceToken", identity.get("processInstanceToken"))
+    generation = target.get("generation")
+    if not hwnd or not pid or target.get("isTargetAlive") is not True or target.get("isTargetForeground") is not True:
+        return None
+    if generation is None and process_token is None:
+        return None
+    return {
+        "targetHwnd": hwnd,
+        "targetPid": pid,
+        "generation": generation,
+        "processInstanceToken": process_token,
+    }
+
+
+def _native_start_frame_watchdog_locked() -> None:
+    global _NATIVE_FRAME_WATCHDOG_THREAD
+    if _NATIVE_FRAME_WATCHDOG_THREAD is not None and _NATIVE_FRAME_WATCHDOG_THREAD.is_alive():
+        return
+    _NATIVE_FRAME_WATCHDOG_THREAD = threading.Thread(
+        target=_native_frame_watchdog_loop,
+        name="native-observation-watchdog",
+        daemon=True,
+    )
+    _NATIVE_FRAME_WATCHDOG_THREAD.start()
+
+
+def _native_invalidate_solver_locked(reason: str) -> None:
+    """Revoke native solver admission and every reusable result under the UI lock."""
+    global _NATIVE_SOLVER_INVALIDATION_GENERATION, _NATIVE_SOLVER_LEASE
+    global _NATIVE_OBSERVATION_LAST_FRAME_NS
+    retired_match_id = str((_NATIVE_SOLVER_LEASE or {}).get("matchId") or CURRENT_MATCH.id or "")
+    _NATIVE_SOLVER_INVALIDATION_GENERATION += 1
+    _NATIVE_SOLVER_LEASE = None
+    _NATIVE_OBSERVATION_LAST_FRAME_NS = None
+    _NATIVE_CONTROL_BINDINGS.clear()
+    ACTIVE_SNAPSHOT_HOLDER.clear()
+    LATEST_VISION_PAYLOAD.clear()
+    if retired_match_id:
+        with _SHADOW_PRESENTATION_LOCK:
+            _SHADOW_PRESENTATION_KEYS.pop(retired_match_id, None)
+    try:
+        from live_shadow import invalidate_match_shadow
+        invalidate_match_shadow()
+    except Exception as exc:
+        log_stage("PRESENTATION:NATIVE", f"Shadow invalidation failed: {type(exc).__name__}: {exc}")
+
+    for payload in (LATEST_PAYLOAD, LATEST_VISION_PAYLOAD):
+        if not isinstance(payload, dict) or not payload:
+            continue
+        payload.update({
             "nativeInvalidated": True,
-            "observationStatus": raw_status,
+            "observationStatus": "WAITING_FOR_FRESH_FRAME",
             "scene": "UNKNOWN",
             "inAuction": False,
             "inLobby": False,
@@ -1501,9 +1574,150 @@ def _native_publish_health(event: Dict[str, Any], *, force_main: bool = False) -
             "intel": [],
             "round": None,
             "leaderBid": None,
+            "currentLeaderBid": None,
+            "predictionSnapshot": None,
+            "frozenPrediction": None,
+            "probabilityProfile": None,
+            "solverStatus": "paused",
+            "solverMissingReason": reason,
+            "shadowUpdating": False,
         })
-        LATEST_PAYLOAD.pop("visionState", None)
-        LATEST_VISION_PAYLOAD.clear()
+        payload.pop("visionState", None)
+        solver_input = payload.get("solverInput")
+        if isinstance(solver_input, dict):
+            solver_input = dict(solver_input)
+            solver_input.update({
+                "predictionSnapshot": None,
+                "frozenPrediction": None,
+                "probabilityProfile": None,
+                "shadowUpdating": False,
+            })
+            payload["solverInput"] = solver_input
+        current_summary = payload.get("currentMatch")
+        if isinstance(current_summary, dict):
+            current_summary = dict(current_summary)
+            current_summary.update({
+                "prediction": None,
+                "decisionLines": None,
+                "explainability": None,
+            })
+            payload["currentMatch"] = current_summary
+    health = dict(LATEST_PAYLOAD.get("visionHealth") or {})
+    if health.get("profile") == "native-readonly-v1":
+        health.update({
+            "status": "WAITING",
+            "stage": "native-refreshing",
+            "reason": reason,
+        })
+        health.pop("freshnessMs", None)
+        health.pop("frameSequence", None)
+        LATEST_PAYLOAD["visionHealth"] = health
+
+
+def _native_solver_lease_matches_locked(context: Dict[str, Any]) -> bool:
+    lease = _NATIVE_SOLVER_LEASE
+    if not isinstance(context, dict) or not isinstance(lease, dict):
+        return False
+    now_ns = time.monotonic_ns()
+    if now_ns - int(lease.get("acceptedAtMonotonicNs") or 0) >= int(_NATIVE_FRAME_TIMEOUT_SECONDS * 1_000_000_000):
+        return False
+    target = _native_target_instance(context.get("target"))
+    return bool(
+        lease.get("generation") == _NATIVE_SOLVER_INVALIDATION_GENERATION
+        and context.get("nativeSolverGeneration") == lease.get("generation")
+        and lease.get("sessionId") == _NATIVE_EXPECTED_SESSION == _NATIVE_OBSERVATION_SESSION
+        and lease.get("matchId") == CURRENT_MATCH.id == context.get("matchId")
+        and lease.get("round") == context.get("round")
+        and lease.get("factsRevision") == context.get("factsRevision")
+        and lease.get("engineFactsRevision") == context.get("engineFactsRevision")
+        and lease.get("matchGeneration") == context.get("matchGeneration")
+        and lease.get("targetInstance") == target
+        and context.get("scene") == "IN_AUCTION"
+        and context.get("nativeInvalidated") is not True
+        and _LIVE_VISION_ACTIVE
+        and _LIVE_VISION_MATCH_ID == CURRENT_MATCH.id
+    )
+
+
+def _native_solver_lease_matches(context: Dict[str, Any]) -> bool:
+    with _MANUAL_STATE_LOCK:
+        return _native_solver_lease_matches_locked(context)
+
+
+def _native_accept_observation_locked(data: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+    global _NATIVE_SOLVER_LEASE
+    target_instance = _native_target_instance(data.get("target"))
+    try:
+        freshness_ms = float(data.get("freshnessMs"))
+    except (TypeError, ValueError):
+        return None
+    if (
+        data.get("scene") != "IN_AUCTION"
+        or data.get("inAuction") is not True
+        or data.get("isSettlement") is True
+        or target_instance is None
+        or freshness_ms < 0
+        or freshness_ms > _NATIVE_FRAME_TIMEOUT_SECONDS * 1000
+    ):
+        return None
+    lease = {
+        "generation": _NATIVE_SOLVER_INVALIDATION_GENERATION,
+        "sessionId": data.get("observationSessionId"),
+        "targetInstance": target_instance,
+        "matchId": data.get("matchId"),
+        "round": data.get("round"),
+        "factsRevision": data.get("factsRevision"),
+        "engineFactsRevision": data.get("engineFactsRevision"),
+        "matchGeneration": data.get("matchGeneration"),
+        "frameSequence": data.get("frameSequence"),
+        "acceptedAtMonotonicNs": time.monotonic_ns(),
+    }
+    _NATIVE_SOLVER_LEASE = lease
+    data["nativeSolverGeneration"] = lease["generation"]
+    _native_start_frame_watchdog_locked()
+    return lease
+
+
+def _native_frame_watchdog_loop() -> None:
+    while True:
+        time.sleep(0.5)
+        with _MANUAL_STATE_LOCK:
+            lease = _NATIVE_SOLVER_LEASE
+            if not isinstance(lease, dict):
+                continue
+            elapsed_ns = time.monotonic_ns() - int(lease.get("acceptedAtMonotonicNs") or 0)
+            if elapsed_ns < int(_NATIVE_FRAME_TIMEOUT_SECONDS * 1_000_000_000):
+                continue
+            session_id = str(lease.get("sessionId") or "")
+            generation = lease.get("generation")
+            frame_sequence = lease.get("frameSequence")
+            _native_observation_event({
+                "type": "native_observation",
+                "schemaVersion": "native-observation-v1",
+                "status": "PAUSED",
+                "observationSessionId": session_id,
+                "sourceKind": "native_wgc",
+                "reason": "observation-frame-timeout",
+                "inputActions": False,
+                "formalHistoryWriter": False,
+                "details": {"generation": generation, "frameSequence": frame_sequence},
+            })
+
+
+def _native_publish_health(event: Dict[str, Any], *, force_main: bool = False) -> Dict[str, Any]:
+    health = _native_health_from_event(event)
+    raw_status = str(event.get("status") or "").upper()
+    invalidating = raw_status in {"STARTING", "READY", "PAUSED", "ERROR", "STOPPED"}
+    with _MANUAL_STATE_LOCK:
+        if invalidating:
+            _native_invalidate_solver_locked(str(event.get("reason") or f"native-{raw_status.lower()}"))
+            LATEST_PAYLOAD["observationStatus"] = raw_status
+            LATEST_PAYLOAD.pop("visionState", None)
+            LATEST_VISION_PAYLOAD.clear()
+        LATEST_PAYLOAD["visionHealth"] = health
+        LATEST_PAYLOAD["observationProfile"] = "native-readonly-v1"
+        if invalidating:
+            LATEST_PAYLOAD["nativeInvalidated"] = True
     PRESENTATION_RUNTIME.set_vision_process_state(
         "running" if raw_status in {"STARTING", "READY", "FRAME", "CONTROL"} else "stopped"
     )
@@ -1511,7 +1725,7 @@ def _native_publish_health(event: Dict[str, Any], *, force_main: bool = False) -
         "type": "vision_health",
         "visionHealth": health,
         "observationProfile": "native-readonly-v1",
-        "nativeInvalidated": raw_status in {"PAUSED", "ERROR", "STOPPED"},
+        "nativeInvalidated": invalidating,
     }
     loop = WS_EVENT_LOOP
     if loop is not None and loop.is_running():
@@ -1601,30 +1815,53 @@ def _native_observation_event(event: Dict[str, Any]) -> None:
     elif incoming_session and incoming_session != _NATIVE_EXPECTED_SESSION:
         # An old reader/result must not revive or invalidate the new session.
         return
+    if status == "PAUSED" and event.get("reason") == "observation-frame-timeout":
+        details = event.get("details") if isinstance(event.get("details"), dict) else {}
+        with _MANUAL_STATE_LOCK:
+            lease = _NATIVE_SOLVER_LEASE
+            if not isinstance(lease, dict) or (
+                lease.get("sessionId") != incoming_session
+                or lease.get("generation") != details.get("generation")
+                or lease.get("frameSequence") != details.get("frameSequence")
+            ):
+                return
     if status in {"PAUSED", "ERROR", "STOPPED"}:
         _NATIVE_EXPECTED_SESSION = None
     if status != "FRAME":
         if status == "CONTROL":
             details = event.get("details") if isinstance(event.get("details"), dict) else {}
-            receipt = {
-                "commandId": details.get("commandId"),
-                "revision": details.get("controlRevision"),
-                "status": details.get("commandStatus") or "ERROR",
-                "messageType": details.get("commandMessageType"),
-                "result": details.get("commandResult"),
-            }
-            LATEST_PAYLOAD["nativeControlResult"] = receipt
-            health = dict(LATEST_PAYLOAD.get("visionHealth") or {})
-            if not health or health.get("profile") != "native-readonly-v1":
-                health = _native_health_from_event(event)
-            health["controlReceipt"] = receipt
-            LATEST_PAYLOAD["visionHealth"] = health
-            control_message = {
-                "type": "vision_control",
-                "nativeControlResult": receipt,
-                "visionHealth": health,
-                "observationProfile": "native-readonly-v1",
-            }
+            try:
+                control_revision = int(details.get("controlRevision"))
+            except (TypeError, ValueError):
+                return
+            with _MANUAL_STATE_LOCK:
+                binding = _NATIVE_CONTROL_BINDINGS.pop(control_revision, None)
+                if not isinstance(binding, dict) or (
+                    binding.get("matchId") != CURRENT_MATCH.id
+                    or binding.get("mainFactsRevision") != CURRENT_MATCH.facts_revision
+                    or binding.get("sessionId") != _NATIVE_OBSERVATION_SESSION
+                    or incoming_session != _NATIVE_EXPECTED_SESSION
+                ):
+                    return
+                receipt = {
+                    "commandId": details.get("commandId"),
+                    "revision": control_revision,
+                    "status": details.get("commandStatus") or "ERROR",
+                    "messageType": details.get("commandMessageType"),
+                    "result": details.get("commandResult"),
+                }
+                LATEST_PAYLOAD["nativeControlResult"] = receipt
+                health = dict(LATEST_PAYLOAD.get("visionHealth") or {})
+                if not health or health.get("profile") != "native-readonly-v1":
+                    health = _native_health_from_event(event)
+                health["controlReceipt"] = receipt
+                LATEST_PAYLOAD["visionHealth"] = health
+                control_message = {
+                    "type": "vision_control",
+                    "nativeControlResult": receipt,
+                    "visionHealth": health,
+                    "observationProfile": "native-readonly-v1",
+                }
             loop = WS_EVENT_LOOP
             if loop is not None and loop.is_running():
                 try:
@@ -1675,6 +1912,27 @@ def _native_observation_event(event: Dict[str, Any]) -> None:
             "reason": "native-frame-sequence-invalid",
         }, force_main=True)
         return
+    target = event.get("target")
+    try:
+        frame_freshness_ms = float(frame.get("freshnessMs"))
+    except (TypeError, ValueError):
+        frame_freshness_ms = float("inf")
+    if (
+        _native_target_instance(target) is None
+        or frame_freshness_ms < 0
+        or frame_freshness_ms > _NATIVE_FRAME_TIMEOUT_SECONDS * 1000
+    ):
+        _native_observation_event({
+            "type": "native_observation",
+            "schemaVersion": "native-observation-v1",
+            "status": "ERROR",
+            "observationSessionId": session_id,
+            "sourceKind": "native_wgc",
+            "reason": "native-frame-target-or-freshness-invalid",
+            "inputActions": False,
+            "formalHistoryWriter": False,
+        })
+        return
     from live_match_transport import LiveMatchReceiver
     with _MANUAL_STATE_LOCK:
         prior = LATEST_PAYLOAD if LATEST_PAYLOAD.get("observationSessionId") == session_id else {}
@@ -1696,19 +1954,32 @@ def _native_observation_event(event: Dict[str, Any]) -> None:
             log_stage("PRESENTATION:NATIVE", f"stale business result dropped sequence={sequence} session={session_id}")
             return
         if session_id != _NATIVE_OBSERVATION_SESSION:
+            _native_invalidate_solver_locked("observation-session-replaced")
             _NATIVE_OBSERVATION_SESSION = session_id
             _NATIVE_OBSERVATION_SEQUENCE = 0
-            _NATIVE_OBSERVATION_RECEIVER = LiveMatchReceiver()
+            prior_receiver = _NATIVE_OBSERVATION_RECEIVER
+            receiver = LiveMatchReceiver()
+            receiver.retired.update(getattr(prior_receiver, "retired", set()))
             # A native Host session is a hard observation boundary.  Do not
             # let a prior session's facts survive a new Engine match id when
             # the first new frame contains honest nulls.
             if str(snapshot.get("id") or "") != CURRENT_MATCH.id:
+                if CURRENT_MATCH.id:
+                    receiver.retired.add(CURRENT_MATCH.id)
                 CURRENT_MATCH.begin_next_match()
                 _LIVE_MANUAL_OVERRIDES.clear()
+            _NATIVE_OBSERVATION_RECEIVER = receiver
         receiver = _NATIVE_OBSERVATION_RECEIVER
         if receiver is None:
             receiver = LiveMatchReceiver()
             _NATIVE_OBSERVATION_RECEIVER = receiver
+        incoming_match_id = str(snapshot.get("id") or "")
+        if incoming_match_id and incoming_match_id in receiver.retired:
+            log_stage(
+                "PRESENTATION:NATIVE",
+                f"retired match frame dropped sequence={sequence} session={session_id} match={incoming_match_id}",
+            )
+            return
         vision_state = {
             "version": 1,
             "session": f"native:{session_id}",
@@ -1726,7 +1997,11 @@ def _native_observation_event(event: Dict[str, Any]) -> None:
             pass
         else:
             if CURRENT_MATCH.id != previous_match_id:
+                _native_invalidate_solver_locked("match-replaced")
                 _LIVE_MANUAL_OVERRIDES.clear()
+                ACTIVE_SETTLEMENT_TRUTH_HOLDER.clear()
+                _LIVE_CONTROL_WAITING_EXIT = False
+                LATEST_PAYLOAD.pop("nativeControlResult", None)
             _LIVE_CONTROL_WAITING_EXIT = False
             _LIVE_VISION_MATCH_ID = CURRENT_MATCH.id
             _LIVE_VISION_ACTIVE = True
@@ -1782,8 +2057,10 @@ def _native_observation_event(event: Dict[str, Any]) -> None:
                 "intelCardReadings": context.get("intelCardReadings") or intel,
                 "frameSequence": sequence,
                 "matchId": CURRENT_MATCH.id,
-                "factsRevision": CURRENT_MATCH.facts_revision,
+                "matchGeneration": CURRENT_MATCH._seq,
+                "factsRevision": snapshot.get("factsRevision"),
                 "engineFactsRevision": snapshot.get("factsRevision"),
+                "mainFactsRevision": CURRENT_MATCH.facts_revision,
                 "capturedAtNs": capture_ns,
                 "capturedAtUtc": frame.get("capturedAtUtc"),
                 "freshnessMs": frame.get("freshnessMs"),
@@ -1817,19 +2094,35 @@ def _native_observation_event(event: Dict[str, Any]) -> None:
             # manual correction. Null current seats cannot revive an old round.
             _native_project_current_quote(data, CURRENT_MATCH)
             previous_identity = (
-                LATEST_PAYLOAD.get("observationSessionId"), LATEST_PAYLOAD.get("round"),
-                LATEST_PAYLOAD.get("factsRevision"),
+                LATEST_PAYLOAD.get("observationSessionId"),
+                _native_target_instance(LATEST_PAYLOAD.get("target")),
+                LATEST_PAYLOAD.get("matchId"), LATEST_PAYLOAD.get("round"),
+                LATEST_PAYLOAD.get("factsRevision"), LATEST_PAYLOAD.get("engineFactsRevision"),
+                LATEST_PAYLOAD.get("matchGeneration"),
             )
-            current_identity = (session_id, round_no, CURRENT_MATCH.facts_revision)
-            if previous_identity != current_identity:
-                ACTIVE_SNAPSHOT_HOLDER.clear()
+            current_identity = (
+                session_id, _native_target_instance(data.get("target")),
+                CURRENT_MATCH.id, round_no, data.get("factsRevision"),
+                snapshot.get("factsRevision"), CURRENT_MATCH._seq,
+            )
+            if any(previous_identity) and previous_identity != current_identity:
+                _native_invalidate_solver_locked("observation-scope-changed")
+            lease = _native_accept_observation_locked(data)
             mapped, missing_reason = _native_solver_admission(facts)
             data.update(
                 predictionSnapshot=None, frozenPrediction=None, probabilityProfile=None,
                 solverStatus="incomplete", solverMissingReason=missing_reason,
                 shadowUpdating=False,
             )
-            if in_auction and mapped is not None:
+            if lease is None:
+                data.update(
+                    nativeInvalidated=True,
+                    observationStatus="WAITING_FOR_FRESH_FRAME",
+                    solverStatus="paused",
+                    solverMissingReason="等待当前有效的局内观察帧",
+                )
+                _native_invalidate_solver_locked("observation-not-current-auction")
+            elif in_auction and mapped is not None and _native_solver_lease_matches(data):
                 from live_shadow import attach_live_shadow
                 solver_ctx = dict(data)
                 solver_ctx.update(
@@ -1844,10 +2137,17 @@ def _native_observation_event(event: Dict[str, Any]) -> None:
                 if isinstance(snapshot_result, dict):
                     data["solverStatus"] = (snapshot_result.get("status") or {}).get("solverStatus") or "incomplete"
                     if data["solverStatus"] == "valid":
-                        ACTIVE_SNAPSHOT_HOLDER.update(
-                            CURRENT_MATCH.id, snapshot=snapshot_result,
-                            frozen_prediction=shadow.get("frozenPrediction"),
-                        )
+                        if _native_solver_lease_matches(solver_ctx):
+                            ACTIVE_SNAPSHOT_HOLDER.update(
+                                CURRENT_MATCH.id, snapshot=snapshot_result,
+                                frozen_prediction=shadow.get("frozenPrediction"),
+                            )
+                        else:
+                            data.update(
+                                predictionSnapshot=None, frozenPrediction=None,
+                                probabilityProfile=None, solverStatus="paused",
+                                solverMissingReason="观察资格已失效",
+                            )
                     else:
                         data["predictionSnapshot"] = None
                         data["frozenPrediction"] = None
@@ -1856,6 +2156,9 @@ def _native_observation_event(event: Dict[str, Any]) -> None:
                 elif shadow.get("shadowUpdating"):
                     data["solverStatus"] = "pending"
             data["overlayState"] = build_canonical_overlay_state(CURRENT_MATCH, data)
+            # Publish the accepted observation scope under the lock before the
+            # summary reader decides whether an active native result is eligible.
+            LATEST_PAYLOAD.update(data)
             data["currentMatch"] = get_current_match_presentation_summary()
             LATEST_VISION_PAYLOAD.clear()
             LATEST_VISION_PAYLOAD.update(data)
@@ -1884,6 +2187,25 @@ def _native_observation_event(event: Dict[str, Any]) -> None:
 def _send_native_manual_control(command: Optional[Dict[str, Any]]) -> Optional[Dict[str, Any]]:
     if not native_observation_enabled() or not isinstance(command, dict):
         return None
+    expected_match_id = str(command.get("expectedMatchId") or "").strip()
+    revision = command.get("revision")
+    if not command.get("reset"):
+        snapshot = command.get("snapshot") if isinstance(command.get("snapshot"), dict) else {}
+        try:
+            command_main_revision = int(snapshot.get("factsRevision"))
+        except (TypeError, ValueError):
+            command_main_revision = -1
+        if (
+            expected_match_id != CURRENT_MATCH.id
+            or command_main_revision != CURRENT_MATCH.facts_revision
+            or not _NATIVE_EXPECTED_SESSION
+            or _NATIVE_EXPECTED_SESSION != _NATIVE_OBSERVATION_SESSION
+        ):
+            return {
+                "status": "REJECTED",
+                "reason": "STALE_MATCH_COMMAND",
+                "revision": revision,
+            }
     with _NATIVE_OBSERVATION_LOCK:
         bridge = NATIVE_OBSERVATION_BRIDGE
     if bridge is None or not bridge.running:
@@ -1892,7 +2214,21 @@ def _send_native_manual_control(command: Optional[Dict[str, Any]]) -> Optional[D
             "reason": "NATIVE_OBSERVATION_NOT_RUNNING",
             "revision": command.get("revision"),
         }
+    binding = None
+    try:
+        control_revision = int(revision)
+    except (TypeError, ValueError):
+        control_revision = None
+    if control_revision is not None and not command.get("reset"):
+        binding = {
+            "matchId": expected_match_id,
+            "mainFactsRevision": CURRENT_MATCH.facts_revision,
+            "sessionId": _NATIVE_OBSERVATION_SESSION,
+        }
+        _NATIVE_CONTROL_BINDINGS[control_revision] = binding
     sent = bridge.send_control({"type": "native_control", "command": command})
+    if not sent and control_revision is not None:
+        _NATIVE_CONTROL_BINDINGS.pop(control_revision, None)
     return {
         "status": "SENT" if sent else "REJECTED",
         "reason": None if sent else "NATIVE_CONTROL_CHANNEL_FAILED",
@@ -1946,11 +2282,13 @@ def _publish_live_shadow_event(event: Dict[str, Any]) -> None:
             if (
                 event.get("observationSessionId") != payload.get("observationSessionId")
                 or event.get("factsRevision") != payload.get("factsRevision")
+                or event.get("engineFactsRevision") != payload.get("engineFactsRevision")
                 or event.get("round") != payload.get("round")
                 or event.get("matchGeneration") != payload.get("matchGeneration")
-                or event_target.get("targetHwnd") != target.get("targetHwnd")
-                or event_target.get("targetPid") != target.get("targetPid")
+                or event.get("nativeSolverGeneration") != payload.get("nativeSolverGeneration")
+                or _native_target_instance(event_target) != _native_target_instance(target)
                 or payload.get("nativeInvalidated")
+                or not _native_solver_lease_matches(event)
             ):
                 return
         with _SHADOW_PRESENTATION_LOCK:
@@ -2539,6 +2877,10 @@ def build_manual_alpha_payload(include_solver_input: bool = True) -> Dict[str, A
         "coverageRatio": 0.0,
     }
     shadow_updating = False
+    native_projection_current = bool(
+        native_observation_enabled()
+        and _native_solver_lease_matches(LATEST_PAYLOAD)
+    )
     if include_solver_input and snap.get("venueId"):
         compatibility = dict(solver_context_translation(
             VENUE_BOX_CATALOG,
@@ -2558,58 +2900,66 @@ def build_manual_alpha_payload(include_solver_input: bool = True) -> Dict[str, A
                 "targetProfit": MANUAL_VISIBLE_TARGET_PROFIT_DEFAULT,
                 "codeRevision": get_code_revision(),
             })
-            try:
-                from live_shadow import (
-                    attach_live_shadow,
-                    get_live_dataset_revision,
-                    load_history_snapshot,
-                )
-                records = load_history_snapshot(CANONICAL_DATABASE)
-                revision = get_live_dataset_revision(CANONICAL_DATABASE)
-                solver_input["datasetRevision"] = revision
-                support_record_n = int(revision.get("supportEligibleRecordCount") or 0)
-                # Catalog feasibility is useful even before the first eligible history record.
-                solver_input = attach_live_shadow(solver_input, db_path=CANONICAL_DATABASE)
-                if isinstance(solver_input.get("predictionSnapshot"), dict) and not solver_input.get("shadowUpdating"):
-                    ACTIVE_SNAPSHOT_HOLDER.update(snap["id"], snapshot=solver_input["predictionSnapshot"], frozen_prediction=solver_input.get("frozenPrediction"))
-                shadow_updating = bool(solver_input.get("shadowUpdating"))
-                profile = solver_input.get("probabilityProfile") or {}
-                meta = solver_input.get("shadowMeta") or {}
-                coverage = float(profile.get("coverageRatio") or 0.0)
-                history_n = int(meta.get("historyN") or 0)
-                if support_record_n == 0:
-                    support_status = "STRUCTURAL_ONLY"
-                    reason_codes = ["INSUFFICIENT_HISTORY"]
-                elif coverage >= 0.999999 and profile.get("shadowWhole"):
-                    support_status = "HISTORICAL_SUPPORTED"
-                    reason_codes = []
-                elif coverage > 0:
-                    support_status = "PARTIAL_HISTORICAL_SUPPORT"
-                    reason_codes = ["PARTIAL_HISTORY_COVERAGE"]
-                elif shadow_updating:
-                    support_status = "SUPPORT_UPDATING"
-                    reason_codes = ["HISTORICAL_PROFILE_PENDING"]
-                else:
-                    support_status = "STRUCTURAL_ONLY"
-                    reason_codes = ["NO_MATCHING_HISTORY_SUPPORT"]
-                if compatibility.get("boxStatus") == "UNKNOWN_NO_BOX_EFFECT":
-                    reason_codes.append("UNKNOWN_BOX")
+            if native_observation_enabled():
                 shadow_support = {
-                    "status": support_status,
-                    "reasonCodes": reason_codes,
-                    "historyN": history_n,
-                    "coverageRatio": coverage,
-                }
-            except Exception as exc:
-                log_stage("MANUAL:SHADOW", f"history support unavailable: {type(exc).__name__}")
-                solver_input["probabilityProfile"] = None
-                solver_input["shadowUpdating"] = False
-                shadow_support = {
-                    "status": "STRUCTURAL_ONLY",
-                    "reasonCodes": ["HISTORY_UNAVAILABLE"],
+                    "status": "WAITING_FOR_OBSERVATION",
+                    "reasonCodes": ["NATIVE_OBSERVATION_NOT_CURRENT"],
                     "historyN": None,
                     "coverageRatio": 0.0,
                 }
+            else:
+                try:
+                    from live_shadow import (
+                        attach_live_shadow,
+                        get_live_dataset_revision,
+                        load_history_snapshot,
+                    )
+                    records = load_history_snapshot(CANONICAL_DATABASE)
+                    revision = get_live_dataset_revision(CANONICAL_DATABASE)
+                    solver_input["datasetRevision"] = revision
+                    support_record_n = int(revision.get("supportEligibleRecordCount") or 0)
+                    # Catalog feasibility is useful even before the first eligible history record.
+                    solver_input = attach_live_shadow(solver_input, db_path=CANONICAL_DATABASE)
+                    if isinstance(solver_input.get("predictionSnapshot"), dict) and not solver_input.get("shadowUpdating"):
+                        ACTIVE_SNAPSHOT_HOLDER.update(snap["id"], snapshot=solver_input["predictionSnapshot"], frozen_prediction=solver_input.get("frozenPrediction"))
+                    shadow_updating = bool(solver_input.get("shadowUpdating"))
+                    profile = solver_input.get("probabilityProfile") or {}
+                    meta = solver_input.get("shadowMeta") or {}
+                    coverage = float(profile.get("coverageRatio") or 0.0)
+                    history_n = int(meta.get("historyN") or 0)
+                    if support_record_n == 0:
+                        support_status = "STRUCTURAL_ONLY"
+                        reason_codes = ["INSUFFICIENT_HISTORY"]
+                    elif coverage >= 0.999999 and profile.get("shadowWhole"):
+                        support_status = "HISTORICAL_SUPPORTED"
+                        reason_codes = []
+                    elif coverage > 0:
+                        support_status = "PARTIAL_HISTORICAL_SUPPORT"
+                        reason_codes = ["PARTIAL_HISTORY_COVERAGE"]
+                    elif shadow_updating:
+                        support_status = "SUPPORT_UPDATING"
+                        reason_codes = ["HISTORICAL_PROFILE_PENDING"]
+                    else:
+                        support_status = "STRUCTURAL_ONLY"
+                        reason_codes = ["NO_MATCHING_HISTORY_SUPPORT"]
+                    if compatibility.get("boxStatus") == "UNKNOWN_NO_BOX_EFFECT":
+                        reason_codes.append("UNKNOWN_BOX")
+                    shadow_support = {
+                        "status": support_status,
+                        "reasonCodes": reason_codes,
+                        "historyN": history_n,
+                        "coverageRatio": coverage,
+                    }
+                except Exception as exc:
+                    log_stage("MANUAL:SHADOW", f"history support unavailable: {type(exc).__name__}")
+                    solver_input["probabilityProfile"] = None
+                    solver_input["shadowUpdating"] = False
+                    shadow_support = {
+                        "status": "STRUCTURAL_ONLY",
+                        "reasonCodes": ["HISTORY_UNAVAILABLE"],
+                        "historyN": None,
+                        "coverageRatio": 0.0,
+                    }
         else:
             shadow_support = {
                 "status": "UNAVAILABLE",
@@ -2621,14 +2971,18 @@ def build_manual_alpha_payload(include_solver_input: bool = True) -> Dict[str, A
         "type": "manual_alpha_state",
         "recognitionMode": get_recognition_mode(),
         "observationProfile": native_observation_profile(),
+        "observationSessionId": LATEST_PAYLOAD.get("observationSessionId") if native_observation_enabled() else None,
         "visionHealth": get_current_match_presentation_summary().get("visionHealth") or {},
         "nativeControlResult": dict(LATEST_PAYLOAD.get("nativeControlResult") or {}),
         "configuredPlayerName": get_player_name(),
         "source": "manual",
         "fillDefaults": False,
         "manualMode": True,
-        "inAuction": True,
-        "scene": "IN_AUCTION",
+        "inAuction": not native_observation_enabled() or native_projection_current,
+        "scene": "IN_AUCTION" if not native_observation_enabled() or native_projection_current else "UNKNOWN",
+        "nativeInvalidated": native_observation_enabled() and not native_projection_current,
+        "solverStatus": "paused" if native_observation_enabled() and not native_projection_current else "incomplete",
+        "solverMissingReason": "等待当前有效的局内观察帧" if native_observation_enabled() and not native_projection_current else None,
         "sceneLabel": "手动局",
         "matchId": snap["id"],
         "lifecycleStatus": "DRAFT",
@@ -2667,13 +3021,15 @@ def build_manual_alpha_payload(include_solver_input: bool = True) -> Dict[str, A
         "solverInput": solver_input,
         "solverCompatibility": compatibility,
         "solverAvailability": (
-            "AVAILABLE" if solver_input else "UNAVAILABLE"
+            "PAUSED" if native_observation_enabled() and not native_projection_current
+            else "AVAILABLE" if solver_input else "UNAVAILABLE"
         ),
         "shadowSupport": shadow_support,
         "shadowUpdating": shadow_updating,
         "draftSaved": draft_write_status() == "SAVED",
         "draftSaveStatus": draft_write_status(),
-        "factsRevision": snap.get("factsRevision"),
+        "factsRevision": LATEST_PAYLOAD.get("factsRevision") if native_observation_enabled() else snap.get("factsRevision"),
+        "mainFactsRevision": snap.get("factsRevision"),
         "fieldStates": snap.get("fieldStates") or {},
     }
 
@@ -2690,8 +3046,33 @@ def _manual_patch_has_content(patch: Dict[str, Any]) -> bool:
 
 def apply_manual_facts(facts: Optional[Dict[str, Any]]) -> Dict[str, Any]:
     with _MANUAL_STATE_LOCK:
-        previous_facts = dict(CURRENT_MATCH.facts)
         raw_data = dict(facts or {})
+        if native_observation_enabled():
+            expected_match_id = str(raw_data.get("expectedMatchId") or "").strip()
+            expected_revision = raw_data.get("expectedFactsRevision")
+            expected_session = str(raw_data.get("expectedObservationSessionId") or "").strip()
+            current_worker_revision = LATEST_PAYLOAD.get("factsRevision")
+            revision_matches = type(expected_revision) is int and expected_revision == current_worker_revision
+            if (
+                not expected_match_id
+                or expected_match_id != CURRENT_MATCH.id
+                or not revision_matches
+                or not expected_session
+                or expected_session != _NATIVE_OBSERVATION_SESSION
+                or (expected_session and _NATIVE_EXPECTED_SESSION not in (None, expected_session))
+            ):
+                rejected = dict(LATEST_PAYLOAD)
+                rejected.update({
+                    "type": "manual_alpha_state",
+                    "matchId": CURRENT_MATCH.id,
+                    "factsRevision": CURRENT_MATCH.facts_revision,
+                    "manualCommandResult": {
+                        "status": "REJECTED",
+                        "reason": "STALE_MATCH_COMMAND",
+                    },
+                })
+                return rejected
+        previous_facts = dict(CURRENT_MATCH.facts)
         patch = dict(raw_data.get("facts") or raw_data)
         cleared_fields = [key for key in (raw_data.get("clearedFields") or patch.pop("clearedFields", []) or []) if isinstance(key, str)]
         restore_auto_fields = [key for key in (raw_data.get("restoreAutoFields") or patch.pop("restoreAutoFields", []) or []) if isinstance(key, str)]
@@ -2705,7 +3086,7 @@ def apply_manual_facts(facts: Optional[Dict[str, Any]]) -> Dict[str, Any]:
             _MANUAL_MATCH_PLAYED_AT.setdefault(CURRENT_MATCH.id, explicit_played_at.strip())
         snap = raw_data.get("predictionSnapshot")
         frozen = raw_data.get("frozenPrediction")
-        if snap or frozen:
+        if (snap or frozen) and not native_observation_enabled():
             ACTIVE_SNAPSHOT_HOLDER.update(CURRENT_MATCH.id, snapshot=snap, frozen_prediction=frozen)
 
         input_issues = []
@@ -2813,6 +3194,13 @@ def apply_manual_facts(facts: Optional[Dict[str, Any]]) -> Dict[str, Any]:
             key: value for key, value in patch.items()
             if key == "boxUnknown" or not is_missing_observation(key, value)
         }
+        native_fact_command = bool(
+            any(key in CURRENT_MATCH.facts for key in content_patch)
+            or cleared_fields
+            or restore_auto_fields
+        )
+        if native_observation_enabled() and native_fact_command:
+            _native_invalidate_solver_locked("manual-facts-awaiting-worker-frame")
         if _manual_patch_has_content(content_patch) or cleared_fields or restore_auto_fields:
             CURRENT_MATCH.apply_facts(
                 content_patch,
@@ -2844,6 +3232,10 @@ def apply_manual_facts(facts: Optional[Dict[str, Any]]) -> Dict[str, Any]:
                 payload["nativeControlResult"] = native_receipt
         payload["draftId"] = saved.get("id") if saved else CURRENT_MATCH.id
         payload["draftSaved"] = draft_write_status() == "SAVED"
+        if native_observation_enabled() and not native_fact_command:
+            current_payload = dict(LATEST_PAYLOAD)
+            current_payload["manualCommandResult"] = {"status": "ACCEPTED"}
+            return current_payload
         LATEST_PAYLOAD.update(payload)
         return payload
 
@@ -3701,6 +4093,8 @@ def collect_gui_archive_prediction(request):
     with _MANUAL_STATE_LOCK:
         if match_id != CURRENT_MATCH.id:
             return response
+        if native_observation_enabled() and not _native_solver_lease_matches(LATEST_PAYLOAD):
+            return response
         completed = completed_prediction_for_match(match_id)
         if completed:
             ACTIVE_SNAPSHOT_HOLDER.update(match_id, snapshot=completed["snapshot"],
@@ -3823,6 +4217,8 @@ def attach_gui_prediction(payload):
     """Schedule computation on the persistent Node process. Overlay/Main only project."""
     from live_shadow import attach_live_shadow, load_history_snapshot
     data = dict(payload)
+    if native_observation_enabled():
+        return data, None
     if data.get("scene") != "IN_AUCTION" or data.get("isSettlement"):
         return data, None
     load_history_snapshot(CANONICAL_DATABASE)
@@ -3871,20 +4267,25 @@ def build_in_auction_hud_payload(ctx: Dict[str, Any], *, compute_shadow: bool = 
     if raw_costs is None or raw_costs.get("entry") is None:
         ctx["costs"] = session_costs_from_ctx(ctx)
     from live_shadow import attach_live_shadow
-    shadowed = attach_live_shadow(ctx) if compute_shadow else {}
+    native_lease_current = not native_observation_enabled() or _native_solver_lease_matches(ctx)
+    shadowed = attach_live_shadow(ctx) if compute_shadow and native_lease_current else {}
     profile = shadowed.get("probabilityProfile")
     snap = shadowed.get("predictionSnapshot")
     frozen = shadowed.get("frozenPrediction")
     target_match_id = ctx.get("matchId") or ctx.get("id") or CURRENT_MATCH.id
-    if snap or frozen:
+    if (snap or frozen) and native_lease_current:
         ACTIVE_SNAPSHOT_HOLDER.update(target_match_id, snapshot=snap, frozen_prediction=frozen)
         ctx["predictionSnapshot"] = snap
         ctx["frozenPrediction"] = frozen
     shadow_updating = bool(shadowed.get("shadowUpdating"))
     solver_status = ((snap.get("status") or {}).get("solverStatus") if isinstance(snap, dict) else None)
-    if solver_status is None:
+    if native_observation_enabled() and not native_lease_current:
+        solver_status = "paused"
+        solver_missing_reason = "等待当前有效的局内观察帧"
+    elif solver_status is None:
         solver_status = "pending" if shadow_updating else "incomplete"
-    solver_missing_reason = None
+    else:
+        solver_missing_reason = None
     if solver_status == "incomplete":
         if ctx.get("q") is None:
             solver_missing_reason = "缺失总高阶件数 Q"
@@ -4513,7 +4914,7 @@ def vision_capture_worker():
                         elif isinstance(data, dict) and data.get("action") == "prediction_archive_response":
                             prediction_transport.receive(data)
                         elif isinstance(data, dict) and data.get("action") == "prediction_snapshot":
-                            if data.get("matchId") == CURRENT_MATCH.id:
+                            if not native_observation_enabled() and data.get("matchId") == CURRENT_MATCH.id:
                                 ACTIVE_SNAPSHOT_HOLDER.update(
                                     CURRENT_MATCH.id, snapshot=data.get("snapshot"),
                                     frozen_prediction=data.get("frozenPrediction"))
@@ -5094,7 +5495,9 @@ def _start_native_observation_locked(*, resume_same_match: bool = False):
             return NATIVE_OBSERVATION_BRIDGE.process
         resume_state = None
         health = LATEST_PAYLOAD.get("visionHealth") or {}
-        if resume_same_match and health.get("reason") in {"focus-lost", "capture-failed"}:
+        if resume_same_match and health.get("reason") in {
+            "focus-lost", "capture-failed", "observation-frame-timeout"
+        }:
             target = LATEST_PAYLOAD.get("target")
             if isinstance(target, dict) and target.get("identity"):
                 with _MANUAL_STATE_LOCK:

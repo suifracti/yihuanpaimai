@@ -65,6 +65,10 @@ const dashboard = {
   pendingReviewRequestId: null,
   matchState: {
     matchId: null,
+    factsRevision: 0,
+    observationFactsRevision: null,
+    observationProfile: null,
+    observationSessionId: null,
     venueId: null,
     venue: null,
     boxId: null,
@@ -1122,9 +1126,15 @@ function postNative(action, payload = {}) {
   if (!isBridgeReady()) return;
   dashboard.requestSequence += 1;
   if (action === "warehouse_identity_review") dashboard.latestWarehouseRequestId = `main-${dashboard.requestSequence}`;
+  const commandPayload = { ...payload };
+  if (action === "manual_facts" && dashboard.matchState.observationProfile === "native-readonly-v1") {
+    commandPayload.expectedMatchId ??= dashboard.matchState.matchId;
+    commandPayload.expectedFactsRevision ??= dashboard.matchState.observationFactsRevision;
+    commandPayload.expectedObservationSessionId ??= dashboard.matchState.observationSessionId;
+  }
   window.chrome.webview.postMessage(JSON.stringify({
     action,
-    ...payload,
+    ...commandPayload,
     requestId: `main-${dashboard.requestSequence}`
   }));
   return "main-" + dashboard.requestSequence;
@@ -1840,11 +1850,15 @@ function renderMatch(currentMatch, overlayVisible) {
     modeButton.title = '点击切换手动／自动；结算采集单独控制';
   }
   dashboard.lastCurrentMatch = currentMatch;
+  dashboard.matchState.factsRevision = Number(currentMatch.factsRevision || 0);
+  dashboard.matchState.observationFactsRevision = currentMatch.observationFactsRevision ?? null;
+  dashboard.matchState.observationProfile = currentMatch.observationProfile || null;
+  dashboard.matchState.observationSessionId = currentMatch.observationSessionId || null;
   const visionHealthStatus = document.getElementById('vision-health-status');
   if (visionHealthStatus) {
     const health = currentMatch.visionHealth || {};
     const nativeProfile = currentMatch.observationProfile === 'native-readonly-v1' || health.profile === 'native-readonly-v1';
-    const nativeWaiting = nativeProfile && ['native-starting', 'native-ready'].includes(health.stage);
+    const nativeWaiting = nativeProfile && ['native-starting', 'native-ready', 'native-refreshing'].includes(health.stage);
     const needsNativeAction = nativeProfile && health.status !== 'READY' && !nativeWaiting;
     const nativeTelemetry = nativeProfile && health.status === 'READY' && health.freshnessMs != null;
     visionHealthStatus.hidden = nativeProfile ? !(needsNativeAction || nativeWaiting || nativeTelemetry) : health.status !== 'ERROR';
@@ -1852,6 +1866,7 @@ function renderMatch(currentMatch, overlayVisible) {
     if (!visionHealthStatus.hidden && nativeProfile) {
       if (nativeTelemetry) visionHealthStatus.textContent = `Native WGC · 新鲜度 ${Number(health.freshnessMs).toFixed(0)}ms · 帧 ${health.frameSequence ?? '--'}`;
       else if (health.stage === 'native-ready') visionHealthStatus.textContent = 'Native Host 已就绪，等待首个业务帧';
+      else if (health.stage === 'native-refreshing') visionHealthStatus.textContent = `等待当前局的新观察帧：${health.reason || '实时建议暂不可用'}`;
       else if (health.stage === 'native-explicit-start' || health.stage === 'native-stopped') visionHealthStatus.textContent = 'Native 观察未启动，点击开始观察';
       else if (health.stage === 'native-starting') visionHealthStatus.textContent = '正在启动 Native 观察，请保持游戏窗口可见并置前';
       else if (health.stage === 'native-paused') visionHealthStatus.textContent = `Native 观察已暂停：${health.reason || '目标窗口或场景边界变化'}；点击重新开始`;
@@ -1866,7 +1881,7 @@ function renderMatch(currentMatch, overlayVisible) {
       restoreButton.hidden = nativeProfile ? !needsNativeAction : visionHealthStatus.hidden || health.stage !== 'process';
       const sameMatchRecovery = nativeProfile
         && health.stage === 'native-paused'
-        && ['focus-lost', 'capture-failed'].includes(String(health.reason || ''));
+        && ['focus-lost', 'capture-failed', 'observation-frame-timeout'].includes(String(health.reason || ''));
       restoreButton.dataset.resumeSameMatch = sameMatchRecovery ? 'true' : 'false';
       restoreButton.textContent = nativeProfile
         ? (sameMatchRecovery ? '恢复同局观察' : '开始新局观察')

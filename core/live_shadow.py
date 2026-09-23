@@ -362,6 +362,7 @@ def _profile_cache_key(ctx: Dict[str, Any], history_gen: int) -> str:
         **_profile_detail_context(ctx),
         "roundingMode": ctx.get("roundingMode") or "floor",
         "matchGeneration": ctx.get("matchGeneration") or 0,
+        "nativeSolverGeneration": ctx.get("nativeSolverGeneration"),
     }
     raw = json.dumps(_jsonable(payload), ensure_ascii=False, separators=(",", ":"), sort_keys=True)
     return hashlib.sha1(raw.encode("utf-8")).hexdigest()
@@ -901,10 +902,16 @@ def _shadow_worker_loop() -> None:
                     publish_event = {
                         "matchId": (pending_ctx or {}).get("matchId") or (pending_ctx or {}).get("id"),
                         "matchGeneration": int((pending_ctx or {}).get("matchGeneration") or 0),
+                        "scene": (pending_ctx or {}).get("scene"),
                         "observationSessionId": (pending_ctx or {}).get("observationSessionId"),
+                        # Main-local validity generation.  This is intentionally
+                        # presentation metadata and never enters the frozen
+                        # MMF/FRAME_READY transport.
+                        "nativeSolverGeneration": (pending_ctx or {}).get("nativeSolverGeneration"),
                         "target": copy.deepcopy((pending_ctx or {}).get("target")),
                         "round": (pending_ctx or {}).get("round") if (pending_ctx or {}).get("round") is not None else (pending_ctx or {}).get("roundNo"),
                         "factsRevision": (pending_ctx or {}).get("factsRevision"),
+                        "engineFactsRevision": (pending_ctx or {}).get("engineFactsRevision"),
                         "presentationSource": (pending_ctx or {}).get("presentationSource"),
                         "shadowGen": pending_gen,
                         "probabilityProfile": copy.deepcopy(profile),

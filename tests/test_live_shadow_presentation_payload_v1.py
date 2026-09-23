@@ -3,6 +3,7 @@
 import os
 import shutil
 import sys
+import time
 import unittest
 from pathlib import Path
 from unittest import mock
@@ -13,9 +14,324 @@ sys.path.insert(0, os.path.join(PROJECT_ROOT, "core"))
 
 import main as app_main
 import live_shadow
+from current_match import CurrentMatch
+from prediction_snapshot_holder import ActivePredictionSnapshotHolder
 
 
 class TestLiveShadowPresentationPayloadV1(unittest.TestCase):
+    @staticmethod
+    def _target():
+        return {
+            "targetHwnd": 123,
+            "targetPid": 456,
+            "generation": 7,
+            "identity": {"ProcessInstanceToken": 99},
+            "isTargetAlive": True,
+            "isTargetForeground": True,
+        }
+
+    def _native_lease_patch(self, *, match_id, session, target, round_no, facts_revision,
+                            engine_facts_revision, match_generation, generation):
+        target_instance = app_main._native_target_instance(target)
+        lease = {
+            "generation": generation,
+            "sessionId": session,
+            "targetInstance": target_instance,
+            "matchId": match_id,
+            "round": round_no,
+            "factsRevision": facts_revision,
+            "engineFactsRevision": engine_facts_revision,
+            "matchGeneration": match_generation,
+            "frameSequence": 1,
+            "acceptedAtMonotonicNs": time.monotonic_ns(),
+        }
+        return mock.patch.multiple(
+            app_main,
+            _NATIVE_SOLVER_INVALIDATION_GENERATION=generation,
+            _NATIVE_SOLVER_LEASE=lease,
+            _NATIVE_EXPECTED_SESSION=session,
+            _NATIVE_OBSERVATION_SESSION=session,
+            _LIVE_VISION_ACTIVE=True,
+            _LIVE_VISION_MATCH_ID=match_id,
+        )
+
+    def _native_frame(self, match, *, session, sequence, match_id, facts_revision,
+                      round_no, target, leader_bid=None, venue_id=None):
+        snapshot = match.snapshot()
+        snapshot.update({
+            "id": match_id,
+            "schemaVersion": 7,
+            "lifecycleStatus": "DRAFT",
+            "factsRevision": facts_revision,
+        })
+        if leader_bid is not None:
+            snapshot["leaderBid"] = leader_bid
+        if venue_id is not None:
+            snapshot["venueId"] = venue_id
+        return {
+            "type": "native_observation",
+            "schemaVersion": "native-observation-v1",
+            "status": "FRAME",
+            "observationSessionId": session,
+            "sourceKind": "native_wgc",
+            "inputActions": False,
+            "formalHistoryWriter": False,
+            "target": target,
+            "frame": {
+                "sequence": sequence,
+                "capturedAtNs": sequence * 1_000_000_000,
+                "freshnessMs": 8,
+            },
+            "currentMatch": snapshot,
+            "perception": {
+                "scene": "IN_AUCTION",
+                "inAuction": True,
+                "bids": [],
+                "intel": [],
+            },
+            "pipelineContext": {
+                "scene": "IN_AUCTION",
+                "inAuction": True,
+                "round": round_no,
+                "seats": [],
+                "intel": [],
+            },
+        }
+
+    def test_pause_recovery_and_new_match_revoke_old_work(self):
+        original_payload = dict(app_main.LATEST_PAYLOAD)
+        original_vision_payload = dict(app_main.LATEST_VISION_PAYLOAD)
+        original_holder = (
+            app_main.ACTIVE_SNAPSHOT_HOLDER.match_id,
+            app_main.ACTIVE_SNAPSHOT_HOLDER.snapshot,
+            app_main.ACTIVE_SNAPSHOT_HOLDER.frozen_prediction,
+        )
+        original_keys = dict(app_main._SHADOW_PRESENTATION_KEYS)
+        original_controls = dict(app_main._NATIVE_CONTROL_BINDINGS)
+        original_manual_overrides = dict(app_main._LIVE_MANUAL_OVERRIDES)
+        original_native_state = {
+            name: getattr(app_main, name)
+            for name in (
+                "_NATIVE_OBSERVATION_RECEIVER", "_NATIVE_OBSERVATION_SESSION",
+                "_NATIVE_EXPECTED_SESSION", "_NATIVE_OBSERVATION_SEQUENCE",
+                "_NATIVE_OBSERVATION_LAST_FRAME_NS", "_NATIVE_SOLVER_INVALIDATION_GENERATION",
+                "_NATIVE_SOLVER_LEASE", "_LIVE_VISION_ACTIVE", "_LIVE_VISION_MATCH_ID",
+            )
+        }
+        match = CurrentMatch()
+        match.id = "p3-match-a"
+        match.apply_facts({
+            "venueId": "venue-shanhu", "venue": "珊瑚海湾",
+            "boxId": "box-shanhu-glass", "box": "琉璃宝箱 · 宝石类概率提升",
+            "fieldCondition": "standard", "q": 12, "goldAvg": 74379,
+            "entryCost": 5000, "roundNo": 3, "leaderBid": 700,
+        }, source="manual", intent="confirm")
+        target = self._target()
+        requests = []
+
+        def pending_shadow(ctx, db_path=None):
+            requests.append(dict(ctx))
+            return {
+                "predictionSnapshot": None,
+                "frozenPrediction": None,
+                "probabilityProfile": None,
+                "shadowUpdating": True,
+                "shadowMeta": {"cache": "pending"},
+            }
+
+        def completed_event(ctx, prediction_id):
+            return {
+                **{key: ctx.get(key) for key in (
+                    "matchId", "matchGeneration", "scene", "observationSessionId",
+                    "nativeSolverGeneration", "target", "round", "factsRevision",
+                    "engineFactsRevision", "presentationSource",
+                )},
+                "predictionSnapshot": {
+                    "matchId": ctx["matchId"],
+                    "predictionId": prediction_id,
+                    "status": {"solverStatus": "valid"},
+                },
+                "probabilityProfile": {"coverageRatio": 0.5},
+                "frozenPrediction": {"recommendedMax": 180},
+            }
+
+        try:
+            app_main.LATEST_PAYLOAD.clear()
+            app_main.LATEST_VISION_PAYLOAD.clear()
+            app_main.ACTIVE_SNAPSHOT_HOLDER.clear()
+            app_main._SHADOW_PRESENTATION_KEYS.clear()
+            app_main._NATIVE_CONTROL_BINDINGS.clear()
+            app_main._LIVE_MANUAL_OVERRIDES.clear()
+            app_main._NATIVE_OBSERVATION_RECEIVER = None
+            app_main._NATIVE_OBSERVATION_SESSION = None
+            app_main._NATIVE_EXPECTED_SESSION = None
+            app_main._NATIVE_OBSERVATION_SEQUENCE = 0
+            app_main._NATIVE_OBSERVATION_LAST_FRAME_NS = None
+            app_main._NATIVE_SOLVER_INVALIDATION_GENERATION = 0
+            app_main._NATIVE_SOLVER_LEASE = None
+            app_main._LIVE_VISION_ACTIVE = False
+            app_main._LIVE_VISION_MATCH_ID = None
+            with mock.patch.object(app_main, "CURRENT_MATCH", match), \
+                 mock.patch.object(app_main, "ACTIVE_SNAPSHOT_HOLDER", ActivePredictionSnapshotHolder()), \
+                 mock.patch.object(app_main, "ACTIVE_SETTLEMENT_TRUTH_HOLDER", mock.Mock()), \
+                 mock.patch.object(app_main, "native_observation_enabled", return_value=True), \
+                 mock.patch.object(app_main, "_native_start_frame_watchdog_locked"), \
+                 mock.patch.object(app_main, "_native_post_main_status"), \
+                 mock.patch.object(app_main.PRESENTATION_RUNTIME, "set_vision_process_state"), \
+                 mock.patch.object(app_main.PRESENTATION_RUNTIME, "observe_transport"), \
+                 mock.patch.object(live_shadow, "invalidate_match_shadow", return_value=0), \
+                 mock.patch.object(live_shadow, "attach_live_shadow", side_effect=pending_shadow):
+                app_main._native_observation_event({
+                    "type": "native_observation", "schemaVersion": "native-observation-v1",
+                    "status": "STARTING", "observationSessionId": "session-a",
+                    "sourceKind": "native_wgc", "inputActions": False,
+                    "formalHistoryWriter": False,
+                })
+                app_main._native_observation_event(self._native_frame(
+                    match, session="session-a", sequence=1, match_id="p3-match-a",
+                    facts_revision=11, round_no=3, target=target, leader_bid=650,
+                    venue_id="venue-other",
+                ))
+                self.assertEqual(len(requests), 1)
+                first_job = requests[0]
+                self.assertEqual(app_main.LATEST_PAYLOAD["solverStatus"], "pending")
+
+                first_result = completed_event(first_job, "before-pause")
+                app_main._publish_live_shadow_event(first_result)
+                self.assertEqual(
+                    app_main.ACTIVE_SNAPSHOT_HOLDER.get_snapshot_for_match("p3-match-a")["predictionId"],
+                    "before-pause",
+                )
+                kept_facts = dict(match.facts)
+                self.assertEqual(match.facts["venueId"], "venue-shanhu")
+                self.assertTrue(match.field_states["venueId"].protected)
+
+                app_main._native_observation_event({
+                    "type": "native_observation", "schemaVersion": "native-observation-v1",
+                    "status": "PAUSED", "observationSessionId": "session-a",
+                    "sourceKind": "native_wgc", "reason": "focus-lost",
+                    "inputActions": False, "formalHistoryWriter": False,
+                })
+                self.assertIsNone(app_main._NATIVE_SOLVER_LEASE)
+                self.assertIsNone(app_main.ACTIVE_SNAPSHOT_HOLDER.get_snapshot_for_match("p3-match-a"))
+                self.assertEqual(match.facts, kept_facts)
+                self.assertTrue(match.field_states["venueId"].protected)
+                app_main._publish_live_shadow_event(first_result)
+                self.assertIsNone(app_main.LATEST_PAYLOAD.get("predictionSnapshot"))
+
+                app_main._native_observation_event({
+                    "type": "native_observation", "schemaVersion": "native-observation-v1",
+                    "status": "STARTING", "observationSessionId": "session-b",
+                    "sourceKind": "native_wgc", "inputActions": False,
+                    "formalHistoryWriter": False,
+                })
+                app_main._native_observation_event({
+                    "type": "native_observation", "schemaVersion": "native-observation-v1",
+                    "status": "READY", "observationSessionId": "session-b",
+                    "sourceKind": "native_wgc", "inputActions": False,
+                    "formalHistoryWriter": False,
+                })
+                self.assertIsNone(app_main._NATIVE_SOLVER_LEASE)
+                app_main._publish_live_shadow_event(first_result)
+                self.assertEqual(len(requests), 1)
+
+                app_main._native_observation_event(self._native_frame(
+                    match, session="session-b", sequence=1, match_id="p3-match-a",
+                    facts_revision=11, round_no=3, target=target, leader_bid=600,
+                    venue_id="venue-other",
+                ))
+                self.assertEqual(len(requests), 2)
+                second_job = requests[1]
+                self.assertEqual(second_job["factsRevision"], first_job["factsRevision"])
+                self.assertGreater(second_job["nativeSolverGeneration"], first_job["nativeSolverGeneration"])
+                self.assertEqual(match.facts["venueId"], "venue-shanhu")
+                self.assertTrue(match.field_states["venueId"].protected)
+                app_main._publish_live_shadow_event(first_result)
+                self.assertIsNone(app_main.LATEST_PAYLOAD.get("predictionSnapshot"))
+                second_result = completed_event(second_job, "after-resume")
+                app_main._publish_live_shadow_event(second_result)
+                self.assertEqual(app_main.LATEST_PAYLOAD["predictionSnapshot"]["predictionId"], "after-resume")
+
+                app_main._native_observation_event({
+                    "type": "native_observation", "schemaVersion": "native-observation-v1",
+                    "status": "PAUSED", "observationSessionId": "session-b",
+                    "sourceKind": "native_wgc", "reason": "scene-boundary:SETTLEMENT",
+                    "inputActions": False, "formalHistoryWriter": False,
+                })
+                next_match = CurrentMatch()
+                next_match.id = "p3-match-b"
+                app_main._native_observation_event({
+                    "type": "native_observation", "schemaVersion": "native-observation-v1",
+                    "status": "STARTING", "observationSessionId": "session-c",
+                    "sourceKind": "native_wgc", "inputActions": False,
+                    "formalHistoryWriter": False,
+                })
+                app_main._native_observation_event({
+                    "type": "native_observation", "schemaVersion": "native-observation-v1",
+                    "status": "READY", "observationSessionId": "session-c",
+                    "sourceKind": "native_wgc", "inputActions": False,
+                    "formalHistoryWriter": False,
+                })
+                app_main._native_observation_event(self._native_frame(
+                    next_match, session="session-c", sequence=1, match_id="p3-match-b",
+                    facts_revision=1, round_no=1, target=target,
+                ))
+                self.assertEqual(match.id, "p3-match-b")
+                self.assertIsNone(match.facts["venueId"])
+                self.assertIsNone(match.facts["q"])
+                self.assertIsNone(match.facts["leaderBid"])
+                self.assertFalse(any(state.protected for state in match.field_states.values()))
+                self.assertIsNone(app_main.LATEST_PAYLOAD.get("predictionSnapshot"))
+                self.assertEqual(app_main.LATEST_PAYLOAD["solverMissingReason"], "缺失会场")
+
+                latest_frame_sequence = app_main.LATEST_PAYLOAD["frameSequence"]
+                app_main._native_observation_event(self._native_frame(
+                    next_match, session="session-c", sequence=99, match_id="p3-match-a",
+                    facts_revision=11, round_no=3, target=target, leader_bid=999,
+                ))
+                self.assertEqual(match.id, "p3-match-b")
+                self.assertEqual(app_main.LATEST_PAYLOAD["frameSequence"], latest_frame_sequence)
+                self.assertIsNone(match.facts["leaderBid"])
+                app_main._native_observation_event(self._native_frame(
+                    next_match, session="session-b", sequence=99, match_id="p3-match-a",
+                    facts_revision=11, round_no=3, target=target,
+                ))
+                self.assertEqual(match.id, "p3-match-b")
+                self.assertEqual(app_main.LATEST_PAYLOAD["frameSequence"], latest_frame_sequence)
+                stale_session_command = app_main.apply_manual_facts({
+                    "expectedMatchId": "p3-match-b",
+                    "expectedFactsRevision": 1,
+                    "expectedObservationSessionId": "session-b",
+                    "facts": {"leaderBid": 999},
+                })
+                self.assertEqual(stale_session_command["manualCommandResult"]["status"], "REJECTED")
+                self.assertIsNone(match.facts["leaderBid"])
+                stale_command = app_main.apply_manual_facts({
+                    "expectedMatchId": "p3-match-a",
+                    "expectedFactsRevision": 11,
+                    "expectedObservationSessionId": "session-b",
+                    "facts": {"leaderBid": 999},
+                })
+                self.assertEqual(stale_command["manualCommandResult"]["status"], "REJECTED")
+                self.assertIsNone(match.facts["leaderBid"])
+        finally:
+            app_main.LATEST_PAYLOAD.clear()
+            app_main.LATEST_PAYLOAD.update(original_payload)
+            app_main.LATEST_VISION_PAYLOAD.clear()
+            app_main.LATEST_VISION_PAYLOAD.update(original_vision_payload)
+            app_main.ACTIVE_SNAPSHOT_HOLDER.clear()
+            old_match, old_snapshot, old_frozen = original_holder
+            if old_match:
+                app_main.ACTIVE_SNAPSHOT_HOLDER.update(old_match, snapshot=old_snapshot, frozen_prediction=old_frozen)
+            app_main._SHADOW_PRESENTATION_KEYS.clear()
+            app_main._SHADOW_PRESENTATION_KEYS.update(original_keys)
+            app_main._NATIVE_CONTROL_BINDINGS.clear()
+            app_main._NATIVE_CONTROL_BINDINGS.update(original_controls)
+            app_main._LIVE_MANUAL_OVERRIDES.clear()
+            app_main._LIVE_MANUAL_OVERRIDES.update(original_manual_overrides)
+            for name, value in original_native_state.items():
+                setattr(app_main, name, value)
+
     def test_qualified_node_prediction_reaches_native_owner(self):
         history_path = Path(PROJECT_ROOT) / "异环拍卖数据.json"
         if not history_path.is_file() or not shutil.which("node"):
@@ -35,7 +351,8 @@ class TestLiveShadowPresentationPayloadV1(unittest.TestCase):
             "scene": "IN_AUCTION", "round": 3, "matchId": match_id,
             "factsRevision": 26, "matchGeneration": 1,
             "observationSessionId": "qualified-session",
-            "target": {"targetHwnd": 123, "targetPid": 456},
+            "target": self._target(),
+            "nativeSolverGeneration": 31,
             "q": 12, "goldAvg": 74379, "purple": 7,
             "entryCost": 5000,
             "costs": {"entry": 5000, "intel": 0, "other": 0, "sunkCost": 5000,
@@ -64,16 +381,24 @@ class TestLiveShadowPresentationPayloadV1(unittest.TestCase):
                 "observationProfile": "native-readonly-v1",
                 "observationSessionId": "qualified-session",
                 "target": context["target"], "round": 3, "factsRevision": 26,
+                "engineFactsRevision": 26, "nativeSolverGeneration": 31,
                 "matchGeneration": 1, "predictionSnapshot": None,
                 "solverStatus": "pending",
             })
             with mock.patch.object(app_main, "CURRENT_MATCH", mock.Mock(id=match_id)), \
                  mock.patch.object(app_main, "get_current_match_presentation_summary", return_value={"id": match_id}), \
-                 mock.patch.object(app_main, "ACTIVE_SNAPSHOT_HOLDER"):
+                 mock.patch.object(app_main, "ACTIVE_SNAPSHOT_HOLDER"), \
+                 self._native_lease_patch(
+                     match_id=match_id, session="qualified-session", target=context["target"],
+                     round_no=3, facts_revision=26, engine_facts_revision=26,
+                     match_generation=1, generation=31,
+                 ):
                 app_main._publish_live_shadow_event({
                     "matchId": match_id, "presentationSource": "live_vision",
+                    "scene": "IN_AUCTION",
                     "observationSessionId": "qualified-session",
                     "target": context["target"], "round": 3, "factsRevision": 26,
+                    "engineFactsRevision": 26, "nativeSolverGeneration": 31,
                     "matchGeneration": 1, "probabilityProfile": profile,
                     "predictionSnapshot": snapshot,
                     "frozenPrediction": meta.get("frozenPrediction"),
@@ -91,19 +416,22 @@ class TestLiveShadowPresentationPayloadV1(unittest.TestCase):
         original_payload = dict(app_main.LATEST_PAYLOAD)
         original_keys = dict(app_main._SHADOW_PRESENTATION_KEYS)
         match_id = "p2-native-result-owner"
+        target = self._target()
         payload = {
             "scene": "IN_AUCTION", "matchId": match_id,
             "observationProfile": "native-readonly-v1",
             "observationSessionId": "session-current",
-            "target": {"targetHwnd": 123, "targetPid": 456},
+            "target": target,
             "round": 5, "factsRevision": 26, "matchGeneration": 1,
+            "engineFactsRevision": 26, "nativeSolverGeneration": 44,
             "predictionSnapshot": None, "solverStatus": "pending",
         }
         event = {
-            "matchId": match_id, "presentationSource": "live_vision",
+            "matchId": match_id, "presentationSource": "live_vision", "scene": "IN_AUCTION",
             "observationSessionId": "session-current",
-            "target": {"targetHwnd": 123, "targetPid": 456},
+            "target": target,
             "round": 5, "factsRevision": 26, "matchGeneration": 1,
+            "engineFactsRevision": 26, "nativeSolverGeneration": 44,
             "predictionSnapshot": {
                 "matchId": match_id, "predictionId": "current-p2",
                 "status": {"solverStatus": "valid"},
@@ -116,7 +444,12 @@ class TestLiveShadowPresentationPayloadV1(unittest.TestCase):
             app_main.LATEST_PAYLOAD.update(payload)
             with mock.patch.object(app_main, "CURRENT_MATCH", mock.Mock(id=match_id)), \
                  mock.patch.object(app_main, "get_current_match_presentation_summary", return_value={"id": match_id}), \
-                 mock.patch.object(app_main, "ACTIVE_SNAPSHOT_HOLDER"):
+                 mock.patch.object(app_main, "ACTIVE_SNAPSHOT_HOLDER"), \
+                 self._native_lease_patch(
+                     match_id=match_id, session="session-current", target=target,
+                     round_no=5, facts_revision=26, engine_facts_revision=26,
+                     match_generation=1, generation=44,
+                 ):
                 for mismatch in (
                     {"factsRevision": 25}, {"round": 4},
                     {"target": {"targetHwnd": 123, "targetPid": 999}},

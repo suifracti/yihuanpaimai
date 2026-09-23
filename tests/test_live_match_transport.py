@@ -23,7 +23,11 @@ class LiveMatchTransportTests(unittest.TestCase):
         current = CurrentMatch()
         current.apply_facts({"q": 19}, source="manual", intent="confirm")
         target = {"identity": {"Hwnd": 11, "Pid": 22, "ProcessInstanceToken": 33}}
-        for reason, should_resume in (("focus-lost", True), ("scene-boundary:SETTLEMENT", False)):
+        for reason, should_resume in (
+            ("focus-lost", True),
+            ("observation-frame-timeout", True),
+            ("scene-boundary:SETTLEMENT", False),
+        ):
             bridge = Mock()
             with patch.object(main, "CURRENT_MATCH", current), \
                  patch.object(main, "NATIVE_OBSERVATION_BRIDGE", None), \

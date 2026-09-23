@@ -800,6 +800,9 @@ class MainWindowBridge:
                         "intent",
                         "predictionSnapshot",
                         "frozenPrediction",
+                        "expectedMatchId",
+                        "expectedFactsRevision",
+                        "expectedObservationSessionId",
                     )
                     if any(key in payload for key in envelope_keys):
                         facts_payload = {
@@ -809,8 +812,13 @@ class MainWindowBridge:
                         }
                     else:
                         facts_payload = payload.get("facts") if "facts" in payload else payload
-                    self._manual_facts_provider(facts_payload)
-                    response["manualFactsResult"] = {"ok": True}
+                    result = self._manual_facts_provider(facts_payload)
+                    command_result = result.get("manualCommandResult") if isinstance(result, dict) else None
+                    rejected = isinstance(command_result, dict) and command_result.get("status") == "REJECTED"
+                    response["manualFactsResult"] = {
+                        "ok": not rejected,
+                        **({"error": command_result.get("reason")} if rejected else {}),
+                    }
                 except Exception as exc:
                     response["manualFactsResult"] = {"ok": False, "error": str(exc)}
             else:
