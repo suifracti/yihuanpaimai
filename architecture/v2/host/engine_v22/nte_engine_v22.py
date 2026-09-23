@@ -1032,6 +1032,7 @@ class RealEngine:
                 # operation and must not block the transport ACK or the first
                 # authoritative CurrentMatch projection.
                 include_heavy_identity=False,
+                prioritize_live_facts=True,
             )
             context = _safe(context)
             context["capturedAt"] = captured_at

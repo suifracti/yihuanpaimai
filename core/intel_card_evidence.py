@@ -387,7 +387,13 @@ class IntelCardEvidenceExtractor:
                 parts.append(piece)
         return " ".join(parts)
 
-    def _extract_text_lines_projected(self, crop: np.ndarray) -> List[np.ndarray]:
+    def _extract_text_lines_projected(
+        self,
+        crop: np.ndarray,
+        *,
+        threshold: int = 140,
+        min_row_density: float = 0.02,
+    ) -> List[np.ndarray]:
         """
         Segment individual text lines from a card crop using 1D vertical projection (4D2D1M-C2.13).
         Bypasses DBNet text detection completely.
@@ -399,7 +405,7 @@ class IntelCardEvidenceExtractor:
         gray = cv2.cvtColor(crop, cv2.COLOR_BGR2GRAY) if (len(crop.shape) == 3 and crop.shape[2] == 3) else crop
 
         # High-contrast thresholding on bright text pixels
-        _, bin_img = cv2.threshold(gray, 140, 255, cv2.THRESH_BINARY)
+        _, bin_img = cv2.threshold(gray, int(threshold), 255, cv2.THRESH_BINARY)
 
         # Exclude left badge: text spans x in [0.18*w, 0.95*w]
         x1 = int(w * 0.18)
@@ -411,7 +417,7 @@ class IntelCardEvidenceExtractor:
         # 1D row profile (vertical projection)
         row_sums = np.sum(bin_img[:, x1:x2] > 0, axis=1)
 
-        min_pixels = int((x2 - x1) * 0.02)  # at least 2% active pixels in the row
+        min_pixels = int((x2 - x1) * float(min_row_density))
         active_rows = row_sums > min_pixels
 
         lines = []
@@ -632,6 +638,11 @@ class IntelCardEvidenceExtractor:
         known_timer: Optional[int] = None,
         generation: int = 0,
         pending_verify_fields: Optional[Any] = None,
+        projection_threshold: int = 140,
+        projection_min_row_density: float = 0.02,
+        allow_detector_fallback: bool = True,
+        external_crops: Optional[List[np.ndarray]] = None,
+        external_results_out: Optional[List[Any]] = None,
     ) -> FrameIntelEvidence:
         """
         Continuous incremental fast-path extractor (4D2D1M-C2.8 / C2.25):
@@ -664,8 +675,19 @@ class IntelCardEvidenceExtractor:
         origin = (int(vx + sx1), int(vy + sy1))
         ox, oy = origin
 
+        if external_results_out is not None:
+            external_results_out.clear()
+        external_crops = [crop for crop in (external_crops or []) if getattr(crop, "size", 0) > 0]
         local_boxes = detect_card_boxes(stack)
         if not local_boxes:
+            engine = self._get_ocr() if external_crops else None
+            if engine is not None and hasattr(engine, "text_rec"):
+                try:
+                    rows, _ = engine.text_rec(external_crops)
+                    if external_results_out is not None:
+                        external_results_out.extend(rows or [])
+                except Exception:
+                    pass
             return evidence
 
         crops = [stack[y1:y2, x1:x2] for x1, y1, x2, y2 in local_boxes]
@@ -683,6 +705,41 @@ class IntelCardEvidenceExtractor:
                     to_unmatch.append(cur_idx)
             for cur_idx in to_unmatch:
                 del reused_matches[cur_idx]
+
+        projected_groups: Dict[int, List[np.ndarray]] = {}
+        projected_text: Dict[int, str] = {}
+        ocr_engine = self._get_ocr() if (unmatched_indices or external_crops) else None
+        if ocr_engine is not None and hasattr(ocr_engine, "text_rec"):
+            line_crops: List[np.ndarray] = list(external_crops)
+            external_count = len(line_crops)
+            for idx in unmatched_indices:
+                group = self._extract_text_lines_projected(
+                    crops[idx],
+                    threshold=projection_threshold,
+                    min_row_density=projection_min_row_density,
+                )
+                projected_groups[idx] = group
+                line_crops.extend(group)
+            if line_crops:
+                try:
+                    rec_rows, _ = ocr_engine.text_rec(line_crops)
+                    rec_rows = list(rec_rows or [])
+                    if external_results_out is not None:
+                        external_results_out.extend(rec_rows[:external_count])
+                        external_results_out.extend(
+                            [("", 0.0)] * max(0, external_count - len(external_results_out))
+                        )
+                    recognized = [
+                        str(row[0]).strip() if row and row[0] else ""
+                        for row in rec_rows[external_count:]
+                    ]
+                    cursor = 0
+                    for idx in unmatched_indices:
+                        group = projected_groups.get(idx) or []
+                        projected_text[idx] = " ".join(recognized[cursor:cursor + len(group)])
+                        cursor += len(group)
+                except Exception:
+                    projected_text = {}
 
         new_cache_entries: List[CachedCardEvidence] = []
 
@@ -712,7 +769,10 @@ class IntelCardEvidenceExtractor:
                 )
                 new_cache_entries.append(entry)
             else:
-                raw_text, routed, _ = self._ocr_card_fast_projected(crop)
+                raw_text = projected_text.get(idx, "")
+                routed = route_card_text(raw_text)
+                if not routed and allow_detector_fallback:
+                    raw_text, routed, _ = self._ocr_card_fast_projected(crop)
                 entry = CachedCardEvidence(
                     sig_raw=sig_raw,
                     badge_hue=b_hue,

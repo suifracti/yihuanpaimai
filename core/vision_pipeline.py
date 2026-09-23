@@ -169,6 +169,8 @@ class NTEVisionPipeline:
         self._session_generation = 0
         self._opening_seat_deferred = False
         self._defer_seat_heavy_once = False
+        self._last_priority_seat_panel_ocr_sig = None
+        self._priority_seat_panel_ocr_attempted = False
         self._confirmed_estimate = None
         self._estimate_candidate = {"val": None, "count": 0}
         self.catalog = []
@@ -587,6 +589,8 @@ class NTEVisionPipeline:
         self._last_intel_trigger_ts = 0.0
         self._opening_seat_deferred = False
         self._defer_seat_heavy_once = False
+        self._last_priority_seat_panel_ocr_sig = None
+        self._priority_seat_panel_ocr_attempted = False
         if hasattr(self, "_async_intel_worker") and self._async_intel_worker is not None:
             try:
                 extractor = self._async_intel_worker._get_extractor()
@@ -606,6 +610,14 @@ class NTEVisionPipeline:
             from intel_card_evidence import AsyncContinuousIntelWorker
             self._async_intel_worker = AsyncContinuousIntelWorker()
         return self._async_intel_worker
+
+    def _get_priority_live_intel_extractor(self):
+        if not hasattr(self, "_priority_live_intel_extractor") or self._priority_live_intel_extractor is None:
+            from intel_card_evidence import IntelCardEvidenceExtractor
+            self._priority_live_intel_extractor = IntelCardEvidenceExtractor(
+                ocr_engine=self._ensure_ocr()
+            )
+        return self._priority_live_intel_extractor
 
     def _reset_auction_ocr_scheduler(self) -> None:
         self._ocr_busy = False
@@ -681,6 +693,16 @@ class NTEVisionPipeline:
             return True
         delta = np.mean(np.abs(sig.astype(np.int16) - prev.astype(np.int16)), axis=1)
         return bool(np.any(delta >= 1.5))
+
+    def _priority_seat_panel_signature(self, frame: np.ndarray) -> Optional[np.ndarray]:
+        """Build a compact signature for the existing seat names/current-bid ROI."""
+        if frame is None or getattr(frame, "size", 0) == 0:
+            return None
+        panel = ROIScaler.crop_roi(frame, "seats_bids_panel")
+        if panel.size == 0:
+            return None
+        gray = cv2.cvtColor(panel, cv2.COLOR_BGR2GRAY) if len(panel.shape) == 3 else panel
+        return cv2.resize(gray, (72, 96), interpolation=cv2.INTER_AREA)
 
     def _intel_region_sig(self, frame: np.ndarray) -> Optional[np.ndarray]:
         """Title and intel cards; seat changes have their own fast ROI reader."""
@@ -952,6 +974,7 @@ class NTEVisionPipeline:
         force_refresh: bool = False,
         record_stable_key: Optional[str] = None,
         include_heavy_identity: bool = True,
+        prioritize_live_facts: bool = False,
     ) -> Dict[str, Any]:
         """
         处理图像帧（支持局部 ROI 极速 OCR 解析 + 4人出价与全回合轨迹时序追踪）
@@ -959,6 +982,8 @@ class NTEVisionPipeline:
         force_refresh=True 时绕过大厅齐套降频，并允许角色识别失败后清空旧值。
         include_heavy_identity=False skips warehouse/settlement identity so the
         live loop can publish OCR facts before the slow catalog match.
+        prioritize_live_facts=True uses the strict round-title ROI to enter the
+        live auction path and defers the optional detector-based estimate fallback.
         """
         self._bind_acquisition_record(record_stable_key)
         self._frame_bid_captured_at = captured_at
@@ -1052,14 +1077,199 @@ class NTEVisionPipeline:
 
         prev_timer = self.current_context.get("timer")
         is_auction_scene = (self.current_context.get("scene") == SCENE_IN_AUCTION or self.current_context.get("inAuction"))
+        round_title_confirmed = False
+        preflight_round = None
+        if (
+            prioritize_live_facts
+            and not is_auction_scene
+            and not self.current_context.get("isSettlement")
+            and self.current_context.get("scene") != SCENE_SETTLEMENT
+            and fast.get("scene") != SCENE_SETTLEMENT
+        ):
+            # The exact, high-confidence round title is sufficient evidence to
+            # enter the existing live path. This avoids a blocking canvas scan
+            # on the first auction frame while keeping settlement fail-closed.
+            observed_round = self._read_df_auction_round_title(frame)
+            previous_round = int(self.current_context.get("round") or 0)
+            round_is_current = (
+                observed_round is not None
+                and (not self._match_active or previous_round <= 0 or observed_round >= previous_round)
+            )
+            if round_is_current:
+                preflight_round = int(observed_round)
+                round_title_confirmed = True
+                self.current_context.update({
+                    "scene": SCENE_IN_AUCTION,
+                    "sceneLabel": SCENE_LABELS[SCENE_IN_AUCTION],
+                    "round": preflight_round,
+                    "inAuction": True,
+                    "inLobby": False,
+                    "isLoading": False,
+                    "isSettlement": False,
+                    "auctionEntryVisible": False,
+                    "hadSettlement": False,
+                    "loadingDirection": None,
+                })
+                self._match_exit_hold = 0
+                if not self._match_active:
+                    self._match_active = True
+                    self._match_gen += 1
+                    self.current_context["matchGeneration"] = self._match_gen
+                self._had_settlement = False
+                is_auction_scene = True
 
         df_est = None
         df_timer = None
         df_seat_bids = None
         df_seat_success = False
-        round_title_confirmed = False
-        if is_auction_scene:
-            observed_round = self._read_df_auction_round_title(frame)
+        priority_live_evidence = None
+        priority_seat_panel_changed = None
+        priority_seat_panel_signature = None
+        frame_looks_settlement = bool(
+            self.current_context.get("isSettlement")
+            or self.current_context.get("scene") == SCENE_SETTLEMENT
+            or fast.get("scene") == SCENE_SETTLEMENT
+        )
+        if is_auction_scene and prioritize_live_facts and not frame_looks_settlement:
+            observed_round = preflight_round
+            if observed_round is None:
+                observed_round = self._read_df_auction_round_title(frame)
+            if observed_round is not None:
+                previous_round = int(self.current_context.get("round") or 0)
+                if observed_round >= previous_round:
+                    self.current_context["round"] = observed_round
+                    round_title_confirmed = True
+
+            cur_round = int(self.current_context.get("round") or 0)
+            now_m = time.monotonic()
+            since_intel_trig = now_m - getattr(self, "_last_intel_trigger_ts", 0.0)
+            pending_fields = self._intel_ledger.get_pending_verify_fields() if self._intel_ledger else None
+            needs_round_extraction = bool(cur_round > 0 and getattr(self, "_round_intel_scheduled", 0) != cur_round)
+            intel_sig_changed = self._intel_card_stack_sig_changed(frame)
+            priority_card_trigger = bool(
+                not getattr(self, "fast_live_intel", False)
+                and (
+                    needs_round_extraction
+                    or (intel_sig_changed and since_intel_trig >= 1.0)
+                    or (pending_fields and since_intel_trig >= 0.1)
+                )
+            )
+            if priority_card_trigger:
+                if needs_round_extraction:
+                    self._round_intel_scheduled = cur_round
+                self._last_intel_card_sig = self._intel_card_stack_sig(frame)
+                self._last_intel_trigger_ts = now_m
+
+            # Keep all time-sensitive numeric regions in one recognizer batch.
+            # On a card update, the card line crops join this same batch.
+            priority_seat_panel_signature = self._priority_seat_panel_signature(frame)
+            if priority_seat_panel_signature is not None:
+                previous_seat_panel = getattr(self, "_last_priority_seat_panel_ocr_sig", None)
+                priority_seat_panel_changed = (
+                    previous_seat_panel is None
+                    or previous_seat_panel.shape != priority_seat_panel_signature.shape
+                    or float(np.mean(np.abs(
+                        priority_seat_panel_signature.astype(np.int16)
+                        - previous_seat_panel.astype(np.int16)
+                    ))) >= 1.5
+                )
+            h, w = frame.shape[:2]
+            tx1, ty1, tx2, ty2 = int(w * 0.483), int(h * 0.055), int(w * 0.525), int(h * 0.090)
+            priority_crops = [frame[ty1:ty2, tx1:tx2]]
+            priority_crops.extend(
+                ROIScaler.crop_roi(frame, f"seat_current_bid_{slot}")
+                for slot in (1, 2, 3, 4)
+            )
+            from bid_glyph_crop import compact_bid_glyph
+            for index in range(1, len(priority_crops)):
+                compact = compact_bid_glyph(priority_crops[index])
+                if compact is not None:
+                    priority_crops[index] = compact
+
+            valid_crop_indices = [i for i, crop in enumerate(priority_crops) if getattr(crop, "size", 0) > 0]
+            valid_crops = [priority_crops[i] for i in valid_crop_indices]
+            aligned_results = [None, None, None, None, None]
+            if valid_crops:
+                external_results = []
+                iso_id = captured_at or time.strftime("%Y-%m-%dT%H:%M:%S", time.localtime())
+                if priority_card_trigger:
+                    try:
+                        priority_live_evidence = self._get_priority_live_intel_extractor().extract_cards_fast(
+                            frame,
+                            frame_id=iso_id,
+                            generation=self._match_gen,
+                            known_round=cur_round,
+                            known_timer=prev_timer,
+                            pending_verify_fields=pending_fields,
+                            projection_threshold=95,
+                            projection_min_row_density=0.01,
+                            allow_detector_fallback=False,
+                            external_crops=valid_crops,
+                            external_results_out=external_results,
+                        )
+                    except Exception:
+                        priority_live_evidence = None
+                else:
+                    try:
+                        external_results, _ = self._ocr_engine.text_rec(valid_crops)
+                    except Exception:
+                        external_results = []
+                for crop_index, result in zip(valid_crop_indices, external_results):
+                    aligned_results[crop_index] = result
+
+            try:
+                df_est, df_timer = self._read_df_numeric_batch(
+                    frame,
+                    include_estimate=False,
+                    precomputed_results=[aligned_results[0]] if aligned_results[0] is not None else [],
+                )
+            except Exception:
+                df_est = None
+                df_timer = None
+            try:
+                df_seat_bids = self._run_df_seat_bids_shadow(frame, precomputed_results=aligned_results[1:5])
+                df_seat_success = any(value is not None for value in df_seat_bids)
+            except Exception:
+                self._df_shadow_seat_bids = [None, None, None, None]
+                df_seat_bids = None
+                df_seat_success = False
+            if priority_live_evidence is not None and priority_live_evidence.cards:
+                # The timer result comes from the same recognizer call as these
+                # cards, so attach its parsed value before recording provenance.
+                priority_live_evidence.timer = df_timer if df_timer is not None else prev_timer
+                for observation in priority_live_evidence.observations:
+                    observation.timer = priority_live_evidence.timer
+                for reading in priority_live_evidence.cardReadings:
+                    reading["timer"] = priority_live_evidence.timer
+                self._latest_intel_evidence = priority_live_evidence
+                if self._intel_ledger is None:
+                    from intel_card_evidence import IntelCardEvidenceLedger
+                    self._intel_ledger = IntelCardEvidenceLedger()
+                self._intel_ledger.merge(priority_live_evidence)
+                if priority_live_evidence.round:
+                    self._round_intel_extracted = priority_live_evidence.round
+                has_priority_fact = False
+                for observation in priority_live_evidence.observations:
+                    if (
+                        observation.status != "OBSERVED"
+                        or observation.value is None
+                        or observation.value == "UNKNOWN"
+                        or float(observation.confidence or 0.0) < 0.90
+                    ):
+                        continue
+                    if observation.field in {"q", "goldAvg", "purpleAvg"}:
+                        self.current_context[observation.field] = observation.value
+                        if observation.field == "goldAvg":
+                            self.current_context["avg"] = observation.value
+                        has_priority_fact = True
+                if has_priority_fact:
+                    # Seat number OCR remains live; defer player-name panel OCR
+                    # for this frame so it cannot delay bids.
+                    self._defer_seat_heavy_once = True
+        elif is_auction_scene and not frame_looks_settlement:
+            observed_round = preflight_round
+            if observed_round is None:
+                observed_round = self._read_df_auction_round_title(frame)
             if observed_round is not None:
                 previous_round = int(self.current_context.get("round") or 0)
                 if observed_round >= previous_round:
@@ -1093,10 +1303,14 @@ class NTEVisionPipeline:
 
         cur_timer = roi_timer if roi_timer is not None else prev_timer
 
-        # Async Continuous Intel Shadow (4D2D1M-C2 / C2.25W)
-        # 1. Drain any completed async extraction results matching current session generation
-        intel_worker = self._get_async_intel_worker()
-        completed_intel_evs = intel_worker.poll_results(getattr(self, "_session_generation", 0))
+        # Async Continuous Intel remains available to the non-priority paths.
+        # The live worker performs card and numeric OCR in the shared batch above,
+        # so creating a second RapidOCR worker here would contend for the CPU.
+        intel_worker = None
+        completed_intel_evs = []
+        if not prioritize_live_facts:
+            intel_worker = self._get_async_intel_worker()
+            completed_intel_evs = intel_worker.poll_results(getattr(self, "_session_generation", 0))
         for ev in completed_intel_evs:
             current_round = int(self.current_context.get("round") or 0)
             if ev.round and current_round and int(ev.round) < current_round:
@@ -1112,7 +1326,12 @@ class NTEVisionPipeline:
 
         # 2. Check trigger conditions in auction scene
         is_settlement = bool(self.current_context.get("isSettlement") or self.current_context.get("scene") == SCENE_SETTLEMENT)
-        if is_auction_scene and not is_settlement and not getattr(self, 'fast_live_intel', False):
+        if (
+            is_auction_scene
+            and not is_settlement
+            and not prioritize_live_facts
+            and not getattr(self, 'fast_live_intel', False)
+        ):
             cur_round = int(self.current_context.get("round") or 0)
             now_m = time.monotonic()
             since_intel_trig = now_m - getattr(self, "_last_intel_trigger_ts", 0.0)
@@ -1167,8 +1386,8 @@ class NTEVisionPipeline:
             or non_auction_scene
         )
         if is_auction_scene and round_title_confirmed and not force_refresh:
-            # A strict, visible current-round title keeps bid capture on the
-            # fast ROI path. Async card extraction owns new auction intel.
+            # The strict round ROI and priority card recognizer own the live
+            # path; broad scene OCR would delay the current bid publication.
             should_run_full_canvas = False
             self.ocr_skip_count += 1
         elif is_auction_scene and not self._should_run_auction_canvas_ocr(frame, force_refresh):
@@ -1220,10 +1439,14 @@ class NTEVisionPipeline:
             if not res:
                 if self._try_release_locked_match(fast):
                     return self.current_context
-                if self.current_context.get("scene") in LOCKED_MATCH_SCENES:
+                if (
+                    self.current_context.get("scene") in LOCKED_MATCH_SCENES
+                    and not (prioritize_live_facts and round_title_confirmed)
+                ):
                     return self.current_context
-                self._hold_nav_or_clear(max_hold=1)
-                return self.current_context
+                if self.current_context.get("scene") not in LOCKED_MATCH_SCENES:
+                    self._hold_nav_or_clear(max_hold=1)
+                    return self.current_context
 
             # 将 OCR 坐标映射回全屏空间
             for box, text, score in res:
@@ -1561,7 +1784,15 @@ class NTEVisionPipeline:
         )
         panel_bound = True
         if is_auction_scene:
-            panel_bound = self._handle_seat_binding_tier(frame, w, h, df_seat_bids, df_seat_success)
+            panel_bound = self._handle_seat_binding_tier(
+                frame,
+                w,
+                h,
+                df_seat_bids,
+                df_seat_success,
+                bid_panel_changed=priority_seat_panel_changed if prioritize_live_facts else None,
+                bid_panel_signature=priority_seat_panel_signature if prioritize_live_facts else None,
+            )
 
         if not panel_bound:
             # Full-canvas fallback: if DF/panel binding failed
@@ -1610,7 +1841,7 @@ class NTEVisionPipeline:
             elif full_canvas_est is not None and full_canvas_est >= 1000:
                 roi_est = full_canvas_est
             elif not should_run_full_canvas:
-                roi_est = self._parse_current_estimate_chip(frame)
+                roi_est = None if prioritize_live_facts else self._parse_current_estimate_chip(frame)
             else:
                 roi_est = None
         else:
@@ -1627,7 +1858,13 @@ class NTEVisionPipeline:
             elif full_canvas_est and full_canvas_est >= 1000:
                 raw_est = full_canvas_est
 
-            self.current_context["currentEstimate"] = self._apply_estimate_observation(raw_est)
+            if prioritize_live_facts and raw_est is None:
+                # No estimate was observed on this frame. Do not restamp a
+                # previously confirmed value with the newer frame timestamp.
+                self._apply_estimate_observation(None)
+                self.current_context["currentEstimate"] = None
+            else:
+                self.current_context["currentEstimate"] = self._apply_estimate_observation(raw_est)
 
             # Timer
             if roi_timer is not None:
@@ -1752,7 +1989,13 @@ class NTEVisionPipeline:
 
         return self.current_context
 
-    def _read_df_numeric_batch(self, frame: Optional[np.ndarray]) -> Tuple[Optional[int], Optional[int]]:
+    def _read_df_numeric_batch(
+        self,
+        frame: Optional[np.ndarray],
+        *,
+        include_estimate: bool = True,
+        precomputed_results: Optional[List[Any]] = None,
+    ) -> Tuple[Optional[int], Optional[int]]:
         """
         Detection-Free 2-field recognition batch for estimate and timer authority (4D2D1L-L3W).
         Runs strictly when scene == IN_AUCTION.
@@ -1770,30 +2013,40 @@ class NTEVisionPipeline:
 
         h, w = frame.shape[:2]
 
-        # Crop 1: current estimate digits above the warehouse grid.
-        ex1, ey1, ex2, ey2 = ROIScaler.scale_roi("current_estimate_digits", w, h)
-        crop_est = frame[ey1:ey2, ex1:ex2]
+        crop_est = None
+        if include_estimate:
+            # Current estimate is optional in the low-latency live path.
+            ex1, ey1, ex2, ey2 = ROIScaler.scale_roi("current_estimate_digits", w, h)
+            crop_est = frame[ey1:ey2, ex1:ex2]
 
-        # Crop 2: Timer Numeric (0.483, 0.055, 0.525, 0.090)
+        # Timer Numeric (0.483, 0.055, 0.525, 0.090)
         tx1, ty1, tx2, ty2 = int(w * 0.483), int(h * 0.055), int(w * 0.525), int(h * 0.090)
         crop_timer = frame[ty1:ty2, tx1:tx2]
 
-        if crop_est.size == 0 or crop_timer.size == 0:
+        if (include_estimate and (crop_est is None or crop_est.size == 0)) or crop_timer.size == 0:
             self._df_shadow_estimate = None
             self._df_shadow_timer = None
             return None, None
 
-        # Exactly ONE batch recognition call
-        batch_res, _ = self._ocr_engine.text_rec([crop_est, crop_timer])
+        if precomputed_results is None:
+            crops = [crop_est, crop_timer] if include_estimate else [crop_timer]
+            batch_res, _ = self._ocr_engine.text_rec(crops)
+        else:
+            batch_res = precomputed_results
         self._df_shadow_batch_count += 1
 
-        if not batch_res or len(batch_res) < 2:
+        expected_results = 2 if include_estimate else 1
+        if not batch_res or len(batch_res) < expected_results:
             self._df_shadow_estimate = None
             self._df_shadow_timer = None
             return None, None
 
-        raw_est, conf_est = batch_res[0]
-        raw_timer, conf_timer = batch_res[1]
+        if include_estimate:
+            raw_est, conf_est = batch_res[0]
+            raw_timer, conf_timer = batch_res[1]
+        else:
+            raw_est, conf_est = None, 0.0
+            raw_timer, conf_timer = batch_res[0]
 
         self._df_shadow_raw_text = {"estimate": raw_est, "timer": raw_timer}
         self._df_shadow_conf = {"estimate": float(conf_est or 0.0), "timer": float(conf_timer or 0.0)}
@@ -1825,7 +2078,12 @@ class NTEVisionPipeline:
 
         return parsed_est, parsed_timer
 
-    def _run_df_seat_bids_shadow(self, frame: Optional[np.ndarray]) -> List[Optional[int]]:
+    def _run_df_seat_bids_shadow(
+        self,
+        frame: Optional[np.ndarray],
+        *,
+        precomputed_results: Optional[List[Any]] = None,
+    ) -> List[Optional[int]]:
         """
         Detection-Free 4-slot recognition shadow for seat current bids (4D2D1L-L3Z.2).
         Runs strictly when scene == IN_AUCTION.
@@ -1845,23 +2103,25 @@ class NTEVisionPipeline:
             self._df_shadow_seat_bids_conf = [0.0, 0.0, 0.0, 0.0]
             return [None, None, None, None]
 
-        h, w = frame.shape[:2]
+        if precomputed_results is None:
+            h, w = frame.shape[:2]
+            # Share the same viewport compensation as the full seats panel.
+            crops = [ROIScaler.crop_roi(frame, f"seat_current_bid_{slot}") for slot in (1, 2, 3, 4)]
 
-        # Share the same viewport compensation as the full seats panel.
-        crops = [ROIScaler.crop_roi(frame, f"seat_current_bid_{slot}") for slot in (1, 2, 3, 4)]
+            if any(c.size == 0 for c in crops):
+                self._df_shadow_seat_bids = [None, None, None, None]
+                return [None, None, None, None]
 
-        if any(c.size == 0 for c in crops):
-            self._df_shadow_seat_bids = [None, None, None, None]
-            return [None, None, None, None]
+            from bid_glyph_crop import compact_bid_glyph
+            for index, crop in enumerate(crops):
+                compact = compact_bid_glyph(crop)
+                if compact is not None:
+                    crops[index] = compact
 
-        from bid_glyph_crop import compact_bid_glyph
-        for index, crop in enumerate(crops):
-            compact = compact_bid_glyph(crop)
-            if compact is not None:
-                crops[index] = compact
-
-        # Exactly 1 four-slot batch recognition call
-        batch_res, _ = self._ocr_engine.text_rec(crops)
+            # Exactly 1 four-slot batch recognition call
+            batch_res, _ = self._ocr_engine.text_rec(crops)
+        else:
+            batch_res = precomputed_results
         self._df_shadow_seat_bids_batch_count += 1
 
         parsed_bids: List[Optional[int]] = [None, None, None, None]
@@ -2898,6 +3158,9 @@ class NTEVisionPipeline:
         h: int,
         df_seat_bids: Optional[List[Optional[int]]],
         df_seat_success: bool,
+        *,
+        bid_panel_changed: Optional[bool] = None,
+        bid_panel_signature: Optional[np.ndarray] = None,
     ) -> bool:
         """
         Seat Binding Tier with DF Authority & Metadata Gate (4D2D1L-L3Z.7):
@@ -2938,7 +3201,22 @@ class NTEVisionPipeline:
         needs_df_fallback = not df_seat_success or any(value is None for value in (df_seat_bids or [None]*4))
         is_mocked = (getattr(self._bind_seats_slot_authoritative, "__func__", self._bind_seats_slot_authoritative) != NTEVisionPipeline._bind_seats_slot_authoritative)
 
-        should_run_heavy_panel = bool(needs_names or is_round_transition or needs_df_fallback or is_mocked)
+        if bid_panel_changed is None:
+            should_run_heavy_panel = bool(needs_names or is_round_transition or needs_df_fallback or is_mocked)
+        else:
+            needs_initial_name_scan = bool(
+                needs_names and (
+                    bid_panel_changed
+                    or not getattr(self, "_priority_seat_panel_ocr_attempted", False)
+                )
+            )
+            needs_changed_bid_fallback = bool(needs_df_fallback and bid_panel_changed)
+            should_run_heavy_panel = bool(
+                needs_initial_name_scan
+                or is_round_transition
+                or needs_changed_bid_fallback
+                or is_mocked
+            )
         if getattr(self, "_defer_seat_heavy_once", False):
             self._defer_seat_heavy_once = False
             should_run_heavy_panel = False
@@ -2950,6 +3228,10 @@ class NTEVisionPipeline:
                 px1, py1, px2, py2 = ROIScaler.scale_roi("seats_bids_panel", w, h)
                 panel_crop = frame[py1:py2, px1:px2]
                 if panel_crop.size > 0:
+                    if bid_panel_changed is not None:
+                        self._priority_seat_panel_ocr_attempted = True
+                        if bid_panel_signature is not None:
+                            self._last_priority_seat_panel_ocr_sig = bid_panel_signature.copy()
                     panel_res, _ = self.ocr(panel_crop)
                     if panel_res:
                         mapped_panel_res = [
