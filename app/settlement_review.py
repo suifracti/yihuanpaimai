@@ -34,6 +34,7 @@ from evidence_storage import get_canonical_data_dir, save_evidence_png, verify_e
 from legacy_archive import LegacyArchive
 from review_overlay import ReviewOverlayStore
 from runtime_data import resolve_runtime_history_path
+from native_trial_drafts import NativeTrialDraftStore, resolve_native_trial_history_path
 from settlement_catalog_candidates import get_global_catalog_candidate_resolver
 from settlement_evidence_store_v2 import (
     COVERAGE_PARTIAL,
@@ -106,32 +107,47 @@ class SettlementReviewService:
         data_root_provider: Optional[Any] = None,
         legacy_archive: Optional[LegacyArchive] = None,
         overlay_store: Optional[ReviewOverlayStore] = None,
+        native_trial_store: Optional[NativeTrialDraftStore] = None,
     ):
         self._history_path_provider = history_path_provider or (lambda: str(resolve_runtime_history_path()))
         self._data_root_provider = data_root_provider or (lambda: str(get_canonical_data_dir()))
         self._legacy_archive = legacy_archive or LegacyArchive()
         self._overlay_store = overlay_store or ReviewOverlayStore()
+        self._native_trial_store = native_trial_store or NativeTrialDraftStore(
+            resolve_native_trial_history_path()
+        )
 
     # ------------------------------------------------------------------ store
-    def _store(self) -> CanonicalHistoryStore:
-        return CanonicalHistoryStore(self._history_path_provider())
+    def _store(self, source: str = "current") -> CanonicalHistoryStore:
+        path = self._native_trial_store.history_path if source == "live-trial" else self._history_path_provider()
+        return CanonicalHistoryStore(path)
 
-    def _data_root(self) -> Path:
+    def _data_root(self, source: str = "current") -> Path:
+        if source == "live-trial":
+            return self._native_trial_store.root
         return Path(self._data_root_provider()).resolve()
 
-    def _evidence_dir(self) -> Path:
-        d = self._data_root() / "evidence" / "settlement"
+    def _evidence_dir(self, source: str = "current") -> Path:
+        d = self._data_root(source) / "evidence" / "settlement"
         d.mkdir(parents=True, exist_ok=True)
         return d
 
     # ---------------------------------------------------------------- helpers
-    def _load_record(self, record_id: str) -> Optional[Dict[str, Any]]:
-        return self._store().lookup(record_id)
+    def _load_record(self, record_id: str, source: str = "current") -> Optional[Dict[str, Any]]:
+        if source == "live-trial":
+            return self._native_trial_store.lookup(record_id)
+        return self._store(source).lookup(record_id)
 
-    def _evidence_image(self, uri: Optional[str]) -> Optional[Path]:
+    def get_record(self, record_id: str, source: str = "current") -> Optional[Dict[str, Any]]:
+        return self._load_record(record_id, source)
+
+    def lookup_runtime_file_originals(self, record_id: str, source: str = "current") -> List[Dict[str, Any]]:
+        return lookup_runtime_file_originals(record_id, self._data_root(source))
+
+    def _evidence_image(self, uri: Optional[str], source: str = "current") -> Optional[Path]:
         if not uri:
             return None
-        p = self._data_root() / uri.replace("/", os.sep)
+        p = self._data_root(source) / uri.replace("/", os.sep)
         return p if p.is_file() else None
 
     def _run_recognizer(self, image_path: Path) -> List[Dict[str, Any]]:
@@ -193,12 +209,12 @@ class SettlementReviewService:
 
     def delete_imported_screenshot(self, record_id: str, source: str = "current") -> Dict[str, Any]:
         """Delete user-imported screenshot reference and return a fresh clean review session."""
-        record = self._load_legacy_record(record_id) if source == "legacy" else self._load_record(record_id)
+        record = self._load_legacy_record(record_id) if source == "legacy" else self._load_record(record_id, source)
         if record is None:
             return {"ok": False, "status": "RECORD_NOT_FOUND", "message": "记录不存在"}
         sanitized_key = record_id.replace(":", "_")
         try:
-            v2_store = self._v2_store()
+            v2_store = self._v2_store(source)
             v2_store.unlink_user_imports(sanitized_key)
         except Exception as exc:
             return {"ok": False, "status": "DELETE_FAILED", "message": str(exc)}
@@ -210,23 +226,23 @@ class SettlementReviewService:
                 self._overlay_store.remove_screenshot(file_sha, record_id)
             return self.create_review_session(record_id, source="legacy")
 
-        return self.create_review_session(record_id, source="current")
+        return self.create_review_session(record_id, source=source)
 
     def _load_legacy_record(self, key: str) -> Optional[Dict[str, Any]]:
         return self._legacy_archive.get_record(key)
 
-    def _v2_store(self) -> SettlementEvidenceStoreV2:
-        return SettlementEvidenceStoreV2(self._data_root())
+    def _v2_store(self, source: str = "current") -> SettlementEvidenceStoreV2:
+        return SettlementEvidenceStoreV2(self._data_root(source))
 
-    def _load_v2_evidence_for_record(self, record_id: str) -> Tuple[Optional[Path], Optional[str], Optional[np.ndarray]]:
+    def _load_v2_evidence_for_record(self, record_id: str, source: str = "current") -> Tuple[Optional[Path], Optional[str], Optional[np.ndarray]]:
         try:
             sanitized_key = record_id.replace(":", "_")
-            v2_store = self._v2_store()
+            v2_store = self._v2_store(source)
             descriptors = v2_store.list_record_evidence(sanitized_key)
             # The archived bill can reference a later, clearer stable viewport.
             # Do not silently replace it with the first animation frame in the
             # evidence index. A warehouse segment still cannot become main.
-            record = self._load_record(record_id) or {}
+            record = self._load_record(record_id, source) or {}
             truth = (record.get('settlement') or {}).get('truthEvidence') or {}
             preferred = [d.get('sha256') for d in (truth.get('fileOriginals') or [])
                          if d.get('kind') == KIND_MAIN]
@@ -248,11 +264,32 @@ class SettlementReviewService:
             pass
         return None, None, None
 
-    def list_original_screenshots(self, record_id: str) -> Dict[str, Any]:
+    def list_original_screenshots(self, record_id: str, source: str = "current") -> Dict[str, Any]:
         """Show verified originals without running expensive item recognition."""
-        store = self._v2_store()
-        images = []
-        for index, desc in enumerate(store.list_record_evidence(record_id.replace(":", "_")), start=1):
+        if source == "live-trial":
+            record = self._native_trial_store.lookup(record_id)
+            if record is None:
+                return {"ok": False, "recordId": record_id, "source": source, "message": "隔离草稿不存在"}
+            images = []
+            for index, image in enumerate(self._native_trial_store.source_images(record_id), start=1):
+                raw = image.get("data")
+                mime = image.get("mimeType") or "application/octet-stream"
+                images.append({
+                    "evidenceId": image.get("evidenceId"),
+                    "sequence": index,
+                    "sha256": image.get("sha256"),
+                    "width": image.get("width"),
+                    "height": image.get("height"),
+                    "capturedAt": image.get("capturedAt"),
+                    "kind": image.get("kind"),
+                    "readOnly": True,
+                    "error": image.get("error"),
+                    "dataUrl": "data:" + mime + ";base64," + base64.b64encode(raw).decode("ascii") if raw else None,
+                })
+        else:
+            images = []
+        store = self._v2_store(source)
+        for index, desc in enumerate(store.list_record_evidence(record_id.replace(":", "_")), start=len(images) + 1):
             try:
                 raw = store.load_original(desc)
                 images.append({
@@ -272,12 +309,14 @@ class SettlementReviewService:
                     "sha256": desc.get("sha256"),
                     "error": "原图缺失或校验失败",
                 })
-        return {"ok": True, "recordId": record_id, "images": images}
+        return {"ok": True, "recordId": record_id, "source": source, "images": images}
 
-    def remove_original_screenshot(self, record_id: str, evidence_id: str, *, restore: bool = False) -> Dict[str, Any]:
+    def remove_original_screenshot(self, record_id: str, evidence_id: str, *, restore: bool = False, source: str = "current") -> Dict[str, Any]:
+        if source == "live-trial":
+            return {"ok": False, "recordId": record_id, "source": source, "message": "观察原图属于隔离草稿的只读证据，不能删除"}
         try:
-            self._v2_store().set_original_removed(record_id.replace(":", "_"), evidence_id, not restore)
-            result = self.list_original_screenshots(record_id)
+            self._v2_store(source).set_original_removed(record_id.replace(":", "_"), evidence_id, not restore)
+            result = self.list_original_screenshots(record_id, source)
             result["message"] = "截图已恢复" if restore else "截图已从列表删除，原始证据保留"
             if not restore:
                 result["undoEvidenceId"] = evidence_id
@@ -290,8 +329,8 @@ class SettlementReviewService:
         session from the current recognizer proposal.  source='current' reads
         CanonicalHistoryStore; source='legacy' reads the Legacy Archive lane and
         merges any existing review overlay (never touching the source file)."""
-        v2_store = self._v2_store()
-        v2_path, v2_sha, v2_img = self._load_v2_evidence_for_record(record_id)
+        v2_store = self._v2_store(source)
+        v2_path, v2_sha, v2_img = self._load_v2_evidence_for_record(record_id, source)
 
         if source == "legacy":
             record = self._load_legacy_record(record_id)
@@ -307,7 +346,7 @@ class SettlementReviewService:
             if overlay and overlay.get("screenshot"):
                 uri = overlay["screenshot"].get("uri") or uri
                 sha = overlay["screenshot"].get("sha256") or sha
-            image_path = self._evidence_image(uri) or v2_path
+            image_path = self._evidence_image(uri, source) or v2_path
             proposals = self._run_recognizer(image_path) if image_path is not None else []
             review = self._build_dto(
                 record_id, {"settlement": st}, uri, sha, image_path, proposals
@@ -333,7 +372,7 @@ class SettlementReviewService:
             review["settlement"]["reviewedAt"] = ((overlay or {}).get("reviewProvenance") or {}).get("reviewedAt")
             return {"ok": True, "review": review}
 
-        record = self._load_record(record_id)
+        record = self._load_record(record_id, source)
         if record is None and not v2_path:
             return {"ok": False, "status": "RECORD_NOT_FOUND", "message": "记录不存在"}
         st = (record or {}).get("settlement") or {}
@@ -344,10 +383,10 @@ class SettlementReviewService:
         # can start with a warehouse crop and must not override that main image.
         if v2_path is not None:
             image_path = v2_path
-            uri = v2_path.relative_to(self._data_root()).as_posix()
+            uri = v2_path.relative_to(self._data_root(source)).as_posix()
             sha = v2_sha
         else:
-            image_path = self._evidence_image(uri)
+            image_path = self._evidence_image(uri, source)
         sanitized_key = record_id.replace(":", "_")
         descriptors = v2_store.list_record_evidence(sanitized_key)
         main_desc = next((d for d in descriptors if d.get("kind") == KIND_MAIN and d.get('sha256') == sha), None)
@@ -395,7 +434,7 @@ class SettlementReviewService:
                 crop_data_url = None
                 crop_rel = u.get("cropPath")
                 if crop_rel:
-                    crop_full = self._data_root() / crop_rel.replace("/", os.sep)
+                    crop_full = self._data_root(source) / crop_rel.replace("/", os.sep)
                     if crop_full.is_file():
                         crop_bytes = crop_full.read_bytes()
                         crop_data_url = "data:image/png;base64," + base64.b64encode(crop_bytes).decode("ascii")
@@ -473,6 +512,7 @@ class SettlementReviewService:
         reviewed_items = v2_reviewed if v2_reviewed else (st.get("reviewedItems") or [])
 
         dto = self._build_dto(record_id, record or {"settlement": st}, uri, sha, image_path, proposals)
+        dto["source"] = source
         dto["groupingHypotheses"] = grouping_hypotheses
         dto["identityEvidence"] = identity_evidences
         dto["reviewUnits"] = identity_evidences
@@ -513,7 +553,7 @@ class SettlementReviewService:
         identity_evidences = review_dto.get("identityEvidence") or []
         grouping_hypotheses = review_dto.get("groupingHypotheses") or []
 
-        v2_store = self._v2_store()
+        v2_store = self._v2_store(source)
         try:
             reviewed_item = apply_settlement_human_review_action(
                 store=v2_store,
@@ -559,10 +599,10 @@ class SettlementReviewService:
         7. Zero writes to canonical business data, knownItems, Solver, CurrentMatch.
         """
         sanitized_key = record_id.replace(":", "_")
-        v2_store = self._v2_store()
-        v2_path, v2_sha, v2_img = self._load_v2_evidence_for_record(record_id)
+        v2_store = self._v2_store(source)
+        v2_path, v2_sha, v2_img = self._load_v2_evidence_for_record(record_id, source)
 
-        record = self._load_legacy_record(record_id) if source == "legacy" else self._load_record(record_id)
+        record = self._load_legacy_record(record_id) if source == "legacy" else self._load_record(record_id, source)
         if record is None and not v2_path:
             return {"ok": False, "status": "RECORD_NOT_FOUND", "message": "记录不存在"}
 
@@ -570,7 +610,7 @@ class SettlementReviewService:
         refs = (st.get("truthEvidence") or {}).get("evidenceReferences") or []
         uri = refs[0].get("uri") if refs else None
         sha = refs[0].get("sha256") if refs else (v2_sha or None)
-        image_path = self._evidence_image(uri) or v2_path
+        image_path = self._evidence_image(uri, source) or v2_path
 
         img = v2_img
         if img is None and image_path is not None and Path(image_path).is_file():
@@ -662,7 +702,7 @@ class SettlementReviewService:
         4. Zero recognition, zero grouping, zero identity resolution, zero automatic review
         5. Zero writes to History canonical business fields (clearing/profit), knownItems, Solver, CurrentMatch.
         """
-        record = self._load_legacy_record(record_id) if source == "legacy" else self._load_record(record_id)
+        record = self._load_legacy_record(record_id) if source == "legacy" else self._load_record(record_id, source)
         if record is None:
             return {"ok": False, "status": "RECORD_NOT_FOUND", "message": "请先选择要绑定的 History 记录"}
         src = Path(source_path)
@@ -681,7 +721,7 @@ class SettlementReviewService:
         digest = _sha256_bytes(raw)
         ext = ".png" if suffix == ".png" else ".jpg"
         dst_name = f"import_{digest[:16]}{ext}"
-        dst = self._evidence_dir() / dst_name
+        dst = self._evidence_dir(source) / dst_name
         if not dst.exists():
             tmp = dst.with_suffix(dst.suffix + ".tmp")
             tmp.write_bytes(raw)
@@ -689,7 +729,7 @@ class SettlementReviewService:
         uri = f"evidence/settlement/{dst_name}"
 
         sanitized_key = record_id.replace(":", "_")
-        v2_store = self._v2_store()
+        v2_store = self._v2_store(source)
         try:
             desc = v2_store.save_original(
                 record_stable_key=sanitized_key,
@@ -719,7 +759,7 @@ class SettlementReviewService:
             if file_sha:
                 overlay = self._overlay_store.get_overlay(file_sha, record_id)
         else:
-            record = self._load_record(record_id)
+            record = self._load_record(record_id, source)
             if record is None:
                 return {
                     "ok": False,
@@ -735,7 +775,7 @@ class SettlementReviewService:
         reviewed_items = (overlay or {}).get("reviewedItems") if source == "legacy" else (v2_reviewed or (st.get("reviewedItems") or []))
         review_dto = {
             "recordId": record_id,
-            "identityEditable": source == "current" and record.get("lifecycleStatus") == "DRAFT",
+            "identityEditable": source in {"current", "live-trial"} and record.get("lifecycleStatus") == "DRAFT",
             "source": source,
             "settlement": {
                 "clearingPrice": st.get("clearingPrice"),
@@ -812,7 +852,7 @@ class SettlementReviewService:
             return {"ok": False, "status": "REVIEWED_ITEMS_INVALID", "message": "reviewedItems 必须为数组"}
         if identity_review is not None:
             from auto_archiver import FORBIDDEN_WINNER_PLACEHOLDERS
-            if source != "current" or not isinstance(identity_review, dict):
+            if source not in {"current", "live-trial"} or not isinstance(identity_review, dict):
                 return {"ok": False, "message": "仅支持本地草稿的身份核对"}
             winner = identity_review.get("winner")
             if not isinstance(winner, str) or not winner.strip() or winner.strip() in FORBIDDEN_WINNER_PLACEHOLDERS:
@@ -854,9 +894,13 @@ class SettlementReviewService:
                 "lane": "legacy_overlay",
             }
 
-        record = self._load_record(record_id)
+        if source not in {"current", "live-trial"}:
+            return {"ok": False, "status": "SOURCE_UNSUPPORTED", "message": "当前复核来源不支持写入"}
+        record = self._load_record(record_id, source)
         if record is None:
             return {"ok": False, "status": "RECORD_NOT_FOUND", "message": "记录不存在"}
+        if identity_review is not None and str(record.get("lifecycleStatus") or "").upper() != "DRAFT":
+            return {"ok": False, "status": "IDENTITY_REVIEW_DRAFT_ONLY", "message": "仅允许核对本地草稿"}
 
         now = _aware_now()
         base_sha = None
@@ -868,7 +912,7 @@ class SettlementReviewService:
         # Client-supplied descriptors/paths/hashes are never trusted as v2 originals.
         backend_originals = runtime_file_originals
         if backend_originals is None:
-            backend_originals = lookup_runtime_file_originals(record_id, self._data_root())
+            backend_originals = lookup_runtime_file_originals(record_id, self._data_root(source))
 
         patch = {
             "settlement": {
@@ -890,7 +934,7 @@ class SettlementReviewService:
         if backend_originals:
             try:
                 verified = [
-                    verify_runtime_original(item, record_id=record_id, data_root=self._data_root())
+                    verify_runtime_original(item, record_id=record_id, data_root=self._data_root(source))
                     for item in backend_originals
                 ]
                 patch["settlement"]["truthEvidence"] = build_truth_evidence_v2(
@@ -935,7 +979,14 @@ class SettlementReviewService:
                 }
 
         try:
-            updated = self._store().update_record_transactional(record_id, patch, identity_review=identity_review)
+            if source == "live-trial":
+                updated = self._native_trial_store.update_reviewed_draft(
+                    record_id, patch, identity_review=identity_review
+                )
+            else:
+                updated = self._store(source).update_record_transactional(
+                    record_id, patch, identity_review=identity_review
+                )
         except Exception as exc:
             return {"ok": False, "status": "SAVE_FAILED", "message": str(exc)}
         st = updated.get("settlement") or {}
@@ -945,4 +996,5 @@ class SettlementReviewService:
             "reviewedCount": len(st.get("reviewedItems") or []),
             "reviewedAt": st.get("reviewedAt"),
             "identityReviewed": identity_review is not None,
+            "source": source,
         }

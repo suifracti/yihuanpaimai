@@ -139,7 +139,7 @@ internal static class NativeObservationService
             var firstFrameWritten = false;
             while (maxFrames <= 0 || acceptedFrames < maxFrames)
             {
-                if (DrainControls(controlQueue, session, sessionId))
+                if (DrainControls(controlQueue, session, sessionId, monitor, target))
                 {
                     session.ControlledShutdown();
                     EmitStatus(sessionId, "STOPPED", "explicit-stop", new { acceptedFrames });
@@ -397,7 +397,9 @@ internal static class NativeObservationService
     private static bool DrainControls(
         BlockingCollection<JsonObject> queue,
         SupervisorSession session,
-        string sessionId)
+        string sessionId,
+        WindowMonitor monitor,
+        WindowMonitorSnapshot sessionTarget)
     {
         while (queue.TryTake(out var message))
         {
@@ -424,6 +426,47 @@ internal static class NativeObservationService
 
             var revision = (int?)command["revision"] ?? -1;
             var commandId = $"native-control-{revision}";
+            var expectedSessionId = (string?)command["expectedObservationSessionId"];
+            if (!string.Equals(expectedSessionId, sessionId, StringComparison.Ordinal))
+            {
+                EmitStatus(sessionId, "CONTROL", "stale-command-session", new
+                {
+                    commandId,
+                    controlRevision = revision,
+                    commandStatus = "REJECT",
+                    commandMessageType = "NACK",
+                    commandResult = new
+                    {
+                        status = "REJECT",
+                        errorDetails = "STALE_OBSERVATION_SESSION",
+                        resultData = new { observationSessionId = sessionId },
+                    },
+                });
+                continue;
+            }
+            var expectedTarget = command["expectedTargetInstance"] as JsonObject;
+            var activeTarget = monitor.Snapshot();
+            if (!MatchesCommandTarget(expectedTarget, activeTarget, sessionTarget))
+            {
+                EmitStatus(sessionId, "CONTROL", "stale-command-target", new
+                {
+                    commandId,
+                    controlRevision = revision,
+                    commandStatus = "REJECT",
+                    commandMessageType = "NACK",
+                    commandResult = new
+                    {
+                        status = "REJECT",
+                        errorDetails = "STALE_TARGET_INSTANCE",
+                        resultData = new
+                        {
+                            expectedObservationSessionId = sessionId,
+                            target = TargetEvidence(activeTarget),
+                        },
+                    },
+                });
+                continue;
+            }
             try
             {
                 var result = session.SendCommandWithId(
@@ -452,6 +495,26 @@ internal static class NativeObservationService
             }
         }
         return false;
+    }
+
+    private static bool MatchesCommandTarget(
+        JsonObject? expected,
+        WindowMonitorSnapshot active,
+        WindowMonitorSnapshot sessionTarget)
+    {
+        if (expected is null || !IsUsableTarget(active))
+        {
+            return false;
+        }
+        var processToken = sessionTarget.TargetIdentity?.ProcessInstanceToken;
+        return active.TargetHwnd == sessionTarget.TargetHwnd
+            && active.TargetPid == sessionTarget.TargetPid
+            && active.Generation == sessionTarget.Generation
+            && active.TargetIdentity?.ProcessInstanceToken == processToken
+            && (long?)expected["targetHwnd"] == sessionTarget.TargetHwnd
+            && (int?)expected["targetPid"] == sessionTarget.TargetPid
+            && (long?)expected["generation"] == sessionTarget.Generation
+            && (long?)expected["processInstanceToken"] == processToken;
     }
 
     private static void EmitStatus(string sessionId, string status, string reason, object? details)

@@ -54,4 +54,32 @@ class DraftWriteStatusTests(unittest.TestCase):
             self.assertEqual(main.draft_write_status(),'FAILED')
             self.assertFalse(main.build_manual_alpha_payload(include_solver_input=False)['draftSaved'])
 
+    def test_native_save_failure_is_visible_and_retry_saves_the_same_match(self):
+        match_id = main.CURRENT_MATCH.id
+        store = Mock()
+        store.lookup.return_value = None
+        store.save_draft.side_effect = [RuntimeError("disk full"), {"id": match_id}]
+        published = []
+        source_frame = {"sha256": "known-frame", "relativePath": "source-frames/known-frame.bmp"}
+        with patch.object(main, "native_observation_enabled", return_value=True), \
+             patch.object(main, "NATIVE_TRIAL_DRAFT_STORE", store), \
+             patch.object(main, "_NATIVE_TRIAL_SOURCE_FRAMES", [source_frame]), \
+             patch.object(main, "_manual_draft_record", return_value={"id": match_id, "dataOrigin": "live-trial"}), \
+             patch.object(main, "_LAST_DRAFT_WRITE", None), \
+             patch.object(main, "_DRAFT_WRITE_FAILED", False), \
+             patch.object(main, "_NATIVE_DRAFT_SAVE_ERROR", None), \
+             patch.object(main, "_NATIVE_DRAFT_SAVE_ERROR_MATCH_ID", None), \
+             patch.object(main, "LATEST_PAYLOAD", {"type": "manual_alpha_state", "matchId": match_id}), \
+             patch.object(main, "publish_manual_payload", side_effect=lambda payload: published.append(dict(payload))):
+            self.assertIsNone(main._persist_current_draft_now())
+            self.assertEqual(main.draft_write_status(), "FAILED")
+            self.assertIn("disk full", published[-1]["draftSaveError"])
+            self.assertEqual(published[-1]["draftSaveStatus"], "FAILED")
+
+            result = main.retry_draft_save()
+            self.assertTrue(result["ok"], result)
+            self.assertEqual(main.draft_write_status(), "SAVED")
+            self.assertEqual(store.save_draft.call_count, 2)
+            self.assertEqual(published[-1]["draftSaveStatus"], "SAVED")
+
 if __name__=='__main__':unittest.main()

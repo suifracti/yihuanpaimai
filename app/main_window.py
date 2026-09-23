@@ -166,12 +166,15 @@ class ShutdownCoordinator:
         cleanup_steps: Iterable[Tuple[str, Callable[[], None]]],
         close_main: Callable[[], None],
         logger: Optional[Callable[[str, str], None]] = None,
+        prepare_shutdown: Optional[Callable[[], bool]] = None,
     ):
         self._begin_shutdown = begin_shutdown
         self._cleanup_steps = tuple(cleanup_steps)
         self._close_main = close_main
         self._logger = logger
+        self._prepare_shutdown = prepare_shutdown
         self._lock = threading.Lock()
+        self._request_lock = threading.Lock()
         self._started = False
         self._reason = None
 
@@ -186,20 +189,32 @@ class ShutdownCoordinator:
             return self._reason
 
     def request(self, reason: str, close_main: bool) -> bool:
-        with self._lock:
-            if self._started:
-                return False
-            self._started = True
-            self._reason = str(reason or "unknown")
+        with self._request_lock:
+            with self._lock:
+                if self._started:
+                    return False
+            if self._prepare_shutdown is not None:
+                try:
+                    if not self._prepare_shutdown():
+                        self._log("SHUTDOWN:MAIN", "shutdown cancelled before cleanup")
+                        return False
+                except Exception as exc:
+                    self._log("SHUTDOWN:MAIN", f"shutdown preparation failed: {exc}")
+                    return False
+            with self._lock:
+                if self._started:
+                    return False
+                self._started = True
+                self._reason = str(reason or "unknown")
 
-        self._log("SHUTDOWN:MAIN", f"shutdown started reason={self._reason}")
-        self._run_step("disable-ui", self._begin_shutdown)
-        for name, step in self._cleanup_steps:
-            self._run_step(name, step)
-        if close_main:
-            self._run_step("close-main", self._close_main)
-        self._log("SHUTDOWN:MAIN", "shutdown coordination completed")
-        return True
+            self._log("SHUTDOWN:MAIN", f"shutdown started reason={self._reason}")
+            self._run_step("disable-ui", self._begin_shutdown)
+            for name, step in self._cleanup_steps:
+                self._run_step(name, step)
+            if close_main:
+                self._run_step("close-main", self._close_main)
+            self._log("SHUTDOWN:MAIN", "shutdown coordination completed")
+            return True
 
     def _run_step(self, name: str, step: Callable[[], None]) -> None:
         try:
@@ -311,6 +326,7 @@ class MainWindowBridge:
         warehouse_identity_review_session=None,
         warehouse_identity_review_history_store=None,
         history_path_provider=None,
+        live_trial_drafts_provider=None,
         topmost_controller=None,
         user_pinned: bool = True,
     ):
@@ -335,6 +351,7 @@ class MainWindowBridge:
         self._warehouse_identity_review_session = warehouse_identity_review_session
         self._warehouse_identity_review_history_store = warehouse_identity_review_history_store
         self._history_path_provider = history_path_provider
+        self._live_trial_drafts_provider = live_trial_drafts_provider
         self._topmost_controller = topmost_controller
         self._user_pinned = bool(user_pinned)
         self._capture_safety_override = False
@@ -415,7 +432,14 @@ class MainWindowBridge:
             snapshot = unavailable_main_view_state_snapshot(
                 "UNAVAILABLE", "HISTORY_PROVIDER_INVALID"
             )
-        return snapshot.to_payload()
+        payload = snapshot.to_payload()
+        if self._live_trial_drafts_provider is not None:
+            try:
+                rows = self._live_trial_drafts_provider()
+                payload.setdefault("history", {})["liveTrialDrafts"] = rows if isinstance(rows, list) else []
+            except Exception:
+                payload.setdefault("history", {})["liveTrialDrafts"] = []
+        return payload
 
     def mascot_state_payload(self, application_state: str = "ready") -> Optional[dict]:
         if self._mascot_state_provider is None:
@@ -501,6 +525,8 @@ class MainWindowBridge:
                     "id": record_id if str(record_id).startswith("legacy:") else f"legacy:{record_id}",
                     "source": "legacy",
                 }
+            elif str(source or "current") == "live-trial" and self._settlement_review_service is not None:
+                record = self._settlement_review_service.get_record(record_id, source="live-trial")
             elif self._warehouse_identity_review_history_store is not None and record_id:
                 record = self._warehouse_identity_review_history_store.lookup(record_id)
             summary = summarize_persisted_identity_review(record)
@@ -696,7 +722,8 @@ class MainWindowBridge:
         if action == "request_original_screenshots":
             service = self._settlement_review_service
             response["originalScreenshots"] = service.list_original_screenshots(
-                str(payload.get("recordId") or "").strip()
+                str(payload.get("recordId") or "").strip(),
+                source=str(payload.get("source") or "current").strip(),
             ) if service else {"ok": False, "message": "截图服务未就绪"}
 
         if action in ("delete_original_screenshot", "restore_original_screenshot"):
@@ -705,6 +732,7 @@ class MainWindowBridge:
                 str(payload.get("recordId") or "").strip(),
                 str(payload.get("evidenceId") or "").strip(),
                 restore=action == "restore_original_screenshot",
+                source=str(payload.get("source") or "current").strip(),
             ) if service else {"ok": False, "message": "截图服务未就绪"}
 
         if action in (
@@ -750,12 +778,7 @@ class MainWindowBridge:
                         runtime_originals = None
                         if source != "legacy":
                             try:
-                                from settlement_review_file_originals import lookup_runtime_file_originals
-                                from runtime_data import runtime_data_paths
-
-                                runtime_originals = lookup_runtime_file_originals(
-                                    record_id, runtime_data_paths().root
-                                )
+                                runtime_originals = service.lookup_runtime_file_originals(record_id, source=source)
                             except Exception:
                                 runtime_originals = []
                         result = service.save_reviewed_settlement(
@@ -803,6 +826,8 @@ class MainWindowBridge:
                         "expectedMatchId",
                         "expectedFactsRevision",
                         "expectedObservationSessionId",
+                        "expectedRound",
+                        "expectedTargetInstance",
                     )
                     if any(key in payload for key in envelope_keys):
                         facts_payload = {
@@ -814,15 +839,23 @@ class MainWindowBridge:
                         facts_payload = payload.get("facts") if "facts" in payload else payload
                     result = self._manual_facts_provider(facts_payload)
                     command_result = result.get("manualCommandResult") if isinstance(result, dict) else None
-                    rejected = isinstance(command_result, dict) and command_result.get("status") == "REJECTED"
+                    status = str((command_result or {}).get("status") or "")
+                    rejected = status in {"REJECTED", "ERROR"}
+                    response["manualCommandResult"] = command_result or {
+                        "status": "REJECTED" if rejected else "ACCEPTED",
+                        "reason": (result or {}).get("error") if isinstance(result, dict) else None,
+                    }
                     response["manualFactsResult"] = {
-                        "ok": not rejected,
+                        "ok": None if status == "PENDING" else not rejected,
+                        "status": status or ("ACCEPTED" if not rejected else "REJECTED"),
+                        **({"message": "等待观察 worker 确认修改"} if status == "PENDING" else {}),
                         **({"error": command_result.get("reason")} if rejected else {}),
                     }
                 except Exception as exc:
                     response["manualFactsResult"] = {"ok": False, "error": str(exc)}
             else:
                 response["manualFactsResult"] = {"ok": False, "error": "NO_MANUAL_FACTS_PROVIDER"}
+                response["manualCommandResult"] = {"status": "ERROR", "reason": "手动修改服务未就绪"}
 
         if action == "manual_next_match":
             if self._manual_next_match_provider is not None:
@@ -1353,6 +1386,8 @@ def create_main_window_type(WinForms, Drawing):
             warehouse_identity_review_session=None,
             warehouse_identity_review_history_store=None,
             history_path_provider=None,
+            live_trial_drafts_provider=None,
+            shutdown_started_provider=None,
         ) -> None:
             self._overlay_controller = overlay_controller
             self._bridge = MainWindowBridge(
@@ -1377,9 +1412,11 @@ def create_main_window_type(WinForms, Drawing):
                 warehouse_identity_review_session=warehouse_identity_review_session,
                 warehouse_identity_review_history_store=warehouse_identity_review_history_store,
                 history_path_provider=history_path_provider,
+                live_trial_drafts_provider=live_trial_drafts_provider,
                 topmost_controller=self.set_topmost,
             )
             self._shutdown_request = shutdown_request
+            self._shutdown_started_provider = shutdown_started_provider
             self._accepting_commands = True
             self.set_topmost(self._bridge.effective_topmost)
             self.set_overlay_visible(overlay_controller.visible)
@@ -2140,7 +2177,11 @@ def create_main_window_type(WinForms, Drawing):
         def _on_form_closing(self, sender, event) -> None:
             self.set_topmost(False)
             if self._shutdown_request:
-                self._shutdown_request("main_window_close", False)
+                if self._shutdown_started_provider is not None and self._shutdown_started_provider():
+                    return
+                accepted = self._shutdown_request("main_window_close", False)
+                if accepted is False and self._shutdown_started_provider is not None:
+                    event.Cancel = True
 
         def _log(self, category: str, message: str) -> None:
             if self._logger:

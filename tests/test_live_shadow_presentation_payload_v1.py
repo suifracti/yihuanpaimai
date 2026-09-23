@@ -128,6 +128,10 @@ class TestLiveShadowPresentationPayloadV1(unittest.TestCase):
         }, source="manual", intent="confirm")
         target = self._target()
         requests = []
+        control_messages = []
+        control_bridge = mock.Mock()
+        control_bridge.running = True
+        control_bridge.send_control.side_effect = lambda message: control_messages.append(message) or True
 
         def pending_shadow(ctx, db_path=None):
             requests.append(dict(ctx))
@@ -177,6 +181,8 @@ class TestLiveShadowPresentationPayloadV1(unittest.TestCase):
                  mock.patch.object(app_main, "native_observation_enabled", return_value=True), \
                  mock.patch.object(app_main, "_native_start_frame_watchdog_locked"), \
                  mock.patch.object(app_main, "_native_post_main_status"), \
+                 mock.patch.object(app_main, "NATIVE_OBSERVATION_BRIDGE", control_bridge), \
+                 mock.patch.object(app_main, "schedule_draft_save"), \
                  mock.patch.object(app_main.PRESENTATION_RUNTIME, "set_vision_process_state"), \
                  mock.patch.object(app_main.PRESENTATION_RUNTIME, "observe_transport"), \
                  mock.patch.object(live_shadow, "invalidate_match_shadow", return_value=0), \
@@ -314,6 +320,68 @@ class TestLiveShadowPresentationPayloadV1(unittest.TestCase):
                 })
                 self.assertEqual(stale_command["manualCommandResult"]["status"], "REJECTED")
                 self.assertIsNone(match.facts["leaderBid"])
+
+                accepted_command = app_main.apply_manual_facts({
+                    "expectedMatchId": "p3-match-b",
+                    "expectedFactsRevision": 1,
+                    "expectedObservationSessionId": "session-c",
+                    "expectedRound": 1,
+                    "expectedTargetInstance": target,
+                    "facts": {"q": 9},
+                })
+                self.assertEqual(accepted_command["manualCommandResult"]["status"], "PENDING")
+                self.assertEqual(match.facts["q"], 9)
+                accepted_wire_command = control_messages[-1]["command"]
+                accepted_result = {
+                    "matchId": "p3-match-b",
+                    "expectedMatchId": "p3-match-b",
+                    "expectedFactsRevision": 1,
+                    "expectedRound": 1,
+                    "expectedObservationSessionId": "session-c",
+                }
+                app_main._native_observation_event({
+                    "type": "native_observation", "schemaVersion": "native-observation-v1",
+                    "status": "CONTROL", "observationSessionId": "session-c",
+                    "sourceKind": "native_wgc", "inputActions": False,
+                    "formalHistoryWriter": False,
+                    "details": {
+                        "controlRevision": accepted_wire_command["revision"],
+                        "commandStatus": "ACK",
+                        "commandResult": {"status": "ACK", "resultData": accepted_result},
+                    },
+                })
+                self.assertEqual(app_main.LATEST_PAYLOAD["manualCommandResult"]["status"], "ACK")
+                self.assertTrue(match.field_states["q"].protected)
+
+                app_main.LATEST_PAYLOAD.update({
+                    "observationStatus": "FRAME", "nativeInvalidated": False,
+                    "scene": "IN_AUCTION", "matchId": "p3-match-b",
+                    "observationSessionId": "session-c", "factsRevision": 2,
+                    "round": 1, "frameSequence": 2, "freshnessMs": 8, "target": target,
+                })
+                rejected_command = app_main.apply_manual_facts({
+                    "expectedMatchId": "p3-match-b",
+                    "expectedFactsRevision": 2,
+                    "expectedObservationSessionId": "session-c",
+                    "expectedRound": 1,
+                    "expectedTargetInstance": target,
+                    "facts": {"q": 8},
+                })
+                self.assertEqual(rejected_command["manualCommandResult"]["status"], "PENDING")
+                rejected_wire_command = control_messages[-1]["command"]
+                app_main._native_observation_event({
+                    "type": "native_observation", "schemaVersion": "native-observation-v1",
+                    "status": "CONTROL", "observationSessionId": "session-c",
+                    "sourceKind": "native_wgc", "inputActions": False,
+                    "formalHistoryWriter": False,
+                    "details": {
+                        "controlRevision": rejected_wire_command["revision"],
+                        "commandStatus": "REJECT",
+                        "commandResult": {"status": "REJECT", "errorDetails": "STALE_FACTS_REVISION"},
+                    },
+                })
+                self.assertEqual(app_main.LATEST_PAYLOAD["manualCommandResult"]["status"], "REJECTED")
+                self.assertEqual(match.facts["q"], 9)
         finally:
             app_main.LATEST_PAYLOAD.clear()
             app_main.LATEST_PAYLOAD.update(original_payload)

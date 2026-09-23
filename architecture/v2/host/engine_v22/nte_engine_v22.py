@@ -718,6 +718,30 @@ class RealEngine:
         expected_id = str(parameters.get("expectedMatchId") or "").strip()
         snapshot_id = str(snapshot.get("id") or "").strip()
         reset = parameters.get("reset") is True
+        if "expectedFactsRevision" in parameters:
+            expected_revision = parameters.get("expectedFactsRevision")
+            expected_round = parameters.get("expectedRound")
+            current_round = self.current_match.facts.get("roundNo")
+            if type(expected_revision) is not int or expected_revision != self.current_match.facts_revision:
+                return "REJECT", "STALE_FACTS_REVISION", {
+                    "expectedFactsRevision": expected_revision,
+                    "currentFactsRevision": self.current_match.facts_revision,
+                }
+            if type(expected_round) is not int or expected_round != current_round:
+                return "REJECT", "STALE_ROUND", {
+                    "expectedRound": expected_round,
+                    "currentRound": current_round,
+                }
+            if not expected_id or expected_id != self.current_match.id:
+                return "REJECT", "MATCH_CHANGED", {
+                    "expectedMatchId": expected_id,
+                    "currentMatchId": self.current_match.id,
+                }
+            if not reset and snapshot_id != self.current_match.id:
+                return "REJECT", "MATCH_CHANGED", {
+                    "snapshotMatchId": snapshot_id,
+                    "currentMatchId": self.current_match.id,
+                }
         if reset and expected_id and expected_id != self.current_match.id:
             return "REJECT", "MATCH_CHANGED", {
                 "expectedMatchId": expected_id,
@@ -788,6 +812,10 @@ class RealEngine:
             "matchId": self.current_match.id,
             "factsRevision": self.current_match.facts_revision,
             "reset": reset,
+            "expectedMatchId": expected_id,
+            "expectedFactsRevision": parameters.get("expectedFactsRevision"),
+            "expectedRound": parameters.get("expectedRound"),
+            "expectedObservationSessionId": parameters.get("expectedObservationSessionId"),
         }
 
     def handle_command(self, envelope: dict) -> None:

@@ -415,6 +415,10 @@ CANONICAL_DATABASE = (
 from runtime_revision import get_code_revision
 from prediction_snapshot_holder import ACTIVE_SNAPSHOT_HOLDER
 from settlement_truth_holder import ACTIVE_SETTLEMENT_TRUTH_HOLDER
+from native_trial_drafts import NativeTrialDraftStore, resolve_native_trial_history_path
+
+NATIVE_TRIAL_HISTORY_PATH = resolve_native_trial_history_path(PROJECT_ROOT)
+NATIVE_TRIAL_DRAFT_STORE = NativeTrialDraftStore(NATIVE_TRIAL_HISTORY_PATH)
 
 if "--print-code-revision" in sys.argv or "--version" in sys.argv:
     print(get_code_revision())
@@ -674,6 +678,10 @@ _NATIVE_EXPECTED_SESSION: Optional[str] = None
 _NATIVE_OBSERVATION_SEQUENCE = 0
 _NATIVE_OBSERVATION_LAST_FRAME_NS: Optional[int] = None
 _NATIVE_CONTROL_BINDINGS: Dict[int, Dict[str, Any]] = {}
+_NATIVE_TRIAL_FRAME_MATCH_ID: Optional[str] = None
+_NATIVE_TRIAL_SOURCE_FRAMES: List[Dict[str, Any]] = []
+_NATIVE_DRAFT_SAVE_ERROR: Optional[str] = None
+_NATIVE_DRAFT_SAVE_ERROR_MATCH_ID: Optional[str] = None
 # Solver eligibility is a Main-side lease over the latest worker-accepted
 # observation.  It is intentionally local to presentation/admission and does
 # not extend the frozen Host/Engine protocol.
@@ -1058,11 +1066,14 @@ def get_current_match_presentation_summary() -> dict:
             "observationStatus": native_payload.get("observationStatus") or vision_health.get("status"),
             "observationSessionId": native_payload.get("observationSessionId"),
             "observationFactsRevision": native_payload.get("factsRevision"),
+            "observationRound": native_payload.get("round"),
+            "observationTarget": copy.deepcopy(native_payload.get("target")) if native_payload.get("observationProfile") == "native-readonly-v1" else None,
             "target": copy.deepcopy(native_payload.get("target")) if native_payload.get("observationProfile") == "native-readonly-v1" else None,
             "observationSource": native_payload.get("sourceKind") or vision_health.get("sourceKind"),
             "observationFreshnessMs": native_payload.get("freshnessMs") or vision_health.get("freshnessMs"),
             "observationFrameSequence": native_payload.get("frameSequence") or vision_health.get("frameSequence"),
             "nativeControlResult": dict(native_payload.get("nativeControlResult") or {}),
+            "manualCommandResult": dict(native_payload.get("manualCommandResult") or {}),
             "isolatedTrial": is_isolated_trial(),
             "lifecycleStatus": snap.get("lifecycleStatus", "DRAFT"),
             "hasAnyFact": CURRENT_MATCH.has_any_fact(),
@@ -1172,6 +1183,8 @@ def handle_delete_history_record(record_id: str, source: Optional[str] = None) -
     record_id = str(record_id or "").strip()
     if not record_id:
         return {"ok": False, "status": "RECORD_ID_EMPTY", "message": "记录 ID 不能为空"}
+    if source == "live-trial":
+        return {"ok": False, "status": "ISOLATED_DRAFT_READ_ONLY", "message": "隔离草稿不可从正式 History 删除"}
 
     # Check if this is a legacy archive record
     is_legacy = (source == "legacy") or record_id.startswith("legacy:")
@@ -1539,15 +1552,45 @@ def _native_start_frame_watchdog_locked() -> None:
     _NATIVE_FRAME_WATCHDOG_THREAD.start()
 
 
+def _restore_current_match_state_locked(state: Any) -> None:
+    if not isinstance(state, dict):
+        return
+    CURRENT_MATCH.__dict__.clear()
+    CURRENT_MATCH.__dict__.update(copy.deepcopy(state))
+
+
+def _native_reject_pending_controls_locked(reason: str) -> None:
+    if not _NATIVE_CONTROL_BINDINGS:
+        return
+    pending = list(_NATIVE_CONTROL_BINDINGS.items())
+    _NATIVE_CONTROL_BINDINGS.clear()
+    for control_revision, binding in pending:
+        if not isinstance(binding, dict):
+            continue
+        if (
+            CURRENT_MATCH.id == binding.get("projectedMatchId")
+            and CURRENT_MATCH.facts_revision == binding.get("appliedMainFactsRevision")
+        ):
+            _restore_current_match_state_locked(binding.get("rollbackState"))
+        receipt = {
+            "commandId": f"native-control-{control_revision}",
+            "revision": control_revision,
+            "status": "REJECTED",
+            "reason": reason or "OBSERVATION_INVALIDATED",
+        }
+        LATEST_PAYLOAD["nativeControlResult"] = receipt
+        LATEST_PAYLOAD["manualCommandResult"] = receipt
+
+
 def _native_invalidate_solver_locked(reason: str) -> None:
     """Revoke native solver admission and every reusable result under the UI lock."""
     global _NATIVE_SOLVER_INVALIDATION_GENERATION, _NATIVE_SOLVER_LEASE
     global _NATIVE_OBSERVATION_LAST_FRAME_NS
     retired_match_id = str((_NATIVE_SOLVER_LEASE or {}).get("matchId") or CURRENT_MATCH.id or "")
+    _native_reject_pending_controls_locked(reason)
     _NATIVE_SOLVER_INVALIDATION_GENERATION += 1
     _NATIVE_SOLVER_LEASE = None
     _NATIVE_OBSERVATION_LAST_FRAME_NS = None
-    _NATIVE_CONTROL_BINDINGS.clear()
     ACTIVE_SNAPSHOT_HOLDER.clear()
     LATEST_VISION_PAYLOAD.clear()
     if retired_match_id:
@@ -1704,6 +1747,38 @@ def _native_frame_watchdog_loop() -> None:
             })
 
 
+def _native_capture_trial_frame_locked(path: Any, metadata: Dict[str, Any], *, boundary: bool = False) -> None:
+    """Copy only the first accepted frame and one scene-boundary frame into the isolated trial root."""
+    global _NATIVE_TRIAL_FRAME_MATCH_ID, _NATIVE_TRIAL_SOURCE_FRAMES
+    if not path or not CURRENT_MATCH.id:
+        return
+    if _NATIVE_TRIAL_FRAME_MATCH_ID != CURRENT_MATCH.id:
+        _NATIVE_TRIAL_FRAME_MATCH_ID = CURRENT_MATCH.id
+        _NATIVE_TRIAL_SOURCE_FRAMES = []
+    if boundary and len(_NATIVE_TRIAL_SOURCE_FRAMES) >= 2:
+        return
+    if not boundary and _NATIVE_TRIAL_SOURCE_FRAMES:
+        return
+    with _NATIVE_OBSERVATION_LOCK:
+        bridge = NATIVE_OBSERVATION_BRIDGE
+        session_dir = getattr(bridge, "session_dir", None) if bridge is not None else None
+    if session_dir is None:
+        return
+    try:
+        session_root = os.path.realpath(str(session_dir))
+        source_path = os.path.realpath(str(path))
+        if os.path.commonpath([session_root, source_path]) != session_root:
+            return
+        descriptor = NATIVE_TRIAL_DRAFT_STORE.capture_frame(source_path, metadata)
+    except (OSError, ValueError, RuntimeError) as exc:
+        log_stage("DRAFT:NATIVE", f"source frame copy failed: {type(exc).__name__}: {exc}")
+        return
+    if any(item.get("sha256") == descriptor.get("sha256") for item in _NATIVE_TRIAL_SOURCE_FRAMES):
+        return
+    _NATIVE_TRIAL_SOURCE_FRAMES.append(descriptor)
+    _NATIVE_TRIAL_SOURCE_FRAMES = _NATIVE_TRIAL_SOURCE_FRAMES[:1] + _NATIVE_TRIAL_SOURCE_FRAMES[-1:]
+
+
 def _native_publish_health(event: Dict[str, Any], *, force_main: bool = False) -> Dict[str, Any]:
     health = _native_health_from_event(event)
     raw_status = str(event.get("status") or "").upper()
@@ -1735,6 +1810,14 @@ def _native_publish_health(event: Dict[str, Any], *, force_main: bool = False) -
             )
         except Exception as exc:
             log_stage("PRESENTATION:NATIVE", f"health broadcast failed: {exc}")
+    if invalidating:
+        try:
+            manual_state = build_manual_alpha_payload(include_solver_input=False)
+            manual_state["nativeControlResult"] = dict(LATEST_PAYLOAD.get("nativeControlResult") or {})
+            manual_state["manualCommandResult"] = dict(LATEST_PAYLOAD.get("manualCommandResult") or {})
+            publish_manual_payload(manual_state)
+        except Exception as exc:
+            log_stage("PRESENTATION:NATIVE", f"manual state refresh after invalidation failed: {type(exc).__name__}")
     _native_post_main_status(f"native_{str(event.get('status') or 'event').lower()}", force=force_main)
     return health
 
@@ -1812,7 +1895,7 @@ def _native_observation_event(event: Dict[str, Any]) -> None:
     incoming_session = str(event.get("observationSessionId") or "").strip()
     if status == "STARTING":
         _NATIVE_EXPECTED_SESSION = incoming_session or None
-    elif incoming_session and incoming_session != _NATIVE_EXPECTED_SESSION:
+    elif incoming_session and incoming_session != _NATIVE_EXPECTED_SESSION and status != "CONTROL":
         # An old reader/result must not revive or invalidate the new session.
         return
     if status == "PAUSED" and event.get("reason") == "observation-frame-timeout":
@@ -1836,21 +1919,47 @@ def _native_observation_event(event: Dict[str, Any]) -> None:
                 return
             with _MANUAL_STATE_LOCK:
                 binding = _NATIVE_CONTROL_BINDINGS.pop(control_revision, None)
-                if not isinstance(binding, dict) or (
-                    binding.get("matchId") != CURRENT_MATCH.id
-                    or binding.get("mainFactsRevision") != CURRENT_MATCH.facts_revision
-                    or binding.get("sessionId") != _NATIVE_OBSERVATION_SESSION
-                    or incoming_session != _NATIVE_EXPECTED_SESSION
-                ):
+                if not isinstance(binding, dict):
                     return
+                command_result = details.get("commandResult") if isinstance(details.get("commandResult"), dict) else {}
+                result_data = command_result.get("resultData") if isinstance(command_result.get("resultData"), dict) else {}
+                worker_status = str(details.get("commandStatus") or command_result.get("status") or "ERROR").upper()
+                expected_result_match = binding.get("projectedMatchId") if binding.get("reset") else binding.get("matchId")
+                scope_is_current = bool(
+                    binding.get("sessionId") == incoming_session == _NATIVE_EXPECTED_SESSION == _NATIVE_OBSERVATION_SESSION
+                    and binding.get("invalidationGeneration") == _NATIVE_SOLVER_INVALIDATION_GENERATION
+                    and binding.get("targetInstance") == _native_target_instance(LATEST_PAYLOAD.get("target"))
+                    and CURRENT_MATCH.id == binding.get("projectedMatchId")
+                    and (binding.get("reset") or CURRENT_MATCH.facts_revision == binding.get("appliedMainFactsRevision"))
+                    and str(result_data.get("matchId") or "") == str(expected_result_match or "")
+                    and result_data.get("expectedMatchId") == binding.get("matchId")
+                    and result_data.get("expectedFactsRevision") == binding.get("workerFactsRevision")
+                    and result_data.get("expectedRound") == binding.get("round")
+                    and result_data.get("expectedObservationSessionId") == binding.get("sessionId")
+                )
+                accepted = worker_status == "ACK" and scope_is_current
+                reason = None if accepted else (
+                    command_result.get("errorDetails")
+                    or details.get("error")
+                    or ("OBSERVATION_SCOPE_CHANGED" if worker_status == "ACK" else str(worker_status))
+                )
                 receipt = {
                     "commandId": details.get("commandId"),
                     "revision": control_revision,
-                    "status": details.get("commandStatus") or "ERROR",
+                    "status": "ACK" if accepted else "REJECTED",
                     "messageType": details.get("commandMessageType"),
-                    "result": details.get("commandResult"),
+                    "result": command_result,
+                    "reason": reason,
                 }
+                if not accepted and (
+                    CURRENT_MATCH.id == binding.get("projectedMatchId")
+                    and CURRENT_MATCH.facts_revision == binding.get("appliedMainFactsRevision")
+                ):
+                    _restore_current_match_state_locked(binding.get("rollbackState"))
                 LATEST_PAYLOAD["nativeControlResult"] = receipt
+                LATEST_PAYLOAD["manualCommandResult"] = receipt
+                LATEST_PAYLOAD["draftSaveStatus"] = draft_write_status()
+                LATEST_PAYLOAD["draftSaved"] = draft_write_status() == "SAVED"
                 health = dict(LATEST_PAYLOAD.get("visionHealth") or {})
                 if not health or health.get("profile") != "native-readonly-v1":
                     health = _native_health_from_event(event)
@@ -1870,12 +1979,35 @@ def _native_observation_event(event: Dict[str, Any]) -> None:
                     )
                 except Exception as exc:
                     log_stage("PRESENTATION:NATIVE", f"control broadcast failed: {exc}")
+            if accepted:
+                schedule_draft_save(0.5)
+            try:
+                manual_state = build_manual_alpha_payload(include_solver_input=False)
+                manual_state["nativeControlResult"] = receipt
+                manual_state["manualCommandResult"] = receipt
+                publish_manual_payload(manual_state)
+            except Exception as exc:
+                log_stage("PRESENTATION:NATIVE", f"manual command receipt publish failed: {type(exc).__name__}")
             _native_post_main_status("native_control", force=True)
             return
+        if status == "PAUSED":
+            details = event.get("details") if isinstance(event.get("details"), dict) else {}
+            boundary_path = details.get("boundaryRawPath")
+            if boundary_path:
+                _native_capture_trial_frame_locked(boundary_path, {
+                    "width": None,
+                    "height": None,
+                    "capturedAtUtc": details.get("capturedAtUtc"),
+                    "frameSequence": details.get("frameSequence"),
+                    "observationSessionId": incoming_session,
+                    "targetInstance": _native_target_instance(details.get("target")),
+                }, boundary=True)
         _native_publish_health(event, force_main=status in {"STARTING", "READY", "PAUSED", "ERROR", "STOPPED"})
         if status in {"PAUSED", "ERROR", "STOPPED"}:
             _LIVE_VISION_ACTIVE = False
             _LIVE_VISION_MATCH_ID = None
+            if CURRENT_MATCH.has_any_fact():
+                flush_draft_save_sync()
         return
 
     frame = event.get("frame")
@@ -2002,6 +2134,7 @@ def _native_observation_event(event: Dict[str, Any]) -> None:
                 ACTIVE_SETTLEMENT_TRUTH_HOLDER.clear()
                 _LIVE_CONTROL_WAITING_EXIT = False
                 LATEST_PAYLOAD.pop("nativeControlResult", None)
+                LATEST_PAYLOAD.pop("manualCommandResult", None)
             _LIVE_CONTROL_WAITING_EXIT = False
             _LIVE_VISION_MATCH_ID = CURRENT_MATCH.id
             _LIVE_VISION_ACTIVE = True
@@ -2165,6 +2298,20 @@ def _native_observation_event(event: Dict[str, Any]) -> None:
             LATEST_PAYLOAD.update(data)
             PRESENTATION_RUNTIME.observe_transport(data)
             _NATIVE_OBSERVATION_LAST_FRAME_NS = capture_ns
+            if sequence == 1 or not _NATIVE_TRIAL_SOURCE_FRAMES:
+                _native_capture_trial_frame_locked(frame.get("rawFramePath"), {
+                    "width": frame.get("width"),
+                    "height": frame.get("height"),
+                    "capturedAtUtc": frame.get("capturedAtUtc"),
+                    "frameSequence": sequence,
+                    "observationSessionId": session_id,
+                    "targetInstance": _native_target_instance(data.get("target")),
+                })
+            should_save_trial_draft = bool(
+                native_observation_enabled()
+                and CURRENT_MATCH.has_any_fact()
+                and _LAST_DRAFT_WRITE != (CURRENT_MATCH.id, CURRENT_MATCH.facts_revision)
+            )
 
     if stale_frame:
         _native_publish_health({
@@ -2173,6 +2320,8 @@ def _native_observation_event(event: Dict[str, Any]) -> None:
             "details": {"sequence": sequence, "sessionId": session_id},
         }, force_main=True)
         return
+    if should_save_trial_draft:
+        schedule_draft_save(0.5)
     loop = WS_EVENT_LOOP
     if loop is not None and loop.is_running():
         try:
@@ -2184,28 +2333,66 @@ def _native_observation_event(event: Dict[str, Any]) -> None:
     _native_post_main_status("native_frame")
 
 
-def _send_native_manual_control(command: Optional[Dict[str, Any]]) -> Optional[Dict[str, Any]]:
+def _send_native_manual_control(
+    command: Optional[Dict[str, Any]], *, rollback_state: Optional[Dict[str, Any]] = None,
+    validated_observation_scope: Optional[Dict[str, Any]] = None,
+) -> Optional[Dict[str, Any]]:
     if not native_observation_enabled() or not isinstance(command, dict):
         return None
     expected_match_id = str(command.get("expectedMatchId") or "").strip()
     revision = command.get("revision")
-    if not command.get("reset"):
-        snapshot = command.get("snapshot") if isinstance(command.get("snapshot"), dict) else {}
-        try:
-            command_main_revision = int(snapshot.get("factsRevision"))
-        except (TypeError, ValueError):
-            command_main_revision = -1
-        if (
-            expected_match_id != CURRENT_MATCH.id
-            or command_main_revision != CURRENT_MATCH.facts_revision
-            or not _NATIVE_EXPECTED_SESSION
-            or _NATIVE_EXPECTED_SESSION != _NATIVE_OBSERVATION_SESSION
-        ):
-            return {
-                "status": "REJECTED",
-                "reason": "STALE_MATCH_COMMAND",
-                "revision": revision,
-            }
+    expected_session = str(command.get("expectedObservationSessionId") or "").strip()
+    expected_worker_revision = command.get("expectedFactsRevision")
+    expected_round = command.get("expectedRound")
+    expected_target = command.get("expectedTargetInstance")
+    current_worker_match = str(LATEST_PAYLOAD.get("matchId") or "").strip()
+    scope = validated_observation_scope if isinstance(validated_observation_scope, dict) else LATEST_PAYLOAD
+    try:
+        freshness = float(scope.get("freshnessMs"))
+    except (TypeError, ValueError):
+        freshness = float("inf")
+    scope_target = _native_target_instance(scope.get("target"))
+    if validated_observation_scope is not None:
+        valid_scope = (
+            expected_match_id
+            and expected_match_id == current_worker_match
+            and expected_session
+            and expected_session == _NATIVE_EXPECTED_SESSION == _NATIVE_OBSERVATION_SESSION
+            and type(expected_worker_revision) is int
+            and expected_worker_revision == scope.get("factsRevision") == LATEST_PAYLOAD.get("factsRevision")
+            and type(expected_round) is int
+            and expected_round == scope.get("round")
+            and isinstance(expected_target, dict)
+            and expected_target == scope_target == _native_target_instance(LATEST_PAYLOAD.get("target"))
+            and scope.get("frameSequence") == LATEST_PAYLOAD.get("frameSequence")
+            and scope.get("observationStatus") == "FRAME"
+            and scope.get("nativeInvalidated") is not True
+            and 0 <= freshness <= _NATIVE_FRAME_TIMEOUT_SECONDS * 1000
+            and command.get("expectedInvalidationGeneration") == _NATIVE_SOLVER_INVALIDATION_GENERATION
+        )
+    else:
+        valid_scope = (
+            expected_match_id
+            and expected_match_id == current_worker_match
+            and expected_session
+            and expected_session == _NATIVE_EXPECTED_SESSION == _NATIVE_OBSERVATION_SESSION
+            and type(expected_worker_revision) is int
+            and expected_worker_revision == LATEST_PAYLOAD.get("factsRevision")
+            and type(expected_round) is int
+            and expected_round == LATEST_PAYLOAD.get("round")
+            and isinstance(expected_target, dict)
+            and expected_target == _native_target_instance(LATEST_PAYLOAD.get("target"))
+            and LATEST_PAYLOAD.get("observationStatus") == "FRAME"
+            and LATEST_PAYLOAD.get("nativeInvalidated") is not True
+            and 0 <= freshness <= _NATIVE_FRAME_TIMEOUT_SECONDS * 1000
+            and command.get("expectedInvalidationGeneration") == _NATIVE_SOLVER_INVALIDATION_GENERATION
+        )
+    if not valid_scope:
+        return {"status": "REJECTED", "reason": "STALE_MATCH_COMMAND", "revision": revision}
+    if not command.get("reset") and expected_match_id != CURRENT_MATCH.id:
+        return {"status": "REJECTED", "reason": "STALE_MATCH_COMMAND", "revision": revision}
+    if _NATIVE_CONTROL_BINDINGS:
+        return {"status": "REJECTED", "reason": "COMMAND_PENDING", "revision": revision}
     with _NATIVE_OBSERVATION_LOCK:
         bridge = NATIVE_OBSERVATION_BRIDGE
     if bridge is None or not bridge.running:
@@ -2222,15 +2409,38 @@ def _send_native_manual_control(command: Optional[Dict[str, Any]]) -> Optional[D
     if control_revision is not None and not command.get("reset"):
         binding = {
             "matchId": expected_match_id,
+            "projectedMatchId": CURRENT_MATCH.id,
             "mainFactsRevision": CURRENT_MATCH.facts_revision,
-            "sessionId": _NATIVE_OBSERVATION_SESSION,
+            "appliedMainFactsRevision": CURRENT_MATCH.facts_revision,
+            "workerFactsRevision": expected_worker_revision,
+            "round": expected_round,
+            "sessionId": expected_session,
+            "targetInstance": copy.deepcopy(expected_target),
+            "invalidationGeneration": _NATIVE_SOLVER_INVALIDATION_GENERATION,
+            "rollbackState": copy.deepcopy(rollback_state),
+            "reset": False,
+        }
+        _NATIVE_CONTROL_BINDINGS[control_revision] = binding
+    elif control_revision is not None and command.get("reset"):
+        binding = {
+            "matchId": expected_match_id,
+            "projectedMatchId": CURRENT_MATCH.id,
+            "mainFactsRevision": CURRENT_MATCH.facts_revision,
+            "appliedMainFactsRevision": CURRENT_MATCH.facts_revision,
+            "workerFactsRevision": expected_worker_revision,
+            "round": expected_round,
+            "sessionId": expected_session,
+            "targetInstance": copy.deepcopy(expected_target),
+            "invalidationGeneration": _NATIVE_SOLVER_INVALIDATION_GENERATION,
+            "rollbackState": copy.deepcopy(rollback_state),
+            "reset": True,
         }
         _NATIVE_CONTROL_BINDINGS[control_revision] = binding
     sent = bridge.send_control({"type": "native_control", "command": command})
     if not sent and control_revision is not None:
         _NATIVE_CONTROL_BINDINGS.pop(control_revision, None)
     return {
-        "status": "SENT" if sent else "REJECTED",
+        "status": "PENDING" if sent else "REJECTED",
         "reason": None if sent else "NATIVE_CONTROL_CHANNEL_FAILED",
         "revision": command.get("revision"),
     }
@@ -2527,7 +2737,7 @@ async def ws_handler(websocket):
                     dy = int(data.get("dy", 0))
                     if dx != 0 or dy != 0:
                         move_hud_async(dx, dy)
-                elif msg_type in ("manual_facts", "manual_finalize", "manual_next_match", "manual_bootstrap", "triggered_snapshot", "capture_hud", "resize_hud", "capture_overlay_preview", "eval_overlay_js", "eval_main_js"):
+                elif msg_type in ("manual_facts", "manual_finalize", "manual_next_match", "manual_bootstrap", "retry_draft_save", "triggered_snapshot", "capture_hud", "resize_hud", "capture_overlay_preview", "eval_overlay_js", "eval_main_js"):
                     if msg_type == "resize_hud":
                         continue
                     if msg_type in ("triggered_snapshot", "capture_hud"):
@@ -2566,6 +2776,8 @@ async def ws_handler(websocket):
                         payload = begin_next_manual_match(data)
                     elif msg_type == "manual_bootstrap":
                         payload = build_manual_alpha_payload()
+                    elif msg_type == "retry_draft_save":
+                        payload = retry_draft_save()
                     else:
                         payload = apply_manual_facts(data)
                     await broadcast_ws(json.dumps(payload, ensure_ascii=False))
@@ -2723,7 +2935,10 @@ def _live_vision_presentation_active() -> bool:
     return bool(_LIVE_VISION_ACTIVE and _LIVE_VISION_MATCH_ID == CURRENT_MATCH.id)
 
 
-def make_live_control_command(expected_id, *, facts=None, reset=False, cleared_fields=None, restore_auto_fields=None):
+def make_live_control_command(
+    expected_id, *, facts=None, reset=False, cleared_fields=None,
+    restore_auto_fields=None, observation_scope=None,
+):
     global _LIVE_CONTROL_REVISION, _LIVE_CONTROL_WAITING_EXIT
     _LIVE_CONTROL_REVISION += 1
     if reset:
@@ -2743,6 +2958,15 @@ def make_live_control_command(expected_id, *, facts=None, reset=False, cleared_f
             _LIVE_MANUAL_OVERRIDES[key] = None
     command = {"revision": _LIVE_CONTROL_REVISION, "expectedMatchId": expected_id,
                "snapshot": CURRENT_MATCH.snapshot(), "facts": facts or {}, "reset": reset}
+    if native_observation_enabled():
+        scope = observation_scope if isinstance(observation_scope, dict) else LATEST_PAYLOAD
+        command.update({
+            "expectedObservationSessionId": scope.get("observationSessionId") or _NATIVE_OBSERVATION_SESSION,
+            "expectedFactsRevision": scope.get("factsRevision"),
+            "expectedRound": scope.get("round"),
+            "expectedTargetInstance": _native_target_instance(scope.get("target")) if "target" in scope else _native_target_instance(LATEST_PAYLOAD.get("target")),
+            "expectedInvalidationGeneration": _NATIVE_SOLVER_INVALIDATION_GENERATION,
+        })
     if cleared_fields:
         command["clearedFields"] = list(cleared_fields)
     if restore_auto_fields:
@@ -2786,6 +3010,10 @@ def _manual_draft_record() -> Dict[str, Any]:
     prediction_snapshot = ACTIVE_SNAPSHOT_HOLDER.get_snapshot_for_match(snap["id"])
     if isinstance(prediction_snapshot, dict):
         record["predictionSnapshot"] = prediction_snapshot
+    if native_observation_enabled():
+        record["dataOrigin"] = "live-trial"
+        record["fieldStates"] = copy.deepcopy(snap.get("fieldStates") or {})
+        record["factsRevision"] = snap.get("factsRevision")
     return record
 
 
@@ -2795,7 +3023,11 @@ _DRAFT_WRITE_FAILED = False
 
 def draft_write_status():
     if native_observation_enabled():
-        return "ISOLATED_DRAFT"
+        if _LAST_DRAFT_WRITE == (CURRENT_MATCH.id, CURRENT_MATCH.facts_revision):
+            return "SAVED"
+        if _NATIVE_DRAFT_SAVE_ERROR and _NATIVE_DRAFT_SAVE_ERROR_MATCH_ID == CURRENT_MATCH.id:
+            return "FAILED"
+        return "PENDING" if CURRENT_MATCH.has_any_fact() else "UNAVAILABLE"
     if not DRAFT_ARCHIVER.db_paths:
         return "UNAVAILABLE"
     if _LAST_DRAFT_WRITE == (CURRENT_MATCH.id, CURRENT_MATCH.facts_revision):
@@ -2804,14 +3036,55 @@ def draft_write_status():
 
 
 def _persist_current_draft_now() -> Optional[Dict[str, Any]]:
-    global _DRAFT_TIMER, _LAST_DRAFT_WRITE, _DRAFT_WRITE_FAILED
+    global _DRAFT_TIMER, _LAST_DRAFT_WRITE, _DRAFT_WRITE_FAILED, _NATIVE_DRAFT_SAVE_ERROR
+    global _NATIVE_DRAFT_SAVE_ERROR_MATCH_ID
     with _DRAFT_LOCK:
         _DRAFT_TIMER = None
     if native_observation_enabled():
-        # Native P1 keeps DRAFT/raw diagnostics in the per-observation Host
-        # work directory.  The product's formal History database is read-only
-        # for this profile.
-        return None
+        with _MANUAL_STATE_LOCK:
+            if not CURRENT_MATCH.has_any_fact():
+                return None
+            try:
+                existing_trial = NATIVE_TRIAL_DRAFT_STORE.lookup(CURRENT_MATCH.id) or {}
+                existing_native = ((existing_trial.get("auctionEvidence") or {}).get("nativeObservation") or {})
+                if not _NATIVE_TRIAL_SOURCE_FRAMES and not existing_native.get("sourceFrames"):
+                    raise RuntimeError("尚未能保留本局原始观察帧；草稿未保存，请等待有效帧后重试")
+                scope = {
+                    "profile": "native-readonly-v1",
+                    "observationSessionId": _NATIVE_OBSERVATION_SESSION,
+                    "targetInstance": _native_target_instance(LATEST_PAYLOAD.get("target")),
+                    "workerFactsRevision": LATEST_PAYLOAD.get("factsRevision"),
+                    "mainFactsRevision": CURRENT_MATCH.facts_revision,
+                    "round": LATEST_PAYLOAD.get("round"),
+                    "frameSequence": LATEST_PAYLOAD.get("frameSequence"),
+                    "capturedAtUtc": LATEST_PAYLOAD.get("capturedAtUtc"),
+                }
+                written = NATIVE_TRIAL_DRAFT_STORE.save_draft(
+                    _manual_draft_record(),
+                    source_frames=copy.deepcopy(_NATIVE_TRIAL_SOURCE_FRAMES),
+                    observation_scope=scope,
+                )
+                _LAST_DRAFT_WRITE = (CURRENT_MATCH.id, CURRENT_MATCH.facts_revision)
+                _NATIVE_DRAFT_SAVE_ERROR = None
+                _NATIVE_DRAFT_SAVE_ERROR_MATCH_ID = None
+                _DRAFT_WRITE_FAILED = False
+            except Exception as exc:
+                written = None
+                _NATIVE_DRAFT_SAVE_ERROR = f"{type(exc).__name__}: {exc}"
+                _NATIVE_DRAFT_SAVE_ERROR_MATCH_ID = CURRENT_MATCH.id
+                _DRAFT_WRITE_FAILED = True
+                log_stage("DRAFT:NATIVE", f"isolated draft save failed match={CURRENT_MATCH.id}: {_NATIVE_DRAFT_SAVE_ERROR}")
+            if (LATEST_PAYLOAD.get("type") == "manual_alpha_state"
+                    or LATEST_PAYLOAD.get("matchId") == CURRENT_MATCH.id):
+                payload = {
+                    **LATEST_PAYLOAD,
+                    "draftSaved": written is not None,
+                    "draftSaveStatus": draft_write_status(),
+                    "draftSaveError": _NATIVE_DRAFT_SAVE_ERROR,
+                }
+                LATEST_PAYLOAD.update(payload)
+                publish_manual_payload(payload)
+            return written
     with _MANUAL_STATE_LOCK:
         if not DRAFT_ARCHIVER.db_paths:
             return None
@@ -2856,9 +3129,23 @@ def flush_draft_save_sync() -> Optional[Dict[str, Any]]:
         if _DRAFT_TIMER:
             _DRAFT_TIMER.cancel()
             _DRAFT_TIMER = None
+    if draft_write_status() == "SAVED":
+        return {"id": CURRENT_MATCH.id, "lifecycleStatus": "DRAFT", "alreadySaved": True}
     if CURRENT_MATCH.has_any_fact() or (_LAST_DRAFT_WRITE and _LAST_DRAFT_WRITE[0] == CURRENT_MATCH.id):
         return _persist_current_draft_now()
     return None
+
+
+def retry_draft_save() -> Dict[str, Any]:
+    written = flush_draft_save_sync()
+    status = draft_write_status()
+    if written is not None and status == "SAVED":
+        return {"ok": True, "status": "SAVED", "message": "隔离草稿已保存", "recordId": CURRENT_MATCH.id}
+    if status == "FAILED":
+        return {"ok": False, "status": "FAILED", "message": _NATIVE_DRAFT_SAVE_ERROR or "草稿保存失败，请检查磁盘空间和目录权限后重试"}
+    if status == "UNAVAILABLE":
+        return {"ok": False, "status": "UNAVAILABLE", "message": "当前没有可保存的本局内容"}
+    return {"ok": False, "status": status, "message": "草稿尚未写入，请稍后重试"}
 
 
 def build_manual_alpha_payload(include_solver_input: bool = True) -> Dict[str, Any]:
@@ -2972,8 +3259,15 @@ def build_manual_alpha_payload(include_solver_input: bool = True) -> Dict[str, A
         "recognitionMode": get_recognition_mode(),
         "observationProfile": native_observation_profile(),
         "observationSessionId": LATEST_PAYLOAD.get("observationSessionId") if native_observation_enabled() else None,
+        "observationStatus": LATEST_PAYLOAD.get("observationStatus") if native_observation_enabled() else None,
+        "round": LATEST_PAYLOAD.get("round") if native_observation_enabled() else snap.get("roundNo"),
+        "roundNo": LATEST_PAYLOAD.get("round") if native_observation_enabled() else snap.get("roundNo"),
+        "frameSequence": LATEST_PAYLOAD.get("frameSequence") if native_observation_enabled() else None,
+        "target": copy.deepcopy(LATEST_PAYLOAD.get("target")) if native_observation_enabled() else None,
+        "freshnessMs": LATEST_PAYLOAD.get("freshnessMs") if native_observation_enabled() else None,
         "visionHealth": get_current_match_presentation_summary().get("visionHealth") or {},
         "nativeControlResult": dict(LATEST_PAYLOAD.get("nativeControlResult") or {}),
+        "manualCommandResult": dict(LATEST_PAYLOAD.get("manualCommandResult") or {}),
         "configuredPlayerName": get_player_name(),
         "source": "manual",
         "fillDefaults": False,
@@ -3028,6 +3322,7 @@ def build_manual_alpha_payload(include_solver_input: bool = True) -> Dict[str, A
         "shadowUpdating": shadow_updating,
         "draftSaved": draft_write_status() == "SAVED",
         "draftSaveStatus": draft_write_status(),
+        "draftSaveError": _NATIVE_DRAFT_SAVE_ERROR if native_observation_enabled() and _NATIVE_DRAFT_SAVE_ERROR_MATCH_ID == CURRENT_MATCH.id else None,
         "factsRevision": LATEST_PAYLOAD.get("factsRevision") if native_observation_enabled() else snap.get("factsRevision"),
         "mainFactsRevision": snap.get("factsRevision"),
         "fieldStates": snap.get("fieldStates") or {},
@@ -3047,19 +3342,45 @@ def _manual_patch_has_content(patch: Dict[str, Any]) -> bool:
 def apply_manual_facts(facts: Optional[Dict[str, Any]]) -> Dict[str, Any]:
     with _MANUAL_STATE_LOCK:
         raw_data = dict(facts or {})
-        if native_observation_enabled():
+        native_prior_state = copy.deepcopy(CURRENT_MATCH.__dict__) if native_observation_enabled() else None
+        native_command_scope = None
+        incoming_patch = raw_data.get("facts") if isinstance(raw_data.get("facts"), dict) else raw_data
+        native_local_only = bool(
+            native_observation_enabled()
+            and isinstance(incoming_patch, dict)
+            and set(incoming_patch).issubset({"configuredPlayerName", "recognitionMode"})
+            and not raw_data.get("clearedFields")
+            and not raw_data.get("restoreAutoFields")
+        )
+        if native_observation_enabled() and not native_local_only:
             expected_match_id = str(raw_data.get("expectedMatchId") or "").strip()
             expected_revision = raw_data.get("expectedFactsRevision")
             expected_session = str(raw_data.get("expectedObservationSessionId") or "").strip()
+            expected_round = raw_data.get("expectedRound")
+            expected_target = _native_target_instance(raw_data.get("expectedTargetInstance"))
             current_worker_revision = LATEST_PAYLOAD.get("factsRevision")
             revision_matches = type(expected_revision) is int and expected_revision == current_worker_revision
+            round_matches = type(expected_round) is int and expected_round == LATEST_PAYLOAD.get("round")
+            try:
+                observation_age = float(LATEST_PAYLOAD.get("freshnessMs"))
+            except (TypeError, ValueError):
+                observation_age = float("inf")
             if (
                 not expected_match_id
                 or expected_match_id != CURRENT_MATCH.id
+                or expected_match_id != LATEST_PAYLOAD.get("matchId")
                 or not revision_matches
+                or not round_matches
                 or not expected_session
                 or expected_session != _NATIVE_OBSERVATION_SESSION
-                or (expected_session and _NATIVE_EXPECTED_SESSION not in (None, expected_session))
+                or expected_session != _NATIVE_EXPECTED_SESSION
+                or expected_target is None
+                or expected_target != _native_target_instance(LATEST_PAYLOAD.get("target"))
+                or LATEST_PAYLOAD.get("observationStatus") != "FRAME"
+                or LATEST_PAYLOAD.get("nativeInvalidated") is True
+                or observation_age < 0
+                or observation_age > _NATIVE_FRAME_TIMEOUT_SECONDS * 1000
+                or _NATIVE_CONTROL_BINDINGS
             ):
                 rejected = dict(LATEST_PAYLOAD)
                 rejected.update({
@@ -3068,10 +3389,18 @@ def apply_manual_facts(facts: Optional[Dict[str, Any]]) -> Dict[str, Any]:
                     "factsRevision": CURRENT_MATCH.facts_revision,
                     "manualCommandResult": {
                         "status": "REJECTED",
-                        "reason": "STALE_MATCH_COMMAND",
+                        "reason": "COMMAND_PENDING" if _NATIVE_CONTROL_BINDINGS else "STALE_MATCH_COMMAND",
                     },
                 })
+                LATEST_PAYLOAD["manualCommandResult"] = copy.deepcopy(rejected["manualCommandResult"])
                 return rejected
+            native_command_scope = {
+                key: copy.deepcopy(LATEST_PAYLOAD.get(key))
+                for key in (
+                    "observationSessionId", "factsRevision", "round", "target",
+                    "frameSequence", "freshnessMs", "observationStatus", "nativeInvalidated",
+                )
+            }
         previous_facts = dict(CURRENT_MATCH.facts)
         patch = dict(raw_data.get("facts") or raw_data)
         cleared_fields = [key for key in (raw_data.get("clearedFields") or patch.pop("clearedFields", []) or []) if isinstance(key, str)]
@@ -3105,6 +3434,10 @@ def apply_manual_facts(facts: Optional[Dict[str, Any]]) -> Dict[str, Any]:
         if input_issues:
             payload = build_manual_alpha_payload()
             payload["manualInputIssues"] = input_issues
+            payload["manualCommandResult"] = {
+                "status": "REJECTED",
+                "reason": ", ".join(input_issues),
+            }
             payload["draftSaved"] = draft_write_status() == "SAVED"
             LATEST_PAYLOAD.update(payload)
             return payload
@@ -3140,7 +3473,14 @@ def apply_manual_facts(facts: Optional[Dict[str, Any]]) -> Dict[str, Any]:
             try:
                 selection = catalog_selection(VENUE_BOX_CATALOG, venue_id, box_id)
             except CatalogContractError as exc:
-                raise ValueError(f"MANUAL_CATALOG_SELECTION_REJECTED:{exc}") from exc
+                payload = build_manual_alpha_payload(include_solver_input=False)
+                payload["manualInputIssues"] = ["MANUAL_CATALOG_SELECTION_REJECTED"]
+                payload["manualCommandResult"] = {
+                    "status": "REJECTED",
+                    "reason": f"会场或宝箱选择无效：{exc}",
+                }
+                LATEST_PAYLOAD.update(payload)
+                return payload
             provenance = canonical_catalog_provenance(VENUE_BOX_CATALOG)
             catalog_update = {
                 "venueId": selection["venueId"],
@@ -3226,15 +3566,35 @@ def apply_manual_facts(facts: Optional[Dict[str, Any]]) -> Dict[str, Any]:
                 facts=changed,
                 cleared_fields=cleared_fields,
                 restore_auto_fields=restore_auto_fields,
+                observation_scope=native_command_scope,
             )
-            native_receipt = _send_native_manual_control(payload["manualControl"])
+            native_receipt = _send_native_manual_control(
+                payload["manualControl"], rollback_state=native_prior_state,
+                validated_observation_scope=native_command_scope,
+            )
             if native_receipt is not None:
                 payload["nativeControlResult"] = native_receipt
+                payload["manualCommandResult"] = {
+                    "status": "PENDING" if native_receipt.get("status") == "PENDING" else "REJECTED",
+                    "reason": native_receipt.get("reason"),
+                    "revision": native_receipt.get("revision"),
+                }
+                if native_receipt.get("status") != "PENDING":
+                    _restore_current_match_state_locked(native_prior_state)
+                    payload = build_manual_alpha_payload(include_solver_input=False)
+                    payload["nativeControlResult"] = native_receipt
+                    payload["manualCommandResult"] = {
+                        "status": "REJECTED", "reason": native_receipt.get("reason"),
+                        "revision": native_receipt.get("revision"),
+                    }
         payload["draftId"] = saved.get("id") if saved else CURRENT_MATCH.id
         payload["draftSaved"] = draft_write_status() == "SAVED"
         if native_observation_enabled() and not native_fact_command:
             current_payload = dict(LATEST_PAYLOAD)
+            current_payload["configuredPlayerName"] = get_player_name()
+            current_payload["recognitionMode"] = get_recognition_mode()
             current_payload["manualCommandResult"] = {"status": "ACCEPTED"}
+            LATEST_PAYLOAD["manualCommandResult"] = current_payload["manualCommandResult"]
             return current_payload
         LATEST_PAYLOAD.update(payload)
         return payload
@@ -3247,6 +3607,8 @@ def _manual_terminal_payload(result: Dict[str, Any], *, reset: bool) -> Dict[str
         ACTIVE_SNAPSHOT_HOLDER.clear()
         ACTIVE_SETTLEMENT_TRUTH_HOLDER.clear()
         _MANUAL_MATCH_PLAYED_AT.pop(previous_id, None)
+        LATEST_PAYLOAD.pop("nativeControlResult", None)
+        LATEST_PAYLOAD.pop("manualCommandResult", None)
         CURRENT_MATCH.begin_next_match()
     payload = build_manual_alpha_payload()
     if reset:
@@ -3332,6 +3694,33 @@ def begin_next_manual_match(request: Optional[Dict[str, Any]] = None) -> Dict[st
                     },
                     reset=False,
                 )
+            if disposition == "keep_draft" and CURRENT_MATCH.has_any_fact():
+                persisted = flush_draft_save_sync()
+                if persisted is None:
+                    return _manual_terminal_payload(
+                        {
+                            "terminalVersion": 1,
+                            "ok": False,
+                            "status": "DRAFT_SAVE_FAILED",
+                            "matchId": CURRENT_MATCH.id,
+                            "message": _NATIVE_DRAFT_SAVE_ERROR or "隔离草稿尚未保存；当前局与原图仍保留，请重试保存。",
+                        },
+                        reset=False,
+                    )
+            if disposition == "discard":
+                try:
+                    NATIVE_TRIAL_DRAFT_STORE.discard_draft(expected_id)
+                except Exception as exc:
+                    return _manual_terminal_payload(
+                        {
+                            "terminalVersion": 1,
+                            "ok": False,
+                            "status": "DRAFT_DISCARD_FAILED",
+                            "matchId": CURRENT_MATCH.id,
+                            "message": str(exc),
+                        },
+                        reset=False,
+                    )
             return _manual_terminal_payload(
                 {
                     "terminalVersion": 1,
@@ -5144,6 +5533,14 @@ class HudJsApi:
             resume_same_match=bool(resume_same_match)
         ) is not None
 
+    def retry_draft_save(self):
+        result = retry_draft_save()
+        try:
+            publish_manual_payload(build_manual_alpha_payload(include_solver_input=False))
+        except Exception as exc:
+            log_stage("DRAFT:NATIVE", f"draft retry state publish failed: {type(exc).__name__}")
+        return result
+
     def begin_drag(self):
         if self.form and hasattr(self.form, "ActivateOverlay"):
             try:
@@ -5871,6 +6268,8 @@ def run_hud_app():
                     js_api.begin_next_manual_match(data)
                 elif action == "manual_bootstrap":
                     js_api.manual_bootstrap()
+                elif action == "retry_draft_save":
+                    js_api.retry_draft_save()
                 elif action in ("triggered_snapshot", "capture_hud"):
                     js_api.triggered_snapshot()
                 elif action == "start_live_vision":
@@ -5934,6 +6333,23 @@ def run_hud_app():
             if not main_window.IsDisposed and not main_window.Disposing:
                 main_window.Close()
 
+        def prepare_shutdown():
+            if not CURRENT_MATCH.has_any_fact() or draft_write_status() == "SAVED":
+                return True
+            flush_draft_save_sync()
+            if draft_write_status() == "SAVED":
+                return True
+            reason = _NATIVE_DRAFT_SAVE_ERROR or "本局草稿仍未保存。"
+            choice = WinForms.MessageBox.Show(
+                main_window,
+                f"本局内容尚未保存。\n\n{reason}\n\n按“确定”仍然退出；按“取消”返回助手并重试保存。",
+                "异环拍卖助手",
+                WinForms.MessageBoxButtons.OKCancel,
+                WinForms.MessageBoxIcon.Warning,
+                WinForms.MessageBoxDefaultButton.Button2,
+            )
+            return choice == WinForms.DialogResult.OK
+
         shutdown_coordinator = ShutdownCoordinator(
             begin_shutdown=begin_shutdown,
             cleanup_steps=(
@@ -5948,6 +6364,7 @@ def run_hud_app():
             ),
             close_main=close_main,
             logger=log_stage,
+            prepare_shutdown=prepare_shutdown,
         )
         shutdown_ref["coordinator"] = shutdown_coordinator
         js_api.set_shutdown_request(shutdown_coordinator.request)
@@ -5957,6 +6374,7 @@ def run_hud_app():
         legacy_archive = LegacyArchive()
         settlement_review_service = SettlementReviewService(
             legacy_archive=legacy_archive,
+            native_trial_store=NATIVE_TRIAL_DRAFT_STORE,
         )
         main_window.bind_lifecycle(
             visibility_controller,
@@ -5982,6 +6400,8 @@ def run_hud_app():
             warehouse_capture_host=WAREHOUSE_CAPTURE_HOST,
             warehouse_identity_review_session=WAREHOUSE_IDENTITY_REVIEW,
             warehouse_identity_review_history_store=WAREHOUSE_IDENTITY_HISTORY,
+            live_trial_drafts_provider=lambda: NATIVE_TRIAL_DRAFT_STORE.list_drafts(),
+            shutdown_started_provider=lambda: shutdown_coordinator.started,
         )
         js_api.set_main_window(main_window)
         main_window.Show()

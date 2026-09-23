@@ -13,6 +13,7 @@ if CORE_DIR not in sys.path:
     sys.path.insert(0, CORE_DIR)
 
 from main_window import MainWindowBridge, OverlayVisibilityController, ShutdownCoordinator
+from main_view_state import unavailable_main_view_state_snapshot
 
 
 class _FakeOverlay:
@@ -32,6 +33,22 @@ class _FakeOverlay:
 
 
 class MainWindowLifecycleTests(unittest.TestCase):
+    def test_live_trial_drafts_are_visible_without_entering_formal_history_counts(self):
+        draft = {"id": "trial-match", "lifecycleStatus": "DRAFT", "dataOrigin": "live-trial"}
+        bridge = MainWindowBridge(
+            None,
+            main_view_state_provider=lambda: unavailable_main_view_state_snapshot(
+                "UNAVAILABLE", "history-not-ready"
+            ),
+            live_trial_drafts_provider=lambda: [draft],
+        )
+
+        payload = bridge.main_view_state_payload()
+
+        self.assertEqual(payload["history"]["liveTrialDrafts"], [draft])
+        self.assertEqual(payload["history"]["recentRecords"], [])
+        self.assertEqual(payload["history"]["totalCount"], None)
+
     def test_main_bridge_toggles_the_existing_overlay_controller(self):
         overlay = _FakeOverlay()
         controller = OverlayVisibilityController(overlay)
@@ -156,13 +173,27 @@ class MainWindowLifecycleTests(unittest.TestCase):
                 ("overlay", lambda: events.append("overlay")),
             ),
             close_main=lambda: events.append("main"),
+            prepare_shutdown=lambda: events.append("prepare") or True,
         )
 
         self.assertTrue(coordinator.request("overlay_exit", True))
         self.assertFalse(coordinator.request("main_close", False))
-        self.assertEqual(events, ["disable-ui", "draft", "vision", "overlay", "main"])
+        self.assertEqual(events, ["prepare", "disable-ui", "draft", "vision", "overlay", "main"])
         self.assertTrue(coordinator.started)
         self.assertEqual(coordinator.reason, "overlay_exit")
+
+    def test_shutdown_keeps_application_running_when_unresolved_draft_close_is_cancelled(self):
+        events = []
+        coordinator = ShutdownCoordinator(
+            begin_shutdown=lambda: events.append("disable-ui"),
+            cleanup_steps=(("vision", lambda: events.append("vision")),),
+            close_main=lambda: events.append("main"),
+            prepare_shutdown=lambda: False,
+        )
+
+        self.assertFalse(coordinator.request("main_window_close", False))
+        self.assertFalse(coordinator.started)
+        self.assertEqual(events, [])
 
     def test_shutdown_continues_after_one_cleanup_failure(self):
         events = []

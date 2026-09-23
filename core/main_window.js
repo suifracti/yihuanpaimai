@@ -416,12 +416,55 @@ function ensureLegacyLoaded() {
   }
 }
 
+function projectLiveTrialDraft(record) {
+  const qualities = record?.qualities || {};
+  const known = color => (qualities[color]?.knownItems || [])
+    .map(item => item?.name || item?.value || "").filter(Boolean).join("+");
+  const facts = {
+    ...record,
+    q: record?.q ?? record?.publicIntel?.q,
+    totalItems: record?.totalItems ?? record?.publicIntel?.totalItems,
+    totalGrid: record?.totalGrid ?? record?.publicIntel?.totalGrid,
+    goldAvg: record?.goldAvg ?? qualities.gold?.avg,
+    purpleCount: record?.purpleCount ?? qualities.purple?.count,
+    purpleAvg: record?.purpleAvg ?? qualities.purple?.avg,
+    blueCount: record?.blueCount ?? qualities.blue?.count,
+    goldCount: record?.goldCount ?? qualities.gold?.count,
+    redCount: record?.redCount ?? qualities.red?.count,
+    whiteCount: record?.whiteCount ?? qualities.white?.count,
+    whiteAvg: record?.whiteAvg ?? qualities.white?.avg,
+    greenCount: record?.greenCount ?? qualities.green?.count,
+    greenAvg: record?.greenAvg ?? qualities.green?.avg,
+    blueAvg: record?.blueAvg ?? qualities.blue?.avg,
+    knownGold: record?.knownGold ?? known("gold"),
+    knownPurple: record?.knownPurple ?? known("purple"),
+    knownRed: record?.knownRed ?? known("red"),
+    knownBlue: record?.knownBlue ?? known("blue"),
+    knownGreen: record?.knownGreen ?? known("green"),
+    knownWhite: record?.knownWhite ?? known("white")
+  };
+  return {
+    kind: "current", recordSource: "live-trial", id: record?.id,
+    playedAt: record?.playedAt, localPlayedAt: record?.playedAt,
+    lifecycle: "DRAFT", admitted: false, exclusionReason: "隔离试用草稿",
+    environment: record?.environment || {}, observedFacts: facts,
+    prediction: { hasSnapshot: false }, settlement: record?.settlement || { isSettled: false },
+    settlementEvidenceAvailable: Boolean(record?.settlement?.truthEvidence?.evidenceReferences?.length),
+    settlementReviewed: Boolean(record?.settlement?.reviewedItems?.length),
+    auctionEvidence: record?.auctionEvidence,
+    matchSummary: "隔离试用草稿 · 未进入正式 History", dataOrigin: "live-trial"
+  };
+}
+
 function buildHistoryItems() {
   const current = (dashboard.lastMainViewState && dashboard.lastMainViewState.history && Array.isArray(dashboard.lastMainViewState.history.recentRecords))
     ? dashboard.lastMainViewState.history.recentRecords.map((r) => ({ kind: "current", ...r }))
     : [];
+  const liveTrial = (dashboard.lastMainViewState && dashboard.lastMainViewState.history && Array.isArray(dashboard.lastMainViewState.history.liveTrialDrafts))
+    ? dashboard.lastMainViewState.history.liveTrialDrafts.map(projectLiveTrialDraft)
+    : [];
   const legacy = (dashboard.legacyRecords || []).map((r) => ({ kind: "legacy", ...r }));
-  return [...current, ...legacy];
+  return [...liveTrial, ...current, ...legacy];
 }
 
 function historySelectionKey(recordId, source) {
@@ -431,7 +474,8 @@ function historySelectionKey(recordId, source) {
 function updateHistorySelectionControls() {
   const selectAll = document.getElementById("history-select-all");
   const deleteSelected = document.getElementById("history-delete-selected-btn");
-  const visibleCheckboxes = Array.from(document.querySelectorAll("#history-list .history-record-checkbox"));
+  const visibleCheckboxes = Array.from(document.querySelectorAll("#history-list .history-record-checkbox"))
+    .filter(node => !node.hidden && !node.disabled);
   const checkedCount = dashboard.selectedHistoryRecords.size;
   if (deleteSelected) {
     deleteSelected.disabled = checkedCount === 0;
@@ -447,6 +491,7 @@ function updateHistorySelectionControls() {
 
 function setHistorySelection(recordId, source, checked) {
   const id = String(recordId || "").trim();
+  if (source !== "current" && source !== "legacy") return;
   const kind = source === "legacy" ? "legacy" : "current";
   if (!id) return;
   const key = historySelectionKey(id, kind);
@@ -509,7 +554,9 @@ function matchesFilter(it, f) {
   // 4. Evidence (Screenshot): all | has | none
   const hasShot = it.kind === "legacy"
     ? Boolean(it.screenshotAvailable)
-    : Boolean(it.settlementEvidenceAvailable === true || (it.settlement && it.settlement.settlementEvidenceAvailable === true));
+    : (it.recordSource === "live-trial"
+      ? Boolean(it.auctionEvidence?.nativeObservation?.sourceFrames?.length)
+      : Boolean(it.settlementEvidenceAvailable === true || (it.settlement && it.settlement.settlementEvidenceAvailable === true)));
   if (f.evidence === "has" && !hasShot) return false;
   if (f.evidence === "none" && hasShot) return false;
 
@@ -550,7 +597,8 @@ function renderHistoryList(items) {
   const emptyState = document.getElementById("history-empty-state");
   const errorState = document.getElementById("history-error-state");
   if (errorState) errorState.hidden = true;
-  countBadge.textContent = `${items.length} 条`;
+  const trialCount = items.filter(item => item.recordSource === "live-trial").length;
+  countBadge.textContent = trialCount ? `${items.length} 条（含 ${trialCount} 条隔离草稿）` : `${items.length} 条`;
   listContainer.innerHTML = "";
   if (items.length === 0) {
     if (emptyState) emptyState.hidden = false;
@@ -593,7 +641,9 @@ function renderHistoryList(items) {
       const isSettled = it.lifecycle === "FINALIZED" || it.isSettled === true || (it.settlement && it.settlement.isSettled === true);
       const isCancelled = it.lifecycle === "CANCELLED" || it.outcome === "folded";
       const isCompleted = it.kind === "legacy" ? isSettled : it.lifecycle === "FINALIZED";
-      const outcomeBadge = isCompleted
+      const outcomeBadge = it.recordSource === "live-trial"
+        ? `<span class="item-badge badge-draft">隔离草稿</span>`
+        : isCompleted
         ? `<span class="item-badge badge-finalized">已结算</span>`
         : (isCancelled ? `<span class="item-badge badge-cancelled">已放弃</span>`
           : `<span class="item-badge badge-draft">${isSettled ? "待补全" : "未结算"}</span>`);
@@ -607,7 +657,9 @@ function renderHistoryList(items) {
 
       const hasShot = (it.kind === "legacy"
         ? !!it.screenshotAvailable
-        : (it.settlementEvidenceAvailable === true || (it.settlement && it.settlement.settlementEvidenceAvailable === true)));
+        : (it.recordSource === "live-trial"
+          ? Boolean(it.auctionEvidence?.nativeObservation?.sourceFrames?.length)
+          : (it.settlementEvidenceAvailable === true || (it.settlement && it.settlement.settlementEvidenceAvailable === true))));
       const shotBadge = hasShot ? `<span class="item-badge badge-shot" title="有结算截图">📷 截图</span>` : "";
       
       const st = it.settlement || {};
@@ -620,7 +672,7 @@ function renderHistoryList(items) {
       item.innerHTML = `
         <div class="history-item-top">
           <label class="history-item-select" title="选择此条记录">
-            <input type="checkbox" class="history-record-checkbox" data-record-id="${escapeHtml(it.id || it.key)}" data-source="${escapeHtml(it.kind)}" ${dashboard.selectedHistoryRecords.has(historySelectionKey(it.id || it.key, it.kind)) ? "checked" : ""} />
+            <input type="checkbox" class="history-record-checkbox" data-record-id="${escapeHtml(it.id || it.key)}" data-source="${escapeHtml(it.recordSource || it.kind)}" ${it.recordSource === "live-trial" ? "hidden disabled" : ""} ${dashboard.selectedHistoryRecords.has(historySelectionKey(it.id || it.key, it.kind)) ? "checked" : ""} />
             <span class="history-item-time">${timeStr}</span>
           </label>
           <div class="history-item-badges">${outcomeBadge}${reviewedBadge}${shotBadge}</div>
@@ -763,7 +815,8 @@ function renderHistoryDetail(record) {
     originals.className = "detail-section";
     detailCard.appendChild(originals);
   }
-  if (originals.dataset.recordId !== record.id) requestOriginalScreenshots(record.id, "history-originals");
+  const recordSource = record.recordSource || "current";
+  if (originals.dataset.recordId !== record.id || originals.dataset.source !== recordSource) requestOriginalScreenshots(record.id, "history-originals", recordSource);
   placeholder.hidden = false;
   placeholder.hidden = true;
   detailCard.hidden = false;
@@ -799,7 +852,7 @@ function renderHistoryDetail(record) {
 
   const admissionBadge = document.getElementById("detail-admission-badge");
   if (admissionBadge) {
-    admissionBadge.hidden = false;
+    admissionBadge.hidden = recordSource === "live-trial";
     admissionBadge.className = "badge";
     if (record.admitted) {
       admissionBadge.classList.add("badge-admitted");
@@ -809,11 +862,16 @@ function renderHistoryDetail(record) {
       admissionBadge.textContent = `排除：${formatExclusionReason(record.exclusionReason)}`;
     }
   }
+  const draftSaveStatus = document.getElementById("detail-draft-save-status");
+  if (draftSaveStatus) {
+    draftSaveStatus.hidden = recordSource !== "live-trial";
+    draftSaveStatus.textContent = recordSource === "live-trial" ? "隔离草稿已保存" : "";
+  }
 
   const deleteBtn = document.getElementById("detail-delete-btn");
   if (deleteBtn) {
-    deleteBtn.hidden = false;
-    deleteBtn.style.display = "";
+    deleteBtn.hidden = recordSource === "live-trial";
+    deleteBtn.style.display = recordSource === "live-trial" ? "none" : "";
   }
 
   const facts = record.observedFacts || {};
@@ -943,14 +1001,14 @@ function renderHistoryDetail(record) {
   const isReviewLoaded = (
     dashboard.review &&
     dashboard.review.recordId === record.id &&
-    dashboard.reviewSource === "current"
+    dashboard.reviewSource === recordSource
   );
   const isReviewPending = (
     dashboard.pendingReviewRecordId === record.id &&
-    dashboard.pendingReviewSource === "current"
+    dashboard.pendingReviewSource === recordSource
   );
   if (!isReviewLoaded && !isReviewPending) {
-    loadSettlementReview(record.id, "current");
+    loadSettlementReview(record.id, recordSource);
   }
 }
 
@@ -1131,6 +1189,8 @@ function postNative(action, payload = {}) {
     commandPayload.expectedMatchId ??= dashboard.matchState.matchId;
     commandPayload.expectedFactsRevision ??= dashboard.matchState.observationFactsRevision;
     commandPayload.expectedObservationSessionId ??= dashboard.matchState.observationSessionId;
+    commandPayload.expectedRound ??= dashboard.lastCurrentMatch?.observationRound ?? null;
+    commandPayload.expectedTargetInstance ??= dashboard.lastCurrentMatch?.observationTarget ?? null;
   }
   window.chrome.webview.postMessage(JSON.stringify({
     action,
@@ -1220,7 +1280,7 @@ function confirmDeleteRecord() {
     errorEl.textContent = "";
   }
   const recordId = record.key || record.id;
-  postNative("delete_history_record", { recordId, source: record.kind || "current" });
+  postNative("delete_history_record", { recordId, source: record.recordSource || record.kind || "current" });
 }
 
 function populateMatchOptions(options) {
@@ -1820,6 +1880,34 @@ function savePlayerDisplayName() {
   postNative("manual_facts", { facts: { configuredPlayerName: rawValue } });
 }
 
+function renderManualCommandReceipt(result) {
+  const statusEl = document.getElementById("manual-command-status");
+  if (!statusEl) return;
+  const status = String(result?.status || "").toUpperCase();
+  const reason = String(result?.reason || result?.message || result?.result?.errorDetails || "");
+  const reasonText = {
+    STALE_MATCH_COMMAND: "观察局或版本已变化，请按当前画面重试",
+    COMMAND_PENDING: "上一条修改仍在等待确认",
+    STALE_FACTS_REVISION: "局内事实已变化，请按当前画面重试",
+    STALE_ROUND: "回合已变化，请按当前画面重试",
+    MATCH_CHANGED: "当前局已变化，修改未生效",
+    NATIVE_OBSERVATION_NOT_RUNNING: "观察未运行，修改未生效"
+  }[reason] || reason;
+  if (status === "PENDING" || status === "SENT") {
+    statusEl.textContent = "修改已发送，等待观察 worker 确认";
+    statusEl.style.color = "#f59e0b";
+  } else if (status === "ACK" || status === "ACCEPTED") {
+    statusEl.textContent = "观察 worker 已确认修改";
+    statusEl.style.color = "#34d399";
+  } else if (["REJECT", "REJECTED", "ERROR"].includes(status)) {
+    statusEl.textContent = `修改未生效：${reasonText || "当前状态不允许修改"}`;
+    statusEl.style.color = "#f87171";
+  } else {
+    statusEl.textContent = "";
+  }
+  statusEl.hidden = !statusEl.textContent;
+}
+
 function renderMatch(currentMatch, overlayVisible) {
   if (!currentMatch) return;
   const playerNameInput = document.getElementById('player-display-name');
@@ -1849,6 +1937,7 @@ function renderMatch(currentMatch, overlayVisible) {
     modeButton.textContent = modeButton.dataset.mode === 'auto' ? '自动识别：开' : '手动识别';
     modeButton.title = '点击切换手动／自动；结算采集单独控制';
   }
+  renderManualCommandReceipt(currentMatch.manualCommandResult || currentMatch.nativeControlResult);
   dashboard.lastCurrentMatch = currentMatch;
   dashboard.matchState.factsRevision = Number(currentMatch.factsRevision || 0);
   dashboard.matchState.observationFactsRevision = currentMatch.observationFactsRevision ?? null;
@@ -3609,7 +3698,7 @@ function saveReviewedSettlement() {
 
 function currentReviewTarget() {
   if (dashboard.selectedLegacyKey) return { recordId: dashboard.selectedLegacyKey, source: "legacy" };
-  if (dashboard.selectedRecordId) return { recordId: dashboard.selectedRecordId, source: "current" };
+  if (dashboard.selectedRecordId) return { recordId: dashboard.selectedRecordId, source: dashboard.selectedRecord?.recordSource || "current" };
   return null;
 }
 
@@ -3706,13 +3795,14 @@ function renderSnapshotAssistResult(result) {
 }
 
 const originalScreenshotRequests = new Map();
-function requestOriginalScreenshots(recordId, containerId) {
+function requestOriginalScreenshots(recordId, containerId, source = "current") {
   const container = document.getElementById(containerId);
   if (!container || !recordId) return;
   container.dataset.recordId = recordId;
+  container.dataset.source = source;
   container.textContent = "正在读取已保存原图…";
-  const requestId = postNative("request_original_screenshots", { recordId });
-  originalScreenshotRequests.set(containerId, { requestId, recordId });
+  const requestId = postNative("request_original_screenshots", { recordId, source });
+  originalScreenshotRequests.set(containerId, { requestId, recordId, source });
 }
 
 function renderOriginalScreenshots(payload) {
@@ -3720,7 +3810,7 @@ function renderOriginalScreenshots(payload) {
     if (pending.requestId !== payload.requestId) continue;
     const container = document.getElementById(containerId);
     const result = payload.originalScreenshots;
-    if (!container || container.dataset.recordId !== pending.recordId) continue;
+    if (!container || container.dataset.recordId !== pending.recordId || (container.dataset.source || "current") !== (pending.source || "current")) continue;
     originalScreenshotRequests.delete(containerId);
     container.querySelectorAll("button").forEach(button => { button.disabled = false; });
     if (!result.ok) {
@@ -3734,7 +3824,9 @@ function renderOriginalScreenshots(payload) {
       heading.textContent = "暂无截图证据";
       heading.style.color = "var(--text-muted, #94a3b8)";
     } else {
-      heading.textContent = `已保存 ${images.length} 张结算截图（同一对局证据组） · 逐件识别及完整覆盖尚待核对`;
+      heading.textContent = result.source === "live-trial"
+        ? `本局隔离草稿的观察原图（${images.length} 张） · 原图只读，缺失事实仍显示为未记录`
+        : `已保存 ${images.length} 张结算截图（同一对局证据组） · 逐件识别及完整覆盖尚待核对`;
       heading.style.fontWeight = "600";
     }
     container.appendChild(heading);
@@ -3743,7 +3835,7 @@ function renderOriginalScreenshots(payload) {
       undo.type = "button";
       undo.className = "btn-wb-action";
       undo.textContent = "撤销删除";
-      undo.addEventListener("click", () => changeOriginalScreenshot("restore_original_screenshot", pending.recordId, result.undoEvidenceId, containerId, undo));
+      undo.addEventListener("click", () => changeOriginalScreenshot("restore_original_screenshot", pending.recordId, result.undoEvidenceId, containerId, undo, pending.source));
       container.appendChild(undo);
     }
     if (result.message) {
@@ -3756,22 +3848,24 @@ function renderOriginalScreenshots(payload) {
       details.open = true;
       details.style.marginBottom = "10px";
       const label = document.createElement("summary");
-      const kindLabel = shot.kind === "manual-game" ? "手动截图" : "自动结算";
+      const kindLabel = shot.kind === "native-observation" ? "局内观察原图" : shot.kind === "manual-game" ? "手动截图" : "自动结算";
       const shaPrefix = shot.sha256 ? ` · ${shot.sha256.slice(0, 8)}...` : "";
       label.textContent = `第 ${index + 1} 张 (${kindLabel}) · ${shot.capturedAt || "时间未记录"}${shaPrefix}${shot.error ? " · " + shot.error : ""}`;
       details.appendChild(label);
-      const remove = document.createElement("button");
-      remove.type = "button";
-      remove.className = "btn-wb-action";
-      remove.textContent = "删除截图";
-      remove.title = "从本局及历史截图列表移除，原始证据文件保留；可撤销";
-      remove.style.marginLeft = "12px";
-      remove.addEventListener("click", event => {
-        event.preventDefault();
-        event.stopPropagation();
-        changeOriginalScreenshot("delete_original_screenshot", pending.recordId, shot.evidenceId, containerId, remove);
-      });
-      label.appendChild(remove);
+      if (!shot.readOnly) {
+        const remove = document.createElement("button");
+        remove.type = "button";
+        remove.className = "btn-wb-action";
+        remove.textContent = "删除截图";
+        remove.title = "从本局及历史截图列表移除，原始证据文件保留；可撤销";
+        remove.style.marginLeft = "12px";
+        remove.addEventListener("click", event => {
+          event.preventDefault();
+          event.stopPropagation();
+          changeOriginalScreenshot("delete_original_screenshot", pending.recordId, shot.evidenceId, containerId, remove, pending.source);
+        });
+        label.appendChild(remove);
+      }
       if (shot.dataUrl) {
         const img = document.createElement("img");
         img.src = shot.dataUrl;
@@ -3784,10 +3878,10 @@ function renderOriginalScreenshots(payload) {
   }
 }
 
-function changeOriginalScreenshot(action, recordId, evidenceId, containerId, button) {
+function changeOriginalScreenshot(action, recordId, evidenceId, containerId, button, source = "current") {
   button.disabled = true;
-  const requestId = postNative(action, { recordId, evidenceId });
-  originalScreenshotRequests.set(containerId, { requestId, recordId });
+  const requestId = postNative(action, { recordId, evidenceId, source });
+  originalScreenshotRequests.set(containerId, { requestId, recordId, source });
 }
 
 function handleNativeMessage(event) {
@@ -3799,15 +3893,21 @@ function handleNativeMessage(event) {
     if (payload.action !== "request_original_screenshots") {
       for (const id of ["warehouse-originals", "history-originals"]) {
         const node = document.getElementById(id);
-        if (!updatedContainers.includes(id) && node?.dataset.recordId === payload.originalScreenshots.recordId) {
-          requestOriginalScreenshots(payload.originalScreenshots.recordId, id);
+        if (!updatedContainers.includes(id) && node?.dataset.recordId === payload.originalScreenshots.recordId && (node?.dataset.source || "current") === (payload.originalScreenshots.source || "current")) {
+          requestOriginalScreenshots(payload.originalScreenshots.recordId, id, payload.originalScreenshots.source || "current");
         }
       }
     }
     return;
   }
   if (payload.action === "manual_facts" && payload.manualFactsResult) {
-    if (!payload.manualFactsResult.ok) {
+    renderManualCommandReceipt(payload.manualCommandResult || {
+      status: payload.manualFactsResult.status,
+      reason: payload.manualFactsResult.error || payload.manualFactsResult.message
+    });
+    if (payload.manualFactsResult.status === "PENDING") {
+      dashboard.pendingManualCommand = payload.requestId || true;
+    } else if (!payload.manualFactsResult.ok) {
       dashboard.isSavingPlayerName = false;
       dashboard.pendingPlayerName = null;
       updatePlayerDisplayNameStatus(null, { error: payload.manualFactsResult.error || "写入失败" });
@@ -4404,6 +4504,7 @@ document.addEventListener("DOMContentLoaded", () => {
     historySelectAll.addEventListener("change", () => {
       const checked = historySelectAll.checked;
       document.querySelectorAll("#history-list .history-record-checkbox").forEach((checkbox) => {
+        if (checkbox.disabled || checkbox.hidden) return;
         checkbox.checked = checked;
         setHistorySelection(checkbox.dataset.recordId, checkbox.dataset.source, checked);
       });

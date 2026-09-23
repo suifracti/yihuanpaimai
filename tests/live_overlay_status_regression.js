@@ -8,7 +8,7 @@ const elements = new Map();
 const sandbox = {document:{getElementById(id){
   if(!elements.has(id)) elements.set(id,{textContent:'',classList:{toggle(){},remove(){},add(){}}});
   return elements.get(id);
-}},fmtWan:x=>String(x),paintLeadFact(){},saveCopy:()=>({text:'',ok:false}),manualState:{}};
+}},fmtWan:x=>String(x),paintLeadFact(){},paintDraftSaveState(){},paintManualCommandResult(){},saveCopy:()=>({text:'',ok:false}),manualState:{}};
 vm.createContext(sandbox);
 const helperStart = html.indexOf("    function formatExpectedProfit(value)");
 vm.runInContext(html.slice(helperStart, html.indexOf("\n    function ", helperStart + 10)), sandbox);

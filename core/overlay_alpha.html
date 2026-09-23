@@ -685,7 +685,9 @@
           <span id="boxChipText">选箱型</span>
           <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="6 9 12 15 18 9"/></svg>
         </button>
-        <span class="save" id="saveHint">已保存草稿</span>
+        <span class="save" id="saveHint" role="status" aria-live="polite">等待隔离草稿</span>
+        <button class="btn" id="retryDraftSaveBtn" type="button" hidden>重试保存</button>
+        <span class="status-hint" id="nativeCommandReceipt" role="status" aria-live="polite"></span>
 
         <!-- Custom Popover Panel (Zero native select) -->
         <div class="popover-panel" id="customPopover">
@@ -1115,6 +1117,7 @@
         if (outgoing.action === "manual_finalize" && api.finalize_manual_match) { api.finalize_manual_match(outgoing); return true; }
         if (outgoing.action === "manual_next_match" && api.begin_next_manual_match) { api.begin_next_manual_match(outgoing); return true; }
         if (outgoing.action === "manual_bootstrap" && api.manual_bootstrap) { api.manual_bootstrap(); return true; }
+        if (outgoing.action === "retry_draft_save" && api.retry_draft_save) { api.retry_draft_save(); return true; }
         if (outgoing.action === "triggered_snapshot" && api.triggered_snapshot) { api.triggered_snapshot(); return true; }
         if (outgoing.action === "resize_hud" && api.resize_hud) { api.resize_hud(outgoing.w, outgoing.h); return true; }
         if (outgoing.action === "capture_hud" && (api.triggered_snapshot || api.capture_game)) { (api.triggered_snapshot || api.capture_game)(); return true; }
@@ -1136,7 +1139,9 @@
       manualState.nativeCommandScope = {
         expectedMatchId: String(matchId),
         expectedFactsRevision: revision,
-        expectedObservationSessionId: String(d.observationSessionId || "")
+        expectedObservationSessionId: String(d.observationSessionId || ""),
+        expectedRound: d.round ?? d.roundNo ?? null,
+        expectedTargetInstance: d.target || null
       };
     }
 
@@ -1282,11 +1287,42 @@
 
     function saveCopy(d) {
       if (d?.draftSaveStatus === "UNAVAILABLE") return { text: "保存不可用，请检查数据状态", ok: false };
-      if (d?.draftSaveStatus === "FAILED") return { text: "草稿保存失败", ok: false };
+      if (d?.draftSaveStatus === "FAILED") return { text: "草稿保存失败，可重试", ok: false };
       if (d?.draftSaveStatus === "PENDING") return { text: "等待保存草稿", ok: false };
       if (d && d.draftSaved === false) return { text: "尚未保存", ok: false };
       if (d && d.draftSaved) return { text: "已保存草稿", ok: true };
       return { text: "自动保存中", ok: true };
+    }
+
+    function paintDraftSaveState(d) {
+      const save = saveCopy(d);
+      const hint = document.getElementById("saveHint");
+      const retry = document.getElementById("retryDraftSaveBtn");
+      if (hint) {
+        hint.textContent = d?.draftSaveStatus === "FAILED" && d?.draftSaveError
+          ? `草稿保存失败：${d.draftSaveError}`
+          : save.text;
+        hint.title = d?.draftSaveError || "";
+        hint.classList.toggle("ok", save.ok);
+      }
+      if (retry) retry.hidden = d?.draftSaveStatus !== "FAILED";
+    }
+
+    function paintManualCommandResult(result) {
+      const hint = document.getElementById("nativeCommandReceipt");
+      if (!hint || !result || typeof result !== "object") return;
+      const status = String(result.status || "").toUpperCase();
+      const reason = result.reason || result.message || result.result?.errorDetails || "";
+      if (status === "PENDING" || status === "SENT") {
+        hint.textContent = "修改已发送，等待观察 worker 确认";
+        hint.classList.remove("error");
+      } else if (status === "ACK" || status === "ACCEPTED") {
+        hint.textContent = "修改已由观察 worker 确认";
+        hint.classList.remove("error");
+      } else if (status === "REJECT" || status === "REJECTED" || status === "ERROR") {
+        hint.textContent = `修改未生效${reason ? `：${reason}` : "，请检查当前观察状态"}`;
+        hint.classList.add("error");
+      }
     }
 
     function catalogItems(rarity) {
@@ -2128,10 +2164,8 @@ function sparkleBoundsText(b) {
       document.getElementById("statusHint").textContent = pending
         ? adviceReason
         : (p50 == null && sCenter == null ? "当前结果不足以估计整仓价值" : statusCopy(solverStatus, false));
-      const save = saveCopy(d);
-      const hint = document.getElementById("saveHint");
-      hint.textContent = save.text;
-      hint.classList.toggle("ok", save.ok);
+      paintDraftSaveState(d);
+      paintManualCommandResult(d?.manualCommandResult || d?.nativeControlResult);
       paintLeadFact(d);
       manualState.latestEngineResult = snapshot ? {
         source: "live_vision",
@@ -2422,10 +2456,8 @@ function sparkleBoundsText(b) {
       document.getElementById("actionReason").textContent = adviceReason;
       document.getElementById("expectedProfit").textContent = "预期盈亏（当前叫价，P50扣整局成本）：" + formatExpectedProfit(recommendation == null ? null : dec.expectedProfit);
       document.getElementById("statusHint").textContent = isInfeasible ? "当前输入条件与图鉴/场地倍率冲突" : (p50 == null && engineResult?.solverStatus === "valid" ? "当前结果不足以估计整仓价值" : statusCopy(engineResult && engineResult.solverStatus, hasConstraintError));
-      const save = saveCopy(d);
-      const hint = document.getElementById("saveHint");
-      hint.textContent = save.text;
-      hint.classList.toggle("ok", save.ok);
+      paintDraftSaveState(d);
+      paintManualCommandResult(d?.manualCommandResult || d?.nativeControlResult);
       paintLeadFact(d);
       if (engineResult?.predictionSnapshot || isInfeasible) setTimeout(flushSync, 0);
     }
@@ -2808,6 +2840,11 @@ function sparkleBoundsText(b) {
           hint.classList.add("visible");
         }
       };
+      document.getElementById("retryDraftSaveBtn").onclick = () => {
+        const hint = document.getElementById("saveHint");
+        if (hint) hint.textContent = "正在重试保存隔离草稿…";
+        sendHost({ action: "retry_draft_save", type: "retry_draft_save" });
+      };
 
       document.getElementById("dragBar").addEventListener("mousedown", (e) => {
         if (e.target.closest(".no-drag, button, input, select")) return;
@@ -2851,6 +2888,10 @@ function sparkleBoundsText(b) {
           const d = JSON.parse(event.data);
           paintVisionHealth(d);
           if (d?.type === 'vision_health') return;
+          if (d?.type === 'vision_control') {
+            paintManualCommandResult(d.nativeControlResult);
+            return;
+          }
           if (isLiveVisionPayload(d)) {
             applyLiveVisionState(d);
           } else if (d && (d.type === "manual_alpha_state" || d.manualMode || d.canonical)) {

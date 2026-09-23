@@ -857,6 +857,16 @@ class CanonicalHistoryStore:
                     if preserve_archive_sidecars:
                         if 'intelCardEvidence' not in rec_dict and isinstance(existing_record.get('intelCardEvidence'), dict):
                             rec_dict['intelCardEvidence'] = copy.deepcopy(existing_record['intelCardEvidence'])
+                        prior_auction_evidence = existing_record.get('auctionEvidence')
+                        if isinstance(prior_auction_evidence, dict):
+                            if not isinstance(rec_dict.get('auctionEvidence'), dict):
+                                rec_dict['auctionEvidence'] = copy.deepcopy(prior_auction_evidence)
+                            else:
+                                prior_native = prior_auction_evidence.get('nativeObservation')
+                                next_native = rec_dict['auctionEvidence'].get('nativeObservation')
+                                if isinstance(prior_native, dict) and isinstance(next_native, dict):
+                                    if 'sourceFrames' not in next_native and 'sourceFrames' in prior_native:
+                                        next_native['sourceFrames'] = copy.deepcopy(prior_native['sourceFrames'])
                         prior_settlement = existing_record.get("settlement") or {}
                         # These fields belong to capture/review writers, never OCR archive.
                         for field in (
@@ -864,6 +874,9 @@ class CanonicalHistoryStore:
                             "warehouseIdentityReview",
                             "reviewUnits",
                             "warehouseReviewUnits",
+                            "reviewedItems",
+                            "reviewedAt",
+                            "reviewProvenance",
                         ):
                             if field in prior_settlement and field not in rec_dict.setdefault("settlement", {}):
                                 rec_dict.setdefault("settlement", {})[field] = copy.deepcopy(prior_settlement[field])
@@ -1219,6 +1232,8 @@ class CanonicalHistoryStore:
         self,
         record_id: str,
         active_match_id: Optional[str] = None,
+        *,
+        write_rolling_backup: bool = True,
     ) -> Dict[str, Any]:
         """Atomically delete a record by ID with pre-delete backup, active match guard, and re-read verification."""
         target_id = str(record_id or "").strip()
@@ -1253,25 +1268,26 @@ class CanonicalHistoryStore:
             parent_dir = self.db_path.parent
             parent_dir.mkdir(parents=True, exist_ok=True)
 
-            # Rolling pre-delete backup (history_delete_backup_v1.json)
-            backup_path = parent_dir / "history_delete_backup_v1.json"
-            tmp_backup = parent_dir / f"history_delete_backup_v1.tmp_{os.getpid()}_{threading.get_ident()}"
-            try:
-                with open(tmp_backup, "w", encoding="utf-8") as f:
-                    json.dump(db_data, f, ensure_ascii=False, indent=2)
-                    f.flush()
-                    try:
-                        os.fsync(f.fileno())
-                    except Exception:
-                        pass
-                os.replace(str(tmp_backup), str(backup_path))
-            except Exception as exc:
-                if tmp_backup.exists():
-                    try:
-                        tmp_backup.unlink()
-                    except Exception:
-                        pass
-                # Backup failure is non-fatal for test environments, but log if needed
+            if write_rolling_backup:
+                # Existing callers retain the established delete safety copy.
+                backup_path = parent_dir / "history_delete_backup_v1.json"
+                tmp_backup = parent_dir / f"history_delete_backup_v1.tmp_{os.getpid()}_{threading.get_ident()}"
+                try:
+                    with open(tmp_backup, "w", encoding="utf-8") as f:
+                        json.dump(db_data, f, ensure_ascii=False, indent=2)
+                        f.flush()
+                        try:
+                            os.fsync(f.fileno())
+                        except Exception:
+                            pass
+                    os.replace(str(tmp_backup), str(backup_path))
+                except Exception:
+                    if tmp_backup.exists():
+                        try:
+                            tmp_backup.unlink()
+                        except Exception:
+                            pass
+                    # The transaction itself remains authoritative.
 
             # Delete the record
             del rows[match_idx]
