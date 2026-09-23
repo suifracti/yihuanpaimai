@@ -214,4 +214,28 @@ assert.equal(sent[0].source, "live-trial");
 assert.equal(sent[0].recordId, "trial-a");
 assert.equal(vm.runInContext("JSON.stringify(dashboard.matchState)", sandbox), matchBeforeRead);
 
+vm.runInContext(`dashboard.matchState = {
+  matchId: "live-now", factsRevision: 9, observationFactsRevision: 4,
+  observationSessionId: "session-a", observationProfile: "native-readonly-v1",
+  venueId: "venue-a", venue: "珊瑚场", boxId: "box-a", box: "已选宝箱", fieldCondition: null
+};
+dashboard.lastCurrentMatch = {
+  observationRound: 5, observationTarget: { pid: 42, processStartTime: "start-a" },
+  manualCommandResult: { revision: 2 }
+};
+dashboard.lastSyncedFacts = {
+  venueId: "venue-a", venue: "珊瑚场", boxId: "box-a", box: "已选宝箱",
+  fieldCondition: null, q: 16
+};`, sandbox);
+get("match-input-q").value = "17";
+const unrelatedEdit = JSON.parse(vm.runInContext("JSON.stringify(getChangedMatchFacts())", sandbox));
+assert.equal(unrelatedEdit.patch.q, 17);
+assert.equal(Object.hasOwn(unrelatedEdit.patch, "fieldCondition"), false);
+const beforeRuleCommand = sent.length;
+sandbox.setMatchCondition("standard", "标准对局");
+assert.equal(sent.length, beforeRuleCommand + 1);
+assert.equal(sent.at(-1).action, "manual_facts");
+assert.equal(sent.at(-1).facts.fieldCondition, "standard");
+assert.equal(sent.at(-1).expectedMatchId, "live-now");
+
 console.log("guidebook navigation, bundled catalog, isolated recognition records and read-only original lookup: passed");

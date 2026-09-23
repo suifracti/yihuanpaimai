@@ -1924,7 +1924,7 @@ function getMatchFactsFromForm() {
     venue: dashboard.matchState.venue,
     boxId: dashboard.matchState.boxId,
     box: dashboard.matchState.box,
-    fieldCondition: dashboard.matchState.fieldCondition || "standard",
+    fieldCondition: dashboard.matchState.fieldCondition,
     q: q,
     goldAvg: goldAvg,
     purpleCount: purpleCount,
