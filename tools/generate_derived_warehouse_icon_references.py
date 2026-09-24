@@ -8,6 +8,7 @@ independently annotated gameplay crops. No input image or catalog is modified.
 from __future__ import annotations
 
 import hashlib
+import argparse
 import json
 import sys
 from collections import Counter, defaultdict
@@ -23,6 +24,7 @@ sys.path.insert(0, str(ROOT / "core"))
 from visual_catalog import (  # noqa: E402
     _catalog_reference_body,
     deterministic_reference_crops,
+    load_verified_warehouse_gameplay_templates,
     verified_references,
 )
 from warehouse_placement_resolver import WarehousePlacementResolver  # noqa: E402
@@ -34,9 +36,7 @@ OFFICIAL_PATH = ROOT / "assets/catalog_065.json"
 FIT_GT_PATH = ROOT / "assets/items/video_ground_truth_reference_134436_match2_visible.json"
 FIT_REPLAY_PATH = ROOT / "build/codex_other_video_20260912/134436-small-icon-replay/evaluated_units.json"
 CHECK_GT_PATH = ROOT / "assets/items/video_ground_truth_reference_144037.json"
-DEV_PATH = ROOT / "assets/items/video_development_references_v1.json"
 OUT_DIR = ROOT / "assets/items/derived_warehouse_icon_references_v1"
-MANIFEST_PATH = OUT_DIR / "manifest.json"
 _FOREGROUND_ALIGNMENT = WarehousePlacementResolver.__new__(WarehousePlacementResolver)
 
 RARITY_TO_QUALITY = {
@@ -64,7 +64,7 @@ def read_image(path: Path) -> np.ndarray:
 
 
 def foreground_fraction(image: np.ndarray) -> tuple[float, float] | None:
-    extracted = WarehousePlacementResolver._extract_foreground(image)
+    extracted, _method = _extract_catalog_foreground(image)
     if extracted is None:
         return None
     foreground, _mask = extracted
@@ -74,6 +74,45 @@ def foreground_fraction(image: np.ndarray) -> tuple[float, float] | None:
     resized_w = max(1, round(cropped.shape[1] * scale))
     resized_h = max(1, round(cropped.shape[0] * scale))
     return foreground.shape[1] / resized_w, foreground.shape[0] / resized_h
+
+
+def _extract_catalog_foreground(image: np.ndarray):
+    """Use the shared extractor, then a conservative closed-edge fallback.
+
+    The fallback is limited to catalog body crops where the shared color mask
+    found nothing. It requires a closed, interior, central object contour and
+    does not inspect or tune against any gameplay check image.
+    """
+    extracted = WarehousePlacementResolver._extract_foreground(image)
+    if extracted is not None:
+        return extracted, "WarehousePlacementResolver._extract_foreground"
+    if image is None or min(image.shape[:2]) < 16:
+        return None, "NONE"
+    # Keep the source crop's pixel grid. Resizing before closing can break thin
+    # outlines and make a valid object contour disappear.
+    body = image
+    gray = cv2.GaussianBlur(cv2.cvtColor(body, cv2.COLOR_BGR2GRAY), (3, 3), 0)
+    edges = cv2.Canny(gray, 30, 80)
+    edges = cv2.morphologyEx(edges, cv2.MORPH_CLOSE, np.ones((5, 5), np.uint8), iterations=2)
+    contours, _ = cv2.findContours(edges, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+    h, w = gray.shape
+    candidates = []
+    for contour in contours:
+        area = float(cv2.contourArea(contour)) / max(1, edges.size)
+        x, y, cw, ch = cv2.boundingRect(contour)
+        cx, cy = (x + cw / 2) / w, (y + ch / 2) / h
+        if (.02 < area < .85 and x > 1 and y > 1 and x + cw < w - 1 and y + ch < h - 1
+                and .15 < cx < .85 and .15 < cy < .85):
+            candidates.append((area, contour))
+    if not candidates:
+        return None, "NONE"
+    contour = max(candidates, key=lambda row: row[0])[1]
+    mask = np.zeros_like(edges)
+    cv2.drawContours(mask, [contour], -1, 255, -1)
+    if not .02 < float(mask.mean()) / 255 < .85:
+        return None, "NONE"
+    x, y, cw, ch = cv2.boundingRect(contour)
+    return (body[y:y + ch, x:x + cw], mask[y:y + ch, x:x + cw]), "CATALOG_CLOSED_EDGE_FALLBACK"
 
 
 def verified_official_sources() -> tuple[dict[str, dict[str, Any]], dict[str, str]]:
@@ -111,56 +150,17 @@ def verified_official_sources() -> tuple[dict[str, dict[str, Any]], dict[str, st
 
 
 def gameplay_samples() -> tuple[set[str], list[dict[str, Any]]]:
-    ids: set[str] = set()
-    samples: list[dict[str, Any]] = []
-    for path in (FIT_GT_PATH, CHECK_GT_PATH):
-        payload = read_json(path)
-        group_id = str((payload.get("metadata") or {}).get("recordStableKey") or path.stem)
-        for row in payload.get("items") or []:
-            catalog_id = str(row.get("catalogId") or "")
-            crop_rel = str(row.get("localCropPath") or "")
-            crop_path = ROOT / crop_rel
-            declared_sha = str(row.get("cropSha256") or "")
-            if not catalog_id or not crop_rel or not crop_path.is_file():
-                continue
-            current_sha = sha256(crop_path)
-            if declared_sha and current_sha != declared_sha:
-                raise ValueError(f"game crop hash mismatch: {crop_rel}")
-            ids.add(catalog_id)
-            samples.append({
-                "catalogId": catalog_id,
-                "groupId": group_id,
-                "groundTruthPath": path.relative_to(ROOT).as_posix(),
-                "referenceId": row.get("referenceId"),
-                "localCropPath": crop_rel,
-                "cropSha256": current_sha,
-                "cropShaWasDeclared": bool(declared_sha),
-                "gameSourceFrameTimeSec": row.get("sourceFrameTimeSec", row.get("videoSourceFrameTimeSec")),
-                "gameSourceFramePath": (payload.get("metadata") or {}).get("sourceFramePath"),
-                "gameSourceBbox": row.get("sourceFrameBbox", row.get("pixelBboxOnCanvas")),
-            })
-
-    if DEV_PATH.is_file():
-        for row in (read_json(DEV_PATH).get("records") or []):
-            if row.get("sampleClass") != "development-reference":
-                continue
-            catalog_id = str(row.get("catalogId") or "")
-            image_path = ROOT / str(row.get("imagePath") or "")
-            declared_sha = str(row.get("imageSha256") or "")
-            if catalog_id and image_path.is_file() and declared_sha and sha256(image_path) == declared_sha:
-                ids.add(catalog_id)
-                samples.append({
-                    "catalogId": catalog_id,
-                    "groupId": "video_development_references_v1",
-                    "imagePath": str(row["imagePath"]),
-                    "imageSha256": declared_sha,
-                    "sampleClass": row["sampleClass"],
-                })
+    verified = load_verified_warehouse_gameplay_templates(root=ROOT)
+    samples = [
+        dict(reference["metadata"])
+        for references in verified.values()
+        for reference in references
+    ]
+    ids = {str(row["catalogId"]) for row in samples}
     return ids, samples
 
 
-def fit_pairs(eligible: dict[str, dict[str, Any]]) -> list[dict[str, Any]]:
-    gt = read_json(FIT_GT_PATH)
+def fit_pairs(eligible: dict[str, dict[str, Any]], samples: list[dict[str, Any]]) -> list[dict[str, Any]]:
     replay = read_json(FIT_REPLAY_PATH)
     auto_confirmed = set()
     for unit in replay:
@@ -175,16 +175,22 @@ def fit_pairs(eligible: dict[str, dict[str, Any]]) -> list[dict[str, Any]]:
 
     pairs: list[dict[str, Any]] = []
     seen: set[str] = set()
-    for row in gt.get("items") or []:
+    prior_fit_group = "video_audit_20260908_134436_match2"
+    supplemental_group = "video_audit_20260908_134043"
+    for row in samples:
         catalog_id = str(row.get("catalogId") or "")
-        geometry = row.get("gridBoundingBox") or {}
-        width, height = int(geometry.get("width") or 0), int(geometry.get("height") or 0)
+        width = int(row.get("widthCells") or 0)
+        height = int(row.get("heightCells") or 0)
         source = eligible.get(catalog_id)
+        selected_prior_pair = (
+            row.get("groupId") == prior_fit_group
+            and (catalog_id, width, height) in auto_confirmed
+        )
+        independently_checked_supplement = row.get("groupId") == supplemental_group
         if (
             source is None
             or catalog_id in seen
-            or row.get("identityStatus") != "VISUALLY_CHECKED_SOURCE_CARD"
-            or (catalog_id, width, height) not in auto_confirmed
+            or not (selected_prior_pair or independently_checked_supplement)
             or (width, height) != (int(source["visual"]["width"]), int(source["visual"]["height"]))
         ):
             continue
@@ -210,8 +216,10 @@ def fit_pairs(eligible: dict[str, dict[str, Any]]) -> list[dict[str, Any]]:
             "catalogId": catalog_id,
             "widthCells": width,
             "heightCells": height,
-            "groundTruthPath": FIT_GT_PATH.relative_to(ROOT).as_posix(),
+            "groundTruthPath": row["groundTruthPath"],
+            "groupId": row["groupId"],
             "referenceId": row.get("referenceId"),
+            "pairSelection": "retained prior confirmed fit subset" if selected_prior_pair else "new independently labelled match; one pair per catalog ID",
             "pairAuthority": "independent visually checked ground truth ID + hash-verified catalog source and gameplay crop",
             "catalogScreenshotPath": source["visual"]["sourcePath"],
             "catalogScreenshotSha256": source["visual"]["sourceSha256"],
@@ -255,7 +263,7 @@ def build_reference(
     if source_image is None:
         return None
     body = _catalog_reference_body(source_image)
-    extracted = WarehousePlacementResolver._extract_foreground(body)
+    extracted, extraction_method = _extract_catalog_foreground(body)
     if extracted is None:
         return None
     foreground, mask = extracted
@@ -286,7 +294,8 @@ def build_reference(
     transform = {
         "cropMethod": "catalog_reference_body",
         "cropFractions": BODY_CROP_FRACTIONS,
-        "foregroundMethod": "WarehousePlacementResolver._extract_foreground",
+        "foregroundMethod": extraction_method,
+        "foregroundFallback": "source-resolution Canny 30/80; 5x5 close x2; largest closed contour within 2%-85% area and centered 15%-85% of catalog body; used only if shared extractor fails",
         "scaleMethod": "fit pooled-or-shape median gameplay foreground occupancy into exact grid-cell canvas",
         "rotationDegrees": 0,
         "targetForegroundFraction": [round(float(target_w), 8), round(float(target_h), 8)],
@@ -299,61 +308,32 @@ def build_reference(
 
 
 def score_one(matcher: WarehouseTemplateMatcher, roi: np.ndarray, candidate: dict[str, Any], derived: np.ndarray | None) -> tuple[float, str]:
-    roi_h, roi_w = roi.shape[:2]
-    file_name = candidate.get("File") or candidate.get("ImageFile")
-    direct = matcher.templates.get(file_name) if file_name else None
-    if direct is None:
-        name = str(candidate.get("Name") or "")
-        direct = next((image for filename, image in matcher.templates.items() if name and name in filename), None)
-    direct_score = 0.0
-    derived_score = None
-    for image, kind in ((direct, "DIRECT"), (derived, "DERIVED")):
-        if image is None:
-            continue
-        try:
-            resized = cv2.resize(image, (roi_w, roi_h))
-            score = float(cv2.minMaxLoc(cv2.matchTemplate(roi, resized, cv2.TM_CCOEFF_NORMED))[1])
-        except Exception:
-            continue
-        if kind == "DIRECT":
-            direct_score = score
-        else:
-            derived_score = score
+    direct_score, direct_source = matcher.score_direct_reference(roi, candidate)
+    derived_score = matcher._template_match_score(roi, derived) if derived is not None else None
     if derived_score is None:
-        return direct_score, "DIRECT" if direct is not None else "NONE"
-    combined_score = max(direct_score, derived_score)
+        return direct_score, "DIRECT" if direct_source != "NONE" else "NONE"
     if derived_score > direct_score:
-        return combined_score, "DERIVED"
-    if direct is not None and direct_score > 0:
-        return combined_score, "DIRECT"
-    if derived_score > 0:
-        return combined_score, "DERIVED"
-    return combined_score, "NONE"
+        return derived_score, "DERIVED"
+    return direct_score, "DIRECT" if direct_source != "NONE" else "NONE"
 
 
 def evaluate_historical_transfer(
     eligible: dict[str, dict[str, Any]],
-    pooled: tuple[float, float],
-    shape_models: dict[tuple[int, int], tuple[float, float]],
-    fit_ids: set[str],
+    derived: dict[str, np.ndarray],
+    fit_pairs_used: list[dict[str, Any]],
 ) -> dict[str, Any]:
     check_data = read_json(CHECK_GT_PATH)
     matcher = WarehouseTemplateMatcher()
     config = WarehouseVisionConfig()
-    # These refs are generated only from catalog sources and the fit group.
-    # Building all eligible rows in memory permits transfer evaluation on the
-    # separate historical match without promoting those images to training.
-    derived: dict[str, np.ndarray] = {}
-    for catalog_id, source in eligible.items():
-        shape = (int(source["visual"]["width"]), int(source["visual"]["height"]))
-        image = build_reference(catalog_id, source, shape_models.get(shape, pooled))
-        if image is not None:
-            derived[catalog_id] = image[0]
 
     counts = {
         "candidateEligible": 0,
         "truthNotInOfficialCandidateSet": 0,
-        "directTopCandidateCorrect": 0,
+        "directTopByOrderCorrect": 0,
+        "directTopHasPositiveVisualScore": 0,
+        "directPositiveVisualTopCorrect": 0,
+        "directUniqueVisualWinnerCorrect": 0,
+        "directTopScoreTies": 0,
         "directCorrectConfirmations": 0,
         "directWrongConfirmations": 0,
         "directUnresolved": 0,
@@ -369,8 +349,6 @@ def evaluate_historical_transfer(
     rows = []
     for item in check_data.get("items") or []:
         catalog_id = str(item.get("catalogId") or "")
-        if catalog_id in fit_ids:
-            continue
         geom = item.get("gridBoundingBox") or {}
         width, height = int(geom.get("width") or 0), int(geom.get("height") or 0)
         if catalog_id not in eligible:
@@ -393,13 +371,13 @@ def evaluate_historical_transfer(
         combined_ranked = []
         for index, candidate in enumerate(candidates):
             cid = str(candidate.get("Id") or candidate.get("catalogId") or "")
-            direct_score, _ = score_one(matcher, roi, candidate, None)
+            direct_score, direct_kind = score_one(matcher, roi, candidate, None)
             combined_score, combined_kind = score_one(matcher, roi, candidate, derived.get(cid))
-            direct_ranked.append((direct_score, index, cid))
+            direct_ranked.append((direct_score, index, cid, direct_kind))
             combined_ranked.append((combined_score, index, cid, combined_kind))
         direct_ranked.sort(key=lambda row: (-row[0], row[1]))
         combined_ranked.sort(key=lambda row: (-row[0], row[1]))
-        direct_top = direct_ranked[0] if direct_ranked else (0.0, 0, "")
+        direct_top = direct_ranked[0] if direct_ranked else (0.0, 0, "", "NONE")
         direct_second = direct_ranked[1][0] if len(direct_ranked) > 1 else 0.0
         combined_top = combined_ranked[0] if combined_ranked else (0.0, 0, "", "NONE")
         combined_second = combined_ranked[1][0] if len(combined_ranked) > 1 else 0.0
@@ -410,8 +388,16 @@ def evaluate_historical_transfer(
         combined_exact_allowed = direct_confirmed or (combined_confirmed and combined_top[3] == "DIRECT")
         combined_exact_id = direct_top[2] if direct_confirmed else combined_top[2]
         counts["candidateEligible"] += 1
+        if direct_top[0] == direct_second:
+            counts["directTopScoreTies"] += 1
         if direct_top[2] == catalog_id:
-            counts["directTopCandidateCorrect"] += 1
+            counts["directTopByOrderCorrect"] += 1
+        if direct_top[0] > 0:
+            counts["directTopHasPositiveVisualScore"] += 1
+            if direct_top[2] == catalog_id:
+                counts["directPositiveVisualTopCorrect"] += 1
+            if direct_top[2] == catalog_id and direct_top[0] > direct_second:
+                counts["directUniqueVisualWinnerCorrect"] += 1
         if direct_confirmed and direct_top[2] == catalog_id:
             counts["directCorrectConfirmations"] += 1
         elif direct_confirmed:
@@ -424,8 +410,8 @@ def evaluate_historical_transfer(
             counts["topCandidateImproved"] += 1
         elif direct_top[2] == catalog_id and combined_top[2] != catalog_id:
             counts["topCandidateRegressed"] += 1
-        # Generated refs are deliberately barred from self-confirmation in
-        # production; direct-only winners retain the existing strict gate.
+        # Derived refs remain barred from exact identity; trusted direct refs
+        # use the existing confidence and margin gate.
         if not direct_confirmed and combined_confirmed and combined_top[3] == "DERIVED" and combined_top[2] == catalog_id:
             counts["derivedThresholdCorrectBlocked"] += 1
         elif not direct_confirmed and combined_confirmed and combined_top[3] == "DERIVED":
@@ -443,6 +429,7 @@ def evaluate_historical_transfer(
             "directRawTopCandidate": direct_top[2] or None,
             "directTop": direct_top[2] if direct_confirmed else None,
             "directScore": round(direct_top[0], 4),
+            "directReferenceKind": direct_top[3],
             "combinedTopCandidate": combined_top[2] or None,
             "combinedTopReferenceKind": combined_top[3],
             "combinedScore": round(combined_top[0], 4),
@@ -451,22 +438,26 @@ def evaluate_historical_transfer(
     return {
         "group": CHECK_GT_PATH.relative_to(ROOT).as_posix(),
         "groupUse": "historical cross-match check; previously used development material, not fresh unseen acceptance",
-        "fitIdsExcluded": sorted(fit_ids),
+        "fitReferenceIds": sorted(str(row.get("referenceId") or "") for row in fit_pairs_used),
+        "trainingGroups": sorted({str(row.get("groupId") or "") for row in fit_pairs_used}),
         "counts": counts,
         "rows": rows,
-        "productionExactGate": "DERIVED_UNVERIFIED never upgrades to EXACT_IDENTIFIED; only direct legacy references may pass the existing strict gate",
+        "rankingInterpretation": "directTopByOrderCorrect includes deterministic candidate-order tie breaks; positive-score and unique-winner counts identify actual visual ranking. The historical 7/22 direct baseline had zero positive scores.",
+        "productionExactGate": "DERIVED_UNVERIFIED never upgrades to EXACT_IDENTIFIED; only trusted direct catalog or independently labelled gameplay references may pass the existing strict gate",
     }
 
 
-def main() -> None:
+def main(output_dir: Path = OUT_DIR) -> None:
     eligible, exclusions = verified_official_sources()
     gameplay_ids, gameplay_sources = gameplay_samples()
-    pairs = fit_pairs(eligible)
+    pairs = fit_pairs(eligible, gameplay_sources)
     pooled, shape_models = fit_occupancy(pairs)
-    fit_ids = {str(row["catalogId"]) for row in pairs}
     missing_ids = sorted(set(eligible) - gameplay_ids)
 
-    OUT_DIR.mkdir(parents=True, exist_ok=True)
+    output_dir = output_dir.resolve()
+    if not output_dir.is_relative_to(ROOT.resolve()):
+        raise ValueError("derived output must remain inside the repository; use build/ for diagnostics")
+    output_dir.mkdir(parents=True, exist_ok=True)
     records = []
     generation_failures = []
     for catalog_id in missing_ids:
@@ -475,11 +466,11 @@ def main() -> None:
         occupancy = shape_models.get((width, height), pooled)
         built = build_reference(catalog_id, source, occupancy)
         if built is None:
-            generation_failures.append({"catalogId": catalog_id, "reason": "existing foreground extractor found no usable foreground"})
+            generation_failures.append({"catalogId": catalog_id, "reason": "shared foreground extractor and closed-edge fallback found no bounded foreground"})
             continue
         image, transform = built
         image_name = f"{catalog_id}.png"
-        image_path = OUT_DIR / image_name
+        image_path = output_dir / image_name
         ok, encoded = cv2.imencode(".png", image)
         if not ok:
             raise RuntimeError(f"failed to encode derived reference: {catalog_id}")
@@ -512,11 +503,15 @@ def main() -> None:
             "transform": transform,
         })
 
-    history_check = evaluate_historical_transfer(eligible, pooled, shape_models, fit_ids)
+    derived_images = {
+        str(row["catalogId"]): read_image(output_dir / f"{row['catalogId']}.png")
+        for row in records
+    }
+    history_check = evaluate_historical_transfer(eligible, derived_images, pairs)
     manifest = {
         "schemaVersion": "derived-warehouse-icon-references.v1",
         "status": "DERIVED_UNVERIFIED",
-        "scope": "Predicted warehouse appearance from verified catalog sources and fit-group appearance transform; never raw gameplay evidence, never self-confirming identity, never solver-eligible by itself.",
+        "scope": "Predicted warehouse appearance from verified catalog sources and hash-checked, independently labelled cross-match training crops; never raw gameplay evidence, never self-confirming identity, never solver-eligible by itself.",
         "generator": "tools/generate_derived_warehouse_icon_references.py",
         "officialCatalogPath": OFFICIAL_PATH.relative_to(ROOT).as_posix(),
         "visualCatalogPath": VISUAL_PATH.relative_to(ROOT).as_posix(),
@@ -527,7 +522,8 @@ def main() -> None:
         "fitGroup": {
             "path": FIT_GT_PATH.relative_to(ROOT).as_posix(),
             "priorResultPath": FIT_REPLAY_PATH.relative_to(ROOT).as_posix(),
-            "priorOutcome": "23 annotated physical items, 21 previous automatic exact confirmations, 2 unresolved; fit subset uses independently visually checked pair IDs within those prior confirmations.",
+            "supplementalPath": "assets/items/video_ground_truth_reference_134043_visible.json",
+            "priorOutcome": "Retains the previous 7 independently labelled fit pairs and adds one eligible, hash-verified pair per distinct catalog ID from the separate 134043 development match. Neither match is unseen acceptance material.",
             "recordCount": len(pairs),
             "method": "median foreground occupancy, no per-item fitting; shape-specific only at n>=2",
             "pooledForegroundFraction": [round(float(v), 8) for v in pooled],
@@ -542,6 +538,9 @@ def main() -> None:
         },
         "generation": {
             "gameplaySamplesAlreadyAvailable": len(gameplay_ids),
+            "verifiedGameplayCropCount": len(gameplay_sources),
+            "verifiedGameplayIdsWithVisualCatalogSource": len(gameplay_ids & set(eligible)),
+            "verifiedGameplayIdsWithoutVisualCatalogSource": len(gameplay_ids - set(eligible)),
             "eligibleMissingGameplaySamples": len(missing_ids),
             "generated": len(records),
             "generationFailures": generation_failures,
@@ -552,11 +551,13 @@ def main() -> None:
         "historicalTransferCheck": history_check,
         "records": records,
     }
-    MANIFEST_PATH.write_text(json.dumps(manifest, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+    manifest_path = output_dir / "manifest.json"
+    manifest_path.write_text(json.dumps(manifest, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
     referenced_images = {Path(row["imagePath"]).name for row in records}
-    for stale_image in OUT_DIR.glob("image*.png"):
-        if stale_image.name not in referenced_images:
-            stale_image.unlink()
+    if output_dir == OUT_DIR.resolve():
+        for stale_image in output_dir.glob("image*.png"):
+            if stale_image.name not in referenced_images:
+                stale_image.unlink()
     print(json.dumps({
         "verifiedSourceRecords": len(eligible),
         "sourceExclusions": exclusions,
@@ -567,9 +568,11 @@ def main() -> None:
         "missingGameplayIds": len(missing_ids),
         "generated": len(records),
         "historicalCheck": history_check["counts"],
-        "manifest": MANIFEST_PATH.relative_to(ROOT).as_posix(),
+        "manifest": manifest_path.relative_to(ROOT).as_posix(),
     }, ensure_ascii=False, indent=2))
 
 
 if __name__ == "__main__":
-    main()
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--output-dir", type=Path, default=OUT_DIR)
+    main(parser.parse_args().output_dir)
