@@ -57,6 +57,10 @@ from nte_engine_ref import (  # noqa: E402
 )
 from canonical_history_store import CanonicalHistoryStore, HistoryStoreError  # noqa: E402
 from current_match import FACT_KEYS, CurrentMatch, is_missing_observation  # noqa: E402
+from deferred_identity_analyzer import (  # noqa: E402
+    DeferredIdentityAnalyzer,
+    deferred_identity_result_is_current,
+)
 from venue_box_catalog import (  # noqa: E402
     canonical_catalog_provenance,
     catalog_selection,
@@ -306,6 +310,11 @@ class RealEngine:
         self.heartbeat_enabled = True
         self.frame_queue: queue.Queue[dict] = queue.Queue(maxsize=2)
         self.worker: Optional[threading.Thread] = None
+        self._identity_analyzer: Optional[DeferredIdentityAnalyzer] = None
+        self._identity_generation_lock = threading.Lock()
+        self._identity_invalidation_generation = 0
+        self._identity_scope_key = None
+        self._identity_last_committed_sequence: dict[tuple[str, str, Any], int] = {}
         self.frame_records_path = self.work_dir / "frame_records.ndjson"
         self.state_path = self.work_dir / "engine_state.json"
         self.state_manifest_path = self.work_dir / "engine_state_manifest.json"
@@ -488,6 +497,19 @@ class RealEngine:
     def _capture_iso(self, capture_timestamp_ns: int) -> str:
         wall_ns = int(capture_timestamp_ns) + self._wall_minus_qpc_ns
         return dt.datetime.fromtimestamp(wall_ns / 1_000_000_000.0, dt.timezone.utc).isoformat()
+
+    def _identity_generation(self) -> int:
+        with self._identity_generation_lock:
+            return self._identity_invalidation_generation
+
+    def _invalidate_deferred_identity(self, reason: str) -> int:
+        with self._identity_generation_lock:
+            self._identity_invalidation_generation += 1
+            generation = self._identity_invalidation_generation
+        if self._identity_analyzer is not None:
+            self._identity_analyzer.invalidate_pending()
+        self.log("identity.deferred_invalidated", invalidationGeneration=generation, reason=reason)
+        return generation
 
     # -- envelopes ----------------------------------------------------------
     def next_sequence(self) -> int:
@@ -780,6 +802,7 @@ class RealEngine:
             if key in FACT_KEYS
         ]
 
+        self._invalidate_deferred_identity("manual_match_control")
         if reset or self.current_match.id != snapshot_id:
             self.current_match.begin_next_match()
             self.current_match.id = snapshot_id
@@ -1049,6 +1072,277 @@ class RealEngine:
             self.current_match.apply_facts(patch, source="vision", intent="observe", observed_at=observed_at)
         self.current_match.updated_at = _utc_now()
 
+    def _identity_scope_kind(self, context: dict) -> Optional[str]:
+        scene = str(context.get("scene") or "UNKNOWN")
+        if scene == "IN_AUCTION":
+            kind = "warehouse"
+        elif scene == "SETTLEMENT" or bool(context.get("isSettlement")):
+            kind = "settlement"
+        else:
+            kind = None
+        round_value = context.get("round")
+        if round_value is None:
+            round_value = self.current_match.facts.get("roundNo")
+        try:
+            round_value = int(round_value) if round_value is not None else None
+        except (TypeError, ValueError):
+            round_value = None
+        key = None if kind is None else (
+            self.current_match.id,
+            self.current_match._seq,
+            int(getattr(self.pipeline, "_match_gen", 0)),
+            int(getattr(self.pipeline, "_session_generation", 0)),
+            kind,
+            round_value,
+            str(context.get("recognitionMode") or "auto"),
+        )
+        if key != self._identity_scope_key:
+            previous = self._identity_scope_key
+            self._identity_scope_key = key
+            self._identity_last_committed_sequence.clear()
+            if previous is not None:
+                self._invalidate_deferred_identity("observation_scope_changed")
+        return kind
+
+    def _submit_deferred_identity(self, item: dict, context: dict) -> None:
+        pending = self.pipeline.take_deferred_identity()
+        if not isinstance(pending, dict):
+            return
+        kind = str(pending.get("kind") or "")
+        expected_kind = self._identity_scope_kind(context)
+        if kind != expected_kind or kind not in {"warehouse", "settlement"}:
+            return
+        invalidation_generation = int(item.get("identityInvalidationGeneration", -1))
+        if invalidation_generation != self._identity_generation():
+            self.log("identity.deferred_frame_rejected", reason="INVALIDATED_BEFORE_DISPATCH",
+                     frameSequence=item.get("header", {}).get("sequence"), kind=kind)
+            return
+        round_value = pending.get("round")
+        if round_value is None:
+            round_value = context.get("round", self.current_match.facts.get("roundNo"))
+        try:
+            round_value = int(round_value) if round_value is not None else None
+        except (TypeError, ValueError):
+            round_value = None
+        if kind == "warehouse" and (round_value is None or round_value <= 0):
+            return
+        if self._identity_analyzer is None:
+            self._identity_analyzer = DeferredIdentityAnalyzer()
+        header = item["header"]
+        descriptor = {
+            "kind": kind,
+            "sessionId": self.session_id,
+            "generationId": self.generation_id,
+            "matchId": self.current_match.id,
+            "matchSequence": int(self.current_match._seq),
+            "pipelineMatchGeneration": int(pending.get("matchGeneration", getattr(self.pipeline, "_match_gen", 0))),
+            "pipelineSessionGeneration": int(pending.get("sessionGeneration", getattr(self.pipeline, "_session_generation", 0))),
+            "factsRevisionAtDispatch": int(self.current_match.facts_revision),
+            "invalidationGeneration": invalidation_generation,
+            "round": round_value,
+            "scene": str(context.get("scene") or "UNKNOWN"),
+            "recognitionMode": str(context.get("recognitionMode") or "auto"),
+            "frameSequence": int(header["sequence"]),
+            "captureTimestampNs": int(header["captureTimestampNs"]),
+            "capturedAt": str(item.get("capturedAt") or pending.get("captured_at") or ""),
+            "pixelSha256": str(item.get("rawSha256") or ""),
+            "actualTotal": pending.get("actual_total"),
+        }
+        frame = pending.get("frame")
+        if not isinstance(frame, np.ndarray) or frame.size == 0:
+            frame = item.get("bgr")
+        if self._identity_analyzer.submit(descriptor, frame):
+            self.log("identity.deferred_dispatched", kind=kind, matchId=descriptor["matchId"],
+                     round=round_value, frameSequence=descriptor["frameSequence"],
+                     factsRevision=descriptor["factsRevisionAtDispatch"],
+                     pixelSha256=descriptor["pixelSha256"])
+
+    @staticmethod
+    def _warehouse_fact_projection(vision: dict) -> dict:
+        projected = []
+        for raw in vision.get("slots") or []:
+            if not isinstance(raw, dict):
+                continue
+            try:
+                if any(raw.get(key) is None for key in ("col", "row", "w", "h")):
+                    continue
+                slot = {
+                    "col": int(raw["col"]),
+                    "row": int(raw["row"]),
+                    "w": int(raw["w"]),
+                    "h": int(raw["h"]),
+                    "rarity": str(raw.get("rarity") or "unknown"),
+                    "evidenceLevel": str(raw.get("evidenceLevel") or "OUTLINE_ONLY"),
+                    "identityStatus": str(raw.get("identityStatus") or "UNKNOWN"),
+                    "candidates": [
+                        {"catalogId": str(c.get("catalogId") or c.get("Id") or ""),
+                         "name": str(c.get("name") or c.get("Name") or "")}
+                        for c in (raw.get("candidates") or []) if isinstance(c, dict)
+                        and (c.get("catalogId") or c.get("Id"))
+                    ],
+                }
+                if raw.get("trackId") is not None:
+                    slot["trackId"] = int(raw["trackId"])
+                if (slot["identityStatus"] == "EXACT"
+                        and raw.get("identityReferenceKind") == "DIRECT"
+                        and raw.get("identifiedName")):
+                    slot["identifiedName"] = str(raw["identifiedName"])
+                projected.append(slot)
+            except (TypeError, ValueError):
+                continue
+        return {"slots": projected}
+
+    def _commit_deferred_identity(self, result: dict) -> bool:
+        kind = str(result.get("kind") or "")
+        scope_key = (kind, str(result.get("matchId") or ""), result.get("round") if kind == "warehouse" else None)
+        scene = str((self.last_context or {}).get("scene") or "UNKNOWN")
+        round_value = (self.last_context or {}).get("round")
+        if round_value is None:
+            round_value = self.current_match.facts.get("roundNo")
+        try:
+            round_value = int(round_value) if round_value is not None else None
+        except (TypeError, ValueError):
+            round_value = None
+        current = {
+            "sessionId": self.session_id,
+            "generationId": self.generation_id,
+            "matchId": self.current_match.id,
+            "matchSequence": int(self.current_match._seq),
+            "pipelineMatchGeneration": int(getattr(self.pipeline, "_match_gen", 0)),
+            "pipelineSessionGeneration": int(getattr(self.pipeline, "_session_generation", 0)),
+            "invalidationGeneration": self._identity_generation(),
+            "recognitionMode": str((self.last_context or {}).get("recognitionMode") or "auto"),
+            "factsRevision": int(self.current_match.facts_revision),
+            "lastCommittedFrameSequence": self._identity_last_committed_sequence.get(scope_key, -1),
+            "scene": scene,
+            "round": round_value,
+        }
+        if not deferred_identity_result_is_current(result, current):
+            self.log("identity.deferred_result_rejected", kind=kind,
+                     matchId=result.get("matchId"), round=result.get("round"),
+                     frameSequence=result.get("frameSequence"), currentScene=scene,
+                     currentMatchId=self.current_match.id,
+                     invalidationGeneration=current["invalidationGeneration"],
+                     error=result.get("error"))
+            return False
+
+        evidence_refs = {
+            "kind": "native-deferred-identity-frame",
+            "sessionId": result["sessionId"],
+            "generationId": result["generationId"],
+            "matchId": result["matchId"],
+            "round": result.get("round"),
+            "frameSequence": result["frameSequence"],
+            "captureTimestampNs": result["captureTimestampNs"],
+            "capturedAt": result.get("capturedAt"),
+            "pixelSha256": result.get("pixelSha256"),
+            "identityReferencePolicy": "direct-exact-only; derived-unverified-is-candidate-only",
+        }
+        patch: dict[str, Any] = {}
+        context = copy.deepcopy(self.last_context or {})
+        if kind == "warehouse":
+            vision = result.get("warehouseVision")
+            if not isinstance(vision, dict):
+                return False
+            context["warehouseVision"] = copy.deepcopy(vision)
+            context["warehouseSlots"] = copy.deepcopy(vision.get("slots") or [])
+            context["warehouseExpectedVal"] = vision.get("totalExpectedVal", 0)
+            context["warehouseValRange"] = copy.deepcopy(vision.get("valRange") or [0, 0])
+            projected = self._warehouse_fact_projection(vision)
+            if projected["slots"] and projected != self.current_match.facts.get("warehouse"):
+                patch["warehouse"] = projected
+
+            official_by_id = {
+                str(row.get("Id") or ""): row for row in (self.pipeline.catalog or [])
+                if isinstance(row, dict) and row.get("Id")
+            }
+            quality_targets = {"gold": ("knownGold", "金"), "purple": ("knownPurple", "紫"), "red": ("knownRed", "红")}
+            exact_names: dict[str, dict[str, str]] = {field: {} for field, _quality in quality_targets.values()}
+            for raw in vision.get("slots") or []:
+                if not isinstance(raw, dict) or raw.get("identityStatus") != "EXACT":
+                    continue
+                if raw.get("identityReferenceKind") != "DIRECT":
+                    continue
+                catalog_id = str(raw.get("identifiedCatalogId") or "")
+                official = official_by_id.get(catalog_id)
+                if official is None:
+                    continue
+                fact_key_quality = quality_targets.get(str(raw.get("rarity") or ""))
+                if (fact_key_quality is None or str(official.get("Quality") or "") != fact_key_quality[1]
+                        or str(official.get("Name") or "") != str(raw.get("identifiedName") or "")):
+                    continue
+                field = fact_key_quality[0]
+                name = str(official.get("Name") or "")
+                if name and "+" not in name:
+                    exact_names[field][catalog_id] = name
+            for field, items in exact_names.items():
+                if not items:
+                    continue
+                old = self.current_match.facts.get(field) or ""
+                if isinstance(old, list):
+                    names = [str(item.get("name") or item) if isinstance(item, dict) else str(item) for item in old]
+                else:
+                    names = [part.strip() for part in str(old).split("+") if part.strip()]
+                merged = list(dict.fromkeys(names + list(items.values())))
+                joined = "+".join(merged)
+                if joined and joined != ("+".join(names)):
+                    patch[field] = joined
+        elif kind == "settlement":
+            settlement_items = result.get("settlementItems")
+            if not isinstance(settlement_items, list):
+                return False
+            context["settlementItems"] = copy.deepcopy(settlement_items)
+            settlement_data = context.get("settlementData")
+            if isinstance(settlement_data, dict):
+                settlement_data["items"] = copy.deepcopy(settlement_items)
+                settlement_data["ledger"] = copy.deepcopy({k: v for k, v in result.items()
+                                                             if k not in {"frame", "warehouseVision"}})
+                context["settlementData"] = settlement_data
+            for key in ("settlementItems", "settlementLedgerVerified", "settlementLedgerStatus",
+                        "settlementLedgerDelta"):
+                if key in result and result.get(key) != self.current_match.facts.get(key):
+                    patch[key] = copy.deepcopy(result[key])
+            # Settlement discoveries remain settlement evidence and never enter
+            # the pre-auction knownGold/knownPurple/knownRed facts.
+        else:
+            return False
+
+        self.last_context = context
+        if isinstance(getattr(self.pipeline, "current_context", None), dict):
+            if kind == "warehouse":
+                self.pipeline._apply_warehouse_state(copy.deepcopy(context["warehouseVision"]))
+            else:
+                self.pipeline.current_context.update(copy.deepcopy(context))
+        revision_before = self.current_match.facts_revision
+        if patch:
+            self.current_match.apply_facts(
+                patch,
+                source="vision",
+                intent="observe",
+                observed_at=str(result.get("capturedAt") or ""),
+                evidence_refs=evidence_refs,
+            )
+        self._identity_last_committed_sequence[scope_key] = int(result["frameSequence"])
+        if self.current_match.facts_revision != revision_before:
+            history_status = self._persist_history()
+            self._persist_state(reason="deferred_identity_committed")
+        else:
+            history_status = "UNCHANGED"
+        exact_count = sum(1 for slot in (result.get("warehouseVision", {}).get("slots") or [])
+                          if isinstance(slot, dict) and slot.get("identityStatus") == "EXACT"
+                          and slot.get("identityReferenceKind") == "DIRECT") if kind == "warehouse" else 0
+        self.log("identity.deferred_committed", kind=kind, matchId=result.get("matchId"),
+                 round=result.get("round"), frameSequence=result.get("frameSequence"),
+                 exactDirectCount=exact_count, factsRevision=self.current_match.facts_revision,
+                 historyStatus=history_status)
+        return True
+
+    def _drain_deferred_identity(self) -> None:
+        if self._identity_analyzer is None:
+            return
+        for result in self._identity_analyzer.poll():
+            self._commit_deferred_identity(result)
+
     def _apply_manual_overrides(self, context: dict) -> dict:
         """Project accepted GUI overrides into the next business frame."""
         if self.awaiting_exit:
@@ -1090,6 +1384,7 @@ class RealEngine:
             context["capturedAt"] = captured_at
             context["captureTimestampNs"] = int(header["captureTimestampNs"])
             context = self._apply_manual_overrides(context)
+            self._identity_scope_kind(context)
             self.last_context = copy.deepcopy(context)
             self._apply_pipeline_context(context, captured_at)
             history_status = self._persist_history()
@@ -1133,6 +1428,13 @@ class RealEngine:
                     self._perception_payload(item, context, processing_ms),
                     "perception",
                 )
+            # Publish current bids/intel first. Only after the fast result has
+            # crossed the existing pipe do we copy pixels for optional identity.
+            try:
+                self._submit_deferred_identity(item, context)
+            except Exception as exc:
+                self.log("identity.deferred_dispatch_failed", frameSequence=header.get("sequence"),
+                         error=f"{type(exc).__name__}: {exc}")
             self.log(
                 "frame.processed",
                 frameSequence=header["sequence"],
@@ -1159,11 +1461,13 @@ class RealEngine:
             try:
                 item = self.frame_queue.get(timeout=0.1)
             except queue.Empty:
+                self._drain_deferred_identity()
                 continue
             try:
                 self._process_frame(item)
             finally:
                 self.frame_queue.task_done()
+                self._drain_deferred_identity()
 
     def handle_frame_ready(self, envelope: dict) -> None:
         if self.reader is None:
@@ -1173,6 +1477,7 @@ class RealEngine:
         received_ns = qpc_ns()
         item = self.reader.read_frame(envelope.get("payload") or {}, self.session_id)
         item["receivedNs"] = received_ns
+        item["identityInvalidationGeneration"] = self._identity_generation()
         if self.fault == "bad_header":
             self.send_error("ERR_CORRUPT_FRAME_MAGIC", "PAYLOAD", "test fault: header rejected", False)
             return
@@ -1272,8 +1577,10 @@ class RealEngine:
                     elif message_type == "COMMAND":
                         self.handle_command(envelope)
                     elif message_type == "ABORT_SCAN":
+                        self._invalidate_deferred_identity("abort_scan")
                         self.log("scan.aborted", reason=(envelope.get("payload") or {}).get("reason"))
                     elif message_type == "ENGINE_SHUTDOWN":
+                        self._invalidate_deferred_identity("engine_shutdown")
                         self.log("shutdown.requested", reason=(envelope.get("payload") or {}).get("reason"))
                         return 0
                     else:
@@ -1285,8 +1592,11 @@ class RealEngine:
                     return 9
         finally:
             self.stop_event.set()
+            self._invalidate_deferred_identity("engine_exit")
             if self.worker is not None:
                 self.worker.join(timeout=1.5)
+            if self._identity_analyzer is not None:
+                self._identity_analyzer.close(timeout=0.25)
             try:
                 self._persist_state(reason="engine_exit")
             except Exception as exc:

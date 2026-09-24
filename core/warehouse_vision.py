@@ -81,6 +81,10 @@ class TrackedSlotBlob:
     identified_item: Optional[Dict[str, Any]] = None
     match_score: float = 0.0
     margin_score: float = 0.0
+    identified_catalog_id: Optional[str] = None
+    best_candidate_id: Optional[str] = None
+    best_candidate_name: Optional[str] = None
+    identity_reference_kind: Optional[str] = None
     
     # 估值与价格区间
     min_price: int = 0
@@ -117,6 +121,10 @@ class TrackedSlotBlob:
             "identityStatus": identity_status,
             "candidates": normalized_cands,
             "identifiedName": identified_name,
+            "identifiedCatalogId": self.identified_catalog_id if is_exact else None,
+            "bestCandidateId": self.best_candidate_id,
+            "bestCandidateName": self.best_candidate_name,
+            "identityReferenceKind": self.identity_reference_kind,
             "candidateCount": len(self.candidates),
             "priceRange": [self.min_price, self.max_price],
             "expectedPrice": self.expected_price,
@@ -136,6 +144,7 @@ class WarehouseTemplateMatcher:
         self.catalog: List[Dict[str, Any]] = []
         self.catalog_by_shape_rarity: Dict[Tuple[str, str], List[Dict[str, Any]]] = {}
         self.templates: Dict[str, np.ndarray] = {}
+        self.derived_templates_by_id: Dict[str, Dict[str, Any]] = {}
         
         # 确定路径
         base_dir = os.path.dirname(os.path.abspath(__file__))
@@ -150,6 +159,13 @@ class WarehouseTemplateMatcher:
 
         self._load_catalog()
         self._load_templates()
+        try:
+            from visual_catalog import load_derived_warehouse_templates
+            self.derived_templates_by_id = load_derived_warehouse_templates()
+        except Exception:
+            # Derived references are optional and fail closed. Legacy matching
+            # remains available if the manifest or image bundle is unavailable.
+            self.derived_templates_by_id = {}
 
     def _load_catalog(self):
         if os.path.exists(self.catalog_path):
@@ -218,52 +234,95 @@ class WarehouseTemplateMatcher:
         严禁使用 candidates[0]！
         返回: (best_item, top1_score, margin_score)
         """
+        best, score, margin, evidence = self.match_candidate_evidence(roi_img, candidates, config)
+        if best is not None and evidence.get("accepted") and evidence.get("referenceKind") == "DIRECT":
+            return {key: value for key, value in best.items() if key != "_matchReferenceKind"}, score, margin
+        # A derived appearance is useful for candidate ranking only. It can
+        # never self-promote into the old exact-identity authorization.
+        return None, score, margin
+
+    def match_candidate_evidence(
+        self,
+        roi_img: np.ndarray,
+        candidates: List[Dict[str, Any]],
+        config: WarehouseVisionConfig,
+    ) -> Tuple[Optional[Dict[str, Any]], float, float, Dict[str, Any]]:
+        """Return the strict winner and its reference provenance.
+
+        DIRECT means the pre-existing legacy template path. DERIVED_UNVERIFIED
+        may rank a candidate, but the caller must keep it unresolved.
+        """
         if not candidates or roi_img is None or roi_img.size == 0:
-            return None, 0.0, 0.0
+            return None, 0.0, 0.0, {"referenceKind": "NONE", "accepted": False}
 
-        scores: List[Tuple[float, Dict[str, Any]]] = []
         roi_h, roi_w = roi_img.shape[:2]
-
-        for cand in candidates:
-            img_file = cand.get("File") or cand.get("ImageFile")
-            tpl = None
-            if img_file and img_file in self.templates:
-                tpl = self.templates[img_file]
-            
-            # 若无直接匹配的图片文件，尝试查找对应尺寸目录下的模板
-            if tpl is None:
-                cand_name = cand.get("Name", "")
-                for fname, t_img in self.templates.items():
-                    if cand_name in fname:
-                        tpl = t_img
-                        break
-
-            if tpl is not None:
+        scores: List[Tuple[float, Optional[float], int, Dict[str, Any]]] = []
+        for index, candidate in enumerate(candidates):
+            img_file = candidate.get("File") or candidate.get("ImageFile")
+            direct = self.templates.get(img_file) if img_file else None
+            if direct is None:
+                cand_name = str(candidate.get("Name") or "")
+                direct = next((image for filename, image in self.templates.items()
+                               if cand_name and cand_name in filename), None)
+            catalog_id = str(candidate.get("Id") or candidate.get("catalogId") or "")
+            derived_entry = self.derived_templates_by_id.get(catalog_id)
+            derived = derived_entry.get("image") if isinstance(derived_entry, dict) else None
+            direct_score = 0.0
+            derived_score: Optional[float] = None
+            for template, kind in ((direct, "DIRECT"), (derived, "DERIVED_UNVERIFIED")):
+                if template is None:
+                    continue
                 try:
-                    # 缩放模板至与 ROI 匹配尺寸
-                    tpl_resized = cv2.resize(tpl, (roi_w, roi_h))
-                    res = cv2.matchTemplate(roi_img, tpl_resized, cv2.TM_CCOEFF_NORMED)
-                    _, max_val, _, _ = cv2.minMaxLoc(res)
-                    scores.append((float(max_val), cand))
+                    resized = cv2.resize(template, (roi_w, roi_h))
+                    result = cv2.matchTemplate(roi_img, resized, cv2.TM_CCOEFF_NORMED)
+                    score = float(cv2.minMaxLoc(result)[1])
                 except Exception:
-                    scores.append((0.0, cand))
-            else:
-                scores.append((0.0, cand))
+                    continue
+                if kind == "DIRECT":
+                    direct_score = score
+                else:
+                    derived_score = score
+            scores.append((direct_score, derived_score, index, candidate))
 
-        scores.sort(key=lambda x: x[0], reverse=True)
+        # Preserve the pre-existing direct-template exact path byte-for-byte in
+        # its decision boundary. Derived images are considered only when the
+        # trusted direct templates do not already produce an exact result.
+        direct_ranked = sorted(scores, key=lambda row: (-row[0], row[2]))
+        direct_top = direct_ranked[0]
+        direct_second = direct_ranked[1][0] if len(direct_ranked) > 1 else 0.0
+        direct_margin = direct_top[0] - direct_second
+        if (direct_top[0] >= config.MATCH_CONFIDENCE_THRESHOLD
+                and direct_margin >= config.MATCH_MARGIN_THRESHOLD):
+            direct_item = direct_top[3]
+            return {**direct_item, "_matchReferenceKind": "DIRECT"}, direct_top[0], direct_margin, {
+                "referenceKind": "DIRECT",
+                "accepted": True,
+                "catalogId": str(direct_item.get("Id") or direct_item.get("catalogId") or ""),
+            }
+
+        combined_value = lambda row: max(row[0], row[1]) if row[1] is not None else row[0]
+        scores.sort(key=lambda row: (-combined_value(row), row[2]))
         if not scores:
-            return None, 0.0, 0.0
-
-        top1_score, top1_item = scores[0]
-        top2_score = scores[1][0] if len(scores) > 1 else 0.0
-        margin = top1_score - top2_score
-
-        # 严格置信度判定门槛
-        if top1_score >= config.MATCH_CONFIDENCE_THRESHOLD and margin >= config.MATCH_MARGIN_THRESHOLD:
-            return top1_item, top1_score, margin
-
-        # 未达门槛：拒绝盲猜，返回 None
-        return None, top1_score, margin
+            return None, 0.0, 0.0, {"referenceKind": "NONE", "accepted": False}
+        top_direct, top_derived, _, top_item = scores[0]
+        top_score = max(top_direct, top_derived) if top_derived is not None else top_direct
+        if top_derived is not None and top_derived > top_direct:
+            reference_kind = "DERIVED_UNVERIFIED"
+        elif top_direct > 0:
+            reference_kind = "DIRECT"
+        elif top_derived is not None and top_derived > 0:
+            reference_kind = "DERIVED_UNVERIFIED"
+        else:
+            reference_kind = "NONE"
+        second_score = combined_value(scores[1]) if len(scores) > 1 else 0.0
+        margin = top_score - second_score
+        accepted = top_score >= config.MATCH_CONFIDENCE_THRESHOLD and margin >= config.MATCH_MARGIN_THRESHOLD
+        evidence = {
+            "referenceKind": reference_kind,
+            "accepted": accepted,
+            "catalogId": str(top_item.get("Id") or top_item.get("catalogId") or ""),
+        }
+        return {**top_item, "_matchReferenceKind": reference_kind}, top_score, margin, evidence
 
 # ==============================================================================
 # 4. Warehouse Vision v1 主引擎与时序追踪器
@@ -1094,6 +1153,12 @@ class WarehouseVisionV1:
         unconfirmed = []
 
         for track_id, track in self.tracked_blobs.items():
+            track.identified_catalog_id = None
+            track.best_candidate_id = None
+            track.best_candidate_name = None
+            track.identity_reference_kind = None
+            track.match_score = 0.0
+            track.margin_score = 0.0
             # 没锁形状：只报品质，不按长宽检索图鉴（避免把未展示完的紫/红当成完整件）
             if not track.shape_locked:
                 track.candidates = []
@@ -1147,19 +1212,38 @@ class WarehouseVisionV1:
                 lh = min(crop.shape[0] - ly, track.box[3])
                 roi = crop[ly:ly+lh, lx:lx+lw]
 
-                best_item, top1_score, margin = self.matcher.match_candidates(roi, candidates, self.config)
+                best_item, top1_score, margin, evidence = self.matcher.match_candidate_evidence(
+                    roi, candidates, self.config
+                )
                 track.match_score = top1_score
                 track.margin_score = margin
 
-                if best_item is not None:
+                reference_kind = str(evidence.get("referenceKind") or "NONE")
+                best_candidate_id = str(evidence.get("catalogId") or "")
+                if best_item is not None and top1_score > 0:
+                    track.best_candidate_id = best_candidate_id or str(best_item.get("Id") or "") or None
+                    track.best_candidate_name = str(best_item.get("Name") or "") or None
+                    track.identity_reference_kind = reference_kind
+
+                if best_item is not None and evidence.get("accepted") and reference_kind == "DIRECT":
                     # 达高置信度门槛
                     track.evidence_level = EvidenceLevel.EXACT_IDENTIFIED
                     track.identified_item = best_item
+                    track.identified_catalog_id = str(best_item.get("Id") or best_item.get("catalogId") or "") or None
+                    track.identity_reference_kind = "DIRECT"
                     track.min_price = track.max_price = track.expected_price = best_item.get("Value", 0)
                 else:
                     # 无法可靠区分：严禁选 candidates[0]，忠实标记为 CANDIDATE_SET
                     track.evidence_level = EvidenceLevel.CANDIDATE_SET
                     track.identified_item = None
+                    if reference_kind == "DERIVED_UNVERIFIED" and best_item is not None:
+                        # Display the derived-reference rank as an unverified
+                        # candidate only; it is not an exact identity or solver fact.
+                        winner_id = str(best_item.get("Id") or best_item.get("catalogId") or "")
+                        track.candidates = sorted(
+                            candidates,
+                            key=lambda row: str(row.get("Id") or row.get("catalogId") or "") != winner_id,
+                        )
 
                 confirmed.append(track)
             else:

@@ -4279,6 +4279,14 @@ def _compact_warehouse_vision(ctx: Dict[str, Any]) -> Dict[str, Any]:
             "rarity": s.get("rarity"),
             "evidence": s.get("evidenceLevel") or s.get("evidence"),
             "size": s.get("size"),
+            "identityStatus": s.get("identityStatus"),
+            "identifiedName": s.get("identifiedName") if (
+                s.get("identityStatus") == "EXACT" and s.get("identityReferenceKind") == "DIRECT"
+            ) else None,
+            "bestCandidateName": s.get("bestCandidateName") if (
+                s.get("identityReferenceKind") == "DERIVED_UNVERIFIED"
+            ) else None,
+            "identityReferenceKind": s.get("identityReferenceKind"),
         })
     grid = wh.get("grid") or {}
     return {

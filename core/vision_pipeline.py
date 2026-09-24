@@ -352,6 +352,7 @@ class NTEVisionPipeline:
         if not self.match_trunk_dirty() and not self.current_context.get("settlementFinalized"):
             return False
         self._match_gen += 1
+        self._pending_heavy_identity = None
         self._match_active = False
         lobby_venue = self.current_context.get("lobbyVenue")
         self.current_context.update({
@@ -465,6 +466,7 @@ class NTEVisionPipeline:
         self.clear_match_trunk()
 
     def reset_session_state(self) -> None:
+        self._pending_heavy_identity = None
         if hasattr(self, "_acquisition_names"):
             self._acquisition_names.reset(None)
         self.current_context.pop("isAcquired", None)
@@ -862,6 +864,18 @@ class NTEVisionPipeline:
                 settlement[_qkey] = ledger[_qkey]
                 self.current_context[_qkey] = ledger[_qkey]
         self._stabilize_settlement(settlement, frame=frame, captured_at=captured_at)
+
+    def take_deferred_identity(self) -> Optional[Dict[str, Any]]:
+        """Transfer the deferred frame descriptor to an external bounded worker.
+
+        The caller must copy the pixels before releasing its frame ownership.
+        This method does not run recognition or mutate the pipeline context.
+        """
+        pending = self._pending_heavy_identity
+        self._pending_heavy_identity = None
+        if not isinstance(pending, dict):
+            return None
+        return dict(pending)
 
     def complete_heavy_identity(self) -> Optional[Dict[str, Any]]:
         """Finish warehouse/settlement identity deferred from process_frame."""
@@ -1534,6 +1548,10 @@ class NTEVisionPipeline:
                         "frame": frame,
                         "captured_at": captured_at,
                         "actual_total": actual_total,
+                        "round": self.current_context.get("round"),
+                        "scene": SCENE_SETTLEMENT,
+                        "matchGeneration": self._match_gen,
+                        "sessionGeneration": self._session_generation,
                     }
                     self._stabilize_settlement(settlement, frame=frame, captured_at=captured_at)
                 # Settlement returns before the in-auction warehouse block.
@@ -1954,7 +1972,15 @@ class NTEVisionPipeline:
                     wh_state = self.warehouse_vision.process_frame(frame)
                 self._apply_warehouse_state(wh_state)
             else:
-                self._pending_heavy_identity = {"kind": "warehouse", "frame": frame}
+                self._pending_heavy_identity = {
+                    "kind": "warehouse",
+                    "frame": frame,
+                    "captured_at": captured_at,
+                    "round": self.current_context.get("round"),
+                    "scene": SCENE_IN_AUCTION,
+                    "matchGeneration": self._match_gen,
+                    "sessionGeneration": self._session_generation,
+                }
         else:
             if self._warehouse_vision is not None:
                 self._warehouse_vision.reset()

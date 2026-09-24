@@ -1096,6 +1096,7 @@
     function clearWarehouseGrid() {
       for(let i=0; i<gridCells.length; i++) {
         gridCells[i].className = "grid-cell";
+        gridCells[i].title = "";
       }
     }
 
@@ -1112,11 +1113,22 @@
         const h = Math.max(1, Number(slot.h || 1));
         if(!Number.isFinite(col) || !Number.isFinite(row)) return;
         const klass = rarityClass(slot.rarity);
+        let identityHint = "";
+        if(slot.identityStatus === "EXACT" && slot.identityReferenceKind === "DIRECT" && slot.identifiedName) {
+          identityHint = `已由原始图鉴模板精确匹配：${slot.identifiedName}`;
+        } else if(slot.identityReferenceKind === "DERIVED_UNVERIFIED" && slot.bestCandidateName) {
+          identityHint = `候选外观参考（未经实局确证）：${slot.bestCandidateName}`;
+        } else if(slot.identityStatus === "CANDIDATE") {
+          identityHint = "候选集合，尚未精确确认";
+        }
+        const sizeHint = slot.size || (slot.w && slot.h ? `${slot.w}×${slot.h}` : "尺寸未知");
+        const tooltip = [slot.rarity || "品质未知", sizeHint, identityHint].filter(Boolean).join(" · ");
         for(let rr=row; rr<row+h && rr<rows; rr++) {
           for(let cc=col; cc<col+w && cc<cols; cc++) {
             const idx = rr * GRID_COLS + cc;
             if(idx >= 0 && idx < gridCells.length && klass) {
               gridCells[idx].className = "grid-cell " + klass;
+              gridCells[idx].title = tooltip;
             }
           }
         }

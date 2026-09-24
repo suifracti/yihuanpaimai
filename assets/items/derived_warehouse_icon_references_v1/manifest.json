@@ -1,0 +1,5300 @@
+{
+  "schemaVersion": "derived-warehouse-icon-references.v1",
+  "status": "DERIVED_UNVERIFIED",
+  "scope": "Predicted warehouse appearance from verified catalog sources and fit-group appearance transform; never raw gameplay evidence, never self-confirming identity, never solver-eligible by itself.",
+  "generator": "tools/generate_derived_warehouse_icon_references.py",
+  "officialCatalogPath": "assets/catalog_065.json",
+  "visualCatalogPath": "assets/items/visual_catalog_v2.json",
+  "includedSourceRecordCount": 89,
+  "exclusionSummary": {
+    "no_official_id": 12,
+    "official_identity_or_size_conflict": 6
+  },
+  "gameplaySourceGroups": [
+    {
+      "catalogId": "image18-0-1",
+      "groupId": "video_audit_20260908_134436_match2",
+      "groundTruthPath": "assets/items/video_ground_truth_reference_134436_match2_visible.json",
+      "referenceId": "ref_134436_match2_visible_01",
+      "localCropPath": "assets/items/ground_truth_reference_134436_match2_visible/ref_134436_match2_visible_01.png",
+      "cropSha256": "d3b2e91b2440bf51579cc7b20059756a7a0cecd4425a9b6b8ae3d806679e4384",
+      "cropShaWasDeclared": true,
+      "gameSourceFrameTimeSec": null,
+      "gameSourceFramePath": "build/codex_other_video_20260912/desktop-timeline/frame-550.png",
+      "gameSourceBbox": [
+        1091,
+        310,
+        1175,
+        436
+      ]
+    },
+    {
+      "catalogId": "visual-65250f2f6c5a",
+      "groupId": "video_audit_20260908_134436_match2",
+      "groundTruthPath": "assets/items/video_ground_truth_reference_134436_match2_visible.json",
+      "referenceId": "ref_134436_match2_visible_02",
+      "localCropPath": "assets/items/ground_truth_reference_134436_match2_visible/ref_134436_match2_visible_02.png",
+      "cropSha256": "0012c88b68b5d8dccc86cb85a395697c7627a718dc2d55cdbb404526e1a23af2",
+      "cropShaWasDeclared": true,
+      "gameSourceFrameTimeSec": null,
+      "gameSourceFramePath": "build/codex_other_video_20260912/desktop-timeline/frame-550.png",
+      "gameSourceBbox": [
+        1175,
+        310,
+        1259,
+        352
+      ]
+    },
+    {
+      "catalogId": "image24-0-0",
+      "groupId": "video_audit_20260908_134436_match2",
+      "groundTruthPath": "assets/items/video_ground_truth_reference_134436_match2_visible.json",
+      "referenceId": "ref_134436_match2_visible_03",
+      "localCropPath": "assets/items/ground_truth_reference_134436_match2_visible/ref_134436_match2_visible_03.png",
+      "cropSha256": "b45b4f8afd3a85ac5512efb35614e77061df2bcce63d52cc6988eb2a27e2c018",
+      "cropShaWasDeclared": true,
+      "gameSourceFrameTimeSec": null,
+      "gameSourceFramePath": "build/codex_other_video_20260912/desktop-timeline/frame-550.png",
+      "gameSourceBbox": [
+        1175,
+        352,
+        1217,
+        394
+      ]
+    },
+    {
+      "catalogId": "image16-0-1",
+      "groupId": "video_audit_20260908_134436_match2",
+      "groundTruthPath": "assets/items/video_ground_truth_reference_134436_match2_visible.json",
+      "referenceId": "ref_134436_match2_visible_04",
+      "localCropPath": "assets/items/ground_truth_reference_134436_match2_visible/ref_134436_match2_visible_04.png",
+      "cropSha256": "d2f20504fa60bdda13728a06ff312611c70a8a4bfc6e9f2084cbcac0616d7909",
+      "cropShaWasDeclared": true,
+      "gameSourceFrameTimeSec": null,
+      "gameSourceFramePath": "build/codex_other_video_20260912/desktop-timeline/frame-550.png",
+      "gameSourceBbox": [
+        1217,
+        352,
+        1259,
+        394
+      ]
+    },
+    {
+      "catalogId": "image22-1-2",
+      "groupId": "video_audit_20260908_134436_match2",
+      "groundTruthPath": "assets/items/video_ground_truth_reference_134436_match2_visible.json",
+      "referenceId": "ref_134436_match2_visible_05",
+      "localCropPath": "assets/items/ground_truth_reference_134436_match2_visible/ref_134436_match2_visible_05.png",
+      "cropSha256": "c9951ec96b1d196d154e535de4b41d8ef185aad4da5b3c9e7113ff8e904f1581",
+      "cropShaWasDeclared": true,
+      "gameSourceFrameTimeSec": null,
+      "gameSourceFramePath": "build/codex_other_video_20260912/desktop-timeline/frame-550.png",
+      "gameSourceBbox": [
+        1259,
+        310,
+        1301,
+        394
+      ]
+    },
+    {
+      "catalogId": "image29-1-0",
+      "groupId": "video_audit_20260908_134436_match2",
+      "groundTruthPath": "assets/items/video_ground_truth_reference_134436_match2_visible.json",
+      "referenceId": "ref_134436_match2_visible_06",
+      "localCropPath": "assets/items/ground_truth_reference_134436_match2_visible/ref_134436_match2_visible_06.png",
+      "cropSha256": "e1c13a1ab225e7bf4d8bc729317e6139c2a95c129289de193aec8c46b82cd527",
+      "cropShaWasDeclared": true,
+      "gameSourceFrameTimeSec": null,
+      "gameSourceFramePath": "build/codex_other_video_20260912/desktop-timeline/frame-550.png",
+      "gameSourceBbox": [
+        1301,
+        310,
+        1427,
+        352
+      ]
+    },
+    {
+      "catalogId": "image6-1-0",
+      "groupId": "video_audit_20260908_134436_match2",
+      "groundTruthPath": "assets/items/video_ground_truth_reference_134436_match2_visible.json",
+      "referenceId": "ref_134436_match2_visible_07",
+      "localCropPath": "assets/items/ground_truth_reference_134436_match2_visible/ref_134436_match2_visible_07.png",
+      "cropSha256": "6d024ddacded24c9680fd190ef6e541fd5f0b2f516514cf67a2646213340349e",
+      "cropShaWasDeclared": true,
+      "gameSourceFrameTimeSec": null,
+      "gameSourceFramePath": "build/codex_other_video_20260912/desktop-timeline/frame-550.png",
+      "gameSourceBbox": [
+        1427,
+        310,
+        1511,
+        352
+      ]
+    },
+    {
+      "catalogId": "image30-1-2",
+      "groupId": "video_audit_20260908_134436_match2",
+      "groundTruthPath": "assets/items/video_ground_truth_reference_134436_match2_visible.json",
+      "referenceId": "ref_134436_match2_visible_08",
+      "localCropPath": "assets/items/ground_truth_reference_134436_match2_visible/ref_134436_match2_visible_08.png",
+      "cropSha256": "c1c4bdc42bfd442058d1e2cb4501dcfb0267d35c9a8615b5aeed55155efc6354",
+      "cropShaWasDeclared": true,
+      "gameSourceFrameTimeSec": null,
+      "gameSourceFramePath": "build/codex_other_video_20260912/desktop-timeline/frame-550.png",
+      "gameSourceBbox": [
+        1301,
+        352,
+        1385,
+        436
+      ]
+    },
+    {
+      "catalogId": "image30-1-2",
+      "groupId": "video_audit_20260908_134436_match2",
+      "groundTruthPath": "assets/items/video_ground_truth_reference_134436_match2_visible.json",
+      "referenceId": "ref_134436_match2_visible_09",
+      "localCropPath": "assets/items/ground_truth_reference_134436_match2_visible/ref_134436_match2_visible_09.png",
+      "cropSha256": "cd20e19b527784acff01fc5539f63d52e3d939a01635fb28891b0ed33debc552",
+      "cropShaWasDeclared": true,
+      "gameSourceFrameTimeSec": null,
+      "gameSourceFramePath": "build/codex_other_video_20260912/desktop-timeline/frame-550.png",
+      "gameSourceBbox": [
+        1385,
+        352,
+        1469,
+        436
+      ]
+    },
+    {
+      "catalogId": "image2-0-0",
+      "groupId": "video_audit_20260908_134436_match2",
+      "groundTruthPath": "assets/items/video_ground_truth_reference_134436_match2_visible.json",
+      "referenceId": "ref_134436_match2_visible_10",
+      "localCropPath": "assets/items/ground_truth_reference_134436_match2_visible/ref_134436_match2_visible_10.png",
+      "cropSha256": "c6a8d4a7c4c642079f0d80c3d7964d9693aa1765a01fcbbf2d5308ed9cbf229c",
+      "cropShaWasDeclared": true,
+      "gameSourceFrameTimeSec": null,
+      "gameSourceFramePath": "build/codex_other_video_20260912/desktop-timeline/frame-550.png",
+      "gameSourceBbox": [
+        1469,
+        352,
+        1511,
+        436
+      ]
+    },
+    {
+      "catalogId": "image20-0-2",
+      "groupId": "video_audit_20260908_134436_match2",
+      "groundTruthPath": "assets/items/video_ground_truth_reference_134436_match2_visible.json",
+      "referenceId": "ref_134436_match2_visible_11",
+      "localCropPath": "assets/items/ground_truth_reference_134436_match2_visible/ref_134436_match2_visible_11.png",
+      "cropSha256": "c4cadbf56f00d79d1150496a9bae6bc5281ae72cae487dd067be64bc03b5c223",
+      "cropShaWasDeclared": true,
+      "gameSourceFrameTimeSec": null,
+      "gameSourceFramePath": "build/codex_other_video_20260912/desktop-timeline/frame-550.png",
+      "gameSourceBbox": [
+        1175,
+        394,
+        1259,
+        436
+      ]
+    },
+    {
+      "catalogId": "image3-1-1",
+      "groupId": "video_audit_20260908_134436_match2",
+      "groundTruthPath": "assets/items/video_ground_truth_reference_134436_match2_visible.json",
+      "referenceId": "ref_134436_match2_visible_12",
+      "localCropPath": "assets/items/ground_truth_reference_134436_match2_visible/ref_134436_match2_visible_12.png",
+      "cropSha256": "cc5d93e07a20af72ffde4f04cf8763d830364c873aeec0ff2a4e59347bf20ff7",
+      "cropShaWasDeclared": true,
+      "gameSourceFrameTimeSec": null,
+      "gameSourceFramePath": "build/codex_other_video_20260912/desktop-timeline/frame-550.png",
+      "gameSourceBbox": [
+        1259,
+        394,
+        1301,
+        436
+      ]
+    },
+    {
+      "catalogId": "image30-1-0",
+      "groupId": "video_audit_20260908_134436_match2",
+      "groundTruthPath": "assets/items/video_ground_truth_reference_134436_match2_visible.json",
+      "referenceId": "ref_134436_match2_visible_13",
+      "localCropPath": "assets/items/ground_truth_reference_134436_match2_visible/ref_134436_match2_visible_13.png",
+      "cropSha256": "34f184fe13d62ecd6660a5118475db54ce956c45a4d3f3dc0a06accf97c75fad",
+      "cropShaWasDeclared": true,
+      "gameSourceFrameTimeSec": null,
+      "gameSourceFramePath": "build/codex_other_video_20260912/desktop-timeline/frame-550.png",
+      "gameSourceBbox": [
+        1091,
+        436,
+        1217,
+        478
+      ]
+    },
+    {
+      "catalogId": "image2-1-2",
+      "groupId": "video_audit_20260908_134436_match2",
+      "groundTruthPath": "assets/items/video_ground_truth_reference_134436_match2_visible.json",
+      "referenceId": "ref_134436_match2_visible_14",
+      "localCropPath": "assets/items/ground_truth_reference_134436_match2_visible/ref_134436_match2_visible_14.png",
+      "cropSha256": "da16d29a2c85cfa17ab31e9c512d7b0d17a1e5b99e8383b9920a355dd5340ceb",
+      "cropShaWasDeclared": true,
+      "gameSourceFrameTimeSec": null,
+      "gameSourceFramePath": "build/codex_other_video_20260912/desktop-timeline/frame-550.png",
+      "gameSourceBbox": [
+        1217,
+        436,
+        1259,
+        478
+      ]
+    },
+    {
+      "catalogId": "image1-1-0",
+      "groupId": "video_audit_20260908_134436_match2",
+      "groundTruthPath": "assets/items/video_ground_truth_reference_134436_match2_visible.json",
+      "referenceId": "ref_134436_match2_visible_15",
+      "localCropPath": "assets/items/ground_truth_reference_134436_match2_visible/ref_134436_match2_visible_15.png",
+      "cropSha256": "bb841fc49d30355aa9b27a44a3b0d1f061d0cc5f68ed280b7d6840fbef5cb988",
+      "cropShaWasDeclared": true,
+      "gameSourceFrameTimeSec": null,
+      "gameSourceFramePath": "build/codex_other_video_20260912/desktop-timeline/frame-550.png",
+      "gameSourceBbox": [
+        1259,
+        436,
+        1343,
+        520
+      ]
+    },
+    {
+      "catalogId": "image2-0-0",
+      "groupId": "video_audit_20260908_134436_match2",
+      "groundTruthPath": "assets/items/video_ground_truth_reference_134436_match2_visible.json",
+      "referenceId": "ref_134436_match2_visible_16",
+      "localCropPath": "assets/items/ground_truth_reference_134436_match2_visible/ref_134436_match2_visible_16.png",
+      "cropSha256": "3cb4bdcbcf41b0da1e0baa879270e8b300dfce4bb07e3f5f1260995413c32d78",
+      "cropShaWasDeclared": true,
+      "gameSourceFrameTimeSec": null,
+      "gameSourceFramePath": "build/codex_other_video_20260912/desktop-timeline/frame-550.png",
+      "gameSourceBbox": [
+        1343,
+        436,
+        1385,
+        520
+      ]
+    },
+    {
+      "catalogId": "image2-0-0",
+      "groupId": "video_audit_20260908_134436_match2",
+      "groundTruthPath": "assets/items/video_ground_truth_reference_134436_match2_visible.json",
+      "referenceId": "ref_134436_match2_visible_17",
+      "localCropPath": "assets/items/ground_truth_reference_134436_match2_visible/ref_134436_match2_visible_17.png",
+      "cropSha256": "747033770255ff0e6c2c4613ae90ab944aaf66fc19e015312cd74a45dcbbd68f",
+      "cropShaWasDeclared": true,
+      "gameSourceFrameTimeSec": null,
+      "gameSourceFramePath": "build/codex_other_video_20260912/desktop-timeline/frame-550.png",
+      "gameSourceBbox": [
+        1385,
+        436,
+        1427,
+        520
+      ]
+    },
+    {
+      "catalogId": "image2-1-0",
+      "groupId": "video_audit_20260908_134436_match2",
+      "groundTruthPath": "assets/items/video_ground_truth_reference_134436_match2_visible.json",
+      "referenceId": "ref_134436_match2_visible_18",
+      "localCropPath": "assets/items/ground_truth_reference_134436_match2_visible/ref_134436_match2_visible_18.png",
+      "cropSha256": "cc633b761c902c25c3763fcac20e300115e4f766ad39c455e61e33bb5aa4a725",
+      "cropShaWasDeclared": true,
+      "gameSourceFrameTimeSec": null,
+      "gameSourceFramePath": "build/codex_other_video_20260912/desktop-timeline/frame-550.png",
+      "gameSourceBbox": [
+        1427,
+        436,
+        1469,
+        520
+      ]
+    },
+    {
+      "catalogId": "image9-1-2",
+      "groupId": "video_audit_20260908_134436_match2",
+      "groundTruthPath": "assets/items/video_ground_truth_reference_134436_match2_visible.json",
+      "referenceId": "ref_134436_match2_visible_19",
+      "localCropPath": "assets/items/ground_truth_reference_134436_match2_visible/ref_134436_match2_visible_19.png",
+      "cropSha256": "758d615d9c33d36aa00f8b127943504c2da9da9dad9e4c13bcd113de55829f4e",
+      "cropShaWasDeclared": true,
+      "gameSourceFrameTimeSec": null,
+      "gameSourceFramePath": "build/codex_other_video_20260912/desktop-timeline/frame-550.png",
+      "gameSourceBbox": [
+        1469,
+        436,
+        1511,
+        478
+      ]
+    },
+    {
+      "catalogId": "image2-1-2",
+      "groupId": "video_audit_20260908_134436_match2",
+      "groundTruthPath": "assets/items/video_ground_truth_reference_134436_match2_visible.json",
+      "referenceId": "ref_134436_match2_visible_20",
+      "localCropPath": "assets/items/ground_truth_reference_134436_match2_visible/ref_134436_match2_visible_20.png",
+      "cropSha256": "1739d1b5b455d4a68ce198e38c91795248970b1f2f38144d7f1cede81771b237",
+      "cropShaWasDeclared": true,
+      "gameSourceFrameTimeSec": null,
+      "gameSourceFramePath": "build/codex_other_video_20260912/desktop-timeline/frame-550.png",
+      "gameSourceBbox": [
+        1469,
+        478,
+        1511,
+        520
+      ]
+    },
+    {
+      "catalogId": "image22-1-1",
+      "groupId": "video_audit_20260908_134436_match2",
+      "groundTruthPath": "assets/items/video_ground_truth_reference_134436_match2_visible.json",
+      "referenceId": "ref_134436_match2_visible_21",
+      "localCropPath": "assets/items/ground_truth_reference_134436_match2_visible/ref_134436_match2_visible_21.png",
+      "cropSha256": "8481851583f4afd5335a25ffcc64df4e9fdad27e7239ce002453de18d8d75f4e",
+      "cropShaWasDeclared": true,
+      "gameSourceFrameTimeSec": null,
+      "gameSourceFramePath": "build/codex_other_video_20260912/desktop-timeline/frame-550.png",
+      "gameSourceBbox": [
+        1091,
+        478,
+        1133,
+        562
+      ]
+    },
+    {
+      "catalogId": "image29-0-0",
+      "groupId": "video_audit_20260908_134436_match2",
+      "groundTruthPath": "assets/items/video_ground_truth_reference_134436_match2_visible.json",
+      "referenceId": "ref_134436_match2_visible_22",
+      "localCropPath": "assets/items/ground_truth_reference_134436_match2_visible/ref_134436_match2_visible_22.png",
+      "cropSha256": "a838bd3337eae386ccd407373e628635e006736fed2ee400eaf446cd1b57e426",
+      "cropShaWasDeclared": true,
+      "gameSourceFrameTimeSec": null,
+      "gameSourceFramePath": "build/codex_other_video_20260912/desktop-timeline/frame-550.png",
+      "gameSourceBbox": [
+        1133,
+        478,
+        1259,
+        520
+      ]
+    },
+    {
+      "catalogId": "image34-0-0",
+      "groupId": "video_audit_20260908_134436_match2",
+      "groundTruthPath": "assets/items/video_ground_truth_reference_134436_match2_visible.json",
+      "referenceId": "ref_134436_match2_visible_23",
+      "localCropPath": "assets/items/ground_truth_reference_134436_match2_visible/ref_134436_match2_visible_23.png",
+      "cropSha256": "0fc5b1418adbe3434400c1aaff84d106f4174c90a7839eda1765667033d4397d",
+      "cropShaWasDeclared": true,
+      "gameSourceFrameTimeSec": null,
+      "gameSourceFramePath": "build/codex_other_video_20260912/desktop-timeline/frame-550.png",
+      "gameSourceBbox": [
+        1133,
+        520,
+        1259,
+        646
+      ]
+    },
+    {
+      "catalogId": "image12-0-0",
+      "groupId": "video_ground_truth_reference_144037",
+      "groundTruthPath": "assets/items/video_ground_truth_reference_144037.json",
+      "referenceId": "ref_144037_01",
+      "localCropPath": "assets/items/ground_truth_reference_144037/ref_144037_01.png",
+      "cropSha256": "c34e0292818c11fe6a37079b0eb3c2d3af47a837546fa4cb1a0a07a3e43f8c50",
+      "cropShaWasDeclared": false,
+      "gameSourceFrameTimeSec": 158.0,
+      "gameSourceFramePath": null,
+      "gameSourceBbox": [
+        0,
+        0,
+        150,
+        225
+      ]
+    },
+    {
+      "catalogId": "image11-0-1",
+      "groupId": "video_ground_truth_reference_144037",
+      "groundTruthPath": "assets/items/video_ground_truth_reference_144037.json",
+      "referenceId": "ref_144037_02",
+      "localCropPath": "assets/items/ground_truth_reference_144037/ref_144037_02.png",
+      "cropSha256": "4baee8f871eabc6f64da67a459a15808332e9c9b483e22b27cd92ff236f0f136",
+      "cropShaWasDeclared": false,
+      "gameSourceFrameTimeSec": 158.0,
+      "gameSourceFramePath": null,
+      "gameSourceBbox": [
+        150,
+        0,
+        225,
+        225
+      ]
+    },
+    {
+      "catalogId": "image9-0-2",
+      "groupId": "video_ground_truth_reference_144037",
+      "groundTruthPath": "assets/items/video_ground_truth_reference_144037.json",
+      "referenceId": "ref_144037_03",
+      "localCropPath": "assets/items/ground_truth_reference_144037/ref_144037_03.png",
+      "cropSha256": "6047cd06fa9c932fc2d7e3241a491cce2853ae4e9483789a6698f375c4619c31",
+      "cropShaWasDeclared": false,
+      "gameSourceFrameTimeSec": 158.0,
+      "gameSourceFramePath": null,
+      "gameSourceBbox": [
+        225,
+        0,
+        300,
+        75
+      ]
+    },
+    {
+      "catalogId": "image8-1-1",
+      "groupId": "video_ground_truth_reference_144037",
+      "groundTruthPath": "assets/items/video_ground_truth_reference_144037.json",
+      "referenceId": "ref_144037_04",
+      "localCropPath": "assets/items/ground_truth_reference_144037/ref_144037_04.png",
+      "cropSha256": "a629160e00acf7b9e8e40e6a43557206972e08fa75ca6897e8a04f42f452899c",
+      "cropShaWasDeclared": false,
+      "gameSourceFrameTimeSec": 158.0,
+      "gameSourceFramePath": null,
+      "gameSourceBbox": [
+        300,
+        0,
+        375,
+        75
+      ]
+    },
+    {
+      "catalogId": "image14-0-2",
+      "groupId": "video_ground_truth_reference_144037",
+      "groundTruthPath": "assets/items/video_ground_truth_reference_144037.json",
+      "referenceId": "ref_144037_05",
+      "localCropPath": "assets/items/ground_truth_reference_144037/ref_144037_05.png",
+      "cropSha256": "739fe6175a355286c35747b437c31c44fd1a634a4fbc977c0745b0b56ebe02fc",
+      "cropShaWasDeclared": false,
+      "gameSourceFrameTimeSec": 158.0,
+      "gameSourceFramePath": null,
+      "gameSourceBbox": [
+        375,
+        0,
+        525,
+        75
+      ]
+    },
+    {
+      "catalogId": "image16-0-0",
+      "groupId": "video_ground_truth_reference_144037",
+      "groundTruthPath": "assets/items/video_ground_truth_reference_144037.json",
+      "referenceId": "ref_144037_06",
+      "localCropPath": "assets/items/ground_truth_reference_144037/ref_144037_06.png",
+      "cropSha256": "946ed3c927646ce72857dccbec760665f28da0a6df6f3ef37f27927d477294c1",
+      "cropShaWasDeclared": false,
+      "gameSourceFrameTimeSec": 158.0,
+      "gameSourceFramePath": null,
+      "gameSourceBbox": [
+        525,
+        0,
+        600,
+        75
+      ]
+    },
+    {
+      "catalogId": "image7-0-0",
+      "groupId": "video_ground_truth_reference_144037",
+      "groundTruthPath": "assets/items/video_ground_truth_reference_144037.json",
+      "referenceId": "ref_144037_07",
+      "localCropPath": "assets/items/ground_truth_reference_144037/ref_144037_07.png",
+      "cropSha256": "585d6475c3d4a2c52553594d10e49a20232be29f91a184a656cccee052da1716",
+      "cropShaWasDeclared": false,
+      "gameSourceFrameTimeSec": 158.0,
+      "gameSourceFramePath": null,
+      "gameSourceBbox": [
+        600,
+        0,
+        750,
+        75
+      ]
+    },
+    {
+      "catalogId": "image10-1-0",
+      "groupId": "video_ground_truth_reference_144037",
+      "groundTruthPath": "assets/items/video_ground_truth_reference_144037.json",
+      "referenceId": "ref_144037_08",
+      "localCropPath": "assets/items/ground_truth_reference_144037/ref_144037_08.png",
+      "cropSha256": "bd3168cc32b16ae692449cc732651732c429ef6ed5920c7f51c700793bf82f45",
+      "cropShaWasDeclared": false,
+      "gameSourceFrameTimeSec": 158.0,
+      "gameSourceFramePath": null,
+      "gameSourceBbox": [
+        225,
+        75,
+        450,
+        300
+      ]
+    },
+    {
+      "catalogId": "image34-0-1",
+      "groupId": "video_ground_truth_reference_144037",
+      "groundTruthPath": "assets/items/video_ground_truth_reference_144037.json",
+      "referenceId": "ref_144037_09",
+      "localCropPath": "assets/items/ground_truth_reference_144037/ref_144037_09.png",
+      "cropSha256": "b02dba4abd7b79315ae164ac8d17cb0c879296cf3773266984a521654c14e877",
+      "cropShaWasDeclared": false,
+      "gameSourceFrameTimeSec": 158.0,
+      "gameSourceFramePath": null,
+      "gameSourceBbox": [
+        450,
+        75,
+        675,
+        300
+      ]
+    },
+    {
+      "catalogId": "image24-1-2",
+      "groupId": "video_ground_truth_reference_144037",
+      "groundTruthPath": "assets/items/video_ground_truth_reference_144037.json",
+      "referenceId": "ref_144037_10",
+      "localCropPath": "assets/items/ground_truth_reference_144037/ref_144037_10.png",
+      "cropSha256": "97b9d77a410682db02ff392442f4b2bdce5f374da0659fc6a6da5594f5614425",
+      "cropShaWasDeclared": false,
+      "gameSourceFrameTimeSec": 158.0,
+      "gameSourceFramePath": null,
+      "gameSourceBbox": [
+        675,
+        75,
+        750,
+        150
+      ]
+    },
+    {
+      "catalogId": "visual-latiao-1x2",
+      "groupId": "video_ground_truth_reference_144037",
+      "groundTruthPath": "assets/items/video_ground_truth_reference_144037.json",
+      "referenceId": "ref_144037_11",
+      "localCropPath": "assets/items/ground_truth_reference_144037/ref_144037_11.png",
+      "cropSha256": "434ed9010d808af71824d2de5dea7f1179b32cd3ad5be06f6941daa5e1f610f7",
+      "cropShaWasDeclared": false,
+      "gameSourceFrameTimeSec": 158.0,
+      "gameSourceFramePath": null,
+      "gameSourceBbox": [
+        675,
+        150,
+        750,
+        300
+      ]
+    },
+    {
+      "catalogId": "image20-0-1",
+      "groupId": "video_ground_truth_reference_144037",
+      "groundTruthPath": "assets/items/video_ground_truth_reference_144037.json",
+      "referenceId": "ref_144037_12",
+      "localCropPath": "assets/items/ground_truth_reference_144037/ref_144037_12.png",
+      "cropSha256": "c47f773a76fe2f798599a8adf8e7d4ce66a68046f2ec9128ba14829d2d0a3b2c",
+      "cropShaWasDeclared": false,
+      "gameSourceFrameTimeSec": 158.0,
+      "gameSourceFramePath": null,
+      "gameSourceBbox": [
+        0,
+        225,
+        150,
+        375
+      ]
+    },
+    {
+      "catalogId": "image9-0-1",
+      "groupId": "video_ground_truth_reference_144037",
+      "groundTruthPath": "assets/items/video_ground_truth_reference_144037.json",
+      "referenceId": "ref_144037_13",
+      "localCropPath": "assets/items/ground_truth_reference_144037/ref_144037_13.png",
+      "cropSha256": "2b8e8697941f1e324b60884a83a2521d41d20ab1efec0e32b0f325c2aca3d473",
+      "cropShaWasDeclared": false,
+      "gameSourceFrameTimeSec": 158.0,
+      "gameSourceFramePath": null,
+      "gameSourceBbox": [
+        150,
+        225,
+        225,
+        300
+      ]
+    },
+    {
+      "catalogId": "image30-0-0",
+      "groupId": "video_ground_truth_reference_144037",
+      "groundTruthPath": "assets/items/video_ground_truth_reference_144037.json",
+      "referenceId": "ref_144037_14",
+      "localCropPath": "assets/items/ground_truth_reference_144037/ref_144037_14.png",
+      "cropSha256": "352f6e7f3f98a9802ae6024f0d4d406cea605496858b524ead4056ab8ea1535e",
+      "cropShaWasDeclared": false,
+      "gameSourceFrameTimeSec": 158.0,
+      "gameSourceFramePath": null,
+      "gameSourceBbox": [
+        150,
+        300,
+        300,
+        450
+      ]
+    },
+    {
+      "catalogId": "image5-1-0",
+      "groupId": "video_ground_truth_reference_144037",
+      "groundTruthPath": "assets/items/video_ground_truth_reference_144037.json",
+      "referenceId": "ref_144037_15",
+      "localCropPath": "assets/items/ground_truth_reference_144037/ref_144037_15.png",
+      "cropSha256": "76ebcf6ac086ade9e6cf28a7b14e588a72e4e0443895002b4ceb50491589d092",
+      "cropShaWasDeclared": false,
+      "gameSourceFrameTimeSec": 158.0,
+      "gameSourceFramePath": null,
+      "gameSourceBbox": [
+        300,
+        300,
+        525,
+        375
+      ]
+    },
+    {
+      "catalogId": "visual-922c073c366d",
+      "groupId": "video_ground_truth_reference_144037",
+      "groundTruthPath": "assets/items/video_ground_truth_reference_144037.json",
+      "referenceId": "ref_144037_16",
+      "localCropPath": "assets/items/ground_truth_reference_144037/ref_144037_16.png",
+      "cropSha256": "6fe55f78a54b2e32d2adeb3a41128179e8f88859ceddbdeb0fed1b14611ebb2d",
+      "cropShaWasDeclared": false,
+      "gameSourceFrameTimeSec": 158.0,
+      "gameSourceFramePath": null,
+      "gameSourceBbox": [
+        525,
+        300,
+        675,
+        375
+      ]
+    },
+    {
+      "catalogId": "image15-0-1",
+      "groupId": "video_ground_truth_reference_144037",
+      "groundTruthPath": "assets/items/video_ground_truth_reference_144037.json",
+      "referenceId": "ref_144037_17",
+      "localCropPath": "assets/items/ground_truth_reference_144037/ref_144037_17.png",
+      "cropSha256": "6b84c060ef5ab37c1e1c8d9d34616592d976e9abc2d4faeadca048acf9075c95",
+      "cropShaWasDeclared": false,
+      "gameSourceFrameTimeSec": 158.0,
+      "gameSourceFramePath": null,
+      "gameSourceBbox": [
+        675,
+        300,
+        750,
+        375
+      ]
+    },
+    {
+      "catalogId": "image22-0-2",
+      "groupId": "video_ground_truth_reference_144037",
+      "groundTruthPath": "assets/items/video_ground_truth_reference_144037.json",
+      "referenceId": "ref_144037_18",
+      "localCropPath": "assets/items/ground_truth_reference_144037/ref_144037_18.png",
+      "cropSha256": "cfeea36a1fe05633380ac009a2abe98c0a6f357e5b097657bece3ff7fb9da668",
+      "cropShaWasDeclared": false,
+      "gameSourceFrameTimeSec": 158.0,
+      "gameSourceFramePath": null,
+      "gameSourceBbox": [
+        0,
+        375,
+        150,
+        450
+      ]
+    },
+    {
+      "catalogId": "image30-0-1",
+      "groupId": "video_ground_truth_reference_144037",
+      "groundTruthPath": "assets/items/video_ground_truth_reference_144037.json",
+      "referenceId": "ref_144037_19",
+      "localCropPath": "assets/items/ground_truth_reference_144037/ref_144037_19.png",
+      "cropSha256": "794fbce5622d4e7bdf871325b304ef6b444ffa58c57dc3d5afda4d1521d72b2b",
+      "cropShaWasDeclared": false,
+      "gameSourceFrameTimeSec": 160.0,
+      "gameSourceFramePath": null,
+      "gameSourceBbox": [
+        300,
+        375,
+        450,
+        525
+      ]
+    },
+    {
+      "catalogId": "image3-0-1",
+      "groupId": "video_ground_truth_reference_144037",
+      "groundTruthPath": "assets/items/video_ground_truth_reference_144037.json",
+      "referenceId": "ref_144037_20",
+      "localCropPath": "assets/items/ground_truth_reference_144037/ref_144037_20.png",
+      "cropSha256": "a0cb9a46a0d08dac4ec65d6b88210314ca6b7828caf175395bf5fcdb167d50af",
+      "cropShaWasDeclared": false,
+      "gameSourceFrameTimeSec": 160.0,
+      "gameSourceFramePath": null,
+      "gameSourceBbox": [
+        450,
+        375,
+        525,
+        450
+      ]
+    },
+    {
+      "catalogId": "visual-9607b248bbf4",
+      "groupId": "video_ground_truth_reference_144037",
+      "groundTruthPath": "assets/items/video_ground_truth_reference_144037.json",
+      "referenceId": "ref_144037_21",
+      "localCropPath": "assets/items/ground_truth_reference_144037/ref_144037_21.png",
+      "cropSha256": "115572fe24a623bc3448eac340f32703a09bd077d10eb0efbf18cae08593d23a",
+      "cropShaWasDeclared": false,
+      "gameSourceFrameTimeSec": 160.0,
+      "gameSourceFramePath": null,
+      "gameSourceBbox": [
+        525,
+        375,
+        600,
+        450
+      ]
+    },
+    {
+      "catalogId": "image1-0-0",
+      "groupId": "video_ground_truth_reference_144037",
+      "groundTruthPath": "assets/items/video_ground_truth_reference_144037.json",
+      "referenceId": "ref_144037_22",
+      "localCropPath": "assets/items/ground_truth_reference_144037/ref_144037_22.png",
+      "cropSha256": "34bf4c2e57455addd46a9a277f3afe061c46e769557441aa865ba56168f9a325",
+      "cropShaWasDeclared": false,
+      "gameSourceFrameTimeSec": 160.0,
+      "gameSourceFramePath": null,
+      "gameSourceBbox": [
+        600,
+        375,
+        750,
+        600
+      ]
+    },
+    {
+      "catalogId": "image5-0-0",
+      "groupId": "video_ground_truth_reference_144037",
+      "groundTruthPath": "assets/items/video_ground_truth_reference_144037.json",
+      "referenceId": "ref_144037_23",
+      "localCropPath": "assets/items/ground_truth_reference_144037/ref_144037_23.png",
+      "cropSha256": "99b729fa04fe850ef6015aacb89671e730e05058cbe24349a2b9b6b74d9712b2",
+      "cropShaWasDeclared": false,
+      "gameSourceFrameTimeSec": 160.0,
+      "gameSourceFramePath": null,
+      "gameSourceBbox": [
+        0,
+        450,
+        300,
+        750
+      ]
+    },
+    {
+      "catalogId": "image23-1-1",
+      "groupId": "video_ground_truth_reference_144037",
+      "groundTruthPath": "assets/items/video_ground_truth_reference_144037.json",
+      "referenceId": "ref_144037_24",
+      "localCropPath": "assets/items/ground_truth_reference_144037/ref_144037_24.png",
+      "cropSha256": "6ccb2b9f2efd85e03fbdd337bdee6e4bbb8163ddcfb54a9fd4c323daf0900765",
+      "cropShaWasDeclared": false,
+      "gameSourceFrameTimeSec": 160.0,
+      "gameSourceFramePath": null,
+      "gameSourceBbox": [
+        450,
+        450,
+        525,
+        525
+      ]
+    },
+    {
+      "catalogId": "image31-1-2",
+      "groupId": "video_ground_truth_reference_144037",
+      "groundTruthPath": "assets/items/video_ground_truth_reference_144037.json",
+      "referenceId": "ref_144037_25",
+      "localCropPath": "assets/items/ground_truth_reference_144037/ref_144037_25.png",
+      "cropSha256": "fd98224d1b77698b0f671023a0b94292071227ca40672c60073ccf4eff7aa91d",
+      "cropShaWasDeclared": false,
+      "gameSourceFrameTimeSec": 160.0,
+      "gameSourceFramePath": null,
+      "gameSourceBbox": [
+        525,
+        450,
+        600,
+        600
+      ]
+    },
+    {
+      "catalogId": "visual-922c073c366d",
+      "groupId": "video_ground_truth_reference_144037",
+      "groundTruthPath": "assets/items/video_ground_truth_reference_144037.json",
+      "referenceId": "ref_144037_26",
+      "localCropPath": "assets/items/ground_truth_reference_144037/ref_144037_26.png",
+      "cropSha256": "faaf96543e2d31140d34f8303fcf912cb64b763d6b8fe6084536ef742ccf3902",
+      "cropShaWasDeclared": false,
+      "gameSourceFrameTimeSec": 162.0,
+      "gameSourceFramePath": null,
+      "gameSourceBbox": [
+        300,
+        525,
+        450,
+        600
+      ]
+    },
+    {
+      "catalogId": "image16-0-0",
+      "groupId": "video_ground_truth_reference_144037",
+      "groundTruthPath": "assets/items/video_ground_truth_reference_144037.json",
+      "referenceId": "ref_144037_27",
+      "localCropPath": "assets/items/ground_truth_reference_144037/ref_144037_27.png",
+      "cropSha256": "3b0789405403c46f357173ff9072efab7ee87d4eff2c003e0413cb375488e61d",
+      "cropShaWasDeclared": false,
+      "gameSourceFrameTimeSec": 162.0,
+      "gameSourceFramePath": null,
+      "gameSourceBbox": [
+        450,
+        525,
+        525,
+        600
+      ]
+    },
+    {
+      "catalogId": "visual-xiaoheng-5x5",
+      "groupId": "video_ground_truth_reference_144037",
+      "groundTruthPath": "assets/items/video_ground_truth_reference_144037.json",
+      "referenceId": "ref_144037_28",
+      "localCropPath": "assets/items/ground_truth_reference_144037/ref_144037_28.png",
+      "cropSha256": "ccbe9488fdf7d7b1617e6855ae300d3cb974f3a9afa47c3f4d81f1aa010afb7e",
+      "cropShaWasDeclared": false,
+      "gameSourceFrameTimeSec": 164.0,
+      "gameSourceFramePath": null,
+      "gameSourceBbox": [
+        300,
+        600,
+        675,
+        975
+      ]
+    },
+    {
+      "catalogId": "image11-0-0",
+      "groupId": "video_ground_truth_reference_144037",
+      "groundTruthPath": "assets/items/video_ground_truth_reference_144037.json",
+      "referenceId": "ref_144037_29",
+      "localCropPath": "assets/items/ground_truth_reference_144037/ref_144037_29.png",
+      "cropSha256": "11b56cbce5c36ef206ff396d4c190d304a4b69c66377ace98ca667b905c44f2a",
+      "cropShaWasDeclared": false,
+      "gameSourceFrameTimeSec": 164.0,
+      "gameSourceFramePath": null,
+      "gameSourceBbox": [
+        675,
+        600,
+        750,
+        825
+      ]
+    },
+    {
+      "catalogId": "image26-0-2",
+      "groupId": "video_ground_truth_reference_144037",
+      "groundTruthPath": "assets/items/video_ground_truth_reference_144037.json",
+      "referenceId": "ref_144037_30",
+      "localCropPath": "assets/items/ground_truth_reference_144037/ref_144037_30.png",
+      "cropSha256": "f8295d1691aa0fc7556a0fd5fca77c1656afcd5d4dec143618afd2d5698ae875",
+      "cropShaWasDeclared": false,
+      "gameSourceFrameTimeSec": 164.0,
+      "gameSourceFramePath": null,
+      "gameSourceBbox": [
+        0,
+        750,
+        300,
+        975
+      ]
+    },
+    {
+      "catalogId": "image27-1-2",
+      "groupId": "video_ground_truth_reference_144037",
+      "groundTruthPath": "assets/items/video_ground_truth_reference_144037.json",
+      "referenceId": "ref_144037_31",
+      "localCropPath": "assets/items/ground_truth_reference_144037/ref_144037_31.png",
+      "cropSha256": "3e1eb21437c7c9a8f762cdd3d80842b928adfd4ee63f3b6d71cce5f1350919fe",
+      "cropShaWasDeclared": false,
+      "gameSourceFrameTimeSec": 166.0,
+      "gameSourceFramePath": null,
+      "gameSourceBbox": [
+        675,
+        825,
+        750,
+        1200
+      ]
+    },
+    {
+      "catalogId": "visual-liuliwei-4x1",
+      "groupId": "video_ground_truth_reference_144037",
+      "groundTruthPath": "assets/items/video_ground_truth_reference_144037.json",
+      "referenceId": "ref_144037_32",
+      "localCropPath": "assets/items/ground_truth_reference_144037/ref_144037_32.png",
+      "cropSha256": "cd5e08eb5669757c08e8341798c273c59650b94d62221dc21661ee6ab90e4c06",
+      "cropShaWasDeclared": false,
+      "gameSourceFrameTimeSec": 166.0,
+      "gameSourceFramePath": null,
+      "gameSourceBbox": [
+        0,
+        975,
+        300,
+        1050
+      ]
+    },
+    {
+      "catalogId": "image12-1-1",
+      "groupId": "video_ground_truth_reference_144037",
+      "groundTruthPath": "assets/items/video_ground_truth_reference_144037.json",
+      "referenceId": "ref_144037_33",
+      "localCropPath": "assets/items/ground_truth_reference_144037/ref_144037_33.png",
+      "cropSha256": "6be461c2c2a9fb7ef5037ce5229b7df2e270be5ec5c4cc9f47dc5485fe0f0394",
+      "cropShaWasDeclared": false,
+      "gameSourceFrameTimeSec": 166.0,
+      "gameSourceFramePath": null,
+      "gameSourceBbox": [
+        300,
+        975,
+        450,
+        1125
+      ]
+    },
+    {
+      "catalogId": "image10-1-2",
+      "groupId": "video_ground_truth_reference_144037",
+      "groundTruthPath": "assets/items/video_ground_truth_reference_144037.json",
+      "referenceId": "ref_144037_34",
+      "localCropPath": "assets/items/ground_truth_reference_144037/ref_144037_34.png",
+      "cropSha256": "35af9ed3268c023ae643164d0a3e17a4a4af4486219f5196daa06abcfe5ef7c3",
+      "cropShaWasDeclared": false,
+      "gameSourceFrameTimeSec": 166.0,
+      "gameSourceFramePath": null,
+      "gameSourceBbox": [
+        450,
+        975,
+        675,
+        1125
+      ]
+    },
+    {
+      "catalogId": "image1-1-0",
+      "groupId": "video_ground_truth_reference_144037",
+      "groundTruthPath": "assets/items/video_ground_truth_reference_144037.json",
+      "referenceId": "ref_144037_35",
+      "localCropPath": "assets/items/ground_truth_reference_144037/ref_144037_35.png",
+      "cropSha256": "7481bf4b4c4e5b6e6eb63d3325e3ecfaad623e98d25d2573840dabde25c2d307",
+      "cropShaWasDeclared": false,
+      "gameSourceFrameTimeSec": 168.0,
+      "gameSourceFramePath": null,
+      "gameSourceBbox": [
+        0,
+        1050,
+        150,
+        1200
+      ]
+    },
+    {
+      "catalogId": "image13-1-0",
+      "groupId": "video_ground_truth_reference_144037",
+      "groundTruthPath": "assets/items/video_ground_truth_reference_144037.json",
+      "referenceId": "ref_144037_36",
+      "localCropPath": "assets/items/ground_truth_reference_144037/ref_144037_36.png",
+      "cropSha256": "19e39bc944be9d8aea048c08936ed0fd28ae19612bef03f79bf9713a27cabed5",
+      "cropShaWasDeclared": false,
+      "gameSourceFrameTimeSec": 168.0,
+      "gameSourceFramePath": null,
+      "gameSourceBbox": [
+        150,
+        1050,
+        300,
+        1125
+      ]
+    },
+    {
+      "catalogId": "visual-4cc72b207cb6",
+      "groupId": "video_ground_truth_reference_144037",
+      "groundTruthPath": "assets/items/video_ground_truth_reference_144037.json",
+      "referenceId": "ref_144037_37",
+      "localCropPath": "assets/items/ground_truth_reference_144037/ref_144037_37.png",
+      "cropSha256": "8ac2d52d52381e8c15bd7c15dee3b7150c5fb6a4fbd1c07748d92f8877072b2c",
+      "cropShaWasDeclared": false,
+      "gameSourceFrameTimeSec": 168.0,
+      "gameSourceFramePath": null,
+      "gameSourceBbox": [
+        150,
+        1125,
+        375,
+        1350
+      ]
+    },
+    {
+      "catalogId": "image5-1-1",
+      "groupId": "video_ground_truth_reference_144037",
+      "groundTruthPath": "assets/items/video_ground_truth_reference_144037.json",
+      "referenceId": "ref_144037_38",
+      "localCropPath": "assets/items/ground_truth_reference_144037/ref_144037_38.png",
+      "cropSha256": "12db252fa4ab9be9fe3f085a695e5ed3adf64173e69a5cd9501e99d8201f9fb3",
+      "cropShaWasDeclared": false,
+      "gameSourceFrameTimeSec": 168.0,
+      "gameSourceFramePath": null,
+      "gameSourceBbox": [
+        375,
+        1125,
+        525,
+        1275
+      ]
+    },
+    {
+      "catalogId": "image14-0-0",
+      "groupId": "video_ground_truth_reference_144037",
+      "groundTruthPath": "assets/items/video_ground_truth_reference_144037.json",
+      "referenceId": "ref_144037_39",
+      "localCropPath": "assets/items/ground_truth_reference_144037/ref_144037_39.png",
+      "cropSha256": "5962f592e279757c82a4f68650b75c2468e8d368f4fe1e6185d29ec84d3e8144",
+      "cropShaWasDeclared": false,
+      "gameSourceFrameTimeSec": 168.0,
+      "gameSourceFramePath": null,
+      "gameSourceBbox": [
+        525,
+        1125,
+        675,
+        1200
+      ]
+    },
+    {
+      "catalogId": "image2-1-0",
+      "groupId": "video_development_references_v1",
+      "imagePath": "assets/items/video_development_references_v1/egg-v3a-reveal-186.75.png",
+      "imageSha256": "fb947bfa91e7a1ea829fa0fd2cfd4b49557dac614f0849914354e798befa548c",
+      "sampleClass": "development-reference"
+    },
+    {
+      "catalogId": "image2-0-2",
+      "groupId": "video_development_references_v1",
+      "imagePath": "assets/items/video_development_references_v1/paper-v4-reveal-4.20.png",
+      "imageSha256": "7af1a29c80e303eb1fa7837466ff9bf0d82da31d04fb5c5a248611a866d55687",
+      "sampleClass": "development-reference"
+    }
+  ],
+  "gameplaySampleCatalogIds": [
+    "image1-0-0",
+    "image1-1-0",
+    "image10-1-0",
+    "image10-1-2",
+    "image11-0-0",
+    "image11-0-1",
+    "image12-0-0",
+    "image12-1-1",
+    "image13-1-0",
+    "image14-0-0",
+    "image14-0-2",
+    "image15-0-1",
+    "image16-0-0",
+    "image16-0-1",
+    "image18-0-1",
+    "image2-0-0",
+    "image2-0-2",
+    "image2-1-0",
+    "image2-1-2",
+    "image20-0-1",
+    "image20-0-2",
+    "image22-0-2",
+    "image22-1-1",
+    "image22-1-2",
+    "image23-1-1",
+    "image24-0-0",
+    "image24-1-2",
+    "image26-0-2",
+    "image27-1-2",
+    "image29-0-0",
+    "image29-1-0",
+    "image3-0-1",
+    "image3-1-1",
+    "image30-0-0",
+    "image30-0-1",
+    "image30-1-0",
+    "image30-1-2",
+    "image31-1-2",
+    "image34-0-0",
+    "image34-0-1",
+    "image5-0-0",
+    "image5-1-0",
+    "image5-1-1",
+    "image6-1-0",
+    "image7-0-0",
+    "image8-1-1",
+    "image9-0-1",
+    "image9-0-2",
+    "image9-1-2",
+    "visual-4cc72b207cb6",
+    "visual-65250f2f6c5a",
+    "visual-922c073c366d",
+    "visual-9607b248bbf4",
+    "visual-latiao-1x2",
+    "visual-liuliwei-4x1",
+    "visual-xiaoheng-5x5"
+  ],
+  "fitGroup": {
+    "path": "assets/items/video_ground_truth_reference_134436_match2_visible.json",
+    "priorResultPath": "build/codex_other_video_20260912/134436-small-icon-replay/evaluated_units.json",
+    "priorOutcome": "23 annotated physical items, 21 previous automatic exact confirmations, 2 unresolved; fit subset uses independently visually checked pair IDs within those prior confirmations.",
+    "recordCount": 7,
+    "method": "median foreground occupancy, no per-item fitting; shape-specific only at n>=2",
+    "pooledForegroundFraction": [
+      0.8220339,
+      0.66015625
+    ],
+    "shapeModels": {
+      "1x1": {
+        "foregroundFraction": [
+          0.8828125,
+          0.671875
+        ],
+        "pairCount": 3
+      },
+      "1x2": {
+        "foregroundFraction": [
+          0.78389831,
+          0.63476562
+        ],
+        "pairCount": 2
+      }
+    },
+    "pairs": [
+      {
+        "catalogId": "image18-0-1",
+        "widthCells": 2,
+        "heightCells": 3,
+        "groundTruthPath": "assets/items/video_ground_truth_reference_134436_match2_visible.json",
+        "referenceId": "ref_134436_match2_visible_01",
+        "pairAuthority": "independent visually checked ground truth ID + hash-verified catalog source and gameplay crop",
+        "catalogScreenshotPath": "assets/items/catalog_screenshots/2X3/{5432C3CC-00E0-43D0-8461-DD6A7E64552D}.png",
+        "catalogScreenshotSha256": "b7c9219049c3f10b1452cd3b196515759373fc72ca2203b358a6f1ac2a0d160c",
+        "catalogCardBbox": [
+          392,
+          264,
+          391,
+          263
+        ],
+        "catalogCropPath": "assets/items/reference_crops_v1/image18-0-1.png",
+        "catalogCropSha256": "afc86067cbc15ed9d767dde8163615ca36b45d5a1e1650b4152e422952398935",
+        "gameCropPath": "assets/items/ground_truth_reference_134436_match2_visible/ref_134436_match2_visible_01.png",
+        "gameCropSha256": "d3b2e91b2440bf51579cc7b20059756a7a0cecd4425a9b6b8ae3d806679e4384",
+        "targetForegroundFraction": [
+          0.825,
+          0.640625
+        ],
+        "sourceForegroundFraction": [
+          0.38671875,
+          0.75796178
+        ],
+        "existingForegroundRegistration": {
+          "score": 0.9964,
+          "iou": 0.9641643497065184,
+          "correlation": 0.9735792875289917,
+          "error": 8.998771667480469
+        }
+      },
+      {
+        "catalogId": "image24-0-0",
+        "widthCells": 1,
+        "heightCells": 1,
+        "groundTruthPath": "assets/items/video_ground_truth_reference_134436_match2_visible.json",
+        "referenceId": "ref_134436_match2_visible_03",
+        "pairAuthority": "independent visually checked ground truth ID + hash-verified catalog source and gameplay crop",
+        "catalogScreenshotPath": "assets/items/catalog_screenshots/1x1/{16B07C02-E13A-4195-8F67-C8A4041C7B87}.png",
+        "catalogScreenshotSha256": "9f98e96a63192b44e90e4c530f754d268605fe8283da2b013cde608ac615ccc4",
+        "catalogCardBbox": [
+          780,
+          271,
+          390,
+          271
+        ],
+        "catalogCropPath": "assets/items/reference_crops_v1/image24-0-0.png",
+        "catalogCropSha256": "65d0ffd9f9ef1fd133a513144cd66124998257baaf040cdb799ef25b73b61345",
+        "gameCropPath": "assets/items/ground_truth_reference_134436_match2_visible/ref_134436_match2_visible_03.png",
+        "gameCropSha256": "b45b4f8afd3a85ac5512efb35614e77061df2bcce63d52cc6988eb2a27e2c018",
+        "targetForegroundFraction": [
+          0.796875,
+          0.625
+        ],
+        "sourceForegroundFraction": [
+          0.5078125,
+          0.66887417
+        ],
+        "existingForegroundRegistration": {
+          "score": 0.9914,
+          "iou": 0.9139912132477188,
+          "correlation": 0.9329354763031006,
+          "error": 14.968077659606934
+        }
+      },
+      {
+        "catalogId": "image22-1-2",
+        "widthCells": 1,
+        "heightCells": 2,
+        "groundTruthPath": "assets/items/video_ground_truth_reference_134436_match2_visible.json",
+        "referenceId": "ref_134436_match2_visible_05",
+        "pairAuthority": "independent visually checked ground truth ID + hash-verified catalog source and gameplay crop",
+        "catalogScreenshotPath": "assets/items/catalog_screenshots/1X2/{C8C0E0D0-AD0B-43F9-A2E8-6453DE902C79}.png",
+        "catalogScreenshotSha256": "70480994d882de0565f400f2be0f40d69787ab139e9611d1dc066b29c580642d",
+        "catalogCardBbox": [
+          0,
+          0,
+          384,
+          258
+        ],
+        "catalogCropPath": "assets/items/reference_crops_v1/image22-1-2.png",
+        "catalogCropSha256": "0260ddfa7f722902027ea8a18b021474215cbab7c8b92f2a5a4edbf13bc0cecb",
+        "gameCropPath": "assets/items/ground_truth_reference_134436_match2_visible/ref_134436_match2_visible_05.png",
+        "gameCropSha256": "c9951ec96b1d196d154e535de4b41d8ef185aad4da5b3c9e7113ff8e904f1581",
+        "targetForegroundFraction": [
+          0.8220339,
+          0.609375
+        ],
+        "sourceForegroundFraction": [
+          0.39453125,
+          1.0
+        ],
+        "existingForegroundRegistration": null
+      },
+      {
+        "catalogId": "image3-1-1",
+        "widthCells": 1,
+        "heightCells": 1,
+        "groundTruthPath": "assets/items/video_ground_truth_reference_134436_match2_visible.json",
+        "referenceId": "ref_134436_match2_visible_12",
+        "pairAuthority": "independent visually checked ground truth ID + hash-verified catalog source and gameplay crop",
+        "catalogScreenshotPath": "assets/items/catalog_screenshots/1x1/{F65172DF-A42B-433D-A395-E648C0D920E1}.png",
+        "catalogScreenshotSha256": "06f9dbe6bdba81100f0c98822a6b74973669c7552fec905b7a36754512e5be38",
+        "catalogCardBbox": [
+          796,
+          0,
+          398,
+          264
+        ],
+        "catalogCropPath": "assets/items/reference_crops_v1/image3-1-1.png",
+        "catalogCropSha256": "e3ca7740461cbc97ee3fdc9baaf28d054a95d7db8396b1d0ffbc83774ae15d7a",
+        "gameCropPath": "assets/items/ground_truth_reference_134436_match2_visible/ref_134436_match2_visible_12.png",
+        "gameCropSha256": "cc5d93e07a20af72ffde4f04cf8763d830364c873aeec0ff2a4e59347bf20ff7",
+        "targetForegroundFraction": [
+          0.890625,
+          0.93359375
+        ],
+        "sourceForegroundFraction": [
+          0.5390625,
+          0.8410596
+        ],
+        "existingForegroundRegistration": null
+      },
+      {
+        "catalogId": "image9-1-2",
+        "widthCells": 1,
+        "heightCells": 1,
+        "groundTruthPath": "assets/items/video_ground_truth_reference_134436_match2_visible.json",
+        "referenceId": "ref_134436_match2_visible_19",
+        "pairAuthority": "independent visually checked ground truth ID + hash-verified catalog source and gameplay crop",
+        "catalogScreenshotPath": "assets/items/catalog_screenshots/1x1/{47545E5E-FC05-4F45-857E-A459326990CC}.png",
+        "catalogScreenshotSha256": "bd6cb12df27f964ebfd3374ef9e16296057caa23f3fbed27b0fdf4f3f1cc7a7e",
+        "catalogCardBbox": [
+          775,
+          0,
+          387,
+          265
+        ],
+        "catalogCropPath": "assets/items/reference_crops_v1/image9-1-2.png",
+        "catalogCropSha256": "7c9604d8c4f2d178ff3a3fb05d79ed25fe23b57edec819e2a8677667e40ba2d7",
+        "gameCropPath": "assets/items/ground_truth_reference_134436_match2_visible/ref_134436_match2_visible_19.png",
+        "gameCropSha256": "758d615d9c33d36aa00f8b127943504c2da9da9dad9e4c13bcd113de55829f4e",
+        "targetForegroundFraction": [
+          0.8828125,
+          0.671875
+        ],
+        "sourceForegroundFraction": [
+          0.5546875,
+          0.65822785
+        ],
+        "existingForegroundRegistration": {
+          "score": 0.9924,
+          "iou": 0.9238647082603423,
+          "correlation": 0.96986323595047,
+          "error": 13.052362442016602
+        }
+      },
+      {
+        "catalogId": "image22-1-1",
+        "widthCells": 1,
+        "heightCells": 2,
+        "groundTruthPath": "assets/items/video_ground_truth_reference_134436_match2_visible.json",
+        "referenceId": "ref_134436_match2_visible_21",
+        "pairAuthority": "independent visually checked ground truth ID + hash-verified catalog source and gameplay crop",
+        "catalogScreenshotPath": "assets/items/catalog_screenshots/1X2/{DC23CF1B-F79F-40AF-BB9F-5CB790598626}.png",
+        "catalogScreenshotSha256": "5b7af849aff4c329714ff001e03c3d1e25bc669e624d36f8239fdf2d8567bba4",
+        "catalogCardBbox": [
+          755,
+          259,
+          377,
+          259
+        ],
+        "catalogCropPath": "assets/items/reference_crops_v1/image22-1-1.png",
+        "catalogCropSha256": "a43270362772a60a2250fd03e5d529355093f8086192faee8bea8f42d8ebd6f7",
+        "gameCropPath": "assets/items/ground_truth_reference_134436_match2_visible/ref_134436_match2_visible_21.png",
+        "gameCropSha256": "8481851583f4afd5335a25ffcc64df4e9fdad27e7239ce002453de18d8d75f4e",
+        "targetForegroundFraction": [
+          0.74576271,
+          0.66015625
+        ],
+        "sourceForegroundFraction": [
+          0.3515625,
+          1.0
+        ],
+        "existingForegroundRegistration": null
+      },
+      {
+        "catalogId": "image34-0-0",
+        "widthCells": 3,
+        "heightCells": 3,
+        "groundTruthPath": "assets/items/video_ground_truth_reference_134436_match2_visible.json",
+        "referenceId": "ref_134436_match2_visible_23",
+        "pairAuthority": "independent visually checked ground truth ID + hash-verified catalog source and gameplay crop",
+        "catalogScreenshotPath": "assets/items/catalog_screenshots/3X3/{AF7A8555-2180-49BC-9395-F0DD5444F0EE}.png",
+        "catalogScreenshotSha256": "52c13ad0ec367c44ca512749fe03cfb1106c7f9c814a468d588249c1235dbdaf",
+        "catalogCardBbox": [
+          28,
+          43,
+          366,
+          236
+        ],
+        "catalogCropPath": "assets/items/reference_crops_v1/image34-0-0.png",
+        "catalogCropSha256": "9c38be2a872a87b2bbf2dacc279d9b7abd461b875a9e601fe0b62a54cb957d84",
+        "gameCropPath": "assets/items/ground_truth_reference_134436_match2_visible/ref_134436_match2_visible_23.png",
+        "gameCropSha256": "0fc5b1418adbe3434400c1aaff84d106f4174c90a7839eda1765667033d4397d",
+        "targetForegroundFraction": [
+          0.70703125,
+          0.765625
+        ],
+        "sourceForegroundFraction": [
+          0.453125,
+          0.85234899
+        ],
+        "existingForegroundRegistration": {
+          "score": 0.9963,
+          "iou": 0.9628880866425993,
+          "correlation": 0.9639252424240112,
+          "error": 11.82673454284668
+        }
+      }
+    ]
+  },
+  "generation": {
+    "gameplaySamplesAlreadyAvailable": 56,
+    "eligibleMissingGameplaySamples": 59,
+    "generated": 57,
+    "generationFailures": [
+      {
+        "catalogId": "image27-1-1",
+        "reason": "existing foreground extractor found no usable foreground"
+      },
+      {
+        "catalogId": "image30-0-2",
+        "reason": "existing foreground extractor found no usable foreground"
+      }
+    ],
+    "sourceFieldConflictsRemainExcluded": true,
+    "displayOnlyEntriesIncluded": false,
+    "rotation": "not applied; exact official width/height orientation retained. Existing foreground registration is recorded per fit pair; it did not support one consistent rotation across the small fit subset."
+  },
+  "historicalTransferCheck": {
+    "group": "assets/items/video_ground_truth_reference_144037.json",
+    "groupUse": "historical cross-match check; previously used development material, not fresh unseen acceptance",
+    "fitIdsExcluded": [
+      "image18-0-1",
+      "image22-1-1",
+      "image22-1-2",
+      "image24-0-0",
+      "image3-1-1",
+      "image34-0-0",
+      "image9-1-2"
+    ],
+    "counts": {
+      "candidateEligible": 22,
+      "truthNotInOfficialCandidateSet": 0,
+      "directTopCandidateCorrect": 7,
+      "directCorrectConfirmations": 0,
+      "directWrongConfirmations": 0,
+      "directUnresolved": 22,
+      "combinedTopCandidateCorrect": 19,
+      "topCandidateImproved": 13,
+      "topCandidateRegressed": 1,
+      "combinedCorrectConfirmations": 0,
+      "combinedWrongConfirmations": 0,
+      "derivedThresholdCorrectBlocked": 1,
+      "derivedThresholdWrongBlocked": 0,
+      "combinedUnresolved": 21
+    },
+    "rows": [
+      {
+        "referenceId": "ref_144037_02",
+        "catalogId": "image11-0-1",
+        "size": "1x3",
+        "directRawTopCandidate": "image11-0-0",
+        "directTop": null,
+        "directScore": 0.0,
+        "combinedTopCandidate": "image11-0-1",
+        "combinedTopReferenceKind": "DERIVED",
+        "combinedScore": 0.6693,
+        "combinedThresholdWouldPassButStillUnverified": false
+      },
+      {
+        "referenceId": "ref_144037_04",
+        "catalogId": "image8-1-1",
+        "size": "1x1",
+        "directRawTopCandidate": "image8-1-0",
+        "directTop": null,
+        "directScore": 0.0,
+        "combinedTopCandidate": "image8-1-1",
+        "combinedTopReferenceKind": "DERIVED",
+        "combinedScore": 0.5447,
+        "combinedThresholdWouldPassButStillUnverified": false
+      },
+      {
+        "referenceId": "ref_144037_05",
+        "catalogId": "image14-0-2",
+        "size": "2x1",
+        "directRawTopCandidate": "image13-1-0",
+        "directTop": null,
+        "directScore": 0.0,
+        "combinedTopCandidate": "image14-0-2",
+        "combinedTopReferenceKind": "DERIVED",
+        "combinedScore": 0.6444,
+        "combinedThresholdWouldPassButStillUnverified": false
+      },
+      {
+        "referenceId": "ref_144037_06",
+        "catalogId": "image16-0-0",
+        "size": "1x1",
+        "directRawTopCandidate": "image14-1-2",
+        "directTop": null,
+        "directScore": 0.0,
+        "combinedTopCandidate": "image16-0-0",
+        "combinedTopReferenceKind": "DERIVED",
+        "combinedScore": 0.5721,
+        "combinedThresholdWouldPassButStillUnverified": false
+      },
+      {
+        "referenceId": "ref_144037_07",
+        "catalogId": "image7-0-0",
+        "size": "2x1",
+        "directRawTopCandidate": "image6-0-1",
+        "directTop": null,
+        "directScore": 0.0,
+        "combinedTopCandidate": "image7-0-0",
+        "combinedTopReferenceKind": "DERIVED",
+        "combinedScore": 0.6397,
+        "combinedThresholdWouldPassButStillUnverified": false
+      },
+      {
+        "referenceId": "ref_144037_10",
+        "catalogId": "image24-1-2",
+        "size": "1x1",
+        "directRawTopCandidate": "image21-0-2",
+        "directTop": null,
+        "directScore": 0.0,
+        "combinedTopCandidate": "image24-1-2",
+        "combinedTopReferenceKind": "DERIVED",
+        "combinedScore": 0.6103,
+        "combinedThresholdWouldPassButStillUnverified": false
+      },
+      {
+        "referenceId": "ref_144037_12",
+        "catalogId": "image20-0-1",
+        "size": "2x2",
+        "directRawTopCandidate": "image18-1-0",
+        "directTop": null,
+        "directScore": 0.0,
+        "combinedTopCandidate": "image20-0-1",
+        "combinedTopReferenceKind": "DERIVED",
+        "combinedScore": 0.5162,
+        "combinedThresholdWouldPassButStillUnverified": false
+      },
+      {
+        "referenceId": "ref_144037_13",
+        "catalogId": "image9-0-1",
+        "size": "1x1",
+        "directRawTopCandidate": "image8-1-0",
+        "directTop": null,
+        "directScore": 0.0,
+        "combinedTopCandidate": "image9-0-1",
+        "combinedTopReferenceKind": "DERIVED",
+        "combinedScore": 0.4723,
+        "combinedThresholdWouldPassButStillUnverified": false
+      },
+      {
+        "referenceId": "ref_144037_15",
+        "catalogId": "image5-1-0",
+        "size": "3x1",
+        "directRawTopCandidate": "image5-1-0",
+        "directTop": null,
+        "directScore": 0.0,
+        "combinedTopCandidate": "image5-1-0",
+        "combinedTopReferenceKind": "DERIVED",
+        "combinedScore": 0.7431,
+        "combinedThresholdWouldPassButStillUnverified": false
+      },
+      {
+        "referenceId": "ref_144037_17",
+        "catalogId": "image15-0-1",
+        "size": "1x1",
+        "directRawTopCandidate": "image14-1-2",
+        "directTop": null,
+        "directScore": 0.0,
+        "combinedTopCandidate": "image14-1-2",
+        "combinedTopReferenceKind": "DERIVED",
+        "combinedScore": 0.5951,
+        "combinedThresholdWouldPassButStillUnverified": false
+      },
+      {
+        "referenceId": "ref_144037_18",
+        "catalogId": "image22-0-2",
+        "size": "2x1",
+        "directRawTopCandidate": "image19-1-1",
+        "directTop": null,
+        "directScore": 0.0,
+        "combinedTopCandidate": "image22-0-2",
+        "combinedTopReferenceKind": "DERIVED",
+        "combinedScore": 0.7967,
+        "combinedThresholdWouldPassButStillUnverified": false
+      },
+      {
+        "referenceId": "ref_144037_20",
+        "catalogId": "image3-0-1",
+        "size": "1x1",
+        "directRawTopCandidate": "image14-1-2",
+        "directTop": null,
+        "directScore": 0.0,
+        "combinedTopCandidate": "image14-1-2",
+        "combinedTopReferenceKind": "DERIVED",
+        "combinedScore": 0.5264,
+        "combinedThresholdWouldPassButStillUnverified": false
+      },
+      {
+        "referenceId": "ref_144037_24",
+        "catalogId": "image23-1-1",
+        "size": "1x1",
+        "directRawTopCandidate": "image21-0-2",
+        "directTop": null,
+        "directScore": 0.0,
+        "combinedTopCandidate": "image23-1-1",
+        "combinedTopReferenceKind": "DERIVED",
+        "combinedScore": 0.613,
+        "combinedThresholdWouldPassButStillUnverified": false
+      },
+      {
+        "referenceId": "ref_144037_27",
+        "catalogId": "image16-0-0",
+        "size": "1x1",
+        "directRawTopCandidate": "image14-1-2",
+        "directTop": null,
+        "directScore": 0.0,
+        "combinedTopCandidate": "image16-0-0",
+        "combinedTopReferenceKind": "DERIVED",
+        "combinedScore": 0.3295,
+        "combinedThresholdWouldPassButStillUnverified": false
+      },
+      {
+        "referenceId": "ref_144037_29",
+        "catalogId": "image11-0-0",
+        "size": "1x3",
+        "directRawTopCandidate": "image11-0-0",
+        "directTop": null,
+        "directScore": 0.0,
+        "combinedTopCandidate": "image11-0-1",
+        "combinedTopReferenceKind": "DERIVED",
+        "combinedScore": 0.3863,
+        "combinedThresholdWouldPassButStillUnverified": false
+      },
+      {
+        "referenceId": "ref_144037_30",
+        "catalogId": "image26-0-2",
+        "size": "4x3",
+        "directRawTopCandidate": "image26-0-2",
+        "directTop": null,
+        "directScore": 0.0,
+        "combinedTopCandidate": "image26-0-2",
+        "combinedTopReferenceKind": "DERIVED",
+        "combinedScore": 0.8619,
+        "combinedThresholdWouldPassButStillUnverified": true
+      },
+      {
+        "referenceId": "ref_144037_31",
+        "catalogId": "image27-1-2",
+        "size": "1x5",
+        "directRawTopCandidate": "image27-1-2",
+        "directTop": null,
+        "directScore": 0.0,
+        "combinedTopCandidate": "image27-1-2",
+        "combinedTopReferenceKind": "DERIVED",
+        "combinedScore": 0.5849,
+        "combinedThresholdWouldPassButStillUnverified": false
+      },
+      {
+        "referenceId": "ref_144037_33",
+        "catalogId": "image12-1-1",
+        "size": "2x2",
+        "directRawTopCandidate": "image10-0-1",
+        "directTop": null,
+        "directScore": 0.0,
+        "combinedTopCandidate": "image12-1-1",
+        "combinedTopReferenceKind": "DERIVED",
+        "combinedScore": 0.6915,
+        "combinedThresholdWouldPassButStillUnverified": false
+      },
+      {
+        "referenceId": "ref_144037_34",
+        "catalogId": "image10-1-2",
+        "size": "3x2",
+        "directRawTopCandidate": "image10-1-2",
+        "directTop": null,
+        "directScore": 0.0,
+        "combinedTopCandidate": "image10-1-2",
+        "combinedTopReferenceKind": "DERIVED",
+        "combinedScore": 0.5256,
+        "combinedThresholdWouldPassButStillUnverified": false
+      },
+      {
+        "referenceId": "ref_144037_36",
+        "catalogId": "image13-1-0",
+        "size": "2x1",
+        "directRawTopCandidate": "image13-1-0",
+        "directTop": null,
+        "directScore": 0.0,
+        "combinedTopCandidate": "image13-1-0",
+        "combinedTopReferenceKind": "DERIVED",
+        "combinedScore": 0.6337,
+        "combinedThresholdWouldPassButStillUnverified": false
+      },
+      {
+        "referenceId": "ref_144037_38",
+        "catalogId": "image5-1-1",
+        "size": "2x2",
+        "directRawTopCandidate": "image5-1-1",
+        "directTop": null,
+        "directScore": 0.0,
+        "combinedTopCandidate": "image5-1-1",
+        "combinedTopReferenceKind": "DERIVED",
+        "combinedScore": 0.7502,
+        "combinedThresholdWouldPassButStillUnverified": false
+      },
+      {
+        "referenceId": "ref_144037_39",
+        "catalogId": "image14-0-0",
+        "size": "2x1",
+        "directRawTopCandidate": "image13-1-0",
+        "directTop": null,
+        "directScore": 0.0,
+        "combinedTopCandidate": "image14-0-0",
+        "combinedTopReferenceKind": "DERIVED",
+        "combinedScore": 0.5856,
+        "combinedThresholdWouldPassButStillUnverified": false
+      }
+    ],
+    "productionExactGate": "DERIVED_UNVERIFIED never upgrades to EXACT_IDENTIFIED; only direct legacy references may pass the existing strict gate"
+  },
+  "records": [
+    {
+      "catalogId": "image1-0-1",
+      "name": "起司",
+      "widthCells": 2,
+      "heightCells": 2,
+      "rarity": "white",
+      "status": "DERIVED_UNVERIFIED",
+      "isGameplayEvidence": false,
+      "solverIdentityEligible": false,
+      "imagePath": "assets/items/derived_warehouse_icon_references_v1/image1-0-1.png",
+      "imageSha256": "505b1fb574e766b06b1ebfd90d7bc1cb6746840d9e316d3ceb509677719883ad",
+      "catalogSource": {
+        "sourcePath": "assets/items/catalog_screenshots/2X2/{DFB6F983-7A0D-41C6-AB47-6C150B5F7770}.png",
+        "sourceSha256": "c06571615098094064711d59881537eca676fc07420d0153c1f787afcb77ea69",
+        "cardBbox": [
+          774,
+          259,
+          387,
+          259
+        ],
+        "cropPath": "assets/items/reference_crops_v1/image1-0-1.png",
+        "cropSha256": "5de5d976442733970cbb519af8658f37b9c8bc897a1b0ff47c601e99a5ae7287"
+      },
+      "fitModel": {
+        "source": "pooled",
+        "pairCount": 7
+      },
+      "transform": {
+        "cropMethod": "catalog_reference_body",
+        "cropFractions": {
+          "x": [
+            0.2,
+            0.8
+          ],
+          "y": [
+            0.18,
+            0.76
+          ]
+        },
+        "foregroundMethod": "WarehousePlacementResolver._extract_foreground",
+        "scaleMethod": "fit pooled-or-shape median gameplay foreground occupancy into exact grid-cell canvas",
+        "rotationDegrees": 0,
+        "targetForegroundFraction": [
+          0.8220339,
+          0.66015625
+        ],
+        "sourceForegroundPixels": [
+          128,
+          126
+        ],
+        "outputCanvasPixels": [
+          256,
+          256
+        ],
+        "outputObjectRect": [
+          42,
+          43,
+          172,
+          169
+        ],
+        "backgroundSource": "median HSV edge of catalog body crop"
+      }
+    },
+    {
+      "catalogId": "image1-1-2",
+      "name": "艺术画「花原」",
+      "widthCells": 1,
+      "heightCells": 2,
+      "rarity": "white",
+      "status": "DERIVED_UNVERIFIED",
+      "isGameplayEvidence": false,
+      "solverIdentityEligible": false,
+      "imagePath": "assets/items/derived_warehouse_icon_references_v1/image1-1-2.png",
+      "imageSha256": "4c047a391a3e4ce9c815b40d103aaa9890415598a60282b4b1c9935d6744e8f8",
+      "catalogSource": {
+        "sourcePath": "assets/items/catalog_screenshots/1X2/{39EB6D1F-C312-4C1E-A622-BFADD00F264F}.png",
+        "sourceSha256": "0024658bc1d009e357b95cd25681f5fb1ff804faabccabe85e12a12924fd7138",
+        "cardBbox": [
+          776,
+          279,
+          366,
+          236
+        ],
+        "cropPath": "assets/items/reference_crops_v1/image1-1-2.png",
+        "cropSha256": "a21c0613a0e09bf9375be012383ae54c9bbb2c67e194be822d34c248ed7dfdb4"
+      },
+      "fitModel": {
+        "source": "shape:1x2",
+        "pairCount": 2
+      },
+      "transform": {
+        "cropMethod": "catalog_reference_body",
+        "cropFractions": {
+          "x": [
+            0.2,
+            0.8
+          ],
+          "y": [
+            0.18,
+            0.76
+          ]
+        },
+        "foregroundMethod": "WarehousePlacementResolver._extract_foreground",
+        "scaleMethod": "fit pooled-or-shape median gameplay foreground occupancy into exact grid-cell canvas",
+        "rotationDegrees": 0,
+        "targetForegroundFraction": [
+          0.78389831,
+          0.63476562
+        ],
+        "sourceForegroundPixels": [
+          117,
+          142
+        ],
+        "outputCanvasPixels": [
+          128,
+          256
+        ],
+        "outputObjectRect": [
+          14,
+          67,
+          100,
+          122
+        ],
+        "backgroundSource": "median HSV edge of catalog body crop"
+      }
+    },
+    {
+      "catalogId": "image10-0-0",
+      "name": "绝对是亲手钓的鱼",
+      "widthCells": 5,
+      "heightCells": 5,
+      "rarity": "blue",
+      "status": "DERIVED_UNVERIFIED",
+      "isGameplayEvidence": false,
+      "solverIdentityEligible": false,
+      "imagePath": "assets/items/derived_warehouse_icon_references_v1/image10-0-0.png",
+      "imageSha256": "e5f22dc80daaa5d35f3e6035b5a8b8abe360a7c7a2e3504cba78a6488685cb04",
+      "catalogSource": {
+        "sourcePath": "assets/items/catalog_screenshots/5X5/{5325ABB2-6E85-4169-9C65-98431204CBEE}.png",
+        "sourceSha256": "c066799191fac88616ba303923355cdf0bb1a3974e57bcb4623434126232d680",
+        "cardBbox": [
+          0,
+          272,
+          385,
+          273
+        ],
+        "cropPath": "assets/items/reference_crops_v1/image10-0-0.png",
+        "cropSha256": "6c862eb1c726211c4d2f782495d1e9c9b501b0f3ebf24cff5d6c5d69d00f9301"
+      },
+      "fitModel": {
+        "source": "pooled",
+        "pairCount": 7
+      },
+      "transform": {
+        "cropMethod": "catalog_reference_body",
+        "cropFractions": {
+          "x": [
+            0.2,
+            0.8
+          ],
+          "y": [
+            0.18,
+            0.76
+          ]
+        },
+        "foregroundMethod": "WarehousePlacementResolver._extract_foreground",
+        "scaleMethod": "fit pooled-or-shape median gameplay foreground occupancy into exact grid-cell canvas",
+        "rotationDegrees": 0,
+        "targetForegroundFraction": [
+          0.8220339,
+          0.66015625
+        ],
+        "sourceForegroundPixels": [
+          129,
+          136
+        ],
+        "outputCanvasPixels": [
+          640,
+          640
+        ],
+        "outputObjectRect": [
+          119,
+          109,
+          401,
+          422
+        ],
+        "backgroundSource": "median HSV edge of catalog body crop"
+      }
+    },
+    {
+      "catalogId": "image11-1-0",
+      "name": "断落的剑刃",
+      "widthCells": 1,
+      "heightCells": 3,
+      "rarity": "blue",
+      "status": "DERIVED_UNVERIFIED",
+      "isGameplayEvidence": false,
+      "solverIdentityEligible": false,
+      "imagePath": "assets/items/derived_warehouse_icon_references_v1/image11-1-0.png",
+      "imageSha256": "c0045e63be7ac3b4646a27ddce65988166bd64bea70e7deefbbe5c5474410cdb",
+      "catalogSource": {
+        "sourcePath": "assets/items/catalog_screenshots/1X3/{4B4BA98A-9DF4-4399-8B1B-754510B27C7A}.png",
+        "sourceSha256": "b76f26da9abcbb2f7cb3cb040bc0de2eb2b9cf6f2a053eae678203cf93295885",
+        "cardBbox": [
+          397,
+          260,
+          366,
+          236
+        ],
+        "cropPath": "assets/items/reference_crops_v1/image11-1-0.png",
+        "cropSha256": "8efa76519beabd04954b44f3218210356cca51297eea34c0d208efb5a1f0b4f7"
+      },
+      "fitModel": {
+        "source": "pooled",
+        "pairCount": 7
+      },
+      "transform": {
+        "cropMethod": "catalog_reference_body",
+        "cropFractions": {
+          "x": [
+            0.2,
+            0.8
+          ],
+          "y": [
+            0.18,
+            0.76
+          ]
+        },
+        "foregroundMethod": "WarehousePlacementResolver._extract_foreground",
+        "scaleMethod": "fit pooled-or-shape median gameplay foreground occupancy into exact grid-cell canvas",
+        "rotationDegrees": 0,
+        "targetForegroundFraction": [
+          0.8220339,
+          0.66015625
+        ],
+        "sourceForegroundPixels": [
+          119,
+          122
+        ],
+        "outputCanvasPixels": [
+          128,
+          384
+        ],
+        "outputObjectRect": [
+          11,
+          138,
+          105,
+          108
+        ],
+        "backgroundSource": "median HSV edge of catalog body crop"
+      }
+    },
+    {
+      "catalogId": "image11-1-1",
+      "name": "失落的甲胄",
+      "widthCells": 3,
+      "heightCells": 3,
+      "rarity": "blue",
+      "status": "DERIVED_UNVERIFIED",
+      "isGameplayEvidence": false,
+      "solverIdentityEligible": false,
+      "imagePath": "assets/items/derived_warehouse_icon_references_v1/image11-1-1.png",
+      "imageSha256": "33b960e61b3b1bda73a3fa9fc20fc54886a21234c5bbfa45f123a4aa173ab623",
+      "catalogSource": {
+        "sourcePath": "assets/items/catalog_screenshots/3X3/{E16EEBF5-DDE4-48DC-B4B5-A7862E8D5FA5}.png",
+        "sourceSha256": "9e182266888e3966da22a4d7b0ef4f25797205006379d2caa1334c5ddf8a2a2f",
+        "cardBbox": [
+          0,
+          0,
+          382,
+          258
+        ],
+        "cropPath": "assets/items/reference_crops_v1/image11-1-1.png",
+        "cropSha256": "8f7b122e06a2efe4819ec92bb638f11f0e300ed51f06813781a6bad35635e4c6"
+      },
+      "fitModel": {
+        "source": "pooled",
+        "pairCount": 7
+      },
+      "transform": {
+        "cropMethod": "catalog_reference_body",
+        "cropFractions": {
+          "x": [
+            0.2,
+            0.8
+          ],
+          "y": [
+            0.18,
+            0.76
+          ]
+        },
+        "foregroundMethod": "WarehousePlacementResolver._extract_foreground",
+        "scaleMethod": "fit pooled-or-shape median gameplay foreground occupancy into exact grid-cell canvas",
+        "rotationDegrees": 0,
+        "targetForegroundFraction": [
+          0.8220339,
+          0.66015625
+        ],
+        "sourceForegroundPixels": [
+          154,
+          137
+        ],
+        "outputCanvasPixels": [
+          384,
+          384
+        ],
+        "outputObjectRect": [
+          49,
+          65,
+          285,
+          254
+        ],
+        "backgroundSource": "median HSV edge of catalog body crop"
+      }
+    },
+    {
+      "catalogId": "image12-0-1",
+      "name": "涂鸦板",
+      "widthCells": 4,
+      "heightCells": 1,
+      "rarity": "blue",
+      "status": "DERIVED_UNVERIFIED",
+      "isGameplayEvidence": false,
+      "solverIdentityEligible": false,
+      "imagePath": "assets/items/derived_warehouse_icon_references_v1/image12-0-1.png",
+      "imageSha256": "a4a89129e0974a136fadc05208581fdc9baebb4dbe53e07408b1e2dfc71ec1da",
+      "catalogSource": {
+        "sourcePath": "assets/items/catalog_screenshots/4X1/{7DB91AEB-261E-41F0-831D-424EEDA94025}.png",
+        "sourceSha256": "49e4872e3aafe2727692b89e5efef2e0b6ef10e915d84fb44d52819f22a4ebbe",
+        "cardBbox": [
+          791,
+          36,
+          370,
+          236
+        ],
+        "cropPath": "assets/items/reference_crops_v1/image12-0-1.png",
+        "cropSha256": "f242bfe1bef34e831902786b0d5cebb03766e85871a379ac3fce19d897b62152"
+      },
+      "fitModel": {
+        "source": "pooled",
+        "pairCount": 7
+      },
+      "transform": {
+        "cropMethod": "catalog_reference_body",
+        "cropFractions": {
+          "x": [
+            0.2,
+            0.8
+          ],
+          "y": [
+            0.18,
+            0.76
+          ]
+        },
+        "foregroundMethod": "WarehousePlacementResolver._extract_foreground",
+        "scaleMethod": "fit pooled-or-shape median gameplay foreground occupancy into exact grid-cell canvas",
+        "rotationDegrees": 0,
+        "targetForegroundFraction": [
+          0.8220339,
+          0.66015625
+        ],
+        "sourceForegroundPixels": [
+          142,
+          70
+        ],
+        "outputCanvasPixels": [
+          512,
+          128
+        ],
+        "outputObjectRect": [
+          170,
+          22,
+          171,
+          84
+        ],
+        "backgroundSource": "median HSV edge of catalog body crop"
+      }
+    },
+    {
+      "catalogId": "image12-0-2",
+      "name": "褪色谜",
+      "widthCells": 2,
+      "heightCells": 3,
+      "rarity": "blue",
+      "status": "DERIVED_UNVERIFIED",
+      "isGameplayEvidence": false,
+      "solverIdentityEligible": false,
+      "imagePath": "assets/items/derived_warehouse_icon_references_v1/image12-0-2.png",
+      "imageSha256": "f743f96494a52a25e3880c3213798aab525e5613f805a954e198c80b724d806d",
+      "catalogSource": {
+        "sourcePath": "assets/items/catalog_screenshots/2X3/{E2B97A18-0919-4B0C-9C04-6D8C2BF9F692}.png",
+        "sourceSha256": "8db9eab490ec8ace9a753b78d232ee8c861e6461f492232f7920d154215ae8dc",
+        "cardBbox": [
+          386,
+          0,
+          387,
+          266
+        ],
+        "cropPath": "assets/items/reference_crops_v1/image12-0-2.png",
+        "cropSha256": "c0e976502d9baff362b1f8a0963fe9938104218d4b0b33c518a701fc8f8c64a7"
+      },
+      "fitModel": {
+        "source": "pooled",
+        "pairCount": 7
+      },
+      "transform": {
+        "cropMethod": "catalog_reference_body",
+        "cropFractions": {
+          "x": [
+            0.2,
+            0.8
+          ],
+          "y": [
+            0.18,
+            0.76
+          ]
+        },
+        "foregroundMethod": "WarehousePlacementResolver._extract_foreground",
+        "scaleMethod": "fit pooled-or-shape median gameplay foreground occupancy into exact grid-cell canvas",
+        "rotationDegrees": 0,
+        "targetForegroundFraction": [
+          0.8220339,
+          0.66015625
+        ],
+        "sourceForegroundPixels": [
+          88,
+          139
+        ],
+        "outputCanvasPixels": [
+          256,
+          384
+        ],
+        "outputObjectRect": [
+          48,
+          65,
+          160,
+          254
+        ],
+        "backgroundSource": "median HSV edge of catalog body crop"
+      }
+    },
+    {
+      "catalogId": "image13-0-1",
+      "name": "柠檬气泡水",
+      "widthCells": 1,
+      "heightCells": 3,
+      "rarity": "blue",
+      "status": "DERIVED_UNVERIFIED",
+      "isGameplayEvidence": false,
+      "solverIdentityEligible": false,
+      "imagePath": "assets/items/derived_warehouse_icon_references_v1/image13-0-1.png",
+      "imageSha256": "c0f371d2662da11ea9d10f6e0f3c679ddc8e0971984f7c65e4d6a4e43511a1c4",
+      "catalogSource": {
+        "sourcePath": "assets/items/catalog_screenshots/1X3/{4B4BA98A-9DF4-4399-8B1B-754510B27C7A}.png",
+        "sourceSha256": "b76f26da9abcbb2f7cb3cb040bc0de2eb2b9cf6f2a053eae678203cf93295885",
+        "cardBbox": [
+          774,
+          259,
+          387,
+          259
+        ],
+        "cropPath": "assets/items/reference_crops_v1/image13-0-1.png",
+        "cropSha256": "af67e2c1451dbd280ded2fdd2ffba14a29b0d55448847d3e8b09dd7783d68c96"
+      },
+      "fitModel": {
+        "source": "pooled",
+        "pairCount": 7
+      },
+      "transform": {
+        "cropMethod": "catalog_reference_body",
+        "cropFractions": {
+          "x": [
+            0.2,
+            0.8
+          ],
+          "y": [
+            0.18,
+            0.76
+          ]
+        },
+        "foregroundMethod": "WarehousePlacementResolver._extract_foreground",
+        "scaleMethod": "fit pooled-or-shape median gameplay foreground occupancy into exact grid-cell canvas",
+        "rotationDegrees": 0,
+        "targetForegroundFraction": [
+          0.8220339,
+          0.66015625
+        ],
+        "sourceForegroundPixels": [
+          76,
+          117
+        ],
+        "outputCanvasPixels": [
+          128,
+          384
+        ],
+        "outputObjectRect": [
+          11,
+          111,
+          105,
+          162
+        ],
+        "backgroundSource": "median HSV edge of catalog body crop"
+      }
+    },
+    {
+      "catalogId": "image13-0-2",
+      "name": "断落的剑柄",
+      "widthCells": 1,
+      "heightCells": 2,
+      "rarity": "blue",
+      "status": "DERIVED_UNVERIFIED",
+      "isGameplayEvidence": false,
+      "solverIdentityEligible": false,
+      "imagePath": "assets/items/derived_warehouse_icon_references_v1/image13-0-2.png",
+      "imageSha256": "faf15b9e165ebc559945c42c4289ea31ca4d5f4ca4d5a372d7bb3d043a614148",
+      "catalogSource": {
+        "sourcePath": "assets/items/catalog_screenshots/1X2/{C8C0E0D0-AD0B-43F9-A2E8-6453DE902C79}.png",
+        "sourceSha256": "70480994d882de0565f400f2be0f40d69787ab139e9611d1dc066b29c580642d",
+        "cardBbox": [
+          769,
+          258,
+          384,
+          258
+        ],
+        "cropPath": "assets/items/reference_crops_v1/image13-0-2.png",
+        "cropSha256": "61dbacabb2fbcc679c84da12adb9196bfb1181e11e85b8c80b2bf92f4076543b"
+      },
+      "fitModel": {
+        "source": "shape:1x2",
+        "pairCount": 2
+      },
+      "transform": {
+        "cropMethod": "catalog_reference_body",
+        "cropFractions": {
+          "x": [
+            0.2,
+            0.8
+          ],
+          "y": [
+            0.18,
+            0.76
+          ]
+        },
+        "foregroundMethod": "WarehousePlacementResolver._extract_foreground",
+        "scaleMethod": "fit pooled-or-shape median gameplay foreground occupancy into exact grid-cell canvas",
+        "rotationDegrees": 0,
+        "targetForegroundFraction": [
+          0.78389831,
+          0.63476562
+        ],
+        "sourceForegroundPixels": [
+          115,
+          112
+        ],
+        "outputCanvasPixels": [
+          128,
+          256
+        ],
+        "outputObjectRect": [
+          14,
+          79,
+          100,
+          98
+        ],
+        "backgroundSource": "median HSV edge of catalog body crop"
+      }
+    },
+    {
+      "catalogId": "image13-1-1",
+      "name": "棉绒绒手办",
+      "widthCells": 2,
+      "heightCells": 1,
+      "rarity": "blue",
+      "status": "DERIVED_UNVERIFIED",
+      "isGameplayEvidence": false,
+      "solverIdentityEligible": false,
+      "imagePath": "assets/items/derived_warehouse_icon_references_v1/image13-1-1.png",
+      "imageSha256": "59f8f5103c8417286c29ac6a729a0d6f6c347e0d740e1e904249ea7037e3b766",
+      "catalogSource": {
+        "sourcePath": "assets/items/catalog_screenshots/2X1/{4C68408B-B5A3-46E8-8049-C0B8065ADE60}.png",
+        "sourceSha256": "e2a074bd0588230fcfba5467b094d2a27fc7f433b84672206ca4282753958fb3",
+        "cardBbox": [
+          388,
+          266,
+          388,
+          265
+        ],
+        "cropPath": "assets/items/reference_crops_v1/image13-1-1.png",
+        "cropSha256": "8f3e87a1df23c362f32da58d8d84591acdc6728f7731b113f52f6f72fb617c93"
+      },
+      "fitModel": {
+        "source": "pooled",
+        "pairCount": 7
+      },
+      "transform": {
+        "cropMethod": "catalog_reference_body",
+        "cropFractions": {
+          "x": [
+            0.2,
+            0.8
+          ],
+          "y": [
+            0.18,
+            0.76
+          ]
+        },
+        "foregroundMethod": "WarehousePlacementResolver._extract_foreground",
+        "scaleMethod": "fit pooled-or-shape median gameplay foreground occupancy into exact grid-cell canvas",
+        "rotationDegrees": 0,
+        "targetForegroundFraction": [
+          0.8220339,
+          0.66015625
+        ],
+        "sourceForegroundPixels": [
+          165,
+          140
+        ],
+        "outputCanvasPixels": [
+          256,
+          128
+        ],
+        "outputObjectRect": [
+          78,
+          22,
+          100,
+          84
+        ],
+        "backgroundSource": "median HSV edge of catalog body crop"
+      }
+    },
+    {
+      "catalogId": "image13-1-2",
+      "name": "观蝶纪念章",
+      "widthCells": 2,
+      "heightCells": 1,
+      "rarity": "blue",
+      "status": "DERIVED_UNVERIFIED",
+      "isGameplayEvidence": false,
+      "solverIdentityEligible": false,
+      "imagePath": "assets/items/derived_warehouse_icon_references_v1/image13-1-2.png",
+      "imageSha256": "8184917208b9e0e84c2fc0b47c8e707e6f706403e567ce00494bca93f596255e",
+      "catalogSource": {
+        "sourcePath": "assets/items/catalog_screenshots/2X1/{4C68408B-B5A3-46E8-8049-C0B8065ADE60}.png",
+        "sourceSha256": "e2a074bd0588230fcfba5467b094d2a27fc7f433b84672206ca4282753958fb3",
+        "cardBbox": [
+          776,
+          266,
+          388,
+          265
+        ],
+        "cropPath": "assets/items/reference_crops_v1/image13-1-2.png",
+        "cropSha256": "5475a403b28aa5d32f79a10f15476e67bd4e9853524ac4d05a9d7060104fa0c3"
+      },
+      "fitModel": {
+        "source": "pooled",
+        "pairCount": 7
+      },
+      "transform": {
+        "cropMethod": "catalog_reference_body",
+        "cropFractions": {
+          "x": [
+            0.2,
+            0.8
+          ],
+          "y": [
+            0.18,
+            0.76
+          ]
+        },
+        "foregroundMethod": "WarehousePlacementResolver._extract_foreground",
+        "scaleMethod": "fit pooled-or-shape median gameplay foreground occupancy into exact grid-cell canvas",
+        "rotationDegrees": 0,
+        "targetForegroundFraction": [
+          0.8220339,
+          0.66015625
+        ],
+        "sourceForegroundPixels": [
+          152,
+          106
+        ],
+        "outputCanvasPixels": [
+          256,
+          128
+        ],
+        "outputObjectRect": [
+          67,
+          22,
+          121,
+          84
+        ],
+        "backgroundSource": "median HSV edge of catalog body crop"
+      }
+    },
+    {
+      "catalogId": "image14-1-0",
+      "name": "沸腾之火",
+      "widthCells": 1,
+      "heightCells": 2,
+      "rarity": "blue",
+      "status": "DERIVED_UNVERIFIED",
+      "isGameplayEvidence": false,
+      "solverIdentityEligible": false,
+      "imagePath": "assets/items/derived_warehouse_icon_references_v1/image14-1-0.png",
+      "imageSha256": "e2e4079a64fa7a03cd48deeacb202d5952c1399dbd5e05979c4648b5a9b4ab61",
+      "catalogSource": {
+        "sourcePath": "assets/items/catalog_screenshots/1X2/{F1E0B7B4-D27E-4BF5-A471-40C0FDDDAFE6}.png",
+        "sourceSha256": "e8f052691c008a5d2f107814eeab729818d0abbb2e3b2f9110467861046a6dcb",
+        "cardBbox": [
+          388,
+          0,
+          388,
+          262
+        ],
+        "cropPath": "assets/items/reference_crops_v1/image14-1-0.png",
+        "cropSha256": "c0337d713a8225f606a8288043b6967937deb153114ad2d3f4074e67a2547910"
+      },
+      "fitModel": {
+        "source": "shape:1x2",
+        "pairCount": 2
+      },
+      "transform": {
+        "cropMethod": "catalog_reference_body",
+        "cropFractions": {
+          "x": [
+            0.2,
+            0.8
+          ],
+          "y": [
+            0.18,
+            0.76
+          ]
+        },
+        "foregroundMethod": "WarehousePlacementResolver._extract_foreground",
+        "scaleMethod": "fit pooled-or-shape median gameplay foreground occupancy into exact grid-cell canvas",
+        "rotationDegrees": 0,
+        "targetForegroundFraction": [
+          0.78389831,
+          0.63476562
+        ],
+        "sourceForegroundPixels": [
+          134,
+          147
+        ],
+        "outputCanvasPixels": [
+          128,
+          256
+        ],
+        "outputObjectRect": [
+          14,
+          73,
+          100,
+          110
+        ],
+        "backgroundSource": "median HSV edge of catalog body crop"
+      }
+    },
+    {
+      "catalogId": "image14-1-1",
+      "name": "专属客服",
+      "widthCells": 1,
+      "heightCells": 2,
+      "rarity": "blue",
+      "status": "DERIVED_UNVERIFIED",
+      "isGameplayEvidence": false,
+      "solverIdentityEligible": false,
+      "imagePath": "assets/items/derived_warehouse_icon_references_v1/image14-1-1.png",
+      "imageSha256": "dabcd1bd81ab5cf3e7ca01d38c9b14909606898f681c810d3be4ead8e986105c",
+      "catalogSource": {
+        "sourcePath": "assets/items/catalog_screenshots/1X2/{F1E0B7B4-D27E-4BF5-A471-40C0FDDDAFE6}.png",
+        "sourceSha256": "e8f052691c008a5d2f107814eeab729818d0abbb2e3b2f9110467861046a6dcb",
+        "cardBbox": [
+          776,
+          0,
+          388,
+          262
+        ],
+        "cropPath": "assets/items/reference_crops_v1/image14-1-1.png",
+        "cropSha256": "f4d6b8dc3b65eebe256c526b15770883739a822ba01e94729649896064066016"
+      },
+      "fitModel": {
+        "source": "shape:1x2",
+        "pairCount": 2
+      },
+      "transform": {
+        "cropMethod": "catalog_reference_body",
+        "cropFractions": {
+          "x": [
+            0.2,
+            0.8
+          ],
+          "y": [
+            0.18,
+            0.76
+          ]
+        },
+        "foregroundMethod": "WarehousePlacementResolver._extract_foreground",
+        "scaleMethod": "fit pooled-or-shape median gameplay foreground occupancy into exact grid-cell canvas",
+        "rotationDegrees": 0,
+        "targetForegroundFraction": [
+          0.78389831,
+          0.63476562
+        ],
+        "sourceForegroundPixels": [
+          145,
+          122
+        ],
+        "outputCanvasPixels": [
+          128,
+          256
+        ],
+        "outputObjectRect": [
+          14,
+          86,
+          100,
+          84
+        ],
+        "backgroundSource": "median HSV edge of catalog body crop"
+      }
+    },
+    {
+      "catalogId": "image14-1-2",
+      "name": "蓝釉瓶",
+      "widthCells": 1,
+      "heightCells": 1,
+      "rarity": "blue",
+      "status": "DERIVED_UNVERIFIED",
+      "isGameplayEvidence": false,
+      "solverIdentityEligible": false,
+      "imagePath": "assets/items/derived_warehouse_icon_references_v1/image14-1-2.png",
+      "imageSha256": "9d951c45e1185243c83e66bca7d0d525bc1291922f4659858395d2c85f3a3795",
+      "catalogSource": {
+        "sourcePath": "assets/items/catalog_screenshots/1x1/{E4BB419A-6292-4A50-9CEB-D3351D50AF74}.png",
+        "sourceSha256": "2efe7afa85c29ef1243203ccb1772c7b33ef8351720a297787e86dc4c11bf1e9",
+        "cardBbox": [
+          379,
+          0,
+          379,
+          260
+        ],
+        "cropPath": "assets/items/reference_crops_v1/image14-1-2.png",
+        "cropSha256": "9697277e6d9967e2e97c974cae43a8922a4752772c16126899f41f9a2ea69236"
+      },
+      "fitModel": {
+        "source": "shape:1x1",
+        "pairCount": 3
+      },
+      "transform": {
+        "cropMethod": "catalog_reference_body",
+        "cropFractions": {
+          "x": [
+            0.2,
+            0.8
+          ],
+          "y": [
+            0.18,
+            0.76
+          ]
+        },
+        "foregroundMethod": "WarehousePlacementResolver._extract_foreground",
+        "scaleMethod": "fit pooled-or-shape median gameplay foreground occupancy into exact grid-cell canvas",
+        "rotationDegrees": 0,
+        "targetForegroundFraction": [
+          0.8828125,
+          0.671875
+        ],
+        "sourceForegroundPixels": [
+          132,
+          129
+        ],
+        "outputCanvasPixels": [
+          128,
+          128
+        ],
+        "outputObjectRect": [
+          20,
+          21,
+          88,
+          86
+        ],
+        "backgroundSource": "median HSV edge of catalog body crop"
+      }
+    },
+    {
+      "catalogId": "image15-0-0",
+      "name": "漫画书",
+      "widthCells": 1,
+      "heightCells": 1,
+      "rarity": "blue",
+      "status": "DERIVED_UNVERIFIED",
+      "isGameplayEvidence": false,
+      "solverIdentityEligible": false,
+      "imagePath": "assets/items/derived_warehouse_icon_references_v1/image15-0-0.png",
+      "imageSha256": "3a90eb79a3e585db170545c7638c7fe35830dc05faea342507962b6e6a74e7f1",
+      "catalogSource": {
+        "sourcePath": "assets/items/catalog_screenshots/1x1/{E4BB419A-6292-4A50-9CEB-D3351D50AF74}.png",
+        "sourceSha256": "2efe7afa85c29ef1243203ccb1772c7b33ef8351720a297787e86dc4c11bf1e9",
+        "cardBbox": [
+          758,
+          0,
+          379,
+          260
+        ],
+        "cropPath": "assets/items/reference_crops_v1/image15-0-0.png",
+        "cropSha256": "1f37e78c300fcca096ac5f9053697c816f34d3af43860bd401dac3bb877237ce"
+      },
+      "fitModel": {
+        "source": "shape:1x1",
+        "pairCount": 3
+      },
+      "transform": {
+        "cropMethod": "catalog_reference_body",
+        "cropFractions": {
+          "x": [
+            0.2,
+            0.8
+          ],
+          "y": [
+            0.18,
+            0.76
+          ]
+        },
+        "foregroundMethod": "WarehousePlacementResolver._extract_foreground",
+        "scaleMethod": "fit pooled-or-shape median gameplay foreground occupancy into exact grid-cell canvas",
+        "rotationDegrees": 0,
+        "targetForegroundFraction": [
+          0.8828125,
+          0.671875
+        ],
+        "sourceForegroundPixels": [
+          131,
+          150
+        ],
+        "outputCanvasPixels": [
+          128,
+          128
+        ],
+        "outputObjectRect": [
+          26,
+          21,
+          75,
+          86
+        ],
+        "backgroundSource": "median HSV edge of catalog body crop"
+      }
+    },
+    {
+      "catalogId": "image16-0-2",
+      "name": "噗卡好梦棉花糖",
+      "widthCells": 1,
+      "heightCells": 1,
+      "rarity": "blue",
+      "status": "DERIVED_UNVERIFIED",
+      "isGameplayEvidence": false,
+      "solverIdentityEligible": false,
+      "imagePath": "assets/items/derived_warehouse_icon_references_v1/image16-0-2.png",
+      "imageSha256": "689364448f3da17c58002454e2fc2a56fe2baa7cdc3bf8ce2be8ec00e47cf775",
+      "catalogSource": {
+        "sourcePath": "assets/items/catalog_screenshots/1x1/{92DEEC27-CED4-4688-95EC-5A01A337AF9D}.png",
+        "sourceSha256": "5846d029ee2213c1f19321b6baac89c770ec6cd5ba731efd34a961b403b40fad",
+        "cardBbox": [
+          415,
+          287,
+          366,
+          236
+        ],
+        "cropPath": "assets/items/reference_crops_v1/image16-0-2.png",
+        "cropSha256": "8ca06b07256ccddb17e630c0b5dc8d43d60bc98f695efb99264f3fe583217884"
+      },
+      "fitModel": {
+        "source": "shape:1x1",
+        "pairCount": 3
+      },
+      "transform": {
+        "cropMethod": "catalog_reference_body",
+        "cropFractions": {
+          "x": [
+            0.2,
+            0.8
+          ],
+          "y": [
+            0.18,
+            0.76
+          ]
+        },
+        "foregroundMethod": "WarehousePlacementResolver._extract_foreground",
+        "scaleMethod": "fit pooled-or-shape median gameplay foreground occupancy into exact grid-cell canvas",
+        "rotationDegrees": 0,
+        "targetForegroundFraction": [
+          0.8828125,
+          0.671875
+        ],
+        "sourceForegroundPixels": [
+          118,
+          119
+        ],
+        "outputCanvasPixels": [
+          128,
+          128
+        ],
+        "outputObjectRect": [
+          21,
+          21,
+          85,
+          86
+        ],
+        "backgroundSource": "median HSV edge of catalog body crop"
+      }
+    },
+    {
+      "catalogId": "image16-1-0",
+      "name": "毛茸茸的应答",
+      "widthCells": 1,
+      "heightCells": 1,
+      "rarity": "blue",
+      "status": "DERIVED_UNVERIFIED",
+      "isGameplayEvidence": false,
+      "solverIdentityEligible": false,
+      "imagePath": "assets/items/derived_warehouse_icon_references_v1/image16-1-0.png",
+      "imageSha256": "191ad9f7f283ea2b58ae339b4d2c1bc5df1a9c9c401fddb7d90fa9aad035155e",
+      "catalogSource": {
+        "sourcePath": "assets/items/catalog_screenshots/1x1/{92DEEC27-CED4-4688-95EC-5A01A337AF9D}.png",
+        "sourceSha256": "5846d029ee2213c1f19321b6baac89c770ec6cd5ba731efd34a961b403b40fad",
+        "cardBbox": [
+          787,
+          266,
+          394,
+          267
+        ],
+        "cropPath": "assets/items/reference_crops_v1/image16-1-0.png",
+        "cropSha256": "687272d6bb198a014a1bcd09139f95b5616548bc3696599645d1751664dcc68c"
+      },
+      "fitModel": {
+        "source": "shape:1x1",
+        "pairCount": 3
+      },
+      "transform": {
+        "cropMethod": "catalog_reference_body",
+        "cropFractions": {
+          "x": [
+            0.2,
+            0.8
+          ],
+          "y": [
+            0.18,
+            0.76
+          ]
+        },
+        "foregroundMethod": "WarehousePlacementResolver._extract_foreground",
+        "scaleMethod": "fit pooled-or-shape median gameplay foreground occupancy into exact grid-cell canvas",
+        "rotationDegrees": 0,
+        "targetForegroundFraction": [
+          0.8828125,
+          0.671875
+        ],
+        "sourceForegroundPixels": [
+          137,
+          122
+        ],
+        "outputCanvasPixels": [
+          128,
+          128
+        ],
+        "outputObjectRect": [
+          15,
+          21,
+          97,
+          86
+        ],
+        "backgroundSource": "median HSV edge of catalog body crop"
+      }
+    },
+    {
+      "catalogId": "image17-0-2",
+      "name": "寻星者望远镜",
+      "widthCells": 3,
+      "heightCells": 2,
+      "rarity": "purple",
+      "status": "DERIVED_UNVERIFIED",
+      "isGameplayEvidence": false,
+      "solverIdentityEligible": false,
+      "imagePath": "assets/items/derived_warehouse_icon_references_v1/image17-0-2.png",
+      "imageSha256": "6e0f6ea785cbe4286917cb4a1c3c125b6b6efc561cf5b394666f0eddd544451a",
+      "catalogSource": {
+        "sourcePath": "assets/items/catalog_screenshots/3X2/{08AEF60D-14B8-4F18-93F5-0EF794BF950E}.png",
+        "sourceSha256": "8f34a7b84cfa7abfdffa800f71834cfaea58a1c8665c536b9e63e57dae405018",
+        "cardBbox": [
+          390,
+          268,
+          389,
+          267
+        ],
+        "cropPath": "assets/items/reference_crops_v1/image17-0-2.png",
+        "cropSha256": "8b29cb2502825674b6e31deb86ece52a240ea9f5d692fc1bf582f919b6809b85"
+      },
+      "fitModel": {
+        "source": "pooled",
+        "pairCount": 7
+      },
+      "transform": {
+        "cropMethod": "catalog_reference_body",
+        "cropFractions": {
+          "x": [
+            0.2,
+            0.8
+          ],
+          "y": [
+            0.18,
+            0.76
+          ]
+        },
+        "foregroundMethod": "WarehousePlacementResolver._extract_foreground",
+        "scaleMethod": "fit pooled-or-shape median gameplay foreground occupancy into exact grid-cell canvas",
+        "rotationDegrees": 0,
+        "targetForegroundFraction": [
+          0.8220339,
+          0.66015625
+        ],
+        "sourceForegroundPixels": [
+          137,
+          137
+        ],
+        "outputCanvasPixels": [
+          384,
+          256
+        ],
+        "outputObjectRect": [
+          107,
+          43,
+          169,
+          169
+        ],
+        "backgroundSource": "median HSV edge of catalog body crop"
+      }
+    },
+    {
+      "catalogId": "image17-1-1",
+      "name": "阿瑞斯动感单车",
+      "widthCells": 3,
+      "heightCells": 2,
+      "rarity": "purple",
+      "status": "DERIVED_UNVERIFIED",
+      "isGameplayEvidence": false,
+      "solverIdentityEligible": false,
+      "imagePath": "assets/items/derived_warehouse_icon_references_v1/image17-1-1.png",
+      "imageSha256": "157e9bc84d26c3fb56bb148197979a7d47b44649b094133eeb055c7abfc10644",
+      "catalogSource": {
+        "sourcePath": "assets/items/catalog_screenshots/3X2/{1C65BF0E-A101-4042-A9D7-9653D84BCAD1}.png",
+        "sourceSha256": "8a7797b78d26fb9c92308b04d8b504e4abf8ae6957f67907bc6da31cabfd9897",
+        "cardBbox": [
+          0,
+          0,
+          387,
+          272
+        ],
+        "cropPath": "assets/items/reference_crops_v1/image17-1-1.png",
+        "cropSha256": "d6f37d534701147b30089aba763c38b89136a78b58c628c655254235d74ae54d"
+      },
+      "fitModel": {
+        "source": "pooled",
+        "pairCount": 7
+      },
+      "transform": {
+        "cropMethod": "catalog_reference_body",
+        "cropFractions": {
+          "x": [
+            0.2,
+            0.8
+          ],
+          "y": [
+            0.18,
+            0.76
+          ]
+        },
+        "foregroundMethod": "WarehousePlacementResolver._extract_foreground",
+        "scaleMethod": "fit pooled-or-shape median gameplay foreground occupancy into exact grid-cell canvas",
+        "rotationDegrees": 0,
+        "targetForegroundFraction": [
+          0.8220339,
+          0.66015625
+        ],
+        "sourceForegroundPixels": [
+          119,
+          142
+        ],
+        "outputCanvasPixels": [
+          384,
+          256
+        ],
+        "outputObjectRect": [
+          121,
+          43,
+          142,
+          169
+        ],
+        "backgroundSource": "median HSV edge of catalog body crop"
+      }
+    },
+    {
+      "catalogId": "image17-1-2",
+      "name": "落雪水晶球",
+      "widthCells": 2,
+      "heightCells": 3,
+      "rarity": "purple",
+      "status": "DERIVED_UNVERIFIED",
+      "isGameplayEvidence": false,
+      "solverIdentityEligible": false,
+      "imagePath": "assets/items/derived_warehouse_icon_references_v1/image17-1-2.png",
+      "imageSha256": "c5d06740abc71b76d8fd88271f5226bcac6e5f439176f893ddee0bfefd94ffe8",
+      "catalogSource": {
+        "sourcePath": "assets/items/catalog_screenshots/2X3/{5432C3CC-00E0-43D0-8461-DD6A7E64552D}.png",
+        "sourceSha256": "b7c9219049c3f10b1452cd3b196515759373fc72ca2203b358a6f1ac2a0d160c",
+        "cardBbox": [
+          783,
+          0,
+          392,
+          264
+        ],
+        "cropPath": "assets/items/reference_crops_v1/image17-1-2.png",
+        "cropSha256": "7148fb8edbd0411ceeaa70a88062964f2858fbab81bb5c0c10b9335b4b108661"
+      },
+      "fitModel": {
+        "source": "pooled",
+        "pairCount": 7
+      },
+      "transform": {
+        "cropMethod": "catalog_reference_body",
+        "cropFractions": {
+          "x": [
+            0.2,
+            0.8
+          ],
+          "y": [
+            0.18,
+            0.76
+          ]
+        },
+        "foregroundMethod": "WarehousePlacementResolver._extract_foreground",
+        "scaleMethod": "fit pooled-or-shape median gameplay foreground occupancy into exact grid-cell canvas",
+        "rotationDegrees": 0,
+        "targetForegroundFraction": [
+          0.8220339,
+          0.66015625
+        ],
+        "sourceForegroundPixels": [
+          103,
+          109
+        ],
+        "outputCanvasPixels": [
+          256,
+          384
+        ],
+        "outputObjectRect": [
+          23,
+          80,
+          210,
+          223
+        ],
+        "backgroundSource": "median HSV edge of catalog body crop"
+      }
+    },
+    {
+      "catalogId": "image18-1-2",
+      "name": "智能笔筒",
+      "widthCells": 2,
+      "heightCells": 2,
+      "rarity": "purple",
+      "status": "DERIVED_UNVERIFIED",
+      "isGameplayEvidence": false,
+      "solverIdentityEligible": false,
+      "imagePath": "assets/items/derived_warehouse_icon_references_v1/image18-1-2.png",
+      "imageSha256": "6aafb2e62595fe8088e563538177a9b4ddeab9b2154dc900faebb173105a8b71",
+      "catalogSource": {
+        "sourcePath": "assets/items/catalog_screenshots/2X2/{E979E688-0FB8-4D82-BED5-C0FA4B86B848}.png",
+        "sourceSha256": "dc9ce35eaf9fe92425a27cf64d387838a4ae0a199c5333841dbaa8b2d36a1d6c",
+        "cardBbox": [
+          17,
+          20,
+          366,
+          236
+        ],
+        "cropPath": "assets/items/reference_crops_v1/image18-1-2.png",
+        "cropSha256": "60b8b8f21cca352bbe315055a7699e23ed9c9b7d022859c8243c6d9167f40048"
+      },
+      "fitModel": {
+        "source": "pooled",
+        "pairCount": 7
+      },
+      "transform": {
+        "cropMethod": "catalog_reference_body",
+        "cropFractions": {
+          "x": [
+            0.2,
+            0.8
+          ],
+          "y": [
+            0.18,
+            0.76
+          ]
+        },
+        "foregroundMethod": "WarehousePlacementResolver._extract_foreground",
+        "scaleMethod": "fit pooled-or-shape median gameplay foreground occupancy into exact grid-cell canvas",
+        "rotationDegrees": 0,
+        "targetForegroundFraction": [
+          0.8220339,
+          0.66015625
+        ],
+        "sourceForegroundPixels": [
+          73,
+          138
+        ],
+        "outputCanvasPixels": [
+          256,
+          256
+        ],
+        "outputObjectRect": [
+          83,
+          43,
+          89,
+          169
+        ],
+        "backgroundSource": "median HSV edge of catalog body crop"
+      }
+    },
+    {
+      "catalogId": "image19-0-2",
+      "name": "角斗士之歌",
+      "widthCells": 1,
+      "heightCells": 3,
+      "rarity": "purple",
+      "status": "DERIVED_UNVERIFIED",
+      "isGameplayEvidence": false,
+      "solverIdentityEligible": false,
+      "imagePath": "assets/items/derived_warehouse_icon_references_v1/image19-0-2.png",
+      "imageSha256": "e5af22c68d13b8b7590e95c38af0a3c20b9e5557521531e06b464138e90295ae",
+      "catalogSource": {
+        "sourcePath": "assets/items/catalog_screenshots/1X3/{8443FC6A-7C86-4902-BAB8-454E077003BF}.png",
+        "sourceSha256": "6f824c36d49ed95947cd348d392dfeb3cf9c32fc283f2827ac107850f83bca64",
+        "cardBbox": [
+          769,
+          262,
+          385,
+          263
+        ],
+        "cropPath": "assets/items/reference_crops_v1/image19-0-2.png",
+        "cropSha256": "e97dec153c669d07d0222206e2fe4060b52185ba7cb9ee1e0d299b90eba5e008"
+      },
+      "fitModel": {
+        "source": "pooled",
+        "pairCount": 7
+      },
+      "transform": {
+        "cropMethod": "catalog_reference_body",
+        "cropFractions": {
+          "x": [
+            0.2,
+            0.8
+          ],
+          "y": [
+            0.18,
+            0.76
+          ]
+        },
+        "foregroundMethod": "WarehousePlacementResolver._extract_foreground",
+        "scaleMethod": "fit pooled-or-shape median gameplay foreground occupancy into exact grid-cell canvas",
+        "rotationDegrees": 0,
+        "targetForegroundFraction": [
+          0.8220339,
+          0.66015625
+        ],
+        "sourceForegroundPixels": [
+          63,
+          131
+        ],
+        "outputCanvasPixels": [
+          128,
+          384
+        ],
+        "outputObjectRect": [
+          11,
+          82,
+          105,
+          219
+        ],
+        "backgroundSource": "median HSV edge of catalog body crop"
+      }
+    },
+    {
+      "catalogId": "image19-1-1",
+      "name": "奇异引火石",
+      "widthCells": 2,
+      "heightCells": 1,
+      "rarity": "purple",
+      "status": "DERIVED_UNVERIFIED",
+      "isGameplayEvidence": false,
+      "solverIdentityEligible": false,
+      "imagePath": "assets/items/derived_warehouse_icon_references_v1/image19-1-1.png",
+      "imageSha256": "97d3a15e57db6c9cd01c52397f4fea1b92b7c1104eb000f5fc4aa3e6076daeb6",
+      "catalogSource": {
+        "sourcePath": "assets/items/catalog_screenshots/2X1/{82CFB2D0-B389-4430-B693-85C796393974}.png",
+        "sourceSha256": "f20d22e344b30ff3d790da9f8309254e835add8920c2afbe7e3eb0f440fc3089",
+        "cardBbox": [
+          767,
+          0,
+          384,
+          266
+        ],
+        "cropPath": "assets/items/reference_crops_v1/image19-1-1.png",
+        "cropSha256": "ad91cc0ae081c4095cb82235ef0c2302af87f3b768ac89941b3b2e208cf07b1b"
+      },
+      "fitModel": {
+        "source": "pooled",
+        "pairCount": 7
+      },
+      "transform": {
+        "cropMethod": "catalog_reference_body",
+        "cropFractions": {
+          "x": [
+            0.2,
+            0.8
+          ],
+          "y": [
+            0.18,
+            0.76
+          ]
+        },
+        "foregroundMethod": "WarehousePlacementResolver._extract_foreground",
+        "scaleMethod": "fit pooled-or-shape median gameplay foreground occupancy into exact grid-cell canvas",
+        "rotationDegrees": 0,
+        "targetForegroundFraction": [
+          0.8220339,
+          0.66015625
+        ],
+        "sourceForegroundPixels": [
+          122,
+          124
+        ],
+        "outputCanvasPixels": [
+          256,
+          128
+        ],
+        "outputObjectRect": [
+          86,
+          22,
+          83,
+          84
+        ],
+        "backgroundSource": "median HSV edge of catalog body crop"
+      }
+    },
+    {
+      "catalogId": "image21-1-1",
+      "name": "万能遥控器",
+      "widthCells": 2,
+      "heightCells": 1,
+      "rarity": "purple",
+      "status": "DERIVED_UNVERIFIED",
+      "isGameplayEvidence": false,
+      "solverIdentityEligible": false,
+      "imagePath": "assets/items/derived_warehouse_icon_references_v1/image21-1-1.png",
+      "imageSha256": "1d2a8755f3e7c2da9f1e28abc7d65f7d11b96310db71b9352b82554e20c48129",
+      "catalogSource": {
+        "sourcePath": "assets/items/catalog_screenshots/2X1/{82CFB2D0-B389-4430-B693-85C796393974}.png",
+        "sourceSha256": "f20d22e344b30ff3d790da9f8309254e835add8920c2afbe7e3eb0f440fc3089",
+        "cardBbox": [
+          394,
+          285,
+          366,
+          236
+        ],
+        "cropPath": "assets/items/reference_crops_v1/image21-1-1.png",
+        "cropSha256": "988c01e4d4fd0948d603b0a07d7f353fc2aa32bab98ea727f40737bc0b3cca1f"
+      },
+      "fitModel": {
+        "source": "pooled",
+        "pairCount": 7
+      },
+      "transform": {
+        "cropMethod": "catalog_reference_body",
+        "cropFractions": {
+          "x": [
+            0.2,
+            0.8
+          ],
+          "y": [
+            0.18,
+            0.76
+          ]
+        },
+        "foregroundMethod": "WarehousePlacementResolver._extract_foreground",
+        "scaleMethod": "fit pooled-or-shape median gameplay foreground occupancy into exact grid-cell canvas",
+        "rotationDegrees": 0,
+        "targetForegroundFraction": [
+          0.8220339,
+          0.66015625
+        ],
+        "sourceForegroundPixels": [
+          114,
+          128
+        ],
+        "outputCanvasPixels": [
+          256,
+          128
+        ],
+        "outputObjectRect": [
+          90,
+          22,
+          75,
+          84
+        ],
+        "backgroundSource": "median HSV edge of catalog body crop"
+      }
+    },
+    {
+      "catalogId": "image22-0-1",
+      "name": "秋枫镇纸",
+      "widthCells": 2,
+      "heightCells": 1,
+      "rarity": "purple",
+      "status": "DERIVED_UNVERIFIED",
+      "isGameplayEvidence": false,
+      "solverIdentityEligible": false,
+      "imagePath": "assets/items/derived_warehouse_icon_references_v1/image22-0-1.png",
+      "imageSha256": "396d71462f46930f28c26cae077e7f9d6a33c85925ac0236e3a4f373d4f3b80d",
+      "catalogSource": {
+        "sourcePath": "assets/items/catalog_screenshots/2X1/{4C68408B-B5A3-46E8-8049-C0B8065ADE60}.png",
+        "sourceSha256": "e2a074bd0588230fcfba5467b094d2a27fc7f433b84672206ca4282753958fb3",
+        "cardBbox": [
+          0,
+          0,
+          388,
+          266
+        ],
+        "cropPath": "assets/items/reference_crops_v1/image22-0-1.png",
+        "cropSha256": "f13518a0727fbde9f3fb9929568af23ecbd6a245e708f70308fb70805ddd8769"
+      },
+      "fitModel": {
+        "source": "pooled",
+        "pairCount": 7
+      },
+      "transform": {
+        "cropMethod": "catalog_reference_body",
+        "cropFractions": {
+          "x": [
+            0.2,
+            0.8
+          ],
+          "y": [
+            0.18,
+            0.76
+          ]
+        },
+        "foregroundMethod": "WarehousePlacementResolver._extract_foreground",
+        "scaleMethod": "fit pooled-or-shape median gameplay foreground occupancy into exact grid-cell canvas",
+        "rotationDegrees": 0,
+        "targetForegroundFraction": [
+          0.8220339,
+          0.66015625
+        ],
+        "sourceForegroundPixels": [
+          74,
+          143
+        ],
+        "outputCanvasPixels": [
+          256,
+          128
+        ],
+        "outputObjectRect": [
+          106,
+          22,
+          44,
+          84
+        ],
+        "backgroundSource": "median HSV edge of catalog body crop"
+      }
+    },
+    {
+      "catalogId": "image22-1-0",
+      "name": "双色冰棍",
+      "widthCells": 2,
+      "heightCells": 1,
+      "rarity": "purple",
+      "status": "DERIVED_UNVERIFIED",
+      "isGameplayEvidence": false,
+      "solverIdentityEligible": false,
+      "imagePath": "assets/items/derived_warehouse_icon_references_v1/image22-1-0.png",
+      "imageSha256": "263a4c6b9b70cf65b4cefc6b8302c6293e7c8ccb13d553d26451d85420fb9376",
+      "catalogSource": {
+        "sourcePath": "assets/items/catalog_screenshots/2X1/{4C68408B-B5A3-46E8-8049-C0B8065ADE60}.png",
+        "sourceSha256": "e2a074bd0588230fcfba5467b094d2a27fc7f433b84672206ca4282753958fb3",
+        "cardBbox": [
+          776,
+          0,
+          388,
+          266
+        ],
+        "cropPath": "assets/items/reference_crops_v1/image22-1-0.png",
+        "cropSha256": "e9f685f3f4c51763edafd5b43efb7db52ea1f91ae3b0aefd9eaef38b1583e6dc"
+      },
+      "fitModel": {
+        "source": "pooled",
+        "pairCount": 7
+      },
+      "transform": {
+        "cropMethod": "catalog_reference_body",
+        "cropFractions": {
+          "x": [
+            0.2,
+            0.8
+          ],
+          "y": [
+            0.18,
+            0.76
+          ]
+        },
+        "foregroundMethod": "WarehousePlacementResolver._extract_foreground",
+        "scaleMethod": "fit pooled-or-shape median gameplay foreground occupancy into exact grid-cell canvas",
+        "rotationDegrees": 0,
+        "targetForegroundFraction": [
+          0.8220339,
+          0.66015625
+        ],
+        "sourceForegroundPixels": [
+          81,
+          115
+        ],
+        "outputCanvasPixels": [
+          256,
+          128
+        ],
+        "outputObjectRect": [
+          98,
+          22,
+          60,
+          84
+        ],
+        "backgroundSource": "median HSV edge of catalog body crop"
+      }
+    },
+    {
+      "catalogId": "image23-0-1",
+      "name": "饕目",
+      "widthCells": 1,
+      "heightCells": 1,
+      "rarity": "purple",
+      "status": "DERIVED_UNVERIFIED",
+      "isGameplayEvidence": false,
+      "solverIdentityEligible": false,
+      "imagePath": "assets/items/derived_warehouse_icon_references_v1/image23-0-1.png",
+      "imageSha256": "dd3beed23cf9d014c094a51d2bb85cd8d52c6c38b8fd199f0bef6c6328b5128e",
+      "catalogSource": {
+        "sourcePath": "assets/items/catalog_screenshots/1x1/{16B07C02-E13A-4195-8F67-C8A4041C7B87}.png",
+        "sourceSha256": "9f98e96a63192b44e90e4c530f754d268605fe8283da2b013cde608ac615ccc4",
+        "cardBbox": [
+          0,
+          0,
+          390,
+          271
+        ],
+        "cropPath": "assets/items/reference_crops_v1/image23-0-1.png",
+        "cropSha256": "4dc1e2cf78b63c1c61a1049a48971a7bfb91eb8f608be076c92ea49c2d6d98b0"
+      },
+      "fitModel": {
+        "source": "shape:1x1",
+        "pairCount": 3
+      },
+      "transform": {
+        "cropMethod": "catalog_reference_body",
+        "cropFractions": {
+          "x": [
+            0.2,
+            0.8
+          ],
+          "y": [
+            0.18,
+            0.76
+          ]
+        },
+        "foregroundMethod": "WarehousePlacementResolver._extract_foreground",
+        "scaleMethod": "fit pooled-or-shape median gameplay foreground occupancy into exact grid-cell canvas",
+        "rotationDegrees": 0,
+        "targetForegroundFraction": [
+          0.8828125,
+          0.671875
+        ],
+        "sourceForegroundPixels": [
+          103,
+          114
+        ],
+        "outputCanvasPixels": [
+          128,
+          128
+        ],
+        "outputObjectRect": [
+          25,
+          21,
+          78,
+          86
+        ],
+        "backgroundSource": "median HSV edge of catalog body crop"
+      }
+    },
+    {
+      "catalogId": "image23-0-2",
+      "name": "蔚蓝旋律",
+      "widthCells": 1,
+      "heightCells": 1,
+      "rarity": "purple",
+      "status": "DERIVED_UNVERIFIED",
+      "isGameplayEvidence": false,
+      "solverIdentityEligible": false,
+      "imagePath": "assets/items/derived_warehouse_icon_references_v1/image23-0-2.png",
+      "imageSha256": "ed506f97f97deeadb0048028951dd58566c8f69833c88ec1adb44f4820a0f9db",
+      "catalogSource": {
+        "sourcePath": "assets/items/catalog_screenshots/1x1/{16B07C02-E13A-4195-8F67-C8A4041C7B87}.png",
+        "sourceSha256": "9f98e96a63192b44e90e4c530f754d268605fe8283da2b013cde608ac615ccc4",
+        "cardBbox": [
+          390,
+          0,
+          390,
+          271
+        ],
+        "cropPath": "assets/items/reference_crops_v1/image23-0-2.png",
+        "cropSha256": "36f02aa295392adc726fc05558546af08041d581904dac990a8b90c952d5ca6c"
+      },
+      "fitModel": {
+        "source": "shape:1x1",
+        "pairCount": 3
+      },
+      "transform": {
+        "cropMethod": "catalog_reference_body",
+        "cropFractions": {
+          "x": [
+            0.2,
+            0.8
+          ],
+          "y": [
+            0.18,
+            0.76
+          ]
+        },
+        "foregroundMethod": "WarehousePlacementResolver._extract_foreground",
+        "scaleMethod": "fit pooled-or-shape median gameplay foreground occupancy into exact grid-cell canvas",
+        "rotationDegrees": 0,
+        "targetForegroundFraction": [
+          0.8828125,
+          0.671875
+        ],
+        "sourceForegroundPixels": [
+          131,
+          134
+        ],
+        "outputCanvasPixels": [
+          128,
+          128
+        ],
+        "outputObjectRect": [
+          22,
+          21,
+          84,
+          86
+        ],
+        "backgroundSource": "median HSV edge of catalog body crop"
+      }
+    },
+    {
+      "catalogId": "image23-1-0",
+      "name": "月白沙",
+      "widthCells": 1,
+      "heightCells": 1,
+      "rarity": "purple",
+      "status": "DERIVED_UNVERIFIED",
+      "isGameplayEvidence": false,
+      "solverIdentityEligible": false,
+      "imagePath": "assets/items/derived_warehouse_icon_references_v1/image23-1-0.png",
+      "imageSha256": "5997dab25d4bc657d20665bc9028cfe74a6280e00f607257a785ce682f6a2eb8",
+      "catalogSource": {
+        "sourcePath": "assets/items/catalog_screenshots/1x1/{16B07C02-E13A-4195-8F67-C8A4041C7B87}.png",
+        "sourceSha256": "9f98e96a63192b44e90e4c530f754d268605fe8283da2b013cde608ac615ccc4",
+        "cardBbox": [
+          780,
+          0,
+          390,
+          271
+        ],
+        "cropPath": "assets/items/reference_crops_v1/image23-1-0.png",
+        "cropSha256": "86db28ee7d45b1f4ad7464d9565780e58579158d953460ccd0ad44c2e555a86b"
+      },
+      "fitModel": {
+        "source": "shape:1x1",
+        "pairCount": 3
+      },
+      "transform": {
+        "cropMethod": "catalog_reference_body",
+        "cropFractions": {
+          "x": [
+            0.2,
+            0.8
+          ],
+          "y": [
+            0.18,
+            0.76
+          ]
+        },
+        "foregroundMethod": "WarehousePlacementResolver._extract_foreground",
+        "scaleMethod": "fit pooled-or-shape median gameplay foreground occupancy into exact grid-cell canvas",
+        "rotationDegrees": 0,
+        "targetForegroundFraction": [
+          0.8828125,
+          0.671875
+        ],
+        "sourceForegroundPixels": [
+          141,
+          106
+        ],
+        "outputCanvasPixels": [
+          128,
+          128
+        ],
+        "outputObjectRect": [
+          7,
+          21,
+          113,
+          85
+        ],
+        "backgroundSource": "median HSV edge of catalog body crop"
+      }
+    },
+    {
+      "catalogId": "image23-1-2",
+      "name": "海中栗",
+      "widthCells": 1,
+      "heightCells": 1,
+      "rarity": "purple",
+      "status": "DERIVED_UNVERIFIED",
+      "isGameplayEvidence": false,
+      "solverIdentityEligible": false,
+      "imagePath": "assets/items/derived_warehouse_icon_references_v1/image23-1-2.png",
+      "imageSha256": "711f0cd6eff5a24485cb0ee8dbbdefacd8463451edfb09ea6fe0d3e2eeaa32bf",
+      "catalogSource": {
+        "sourcePath": "assets/items/catalog_screenshots/1x1/{16B07C02-E13A-4195-8F67-C8A4041C7B87}.png",
+        "sourceSha256": "9f98e96a63192b44e90e4c530f754d268605fe8283da2b013cde608ac615ccc4",
+        "cardBbox": [
+          390,
+          271,
+          390,
+          271
+        ],
+        "cropPath": "assets/items/reference_crops_v1/image23-1-2.png",
+        "cropSha256": "21d89a2acab3777433f4a1645147fa09f28787aeed6c51e4f17d0d8319bb7299"
+      },
+      "fitModel": {
+        "source": "shape:1x1",
+        "pairCount": 3
+      },
+      "transform": {
+        "cropMethod": "catalog_reference_body",
+        "cropFractions": {
+          "x": [
+            0.2,
+            0.8
+          ],
+          "y": [
+            0.18,
+            0.76
+          ]
+        },
+        "foregroundMethod": "WarehousePlacementResolver._extract_foreground",
+        "scaleMethod": "fit pooled-or-shape median gameplay foreground occupancy into exact grid-cell canvas",
+        "rotationDegrees": 0,
+        "targetForegroundFraction": [
+          0.8828125,
+          0.671875
+        ],
+        "sourceForegroundPixels": [
+          127,
+          123
+        ],
+        "outputCanvasPixels": [
+          128,
+          128
+        ],
+        "outputObjectRect": [
+          19,
+          21,
+          89,
+          86
+        ],
+        "backgroundSource": "median HSV edge of catalog body crop"
+      }
+    },
+    {
+      "catalogId": "image24-0-1",
+      "name": "焰火海鲜饭",
+      "widthCells": 1,
+      "heightCells": 1,
+      "rarity": "purple",
+      "status": "DERIVED_UNVERIFIED",
+      "isGameplayEvidence": false,
+      "solverIdentityEligible": false,
+      "imagePath": "assets/items/derived_warehouse_icon_references_v1/image24-0-1.png",
+      "imageSha256": "f44845b9f45fe83418f302911699f63fd7dc930d1c9d3c8fcc5673571e2aad4d",
+      "catalogSource": {
+        "sourcePath": "assets/items/catalog_screenshots/1x1/{46C9F0D7-4495-419F-9A04-544A2E375631}.png",
+        "sourceSha256": "e0df940f362f4583c644144ab611bd8ff0aff5682eb2d14609324f6cdc430470",
+        "cardBbox": [
+          0,
+          0,
+          385,
+          260
+        ],
+        "cropPath": "assets/items/reference_crops_v1/image24-0-1.png",
+        "cropSha256": "b3d2d3821fa98e6654f62c43a12c958e815ed8f6813e7959bf9843853a22ee0b"
+      },
+      "fitModel": {
+        "source": "shape:1x1",
+        "pairCount": 3
+      },
+      "transform": {
+        "cropMethod": "catalog_reference_body",
+        "cropFractions": {
+          "x": [
+            0.2,
+            0.8
+          ],
+          "y": [
+            0.18,
+            0.76
+          ]
+        },
+        "foregroundMethod": "WarehousePlacementResolver._extract_foreground",
+        "scaleMethod": "fit pooled-or-shape median gameplay foreground occupancy into exact grid-cell canvas",
+        "rotationDegrees": 0,
+        "targetForegroundFraction": [
+          0.8828125,
+          0.671875
+        ],
+        "sourceForegroundPixels": [
+          150,
+          94
+        ],
+        "outputCanvasPixels": [
+          128,
+          128
+        ],
+        "outputObjectRect": [
+          7,
+          28,
+          113,
+          71
+        ],
+        "backgroundSource": "median HSV edge of catalog body crop"
+      }
+    },
+    {
+      "catalogId": "image24-0-2",
+      "name": "压缩纸盒",
+      "widthCells": 1,
+      "heightCells": 1,
+      "rarity": "purple",
+      "status": "DERIVED_UNVERIFIED",
+      "isGameplayEvidence": false,
+      "solverIdentityEligible": false,
+      "imagePath": "assets/items/derived_warehouse_icon_references_v1/image24-0-2.png",
+      "imageSha256": "814316c70400f40164368df9d7d1ac5a866058b56fe16a89aa0e929d9f0416f4",
+      "catalogSource": {
+        "sourcePath": "assets/items/catalog_screenshots/1x1/{46C9F0D7-4495-419F-9A04-544A2E375631}.png",
+        "sourceSha256": "e0df940f362f4583c644144ab611bd8ff0aff5682eb2d14609324f6cdc430470",
+        "cardBbox": [
+          385,
+          0,
+          386,
+          260
+        ],
+        "cropPath": "assets/items/reference_crops_v1/image24-0-2.png",
+        "cropSha256": "4d3ef2fbc39b9f8cf0a2229d3e667cb66fa7c151905a7732ab1484d4c574ea28"
+      },
+      "fitModel": {
+        "source": "shape:1x1",
+        "pairCount": 3
+      },
+      "transform": {
+        "cropMethod": "catalog_reference_body",
+        "cropFractions": {
+          "x": [
+            0.2,
+            0.8
+          ],
+          "y": [
+            0.18,
+            0.76
+          ]
+        },
+        "foregroundMethod": "WarehousePlacementResolver._extract_foreground",
+        "scaleMethod": "fit pooled-or-shape median gameplay foreground occupancy into exact grid-cell canvas",
+        "rotationDegrees": 0,
+        "targetForegroundFraction": [
+          0.8828125,
+          0.671875
+        ],
+        "sourceForegroundPixels": [
+          114,
+          129
+        ],
+        "outputCanvasPixels": [
+          128,
+          128
+        ],
+        "outputObjectRect": [
+          26,
+          21,
+          76,
+          86
+        ],
+        "backgroundSource": "median HSV edge of catalog body crop"
+      }
+    },
+    {
+      "catalogId": "image24-1-0",
+      "name": "炫彩扭蛋",
+      "widthCells": 1,
+      "heightCells": 1,
+      "rarity": "purple",
+      "status": "DERIVED_UNVERIFIED",
+      "isGameplayEvidence": false,
+      "solverIdentityEligible": false,
+      "imagePath": "assets/items/derived_warehouse_icon_references_v1/image24-1-0.png",
+      "imageSha256": "5868e92278e7171725f36218abe8c79152cf24c00a0200412a94f659eb4d2b34",
+      "catalogSource": {
+        "sourcePath": "assets/items/catalog_screenshots/1x1/{46C9F0D7-4495-419F-9A04-544A2E375631}.png",
+        "sourceSha256": "e0df940f362f4583c644144ab611bd8ff0aff5682eb2d14609324f6cdc430470",
+        "cardBbox": [
+          771,
+          0,
+          385,
+          260
+        ],
+        "cropPath": "assets/items/reference_crops_v1/image24-1-0.png",
+        "cropSha256": "e3bb577860b32b9e1d1264cf638f0efaa333d45d154d4a648973e7af513a3b88"
+      },
+      "fitModel": {
+        "source": "shape:1x1",
+        "pairCount": 3
+      },
+      "transform": {
+        "cropMethod": "catalog_reference_body",
+        "cropFractions": {
+          "x": [
+            0.2,
+            0.8
+          ],
+          "y": [
+            0.18,
+            0.76
+          ]
+        },
+        "foregroundMethod": "WarehousePlacementResolver._extract_foreground",
+        "scaleMethod": "fit pooled-or-shape median gameplay foreground occupancy into exact grid-cell canvas",
+        "rotationDegrees": 0,
+        "targetForegroundFraction": [
+          0.8828125,
+          0.671875
+        ],
+        "sourceForegroundPixels": [
+          141,
+          110
+        ],
+        "outputCanvasPixels": [
+          128,
+          128
+        ],
+        "outputObjectRect": [
+          9,
+          21,
+          110,
+          86
+        ],
+        "backgroundSource": "median HSV edge of catalog body crop"
+      }
+    },
+    {
+      "catalogId": "image24-1-1",
+      "name": "棉花心",
+      "widthCells": 1,
+      "heightCells": 1,
+      "rarity": "purple",
+      "status": "DERIVED_UNVERIFIED",
+      "isGameplayEvidence": false,
+      "solverIdentityEligible": false,
+      "imagePath": "assets/items/derived_warehouse_icon_references_v1/image24-1-1.png",
+      "imageSha256": "7d00ecb51d3ada29e796fd08b83dd6a05863e2f2c70b4a92fff94e8ce4562526",
+      "catalogSource": {
+        "sourcePath": "assets/items/catalog_screenshots/1x1/{46C9F0D7-4495-419F-9A04-544A2E375631}.png",
+        "sourceSha256": "e0df940f362f4583c644144ab611bd8ff0aff5682eb2d14609324f6cdc430470",
+        "cardBbox": [
+          0,
+          260,
+          385,
+          261
+        ],
+        "cropPath": "assets/items/reference_crops_v1/image24-1-1.png",
+        "cropSha256": "2f98d736f14d9e29e06f6a031a1524ad59c3639b3682971989af1f451c9e0ab1"
+      },
+      "fitModel": {
+        "source": "shape:1x1",
+        "pairCount": 3
+      },
+      "transform": {
+        "cropMethod": "catalog_reference_body",
+        "cropFractions": {
+          "x": [
+            0.2,
+            0.8
+          ],
+          "y": [
+            0.18,
+            0.76
+          ]
+        },
+        "foregroundMethod": "WarehousePlacementResolver._extract_foreground",
+        "scaleMethod": "fit pooled-or-shape median gameplay foreground occupancy into exact grid-cell canvas",
+        "rotationDegrees": 0,
+        "targetForegroundFraction": [
+          0.8828125,
+          0.671875
+        ],
+        "sourceForegroundPixels": [
+          122,
+          113
+        ],
+        "outputCanvasPixels": [
+          128,
+          128
+        ],
+        "outputObjectRect": [
+          17,
+          21,
+          93,
+          86
+        ],
+        "backgroundSource": "median HSV edge of catalog body crop"
+      }
+    },
+    {
+      "catalogId": "image25-0-0",
+      "name": "弹性球",
+      "widthCells": 1,
+      "heightCells": 1,
+      "rarity": "purple",
+      "status": "DERIVED_UNVERIFIED",
+      "isGameplayEvidence": false,
+      "solverIdentityEligible": false,
+      "imagePath": "assets/items/derived_warehouse_icon_references_v1/image25-0-0.png",
+      "imageSha256": "38914d4882a856eb1f142d6f95d316059a06326dcb1188a5ec676f809b44fcf7",
+      "catalogSource": {
+        "sourcePath": "assets/items/catalog_screenshots/1x1/{46C9F0D7-4495-419F-9A04-544A2E375631}.png",
+        "sourceSha256": "e0df940f362f4583c644144ab611bd8ff0aff5682eb2d14609324f6cdc430470",
+        "cardBbox": [
+          771,
+          260,
+          385,
+          261
+        ],
+        "cropPath": "assets/items/reference_crops_v1/image25-0-0.png",
+        "cropSha256": "64d757b3c49beb30d44d7de9796f59bfc652de4b798e5b0f6f4ade01d85e1543"
+      },
+      "fitModel": {
+        "source": "shape:1x1",
+        "pairCount": 3
+      },
+      "transform": {
+        "cropMethod": "catalog_reference_body",
+        "cropFractions": {
+          "x": [
+            0.2,
+            0.8
+          ],
+          "y": [
+            0.18,
+            0.76
+          ]
+        },
+        "foregroundMethod": "WarehousePlacementResolver._extract_foreground",
+        "scaleMethod": "fit pooled-or-shape median gameplay foreground occupancy into exact grid-cell canvas",
+        "rotationDegrees": 0,
+        "targetForegroundFraction": [
+          0.8828125,
+          0.671875
+        ],
+        "sourceForegroundPixels": [
+          119,
+          117
+        ],
+        "outputCanvasPixels": [
+          128,
+          128
+        ],
+        "outputObjectRect": [
+          20,
+          21,
+          87,
+          86
+        ],
+        "backgroundSource": "median HSV edge of catalog body crop"
+      }
+    },
+    {
+      "catalogId": "image26-0-0",
+      "name": "乔望尼金雕像",
+      "widthCells": 4,
+      "heightCells": 5,
+      "rarity": "gold",
+      "status": "DERIVED_UNVERIFIED",
+      "isGameplayEvidence": false,
+      "solverIdentityEligible": false,
+      "imagePath": "assets/items/derived_warehouse_icon_references_v1/image26-0-0.png",
+      "imageSha256": "7e1ce18fc3b135b0d5fefc5d297a5d905e33a9a2de441f664545b2c572936418",
+      "catalogSource": {
+        "sourcePath": "assets/items/catalog_screenshots/4X5/{3926DFDD-7627-4780-B786-3D4910511CA2}.png",
+        "sourceSha256": "a936c0ffebad090b7bafebf130ddebdd0db71338264e385657b35b34c1e31a1c",
+        "cardBbox": [
+          33,
+          70,
+          368,
+          236
+        ],
+        "cropPath": "assets/items/reference_crops_v1/image26-0-0.png",
+        "cropSha256": "260c18fb15d1db5df39ee01f581ea6e213bc41ae48b305ddb220a19a623bc4e1"
+      },
+      "fitModel": {
+        "source": "pooled",
+        "pairCount": 7
+      },
+      "transform": {
+        "cropMethod": "catalog_reference_body",
+        "cropFractions": {
+          "x": [
+            0.2,
+            0.8
+          ],
+          "y": [
+            0.18,
+            0.76
+          ]
+        },
+        "foregroundMethod": "WarehousePlacementResolver._extract_foreground",
+        "scaleMethod": "fit pooled-or-shape median gameplay foreground occupancy into exact grid-cell canvas",
+        "rotationDegrees": 0,
+        "targetForegroundFraction": [
+          0.8220339,
+          0.66015625
+        ],
+        "sourceForegroundPixels": [
+          148,
+          149
+        ],
+        "outputCanvasPixels": [
+          512,
+          640
+        ],
+        "outputObjectRect": [
+          46,
+          109,
+          420,
+          422
+        ],
+        "backgroundSource": "median HSV edge of catalog body crop"
+      }
+    },
+    {
+      "catalogId": "image26-1-0",
+      "name": "金龙鱼",
+      "widthCells": 4,
+      "heightCells": 1,
+      "rarity": "gold",
+      "status": "DERIVED_UNVERIFIED",
+      "isGameplayEvidence": false,
+      "solverIdentityEligible": false,
+      "imagePath": "assets/items/derived_warehouse_icon_references_v1/image26-1-0.png",
+      "imageSha256": "6435d77b280e3ed1a7a73b3f409757c5ce21df5b2af0610cec4f7bbdb486f8cb",
+      "catalogSource": {
+        "sourcePath": "assets/items/catalog_screenshots/4X1/{7DB91AEB-261E-41F0-831D-424EEDA94025}.png",
+        "sourceSha256": "49e4872e3aafe2727692b89e5efef2e0b6ef10e915d84fb44d52819f22a4ebbe",
+        "cardBbox": [
+          17,
+          36,
+          366,
+          236
+        ],
+        "cropPath": "assets/items/reference_crops_v1/image26-1-0.png",
+        "cropSha256": "2d8ddda77d4c481b8f8eaadb8fe4e372e535357ddb35c782bb4fe55f78b32a31"
+      },
+      "fitModel": {
+        "source": "pooled",
+        "pairCount": 7
+      },
+      "transform": {
+        "cropMethod": "catalog_reference_body",
+        "cropFractions": {
+          "x": [
+            0.2,
+            0.8
+          ],
+          "y": [
+            0.18,
+            0.76
+          ]
+        },
+        "foregroundMethod": "WarehousePlacementResolver._extract_foreground",
+        "scaleMethod": "fit pooled-or-shape median gameplay foreground occupancy into exact grid-cell canvas",
+        "rotationDegrees": 0,
+        "targetForegroundFraction": [
+          0.8220339,
+          0.66015625
+        ],
+        "sourceForegroundPixels": [
+          122,
+          127
+        ],
+        "outputCanvasPixels": [
+          512,
+          128
+        ],
+        "outputObjectRect": [
+          215,
+          22,
+          81,
+          84
+        ],
+        "backgroundSource": "median HSV edge of catalog body crop"
+      }
+    },
+    {
+      "catalogId": "image26-1-2",
+      "name": "片刻驻足",
+      "widthCells": 2,
+      "heightCells": 3,
+      "rarity": "gold",
+      "status": "DERIVED_UNVERIFIED",
+      "isGameplayEvidence": false,
+      "solverIdentityEligible": false,
+      "imagePath": "assets/items/derived_warehouse_icon_references_v1/image26-1-2.png",
+      "imageSha256": "fee12fddd9c6fa3993488bfd040f189fd818103c22dc5c3ff0d079ccc4ce72bd",
+      "catalogSource": {
+        "sourcePath": "assets/items/catalog_screenshots/2X3/{FD33E1F1-6A47-4A1A-9A89-9163570FEA0A}.png",
+        "sourceSha256": "c0dd93ede20b8cf08649736c47fae9ccd0d185b44e24e6a2616480211a5ad6dd",
+        "cardBbox": [
+          393,
+          0,
+          392,
+          274
+        ],
+        "cropPath": "assets/items/reference_crops_v1/image26-1-2.png",
+        "cropSha256": "c8eecebc120ed6facc1a3f8faf71eefe52f6e42b4d64ee65cbd39f6012451f25"
+      },
+      "fitModel": {
+        "source": "pooled",
+        "pairCount": 7
+      },
+      "transform": {
+        "cropMethod": "catalog_reference_body",
+        "cropFractions": {
+          "x": [
+            0.2,
+            0.8
+          ],
+          "y": [
+            0.18,
+            0.76
+          ]
+        },
+        "foregroundMethod": "WarehousePlacementResolver._extract_foreground",
+        "scaleMethod": "fit pooled-or-shape median gameplay foreground occupancy into exact grid-cell canvas",
+        "rotationDegrees": 0,
+        "targetForegroundFraction": [
+          0.8220339,
+          0.66015625
+        ],
+        "sourceForegroundPixels": [
+          97,
+          136
+        ],
+        "outputCanvasPixels": [
+          256,
+          384
+        ],
+        "outputObjectRect": [
+          37,
+          65,
+          181,
+          254
+        ],
+        "backgroundSource": "median HSV edge of catalog body crop"
+      }
+    },
+    {
+      "catalogId": "image27-0-0",
+      "name": "名为显赫的权杖",
+      "widthCells": 1,
+      "heightCells": 3,
+      "rarity": "gold",
+      "status": "DERIVED_UNVERIFIED",
+      "isGameplayEvidence": false,
+      "solverIdentityEligible": false,
+      "imagePath": "assets/items/derived_warehouse_icon_references_v1/image27-0-0.png",
+      "imageSha256": "682509ccc997f9289f68eb810085ce41062d61a34c9b117036bcae3d4ef35629",
+      "catalogSource": {
+        "sourcePath": "assets/items/catalog_screenshots/1X3/{8443FC6A-7C86-4902-BAB8-454E077003BF}.png",
+        "sourceSha256": "6f824c36d49ed95947cd348d392dfeb3cf9c32fc283f2827ac107850f83bca64",
+        "cardBbox": [
+          393,
+          31,
+          366,
+          236
+        ],
+        "cropPath": "assets/items/reference_crops_v1/image27-0-0.png",
+        "cropSha256": "6e1994926461037b4c3607524430c38ed06261d89de4beae1825aeab8c18fef8"
+      },
+      "fitModel": {
+        "source": "pooled",
+        "pairCount": 7
+      },
+      "transform": {
+        "cropMethod": "catalog_reference_body",
+        "cropFractions": {
+          "x": [
+            0.2,
+            0.8
+          ],
+          "y": [
+            0.18,
+            0.76
+          ]
+        },
+        "foregroundMethod": "WarehousePlacementResolver._extract_foreground",
+        "scaleMethod": "fit pooled-or-shape median gameplay foreground occupancy into exact grid-cell canvas",
+        "rotationDegrees": 0,
+        "targetForegroundFraction": [
+          0.8220339,
+          0.66015625
+        ],
+        "sourceForegroundPixels": [
+          114,
+          130
+        ],
+        "outputCanvasPixels": [
+          128,
+          384
+        ],
+        "outputObjectRect": [
+          11,
+          132,
+          105,
+          120
+        ],
+        "backgroundSource": "median HSV edge of catalog body crop"
+      }
+    },
+    {
+      "catalogId": "image27-0-2",
+      "name": "万有星仪",
+      "widthCells": 5,
+      "heightCells": 5,
+      "rarity": "gold",
+      "status": "DERIVED_UNVERIFIED",
+      "isGameplayEvidence": false,
+      "solverIdentityEligible": false,
+      "imagePath": "assets/items/derived_warehouse_icon_references_v1/image27-0-2.png",
+      "imageSha256": "28a3f45106d12b7d7c19e3c24fb5e142cb700b9f973f92b5e07bc2549797062e",
+      "catalogSource": {
+        "sourcePath": "assets/items/catalog_screenshots/5X5/{5325ABB2-6E85-4169-9C65-98431204CBEE}.png",
+        "sourceSha256": "c066799191fac88616ba303923355cdf0bb1a3974e57bcb4623434126232d680",
+        "cardBbox": [
+          769,
+          0,
+          385,
+          272
+        ],
+        "cropPath": "assets/items/reference_crops_v1/image27-0-2.png",
+        "cropSha256": "4f4171e8b3d885b21bcea1b94603e4297258a2ca77967bd0ced466d39da4f8e3"
+      },
+      "fitModel": {
+        "source": "pooled",
+        "pairCount": 7
+      },
+      "transform": {
+        "cropMethod": "catalog_reference_body",
+        "cropFractions": {
+          "x": [
+            0.2,
+            0.8
+          ],
+          "y": [
+            0.18,
+            0.76
+          ]
+        },
+        "foregroundMethod": "WarehousePlacementResolver._extract_foreground",
+        "scaleMethod": "fit pooled-or-shape median gameplay foreground occupancy into exact grid-cell canvas",
+        "rotationDegrees": 0,
+        "targetForegroundFraction": [
+          0.8220339,
+          0.66015625
+        ],
+        "sourceForegroundPixels": [
+          140,
+          112
+        ],
+        "outputCanvasPixels": [
+          640,
+          640
+        ],
+        "outputObjectRect": [
+          57,
+          109,
+          526,
+          421
+        ],
+        "backgroundSource": "median HSV edge of catalog body crop"
+      }
+    },
+    {
+      "catalogId": "image28-0-1",
+      "name": "心猎铁骑L1-必杀一击",
+      "widthCells": 2,
+      "heightCells": 3,
+      "rarity": "gold",
+      "status": "DERIVED_UNVERIFIED",
+      "isGameplayEvidence": false,
+      "solverIdentityEligible": false,
+      "imagePath": "assets/items/derived_warehouse_icon_references_v1/image28-0-1.png",
+      "imageSha256": "054ec78e9d2f369a9b4accc3ca14db70a94934d7e31ec51f7134fefd73f20aa4",
+      "catalogSource": {
+        "sourcePath": "assets/items/catalog_screenshots/2X3/{FD33E1F1-6A47-4A1A-9A89-9163570FEA0A}.png",
+        "sourceSha256": "c0dd93ede20b8cf08649736c47fae9ccd0d185b44e24e6a2616480211a5ad6dd",
+        "cardBbox": [
+          393,
+          274,
+          392,
+          273
+        ],
+        "cropPath": "assets/items/reference_crops_v1/image28-0-1.png",
+        "cropSha256": "f4573a3423921d0a106bc1ccad49795fb80f76758ee2cf9917dfc27a2c2a8818"
+      },
+      "fitModel": {
+        "source": "pooled",
+        "pairCount": 7
+      },
+      "transform": {
+        "cropMethod": "catalog_reference_body",
+        "cropFractions": {
+          "x": [
+            0.2,
+            0.8
+          ],
+          "y": [
+            0.18,
+            0.76
+          ]
+        },
+        "foregroundMethod": "WarehousePlacementResolver._extract_foreground",
+        "scaleMethod": "fit pooled-or-shape median gameplay foreground occupancy into exact grid-cell canvas",
+        "rotationDegrees": 0,
+        "targetForegroundFraction": [
+          0.8220339,
+          0.66015625
+        ],
+        "sourceForegroundPixels": [
+          135,
+          134
+        ],
+        "outputCanvasPixels": [
+          256,
+          384
+        ],
+        "outputObjectRect": [
+          23,
+          87,
+          210,
+          209
+        ],
+        "backgroundSource": "median HSV edge of catalog body crop"
+      }
+    },
+    {
+      "catalogId": "image28-0-2",
+      "name": "心猎铁骑L2-闪焰冲锋",
+      "widthCells": 2,
+      "heightCells": 3,
+      "rarity": "gold",
+      "status": "DERIVED_UNVERIFIED",
+      "isGameplayEvidence": false,
+      "solverIdentityEligible": false,
+      "imagePath": "assets/items/derived_warehouse_icon_references_v1/image28-0-2.png",
+      "imageSha256": "2a72db0ffcc0f5e1b019387b31ad757db015cea2c0dca4480ef98303d109951c",
+      "catalogSource": {
+        "sourcePath": "assets/items/catalog_screenshots/2X3/{FD33E1F1-6A47-4A1A-9A89-9163570FEA0A}.png",
+        "sourceSha256": "c0dd93ede20b8cf08649736c47fae9ccd0d185b44e24e6a2616480211a5ad6dd",
+        "cardBbox": [
+          785,
+          274,
+          393,
+          273
+        ],
+        "cropPath": "assets/items/reference_crops_v1/image28-0-2.png",
+        "cropSha256": "9767d3569a919af62d3f4311219b3e8fd2ce51035999d984d222286e16913981"
+      },
+      "fitModel": {
+        "source": "pooled",
+        "pairCount": 7
+      },
+      "transform": {
+        "cropMethod": "catalog_reference_body",
+        "cropFractions": {
+          "x": [
+            0.2,
+            0.8
+          ],
+          "y": [
+            0.18,
+            0.76
+          ]
+        },
+        "foregroundMethod": "WarehousePlacementResolver._extract_foreground",
+        "scaleMethod": "fit pooled-or-shape median gameplay foreground occupancy into exact grid-cell canvas",
+        "rotationDegrees": 0,
+        "targetForegroundFraction": [
+          0.8220339,
+          0.66015625
+        ],
+        "sourceForegroundPixels": [
+          112,
+          140
+        ],
+        "outputCanvasPixels": [
+          256,
+          384
+        ],
+        "outputObjectRect": [
+          26,
+          65,
+          203,
+          254
+        ],
+        "backgroundSource": "median HSV edge of catalog body crop"
+      }
+    },
+    {
+      "catalogId": "image29-0-2",
+      "name": "「截云」",
+      "widthCells": 1,
+      "heightCells": 5,
+      "rarity": "gold",
+      "status": "DERIVED_UNVERIFIED",
+      "isGameplayEvidence": false,
+      "solverIdentityEligible": false,
+      "imagePath": "assets/items/derived_warehouse_icon_references_v1/image29-0-2.png",
+      "imageSha256": "049da2816677faad5e396928626b3c0360710e2ac6844c53055eccc6cf35f462",
+      "catalogSource": {
+        "sourcePath": "assets/items/catalog_screenshots/1X5/{DE334641-DA72-4330-9D2A-0D11AE3A8AB4}.png",
+        "sourceSha256": "ef04a250e0ace23d7939abb74ecf657060936d423d93d9e0079c0479f31d5a59",
+        "cardBbox": [
+          409,
+          0,
+          409,
+          309
+        ],
+        "cropPath": "assets/items/reference_crops_v1/image29-0-2.png",
+        "cropSha256": "478f4fd70fe9bcea83a999d6356dc9943f656501b403171932d57d125233ea93"
+      },
+      "fitModel": {
+        "source": "pooled",
+        "pairCount": 7
+      },
+      "transform": {
+        "cropMethod": "catalog_reference_body",
+        "cropFractions": {
+          "x": [
+            0.2,
+            0.8
+          ],
+          "y": [
+            0.18,
+            0.76
+          ]
+        },
+        "foregroundMethod": "WarehousePlacementResolver._extract_foreground",
+        "scaleMethod": "fit pooled-or-shape median gameplay foreground occupancy into exact grid-cell canvas",
+        "rotationDegrees": 0,
+        "targetForegroundFraction": [
+          0.8220339,
+          0.66015625
+        ],
+        "sourceForegroundPixels": [
+          78,
+          124
+        ],
+        "outputCanvasPixels": [
+          128,
+          640
+        ],
+        "outputObjectRect": [
+          11,
+          236,
+          105,
+          167
+        ],
+        "backgroundSource": "median HSV edge of catalog body crop"
+      }
+    },
+    {
+      "catalogId": "image3-1-0",
+      "name": "崭新的弹珠",
+      "widthCells": 1,
+      "heightCells": 1,
+      "rarity": "white",
+      "status": "DERIVED_UNVERIFIED",
+      "isGameplayEvidence": false,
+      "solverIdentityEligible": false,
+      "imagePath": "assets/items/derived_warehouse_icon_references_v1/image3-1-0.png",
+      "imageSha256": "4bbad539f8d554bb3c1fc1b0d5ad107ab488c72acb2f334479a0ee711390fce0",
+      "catalogSource": {
+        "sourcePath": "assets/items/catalog_screenshots/1x1/{F65172DF-A42B-433D-A395-E648C0D920E1}.png",
+        "sourceSha256": "06f9dbe6bdba81100f0c98822a6b74973669c7552fec905b7a36754512e5be38",
+        "cardBbox": [
+          405,
+          26,
+          366,
+          236
+        ],
+        "cropPath": "assets/items/reference_crops_v1/image3-1-0.png",
+        "cropSha256": "b91d25c7b92903fbd3f24d4c6a46b23a8e47cfe169c87672ad10135f9d583c08"
+      },
+      "fitModel": {
+        "source": "shape:1x1",
+        "pairCount": 3
+      },
+      "transform": {
+        "cropMethod": "catalog_reference_body",
+        "cropFractions": {
+          "x": [
+            0.2,
+            0.8
+          ],
+          "y": [
+            0.18,
+            0.76
+          ]
+        },
+        "foregroundMethod": "WarehousePlacementResolver._extract_foreground",
+        "scaleMethod": "fit pooled-or-shape median gameplay foreground occupancy into exact grid-cell canvas",
+        "rotationDegrees": 0,
+        "targetForegroundFraction": [
+          0.8828125,
+          0.671875
+        ],
+        "sourceForegroundPixels": [
+          109,
+          108
+        ],
+        "outputCanvasPixels": [
+          128,
+          128
+        ],
+        "outputObjectRect": [
+          20,
+          21,
+          87,
+          86
+        ],
+        "backgroundSource": "median HSV edge of catalog body crop"
+      }
+    },
+    {
+      "catalogId": "image3-1-2",
+      "name": "劲爽「冰川」",
+      "widthCells": 1,
+      "heightCells": 1,
+      "rarity": "white",
+      "status": "DERIVED_UNVERIFIED",
+      "isGameplayEvidence": false,
+      "solverIdentityEligible": false,
+      "imagePath": "assets/items/derived_warehouse_icon_references_v1/image3-1-2.png",
+      "imageSha256": "1184102fc1570fc65703fe3268e5fc1a99cc771f3d51b5f5702077afb7ba81e9",
+      "catalogSource": {
+        "sourcePath": "assets/items/catalog_screenshots/1x1/{F65172DF-A42B-433D-A395-E648C0D920E1}.png",
+        "sourceSha256": "06f9dbe6bdba81100f0c98822a6b74973669c7552fec905b7a36754512e5be38",
+        "cardBbox": [
+          0,
+          264,
+          398,
+          263
+        ],
+        "cropPath": "assets/items/reference_crops_v1/image3-1-2.png",
+        "cropSha256": "efe53aff115b287da0b3ef096e27adfe3ec8d409eb5561975904e5461f624be3"
+      },
+      "fitModel": {
+        "source": "shape:1x1",
+        "pairCount": 3
+      },
+      "transform": {
+        "cropMethod": "catalog_reference_body",
+        "cropFractions": {
+          "x": [
+            0.2,
+            0.8
+          ],
+          "y": [
+            0.18,
+            0.76
+          ]
+        },
+        "foregroundMethod": "WarehousePlacementResolver._extract_foreground",
+        "scaleMethod": "fit pooled-or-shape median gameplay foreground occupancy into exact grid-cell canvas",
+        "rotationDegrees": 0,
+        "targetForegroundFraction": [
+          0.8828125,
+          0.671875
+        ],
+        "sourceForegroundPixels": [
+          101,
+          140
+        ],
+        "outputCanvasPixels": [
+          128,
+          128
+        ],
+        "outputObjectRect": [
+          33,
+          21,
+          62,
+          86
+        ],
+        "backgroundSource": "median HSV edge of catalog body crop"
+      }
+    },
+    {
+      "catalogId": "image31-0-2",
+      "name": "桂冠",
+      "widthCells": 1,
+      "heightCells": 1,
+      "rarity": "gold",
+      "status": "DERIVED_UNVERIFIED",
+      "isGameplayEvidence": false,
+      "solverIdentityEligible": false,
+      "imagePath": "assets/items/derived_warehouse_icon_references_v1/image31-0-2.png",
+      "imageSha256": "53685a15ee798c884dd27ed175ad7753c6d14911e784029dc832e1b8e296dbae",
+      "catalogSource": {
+        "sourcePath": "assets/items/catalog_screenshots/1x1/{60C0E71A-D308-4533-9AD9-1ADF34119353}.png",
+        "sourceSha256": "2ee85038dc214cf62098f6a265612f00b0116bda585726dea3af4b2dedc42fb8",
+        "cardBbox": [
+          0,
+          0,
+          384,
+          267
+        ],
+        "cropPath": "assets/items/reference_crops_v1/image31-0-2.png",
+        "cropSha256": "47855a5abf4724fb93b875e24e611a4e7511ab80994dfe1cda6875cf59ed92ee"
+      },
+      "fitModel": {
+        "source": "shape:1x1",
+        "pairCount": 3
+      },
+      "transform": {
+        "cropMethod": "catalog_reference_body",
+        "cropFractions": {
+          "x": [
+            0.2,
+            0.8
+          ],
+          "y": [
+            0.18,
+            0.76
+          ]
+        },
+        "foregroundMethod": "WarehousePlacementResolver._extract_foreground",
+        "scaleMethod": "fit pooled-or-shape median gameplay foreground occupancy into exact grid-cell canvas",
+        "rotationDegrees": 0,
+        "targetForegroundFraction": [
+          0.8828125,
+          0.671875
+        ],
+        "sourceForegroundPixels": [
+          103,
+          97
+        ],
+        "outputCanvasPixels": [
+          128,
+          128
+        ],
+        "outputObjectRect": [
+          18,
+          21,
+          91,
+          86
+        ],
+        "backgroundSource": "median HSV edge of catalog body crop"
+      }
+    },
+    {
+      "catalogId": "image31-1-0",
+      "name": "大满贯手握",
+      "widthCells": 2,
+      "heightCells": 1,
+      "rarity": "gold",
+      "status": "DERIVED_UNVERIFIED",
+      "isGameplayEvidence": false,
+      "solverIdentityEligible": false,
+      "imagePath": "assets/items/derived_warehouse_icon_references_v1/image31-1-0.png",
+      "imageSha256": "2da35d3d4b0904a8e5d73c3effa57f74c189abb58da65b053478a3003341772e",
+      "catalogSource": {
+        "sourcePath": "assets/items/catalog_screenshots/2X1/{82CFB2D0-B389-4430-B693-85C796393974}.png",
+        "sourceSha256": "f20d22e344b30ff3d790da9f8309254e835add8920c2afbe7e3eb0f440fc3089",
+        "cardBbox": [
+          13,
+          30,
+          366,
+          236
+        ],
+        "cropPath": "assets/items/reference_crops_v1/image31-1-0.png",
+        "cropSha256": "e2f8d9dc2402c424afb29602483390aab13eb83d1252c8ad172c1df346663316"
+      },
+      "fitModel": {
+        "source": "pooled",
+        "pairCount": 7
+      },
+      "transform": {
+        "cropMethod": "catalog_reference_body",
+        "cropFractions": {
+          "x": [
+            0.2,
+            0.8
+          ],
+          "y": [
+            0.18,
+            0.76
+          ]
+        },
+        "foregroundMethod": "WarehousePlacementResolver._extract_foreground",
+        "scaleMethod": "fit pooled-or-shape median gameplay foreground occupancy into exact grid-cell canvas",
+        "rotationDegrees": 0,
+        "targetForegroundFraction": [
+          0.8220339,
+          0.66015625
+        ],
+        "sourceForegroundPixels": [
+          139,
+          60
+        ],
+        "outputCanvasPixels": [
+          256,
+          128
+        ],
+        "outputObjectRect": [
+          30,
+          22,
+          196,
+          84
+        ],
+        "backgroundSource": "median HSV edge of catalog body crop"
+      }
+    },
+    {
+      "catalogId": "image34-0-2",
+      "name": "便携式折叠屏",
+      "widthCells": 3,
+      "heightCells": 2,
+      "rarity": "red",
+      "status": "DERIVED_UNVERIFIED",
+      "isGameplayEvidence": false,
+      "solverIdentityEligible": false,
+      "imagePath": "assets/items/derived_warehouse_icon_references_v1/image34-0-2.png",
+      "imageSha256": "f3c7e82e287d5a8478062cf3ccefd060420744debab9bbb56286cd887793939d",
+      "catalogSource": {
+        "sourcePath": "assets/items/catalog_screenshots/3X2/{08AEF60D-14B8-4F18-93F5-0EF794BF950E}.png",
+        "sourceSha256": "8f34a7b84cfa7abfdffa800f71834cfaea58a1c8665c536b9e63e57dae405018",
+        "cardBbox": [
+          779,
+          0,
+          390,
+          268
+        ],
+        "cropPath": "assets/items/reference_crops_v1/image34-0-2.png",
+        "cropSha256": "43081b871c9aba3ee74ffecaff7d7cd823a14c6ad0a034db024e8613faff5396"
+      },
+      "fitModel": {
+        "source": "pooled",
+        "pairCount": 7
+      },
+      "transform": {
+        "cropMethod": "catalog_reference_body",
+        "cropFractions": {
+          "x": [
+            0.2,
+            0.8
+          ],
+          "y": [
+            0.18,
+            0.76
+          ]
+        },
+        "foregroundMethod": "WarehousePlacementResolver._extract_foreground",
+        "scaleMethod": "fit pooled-or-shape median gameplay foreground occupancy into exact grid-cell canvas",
+        "rotationDegrees": 0,
+        "targetForegroundFraction": [
+          0.8220339,
+          0.66015625
+        ],
+        "sourceForegroundPixels": [
+          139,
+          108
+        ],
+        "outputCanvasPixels": [
+          384,
+          256
+        ],
+        "outputObjectRect": [
+          83,
+          43,
+          218,
+          169
+        ],
+        "backgroundSource": "median HSV edge of catalog body crop"
+      }
+    },
+    {
+      "catalogId": "image4-0-0",
+      "name": "咕比奇原味薯片",
+      "widthCells": 1,
+      "heightCells": 1,
+      "rarity": "white",
+      "status": "DERIVED_UNVERIFIED",
+      "isGameplayEvidence": false,
+      "solverIdentityEligible": false,
+      "imagePath": "assets/items/derived_warehouse_icon_references_v1/image4-0-0.png",
+      "imageSha256": "8d6d0d81f7552498034486f75ef95fdfc2ecd5b87feb840e146ecee935b85c18",
+      "catalogSource": {
+        "sourcePath": "assets/items/catalog_screenshots/1x1/{F65172DF-A42B-433D-A395-E648C0D920E1}.png",
+        "sourceSha256": "06f9dbe6bdba81100f0c98822a6b74973669c7552fec905b7a36754512e5be38",
+        "cardBbox": [
+          405,
+          281,
+          366,
+          236
+        ],
+        "cropPath": "assets/items/reference_crops_v1/image4-0-0.png",
+        "cropSha256": "10a0781abef79d75420c18c85f4c76f293b90dce73c911ff505cd0e1afd95e11"
+      },
+      "fitModel": {
+        "source": "shape:1x1",
+        "pairCount": 3
+      },
+      "transform": {
+        "cropMethod": "catalog_reference_body",
+        "cropFractions": {
+          "x": [
+            0.2,
+            0.8
+          ],
+          "y": [
+            0.18,
+            0.76
+          ]
+        },
+        "foregroundMethod": "WarehousePlacementResolver._extract_foreground",
+        "scaleMethod": "fit pooled-or-shape median gameplay foreground occupancy into exact grid-cell canvas",
+        "rotationDegrees": 0,
+        "targetForegroundFraction": [
+          0.8828125,
+          0.671875
+        ],
+        "sourceForegroundPixels": [
+          111,
+          120
+        ],
+        "outputCanvasPixels": [
+          128,
+          128
+        ],
+        "outputObjectRect": [
+          24,
+          21,
+          80,
+          86
+        ],
+        "backgroundSource": "median HSV edge of catalog body crop"
+      }
+    },
+    {
+      "catalogId": "image4-0-1",
+      "name": "绿林",
+      "widthCells": 1,
+      "heightCells": 1,
+      "rarity": "white",
+      "status": "DERIVED_UNVERIFIED",
+      "isGameplayEvidence": false,
+      "solverIdentityEligible": false,
+      "imagePath": "assets/items/derived_warehouse_icon_references_v1/image4-0-1.png",
+      "imageSha256": "21221f6b974f3c3b82d00cae08a9758b9497fb5f6087935e974cd8ea431c1699",
+      "catalogSource": {
+        "sourcePath": "assets/items/catalog_screenshots/1x1/{F65172DF-A42B-433D-A395-E648C0D920E1}.png",
+        "sourceSha256": "06f9dbe6bdba81100f0c98822a6b74973669c7552fec905b7a36754512e5be38",
+        "cardBbox": [
+          796,
+          264,
+          398,
+          263
+        ],
+        "cropPath": "assets/items/reference_crops_v1/image4-0-1.png",
+        "cropSha256": "c98317dfff882c2150638291e782a319c69098f04937e7ad9561f953fccc0626"
+      },
+      "fitModel": {
+        "source": "shape:1x1",
+        "pairCount": 3
+      },
+      "transform": {
+        "cropMethod": "catalog_reference_body",
+        "cropFractions": {
+          "x": [
+            0.2,
+            0.8
+          ],
+          "y": [
+            0.18,
+            0.76
+          ]
+        },
+        "foregroundMethod": "WarehousePlacementResolver._extract_foreground",
+        "scaleMethod": "fit pooled-or-shape median gameplay foreground occupancy into exact grid-cell canvas",
+        "rotationDegrees": 0,
+        "targetForegroundFraction": [
+          0.8828125,
+          0.671875
+        ],
+        "sourceForegroundPixels": [
+          106,
+          138
+        ],
+        "outputCanvasPixels": [
+          128,
+          128
+        ],
+        "outputObjectRect": [
+          31,
+          21,
+          66,
+          86
+        ],
+        "backgroundSource": "median HSV edge of catalog body crop"
+      }
+    },
+    {
+      "catalogId": "image6-1-1",
+      "name": "断线之筝",
+      "widthCells": 1,
+      "heightCells": 2,
+      "rarity": "green",
+      "status": "DERIVED_UNVERIFIED",
+      "isGameplayEvidence": false,
+      "solverIdentityEligible": false,
+      "imagePath": "assets/items/derived_warehouse_icon_references_v1/image6-1-1.png",
+      "imageSha256": "fc7bb5699ed32f68372abe277922ab3645e25cb47b796337eaa2262cfe448caa",
+      "catalogSource": {
+        "sourcePath": "assets/items/catalog_screenshots/1X2/{F1E0B7B4-D27E-4BF5-A471-40C0FDDDAFE6}.png",
+        "sourceSha256": "e8f052691c008a5d2f107814eeab729818d0abbb2e3b2f9110467861046a6dcb",
+        "cardBbox": [
+          776,
+          262,
+          388,
+          261
+        ],
+        "cropPath": "assets/items/reference_crops_v1/image6-1-1.png",
+        "cropSha256": "13fe10264f24571c146eddf4a2d9b01e01aa1b1d592bf0baf38960b3d5945762"
+      },
+      "fitModel": {
+        "source": "shape:1x2",
+        "pairCount": 2
+      },
+      "transform": {
+        "cropMethod": "catalog_reference_body",
+        "cropFractions": {
+          "x": [
+            0.2,
+            0.8
+          ],
+          "y": [
+            0.18,
+            0.76
+          ]
+        },
+        "foregroundMethod": "WarehousePlacementResolver._extract_foreground",
+        "scaleMethod": "fit pooled-or-shape median gameplay foreground occupancy into exact grid-cell canvas",
+        "rotationDegrees": 0,
+        "targetForegroundFraction": [
+          0.78389831,
+          0.63476562
+        ],
+        "sourceForegroundPixels": [
+          134,
+          141
+        ],
+        "outputCanvasPixels": [
+          128,
+          256
+        ],
+        "outputObjectRect": [
+          14,
+          75,
+          100,
+          106
+        ],
+        "backgroundSource": "median HSV edge of catalog body crop"
+      }
+    },
+    {
+      "catalogId": "image7-0-1",
+      "name": "轨道之心",
+      "widthCells": 2,
+      "heightCells": 1,
+      "rarity": "green",
+      "status": "DERIVED_UNVERIFIED",
+      "isGameplayEvidence": false,
+      "solverIdentityEligible": false,
+      "imagePath": "assets/items/derived_warehouse_icon_references_v1/image7-0-1.png",
+      "imageSha256": "c6c233bd7b7f790651311d5719709c05295531dbe83bec6c65ee9206b54bee3a",
+      "catalogSource": {
+        "sourcePath": "assets/items/catalog_screenshots/2X1/{48710325-8642-4753-AAFD-302E079D2B93}.png",
+        "sourceSha256": "24b1a803efaa5a13edc21494a4aa5d266026e5424327dca035b8cf63b3d08bba",
+        "cardBbox": [
+          390,
+          0,
+          391,
+          265
+        ],
+        "cropPath": "assets/items/reference_crops_v1/image7-0-1.png",
+        "cropSha256": "3a3048746d838ad1356ff8c6317f94b64b8607797057cb4800568ac3fd417650"
+      },
+      "fitModel": {
+        "source": "pooled",
+        "pairCount": 7
+      },
+      "transform": {
+        "cropMethod": "catalog_reference_body",
+        "cropFractions": {
+          "x": [
+            0.2,
+            0.8
+          ],
+          "y": [
+            0.18,
+            0.76
+          ]
+        },
+        "foregroundMethod": "WarehousePlacementResolver._extract_foreground",
+        "scaleMethod": "fit pooled-or-shape median gameplay foreground occupancy into exact grid-cell canvas",
+        "rotationDegrees": 0,
+        "targetForegroundFraction": [
+          0.8220339,
+          0.66015625
+        ],
+        "sourceForegroundPixels": [
+          144,
+          65
+        ],
+        "outputCanvasPixels": [
+          256,
+          128
+        ],
+        "outputObjectRect": [
+          34,
+          22,
+          187,
+          84
+        ],
+        "backgroundSource": "median HSV edge of catalog body crop"
+      }
+    },
+    {
+      "catalogId": "image8-0-0",
+      "name": "小小麻雀",
+      "widthCells": 1,
+      "heightCells": 2,
+      "rarity": "green",
+      "status": "DERIVED_UNVERIFIED",
+      "isGameplayEvidence": false,
+      "solverIdentityEligible": false,
+      "imagePath": "assets/items/derived_warehouse_icon_references_v1/image8-0-0.png",
+      "imageSha256": "2116f03e21b5b7d2d62e31d85da343eabc82f8792772a701f7977961b2757731",
+      "catalogSource": {
+        "sourcePath": "assets/items/catalog_screenshots/1X2/{39EB6D1F-C312-4C1E-A622-BFADD00F264F}.png",
+        "sourceSha256": "0024658bc1d009e357b95cd25681f5fb1ff804faabccabe85e12a12924fd7138",
+        "cardBbox": [
+          14,
+          279,
+          366,
+          236
+        ],
+        "cropPath": "assets/items/reference_crops_v1/image8-0-0.png",
+        "cropSha256": "6693b740995d6e59feaf7c18b77ae4fe70628e51a7aeeb0d44a212698453b857"
+      },
+      "fitModel": {
+        "source": "shape:1x2",
+        "pairCount": 2
+      },
+      "transform": {
+        "cropMethod": "catalog_reference_body",
+        "cropFractions": {
+          "x": [
+            0.2,
+            0.8
+          ],
+          "y": [
+            0.18,
+            0.76
+          ]
+        },
+        "foregroundMethod": "WarehousePlacementResolver._extract_foreground",
+        "scaleMethod": "fit pooled-or-shape median gameplay foreground occupancy into exact grid-cell canvas",
+        "rotationDegrees": 0,
+        "targetForegroundFraction": [
+          0.78389831,
+          0.63476562
+        ],
+        "sourceForegroundPixels": [
+          91,
+          119
+        ],
+        "outputCanvasPixels": [
+          128,
+          256
+        ],
+        "outputObjectRect": [
+          14,
+          62,
+          100,
+          131
+        ],
+        "backgroundSource": "median HSV edge of catalog body crop"
+      }
+    },
+    {
+      "catalogId": "image8-0-1",
+      "name": "墨染瓶",
+      "widthCells": 1,
+      "heightCells": 2,
+      "rarity": "green",
+      "status": "DERIVED_UNVERIFIED",
+      "isGameplayEvidence": false,
+      "solverIdentityEligible": false,
+      "imagePath": "assets/items/derived_warehouse_icon_references_v1/image8-0-1.png",
+      "imageSha256": "00c9f7543f67e5899c72871b66115727dfbdc74c329ec68e6b31604cee42d9e1",
+      "catalogSource": {
+        "sourcePath": "assets/items/catalog_screenshots/1X2/{39EB6D1F-C312-4C1E-A622-BFADD00F264F}.png",
+        "sourceSha256": "0024658bc1d009e357b95cd25681f5fb1ff804faabccabe85e12a12924fd7138",
+        "cardBbox": [
+          395,
+          279,
+          366,
+          236
+        ],
+        "cropPath": "assets/items/reference_crops_v1/image8-0-1.png",
+        "cropSha256": "4d55d78030084140eaee7cc8cdf1f7e04a9b9f9f6fae1b680ba1a7ebe6961b82"
+      },
+      "fitModel": {
+        "source": "shape:1x2",
+        "pairCount": 2
+      },
+      "transform": {
+        "cropMethod": "catalog_reference_body",
+        "cropFractions": {
+          "x": [
+            0.2,
+            0.8
+          ],
+          "y": [
+            0.18,
+            0.76
+          ]
+        },
+        "foregroundMethod": "WarehousePlacementResolver._extract_foreground",
+        "scaleMethod": "fit pooled-or-shape median gameplay foreground occupancy into exact grid-cell canvas",
+        "rotationDegrees": 0,
+        "targetForegroundFraction": [
+          0.78389831,
+          0.63476562
+        ],
+        "sourceForegroundPixels": [
+          73,
+          143
+        ],
+        "outputCanvasPixels": [
+          128,
+          256
+        ],
+        "outputObjectRect": [
+          22,
+          46,
+          83,
+          163
+        ],
+        "backgroundSource": "median HSV edge of catalog body crop"
+      }
+    },
+    {
+      "catalogId": "image8-0-2",
+      "name": "炭烤青花鱼",
+      "widthCells": 2,
+      "heightCells": 1,
+      "rarity": "green",
+      "status": "DERIVED_UNVERIFIED",
+      "isGameplayEvidence": false,
+      "solverIdentityEligible": false,
+      "imagePath": "assets/items/derived_warehouse_icon_references_v1/image8-0-2.png",
+      "imageSha256": "1a3a9707cfb6e71c4df9e4e654c05f5a67f9d5dd4489b619f7714fe24e6a7323",
+      "catalogSource": {
+        "sourcePath": "assets/items/catalog_screenshots/2X1/{48710325-8642-4753-AAFD-302E079D2B93}.png",
+        "sourceSha256": "24b1a803efaa5a13edc21494a4aa5d266026e5424327dca035b8cf63b3d08bba",
+        "cardBbox": [
+          0,
+          265,
+          390,
+          265
+        ],
+        "cropPath": "assets/items/reference_crops_v1/image8-0-2.png",
+        "cropSha256": "eccc1352de3dfde38fb089249009d7c0b3a8c78f834691bb72af48544e7b4207"
+      },
+      "fitModel": {
+        "source": "pooled",
+        "pairCount": 7
+      },
+      "transform": {
+        "cropMethod": "catalog_reference_body",
+        "cropFractions": {
+          "x": [
+            0.2,
+            0.8
+          ],
+          "y": [
+            0.18,
+            0.76
+          ]
+        },
+        "foregroundMethod": "WarehousePlacementResolver._extract_foreground",
+        "scaleMethod": "fit pooled-or-shape median gameplay foreground occupancy into exact grid-cell canvas",
+        "rotationDegrees": 0,
+        "targetForegroundFraction": [
+          0.8220339,
+          0.66015625
+        ],
+        "sourceForegroundPixels": [
+          153,
+          84
+        ],
+        "outputCanvasPixels": [
+          256,
+          128
+        ],
+        "outputObjectRect": [
+          51,
+          22,
+          154,
+          84
+        ],
+        "backgroundSource": "median HSV edge of catalog body crop"
+      }
+    },
+    {
+      "catalogId": "image9-0-0",
+      "name": "几何灯",
+      "widthCells": 1,
+      "heightCells": 1,
+      "rarity": "green",
+      "status": "DERIVED_UNVERIFIED",
+      "isGameplayEvidence": false,
+      "solverIdentityEligible": false,
+      "imagePath": "assets/items/derived_warehouse_icon_references_v1/image9-0-0.png",
+      "imageSha256": "52ebb973119c1e766ea14af20145e9f7a24c711edc05b8bb8bffe2f2efb36b33",
+      "catalogSource": {
+        "sourcePath": "assets/items/catalog_screenshots/1x1/{9A13C48F-EF9F-4E97-80BF-F2DF347E15DD}.png",
+        "sourceSha256": "89d7bad3a71362066a37d6320ca33b3cec047a712298a081568448391a386b9a",
+        "cardBbox": [
+          0,
+          260,
+          392,
+          259
+        ],
+        "cropPath": "assets/items/reference_crops_v1/image9-0-0.png",
+        "cropSha256": "3112b41df3ced520cbf75108aef37f94dba161949a9e9683b65dd6d06fdf6eff"
+      },
+      "fitModel": {
+        "source": "shape:1x1",
+        "pairCount": 3
+      },
+      "transform": {
+        "cropMethod": "catalog_reference_body",
+        "cropFractions": {
+          "x": [
+            0.2,
+            0.8
+          ],
+          "y": [
+            0.18,
+            0.76
+          ]
+        },
+        "foregroundMethod": "WarehousePlacementResolver._extract_foreground",
+        "scaleMethod": "fit pooled-or-shape median gameplay foreground occupancy into exact grid-cell canvas",
+        "rotationDegrees": 0,
+        "targetForegroundFraction": [
+          0.8828125,
+          0.671875
+        ],
+        "sourceForegroundPixels": [
+          102,
+          135
+        ],
+        "outputCanvasPixels": [
+          128,
+          128
+        ],
+        "outputObjectRect": [
+          31,
+          21,
+          65,
+          86
+        ],
+        "backgroundSource": "median HSV edge of catalog body crop"
+      }
+    },
+    {
+      "catalogId": "image9-1-0",
+      "name": "肥皂",
+      "widthCells": 1,
+      "heightCells": 1,
+      "rarity": "green",
+      "status": "DERIVED_UNVERIFIED",
+      "isGameplayEvidence": false,
+      "solverIdentityEligible": false,
+      "imagePath": "assets/items/derived_warehouse_icon_references_v1/image9-1-0.png",
+      "imageSha256": "610bf48a681d3e8a9859df5515792b92906dadfb393de306f97caa06e58d5c5e",
+      "catalogSource": {
+        "sourcePath": "assets/items/catalog_screenshots/1x1/{47545E5E-FC05-4F45-857E-A459326990CC}.png",
+        "sourceSha256": "bd6cb12df27f964ebfd3374ef9e16296057caa23f3fbed27b0fdf4f3f1cc7a7e",
+        "cardBbox": [
+          0,
+          0,
+          387,
+          265
+        ],
+        "cropPath": "assets/items/reference_crops_v1/image9-1-0.png",
+        "cropSha256": "0181547b4127cc0ed9ca295e8d6d7b4d5b094896d7a22a5c47d261a1e664861e"
+      },
+      "fitModel": {
+        "source": "shape:1x1",
+        "pairCount": 3
+      },
+      "transform": {
+        "cropMethod": "catalog_reference_body",
+        "cropFractions": {
+          "x": [
+            0.2,
+            0.8
+          ],
+          "y": [
+            0.18,
+            0.76
+          ]
+        },
+        "foregroundMethod": "WarehousePlacementResolver._extract_foreground",
+        "scaleMethod": "fit pooled-or-shape median gameplay foreground occupancy into exact grid-cell canvas",
+        "rotationDegrees": 0,
+        "targetForegroundFraction": [
+          0.8828125,
+          0.671875
+        ],
+        "sourceForegroundPixels": [
+          109,
+          75
+        ],
+        "outputCanvasPixels": [
+          128,
+          128
+        ],
+        "outputObjectRect": [
+          7,
+          25,
+          113,
+          78
+        ],
+        "backgroundSource": "median HSV edge of catalog body crop"
+      }
+    }
+  ]
+}

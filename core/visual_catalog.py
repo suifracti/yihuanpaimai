@@ -157,6 +157,83 @@ def development_reference_for_template(template_reference):
                  if record.get("catalogId") == catalog_id), None)
 
 
+@lru_cache(maxsize=4)
+def load_derived_warehouse_templates(root=None):
+    """Load hash-checked catalog-derived warehouse templates as unverified refs.
+
+    A derived picture may help rank candidates, but its provenance never makes
+    the picture gameplay evidence or authorizes an exact identity by itself.
+    Conflicting, display-only, stale, or unverified records are ignored.
+    """
+    base_root = Path(root) if root else asset_root()
+    manifest_path = base_root / "assets/items/derived_warehouse_icon_references_v1/manifest.json"
+    if not manifest_path.is_file():
+        return {}
+    try:
+        manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+        if manifest.get("schemaVersion") != "derived-warehouse-icon-references.v1":
+            return {}
+        visuals = {row["catalogId"]: row for row in verified_references(root=base_root)}
+        crops = {row["catalogId"]: row for row in deterministic_reference_crops(root=base_root)}
+        official_path = base_root / "assets/catalog_065.json"
+        official = {
+            str(row.get("Id") or ""): row
+            for row in json.loads(official_path.read_text(encoding="utf-8-sig"))
+        }
+    except (OSError, ValueError, KeyError, TypeError):
+        return {}
+
+    quality_aliases = {
+        "gold": {"金"}, "purple": {"紫"}, "red": {"红"},
+        "blue": {"蓝"}, "green": {"绿"}, "white": {"白", "灰"},
+    }
+    output = {}
+    for record in manifest.get("records", []):
+        if not isinstance(record, dict):
+            continue
+        catalog_id = str(record.get("catalogId") or "")
+        visual = visuals.get(catalog_id)
+        crop = crops.get(catalog_id)
+        model = official.get(catalog_id)
+        source_meta = record.get("catalogSource") or {}
+        if (
+            record.get("status") != "DERIVED_UNVERIFIED"
+            or record.get("isGameplayEvidence") is not False
+            or record.get("solverIdentityEligible") is not False
+            or not catalog_id or visual is None or crop is None or model is None
+            or record.get("name") != visual.get("name")
+            or int(record.get("widthCells") or 0) != int(visual.get("width") or 0)
+            or int(record.get("heightCells") or 0) != int(visual.get("height") or 0)
+            or record.get("rarity") != visual.get("rarity")
+            or str(model.get("Name") or "") != str(visual.get("name") or "")
+            or int(model.get("Width") or 0) != int(visual.get("width") or 0)
+            or int(model.get("Height") or 0) != int(visual.get("height") or 0)
+            or str(model.get("Quality") or "") not in quality_aliases.get(str(visual.get("rarity") or ""), set())
+            or source_meta.get("sourcePath") != visual.get("sourcePath")
+            or source_meta.get("sourceSha256") != visual.get("sourceSha256")
+            or source_meta.get("cropPath") != crop.get("cropRelativePath")
+            or source_meta.get("cropSha256") != crop.get("cropSha256")
+        ):
+            continue
+        try:
+            image_path = (base_root / str(record.get("imagePath") or "")).resolve()
+            if not image_path.is_relative_to(base_root.resolve()) or not image_path.is_file():
+                continue
+            if hashlib.sha256(image_path.read_bytes()).hexdigest() != record.get("imageSha256"):
+                continue
+            pixels = cv2.imdecode(np.fromfile(str(image_path), np.uint8), cv2.IMREAD_COLOR)
+            expected_shape = (
+                int(record["heightCells"]) * 128,
+                int(record["widthCells"]) * 128,
+            )
+            if pixels is None or pixels.shape[:2] != expected_shape:
+                continue
+        except (OSError, KeyError, TypeError, ValueError):
+            continue
+        output[catalog_id] = {"image": pixels, "metadata": record}
+    return output
+
+
 @lru_cache(maxsize=1024)
 def _features(pixels, height, width):
     gray = np.frombuffer(pixels, np.uint8).reshape(height, width)
