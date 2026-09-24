@@ -43,6 +43,72 @@ def _verified_project_asset(project_root: Path, relative_path: str, sha256: str)
     return resolved
 
 
+def _load_guidebook_display_sources(project_root: Path) -> dict:
+    """Load read-only 1.4 source cards without exposing them to solver identity data."""
+    root = Path(project_root).resolve()
+    document = _read_json(root / "assets/items/visual_catalog_v2.json")
+    source = document.get("guidebookDisplayOnly")
+    if not isinstance(source, dict) or source.get("schemaVersion") != "guidebook-display-only.v1":
+        raise ValueError("1.4 图鉴资料不可读取")
+    authority = source.get("authority") or {}
+    if authority.get("presentationOnly") is not True or authority.get("changesSolverCatalog") is not False \
+            or authority.get("changesVisualIdentityRecords") is not False \
+            or authority.get("enablesSolverForNewEntries") is not False:
+        raise ValueError("1.4 图鉴资料超出只读展示范围")
+
+    missing_images = 0
+
+    def attach_image_uri(image: dict) -> dict:
+        nonlocal missing_images
+        result = dict(image)
+        relative_path = str(result.get("path") or "").replace("\\", "/")
+        if not relative_path.startswith("1.4更新/"):
+            result["uri"] = None
+            result["available"] = False
+            missing_images += 1
+            return result
+        try:
+            asset = _verified_project_asset(root, relative_path, str(result.get("sha256") or ""))
+            result["uri"] = asset.as_uri()
+            result["available"] = True
+        except (OSError, ValueError):
+            result["uri"] = None
+            result["available"] = False
+            missing_images += 1
+        return result
+
+    items = []
+    for entry in source.get("items") or []:
+        if not isinstance(entry, dict):
+            continue
+        item = dict(entry)
+        item["sourceImages"] = [
+            attach_image_uri(image) for image in entry.get("sourceImages") or [] if isinstance(image, dict)
+        ]
+        items.append(item)
+
+    roles = []
+    for entry in source.get("roles") or []:
+        if not isinstance(entry, dict):
+            continue
+        role = dict(entry)
+        image = role.get("sourceImage")
+        if isinstance(image, dict):
+            role["sourceImage"] = attach_image_uri(image)
+        roles.append(role)
+
+    return {
+        "ok": True,
+        "schemaVersion": source["schemaVersion"],
+        "sourceVersion": source.get("sourceVersion"),
+        "authority": authority,
+        "counts": source.get("counts") or {},
+        "items": items,
+        "roles": roles,
+        "message": "部分来源图片暂不可读取" if missing_images else "",
+    }
+
+
 def load_mascot_presentation_contract(project_root: Path) -> dict:
     """Load the frozen presentation-only mascot mapping and verify every byte."""
     project_root = Path(project_root).resolve()
@@ -244,6 +310,7 @@ class MainWindowBridge:
             "select_legacy_archive_source",
             "request_settlement_review",
             "request_original_screenshots",
+            "request_guidebook_sources",
             "delete_original_screenshot",
             "restore_original_screenshot",
             "import_settlement_screenshot",
@@ -725,6 +792,18 @@ class MainWindowBridge:
                 str(payload.get("recordId") or "").strip(),
                 source=str(payload.get("source") or "current").strip(),
             ) if service else {"ok": False, "message": "截图服务未就绪"}
+
+        if action == "request_guidebook_sources":
+            try:
+                project_root = Path(__file__).resolve().parents[1]
+                response["guidebookSources"] = _load_guidebook_display_sources(project_root)
+            except Exception as exc:
+                response["guidebookSources"] = {
+                    "ok": False,
+                    "message": f"1.4 图鉴资料读取失败：{type(exc).__name__}",
+                    "items": [],
+                    "roles": [],
+                }
 
         if action in ("delete_original_screenshot", "restore_original_screenshot"):
             service = self._settlement_review_service

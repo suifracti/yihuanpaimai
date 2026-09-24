@@ -43,8 +43,13 @@ const dashboard = {
   statusPollTimer: null,
   lastMainViewState: null,
   guidebookCatalog: null,
+  guidebookSources: null,
+  guidebookSourcesRequestId: null,
+  guidebookSourcesError: null,
   guidebookSearch: "",
   guidebookRarity: "all",
+  guidebookCategory: "all",
+  guidebookGridSize: "all",
   guidebookSelectedItem: null,
   guidebookTab: "catalog",
   guidebookRecordsSignature: null,
@@ -1162,6 +1167,12 @@ const GUIDEBOOK_FACT_LABELS = {
   totalItems: "总件数", totalGrid: "总占格"
 };
 
+function requestGuidebookSources() {
+  if (dashboard.guidebookSources || dashboard.guidebookSourcesRequestId) return;
+  const requestId = postNative("request_guidebook_sources");
+  if (requestId) dashboard.guidebookSourcesRequestId = requestId;
+}
+
 function guidebookCatalogRows() {
   if (Array.isArray(dashboard.guidebookCatalog)) return dashboard.guidebookCatalog;
   const engine = window.AuctionEngineV06;
@@ -1181,12 +1192,96 @@ function guidebookCatalogRows() {
         name,
         price: Number.isFinite(price) ? price : null,
         footprint: item[2] == null ? "" : String(item[2]),
-        catalogVersion: version
+        catalogVersion: version,
+        sourceRecords: []
       });
     }
   }
+  for (const source of dashboard.guidebookSources?.items || []) {
+    if (!source || typeof source !== "object") continue;
+    const solverKey = source.solverMatch?.key;
+    const linked = solverKey ? rows.find(row => row.key === solverKey) : null;
+    if (linked) {
+      linked.sourceRecords.push(source);
+      continue;
+    }
+    rows.push({
+      key: source.sourceId || `guidebook14:${source.category}:${source.sourceGeometry}:${source.sourceName}`,
+      rarity: source.sourceRarity || "unknown",
+      name: String(source.name || source.sourceName || "名称待确认"),
+      price: null,
+      footprint: source.sourceGeometry || `${source.width || "?"}x${source.height || "?"}`,
+      catalogVersion: "1.4 来源资料",
+      sourceOnly: true,
+      sourceRecords: [source],
+      sourceData: source
+    });
+  }
   dashboard.guidebookCatalog = rows;
   return rows;
+}
+
+function guidebookFilterCategory(item) {
+  return (item.sourceRecords || []).map(source => source.category).filter(Boolean);
+}
+
+function renderGuidebookFilters(rows) {
+  const categorySelect = document.getElementById("guidebook-category-filter");
+  const gridSelect = document.getElementById("guidebook-grid-filter");
+  if (categorySelect) categorySelect.value = dashboard.guidebookCategory || "all";
+  if (!gridSelect) return;
+  const sizes = [...new Set(rows.map(item => /^\d+x\d+$/i.test(item.footprint || "")
+    ? item.footprint.toLowerCase() : "unknown"))].sort((a, b) => {
+    if (a === "unknown") return 1;
+    if (b === "unknown") return -1;
+    const [aw, ah] = a.split("x").map(Number);
+    const [bw, bh] = b.split("x").map(Number);
+    return aw - bw || ah - bh;
+  });
+  const options = [`<option value="all">全部尺寸</option>`, ...sizes.map(size =>
+    `<option value="${escapeHtml(size)}">${size === "unknown" ? "尺寸未知" : escapeHtml(size.replace("x", " × "))}</option>`
+  )];
+  gridSelect.innerHTML = options.join("");
+  if (dashboard.guidebookGridSize !== "all" && !sizes.includes(dashboard.guidebookGridSize)) dashboard.guidebookGridSize = "all";
+  gridSelect.value = dashboard.guidebookGridSize || "all";
+}
+
+function guidebookSourceImagesMarkup(source) {
+  const images = Array.isArray(source?.sourceImages) ? source.sourceImages : [];
+  if (!images.length) return `<p class="guidebook-source-missing">没有保存可回看的来源图片。</p>`;
+  return `<div class="guidebook-source-images">${images.map((image, index) => {
+    const row = Array.isArray(image.cell) ? Number(image.cell[0]) + 1 : null;
+    const column = Array.isArray(image.cell) ? Number(image.cell[1]) + 1 : null;
+    const location = row != null && column != null ? `截图卡片位置：第 ${row} 行、第 ${column} 列` : "截图卡片位置未记录";
+    const label = `${source.category || "来源图鉴"} · ${source.sourceGeometry || "格子尺寸未知"} · ${location}`;
+    return `<details class="guidebook-source-image"><summary>查看来源原图 ${index + 1} · ${escapeHtml(label)}</summary>${image.uri
+      ? `<img src="${escapeHtml(image.uri)}" alt="${escapeHtml(source.sourceName || source.name || "藏品")}来源原图" loading="lazy"><small>${escapeHtml(image.path || "")}</small>`
+      : `<p class="guidebook-source-missing">来源原图暂不可读取；原文件路径：${escapeHtml(image.path || "未知")}</p>`}</details>`;
+  }).join("")}</div>`;
+}
+
+function guidebookCatalogDetailMarkup(item) {
+  if (!item) return `<span class="tag">本地目录</span><h2>没有匹配条目</h2><p>可清除搜索词或更换筛选条件。</p>`;
+  const sources = item.sourceRecords || [];
+  const source = sources[0] || null;
+  const sourceLabel = source
+    ? `<p>1.4 用户分类：${escapeHtml(source.category)} · 素材格子：${escapeHtml(source.sourceGeometry)}。分类来自素材目录，不作为品质或求解规则。</p>`
+    : `<p>此条未在本批 1.4 素材中建立来源分类；现有条目身份与估值目录保持不变。</p>`;
+  const solverValue = item.sourceOnly
+    ? `<p class="guidebook-source-status">仅展示来源资料，未纳入当前求解目录；不会据此产生估值。</p>`
+    : `<p>${item.price == null ? "当前求解目录未提供参考价。" : `当前求解目录基础参考价：${formatCurrency(item.price)}`}</p>`;
+  const sourceValue = source?.sourcePriceStatus === "VISUALLY_CONFIRMED_1_4_SOURCE" && source.sourcePrice != null
+    ? `<p>1.4 原图价签：${formatCurrency(source.sourcePrice)}（已回看原图${source.solverMatch?.price != null && source.sourcePrice !== source.solverMatch.price ? "；与现有目录不同，未替换目录值" : ""}）</p>`
+    : source ? `<p>1.4 原图来源已关联；未独立确认的价格保持未知。</p>` : "";
+  const conflictMarkup = sources.flatMap(entry => entry.dataConflicts || []).map(conflict =>
+    `<p class="guidebook-conflict">待核差异 · ${escapeHtml(conflict.field)}：${escapeHtml(conflict.basis)}</p>`
+  ).join("");
+  const candidateMarkup = source?.solverCandidate
+    ? `<p class="guidebook-conflict">相似求解条目：${escapeHtml(source.solverCandidate.name)}；身份尚未确认，不自动关联。</p>` : "";
+  const imageMarkup = sources.map(guidebookSourceImagesMarkup).join("");
+  const sourceStatus = item.sourceOnly ? "1.4 来源资料 · 仅展示" : "现有求解目录条目";
+  const rarityLabel = GUIDEBOOK_RARITY_LABELS[item.rarity] || "品质未确认";
+  return `<span class="${GUIDEBOOK_RARITY_LABELS[item.rarity] ? `rarity-tag is-${item.rarity}` : "tag"}">${rarityLabel}</span><h2>${escapeHtml(item.name)}</h2><p class="guidebook-source-status">${sourceStatus}</p>${solverValue}${sourceLabel}${sourceValue}<p>${item.footprint && item.footprint !== "unknown" ? `现有目录规格：${escapeHtml(item.footprint)}。` : "目录规格未知。"}目录条目不代表本局已经识别或确认了该藏品。</p>${candidateMarkup}${conflictMarkup}${imageMarkup}<small>目录版本：${escapeHtml(item.catalogVersion || "未知")}${source?.visualCatalogId ? ` · 稳定图鉴 ID：${escapeHtml(source.visualCatalogId)}` : ""}</small>`;
 }
 
 function renderGuidebookCatalog() {
@@ -1196,21 +1291,43 @@ function renderGuidebookCatalog() {
   const sourceNote = document.getElementById("guidebook-catalog-source");
   if (!grid || !count || !detail) return;
   const rows = guidebookCatalogRows();
+  renderGuidebookFilters(rows);
   const query = String(dashboard.guidebookSearch || "").trim().toLowerCase();
-  const filtered = rows.filter(item =>
-    (dashboard.guidebookRarity === "all" || item.rarity === dashboard.guidebookRarity)
-    && (!query || item.name.toLowerCase().includes(query))
-  );
-  count.textContent = rows.length ? `${filtered.length} / ${rows.length} 件` : "本地估值目录不可用";
-  if (sourceNote && rows.length) sourceNote.textContent = `来源：现有求解器本地基础目录 ${rows[0].catalogVersion}。目录价格是估值输入参考值，不等于当前局估值或建议出价；只读浏览。`;
+  const filtered = rows.filter(item => {
+    const categoryMatch = dashboard.guidebookCategory === "all"
+      || (dashboard.guidebookCategory === "other" ? !(item.sourceRecords || []).length
+        : guidebookFilterCategory(item).includes(dashboard.guidebookCategory));
+    const size = /^\d+x\d+$/i.test(item.footprint || "") ? item.footprint.toLowerCase() : "unknown";
+    const queryText = [item.name, ...(item.sourceRecords || []).flatMap(source => [source.sourceName, ...(source.sourceNames || [])])]
+      .filter(Boolean).join(" ").toLowerCase();
+    return categoryMatch
+      && (dashboard.guidebookRarity === "all" || item.rarity === dashboard.guidebookRarity)
+      && ((dashboard.guidebookGridSize || "all") === "all" || size === dashboard.guidebookGridSize)
+      && (!query || queryText.includes(query));
+  });
+  count.textContent = rows.length ? `${filtered.length} / ${rows.length} 条` : (dashboard.guidebookSourcesError || "本地估值目录不可用");
+  if (sourceNote) {
+    const countText = dashboard.guidebookSources?.counts?.uniqueSourceEntries;
+    sourceNote.textContent = dashboard.guidebookSourcesError
+      ? dashboard.guidebookSourcesError
+      : `估值参考来自现有求解器基础目录。${countText ? `另关联 ${countText} 条 1.4 来源资料；新增条目只供浏览，不自动进入识别或求解。` : "1.4 来源资料正在加载。"}格子尺寸按来源目录原样显示，如 1×2 与 2×1 分别保留。`;
+  }
   grid.innerHTML = filtered.length
-    ? filtered.map((item, index) => `<button type="button" role="listitem" class="guidebook-item-card${item.key === dashboard.guidebookSelectedItem ? " is-selected" : ""}" data-guidebook-item-index="${index}" aria-pressed="${item.key === dashboard.guidebookSelectedItem}"><span class="rarity-tag is-${item.rarity}">${GUIDEBOOK_RARITY_LABELS[item.rarity]}</span><strong>${escapeHtml(item.name)}</strong><small>${item.price == null ? "目录未提供参考价" : `目录参考 ${formatCurrency(item.price)}`}</small></button>`).join("")
-    : `<p class="guidebook-empty">${rows.length ? "没有符合筛选条件的藏品。" : "当前内置估值目录无法读取。"}</p>`;
+    ? filtered.map((item, index) => {
+      const rarityLabel = GUIDEBOOK_RARITY_LABELS[item.rarity] || "待确认";
+      const source = (item.sourceRecords || [])[0];
+      const subtitle = item.sourceOnly
+        ? `来源资料 · ${source?.category || "分类待确认"} · ${item.footprint || "尺寸待确认"}`
+        : source ? `${source.category} · ${source.sourceGeometry}` : `现有目录 · ${item.footprint || "尺寸未知"}`;
+      const value = item.sourceOnly
+        ? (source?.sourcePriceStatus === "VISUALLY_CONFIRMED_1_4_SOURCE" && source.sourcePrice != null ? `原图 ${formatCurrency(source.sourcePrice)} · 仅展示` : "来源字段待确认 · 仅展示")
+        : (item.price == null ? "目录未提供参考价" : `目录参考 ${formatCurrency(item.price)}`);
+      return `<button type="button" role="listitem" class="guidebook-item-card${item.key === dashboard.guidebookSelectedItem ? " is-selected" : ""}" data-guidebook-item-index="${index}" aria-pressed="${item.key === dashboard.guidebookSelectedItem}"><span class="rarity-tag${GUIDEBOOK_RARITY_LABELS[item.rarity] ? ` is-${item.rarity}` : ""}">${rarityLabel}</span><strong>${escapeHtml(item.name)}</strong><small>${escapeHtml(subtitle)}</small><small>${escapeHtml(value)}</small></button>`;
+    }).join("")
+    : `<p class="guidebook-empty">${rows.length ? "没有符合筛选条件的藏品。" : escapeHtml(dashboard.guidebookSourcesError || "正在读取本地目录与 1.4 来源资料。")}</p>`;
   const selected = filtered.find(item => item.key === dashboard.guidebookSelectedItem) || filtered[0] || null;
   if (selected) dashboard.guidebookSelectedItem = selected.key;
-  detail.innerHTML = selected
-    ? `<span class="rarity-tag is-${selected.rarity}">${GUIDEBOOK_RARITY_LABELS[selected.rarity]}</span><h2>${escapeHtml(selected.name)}</h2><p>${selected.price == null ? "本地目录没有保存参考价。" : `基础参考价：${formatCurrency(selected.price)}`}</p><p>${selected.footprint ? `目录规格：${escapeHtml(selected.footprint)}。` : "目录未提供占格规格。"}此处为目录条目，不代表本局已经识别或确认了该藏品。</p><small>目录版本：${escapeHtml(selected.catalogVersion)}</small>`
-    : `<span class="tag">本地目录</span><h2>没有匹配条目</h2><p>可清除搜索词或更换品质筛选。</p>`;
+  detail.innerHTML = guidebookCatalogDetailMarkup(selected);
   grid.querySelectorAll("[data-guidebook-item-index]").forEach(button => {
     button.addEventListener("click", () => {
       const item = filtered[Number(button.dataset.guidebookItemIndex)];
@@ -1283,6 +1400,37 @@ function guidebookObservationValue(field, value) {
   return String(value);
 }
 
+function guidebookObservationSourceFrame(item, record) {
+  const frames = record?.auctionEvidence?.nativeObservation?.sourceFrames;
+  if (!Array.isArray(frames)) return null;
+  const native = record?.auctionEvidence?.nativeObservation || {};
+  const wantedSequence = item?.frameSequence ?? item?.sourceFrameSequence;
+  const wantedSession = item?.observationSessionId || item?.sourceObservationSessionId || item?.sessionId
+    || native.observationSessionId;
+  if (wantedSequence != null) {
+    return frames.find(frame => Number(frame?.frameSequence) === Number(wantedSequence)
+      && (!wantedSession || !frame?.observationSessionId || frame.observationSessionId === wantedSession)) || null;
+  }
+  if (item?.frameId != null) {
+    const wantedFrameId = String(item.frameId);
+    return frames.find(frame => String(frame?.capturedAt || "") === wantedFrameId
+      && (!wantedSession || !frame?.observationSessionId || frame.observationSessionId === wantedSession)) || null;
+  }
+  return null;
+}
+
+function guidebookObservationSourceLabel(item, record) {
+  const exact = guidebookObservationSourceFrame(item, record);
+  if (exact) {
+    const sequence = exact.frameSequence == null ? "序号未记录" : `第 ${exact.frameSequence} 帧`;
+    return `首次来源原图已保存：${sequence} · ${exact.capturedAt || "时间未记录"}`;
+  }
+  if (item?.frameSequence != null || item?.sourceFrameSequence != null || item?.frameId != null) {
+    return "事实标记的原始来源帧未保存在本草稿；下方图片仅供回看，不代替首次来源。";
+  }
+  return "未记录可验证的首次来源帧；下方只列本局已保存关键帧。";
+}
+
 function renderGuidebookRecords() {
   const list = document.getElementById("guidebook-recognition-list");
   const count = document.getElementById("guidebook-record-count");
@@ -1319,11 +1467,11 @@ function renderGuidebookRecords() {
     const observationMarkup = usable.length ? usable.map(item => {
       const label = GUIDEBOOK_FACT_LABELS[item.field] || item.field || "局内事实";
       const state = item.status === "OBSERVED" ? "原图观察" : item.status === "CONFIRMED" ? "已确认" : item.status === "STORED_FACT" ? "草稿事实" : "待核对";
-      return `<div class="guidebook-observation"><strong>${escapeHtml(label)} · ${escapeHtml(state)}${item.round != null ? ` · 第 ${escapeHtml(item.round)} 回合` : ""}</strong><p>${escapeHtml(guidebookObservationValue(item.field, item.value))}${item.rawText ? `　｜　${escapeHtml(item.rawText)}` : ""}</p></div>`;
+      return `<div class="guidebook-observation"><strong>${escapeHtml(label)} · ${escapeHtml(state)}${item.round != null ? ` · 第 ${escapeHtml(item.round)} 回合` : ""}</strong><p>${escapeHtml(guidebookObservationValue(item.field, item.value))}${item.rawText ? `　｜　${escapeHtml(item.rawText)}` : ""}</p><small class="guidebook-frame-provenance">${escapeHtml(guidebookObservationSourceLabel(item, record))}</small></div>`;
     }).join("") : `<p class="guidebook-identity-note">本草稿没有单件身份事实；不会从品质、轮廓或置信度推定藏品名称。</p>`;
     const identityMarkup = confirmedItems.length
       ? confirmedItems.map(item => {
-        const catalogMatches = guidebookCatalogRows().filter(row => row.name === item.identifiedName
+        const catalogMatches = guidebookCatalogRows().filter(row => !row.sourceOnly && row.name === item.identifiedName
           && (!item.rarity || row.rarity === item.rarity));
         const catalogMatch = catalogMatches.length === 1 ? catalogMatches[0] : null;
         return `<span class="guidebook-item-confirmed">已确认：${escapeHtml(item.identifiedName)}${catalogMatch ? ` <button type="button" class="btn-review-action" data-guidebook-confirmed-item="${escapeHtml(catalogMatch.key)}">查看图鉴条目</button>` : "（当前估值目录无同名条目）"}</span>`;
@@ -1354,8 +1502,31 @@ function renderGuidebookRecords() {
   });
 }
 
+function renderGuidebookCharacters() {
+  const list = document.getElementById("guidebook-character-list");
+  const count = document.getElementById("guidebook-character-count");
+  const empty = document.getElementById("guidebook-characters-empty");
+  if (!list || !count || !empty) return;
+  const roles = dashboard.guidebookSources?.roles || [];
+  count.textContent = `${roles.length} 名`;
+  empty.hidden = roles.length > 0;
+  if (!roles.length) {
+    empty.textContent = dashboard.guidebookSourcesError || (dashboard.guidebookSourcesRequestId ? "正在读取角色原图与技能资料…" : "角色资料尚未加载。");
+    list.innerHTML = "";
+    return;
+  }
+  list.innerHTML = roles.map(role => {
+    const revelations = Array.isArray(role.revelations) && role.revelations.length
+      ? `<ul class="guidebook-character-revelations">${role.revelations.map(text => `<li>${escapeHtml(text)}</li>`).join("")}</ul>` : "";
+    const image = role.sourceImage?.uri
+      ? `<details class="guidebook-role-source"><summary>查看角色来源原图</summary><img src="${escapeHtml(role.sourceImage.uri)}" alt="${escapeHtml(role.name)}技能来源原图" loading="lazy"><small>${escapeHtml(role.sourceImage.path || "")}</small></details>`
+      : `<p class="guidebook-source-missing">角色来源原图暂不可读取。</p>`;
+    return `<article class="guidebook-character-card"><div class="guidebook-character-heading"><h3>${escapeHtml(role.name)}</h3>${role.newInThisBatch ? `<span class="tag">本批素材新增</span>` : ""}</div>${role.flavor ? `<p class="guidebook-character-flavor">${escapeHtml(role.flavor)}</p>` : ""}<strong>${escapeHtml(role.skillName || "技能资料待确认")}</strong><p>${escapeHtml(role.skillDescription || "技能说明待确认")}</p>${revelations}${role.integrationNote ? `<p class="guidebook-identity-note">${escapeHtml(role.integrationNote)}</p>` : ""}${image}</article>`;
+  }).join("");
+}
+
 function setGuidebookTab(tab) {
-  dashboard.guidebookTab = tab === "records" ? "records" : "catalog";
+  dashboard.guidebookTab = ["records", "characters"].includes(tab) ? tab : "catalog";
   document.querySelectorAll("[data-guidebook-tab]").forEach(button => {
     const active = button.dataset.guidebookTab === dashboard.guidebookTab;
     button.classList.toggle("is-active", active);
@@ -1364,14 +1535,18 @@ function setGuidebookTab(tab) {
   });
   const catalogPanel = document.getElementById("guidebook-catalog-panel");
   const recordsPanel = document.getElementById("guidebook-records-panel");
+  const charactersPanel = document.getElementById("guidebook-characters-panel");
   if (catalogPanel) catalogPanel.hidden = dashboard.guidebookTab !== "catalog";
   if (recordsPanel) recordsPanel.hidden = dashboard.guidebookTab !== "records";
+  if (charactersPanel) charactersPanel.hidden = dashboard.guidebookTab !== "characters";
 }
 
 function renderGuidebook() {
   if (dashboard.currentView !== "guidebook") return;
+  requestGuidebookSources();
   setGuidebookTab(dashboard.guidebookTab);
   renderGuidebookCatalog();
+  renderGuidebookCharacters();
   renderGuidebookRecords();
 }
 
@@ -4217,6 +4392,9 @@ function renderOriginalScreenshots(payload) {
     }
     container.replaceChildren();
     const images = result.images || [];
+    const record = result.source === "live-trial"
+      ? guidebookDrafts().find(item => item.id === pending.recordId) || null
+      : null;
     const heading = document.createElement("p");
     if (!images.length) {
       heading.textContent = "暂无截图证据";
@@ -4241,38 +4419,115 @@ function renderOriginalScreenshots(payload) {
       status.textContent = result.message;
       container.appendChild(status);
     }
-    for (const [index, shot] of images.entries()) {
-      const details = document.createElement("details");
-      details.open = true;
-      details.style.marginBottom = "10px";
-      const label = document.createElement("summary");
-      const kindLabel = shot.kind === "native-observation" ? "局内观察原图" : shot.kind === "manual-game" ? "手动截图" : "自动结算";
-      const shaPrefix = shot.sha256 ? ` · ${shot.sha256.slice(0, 8)}...` : "";
-      label.textContent = `第 ${index + 1} 张 (${kindLabel}) · ${shot.capturedAt || "时间未记录"}${shaPrefix}${shot.error ? " · " + shot.error : ""}`;
-      details.appendChild(label);
+    if (!images.length) continue;
+
+    const sources = record?.intelCardEvidence?.observations || [];
+    const sourceSequences = sources.map(item => item?.frameSequence ?? item?.sourceFrameSequence)
+      .filter(value => value != null).map(Number).filter(Number.isFinite);
+    const nativeSession = record?.auctionEvidence?.nativeObservation?.observationSessionId || null;
+    const matchingSourceIndex = images.reduce((found, shot, index) => {
+      if (shot.frameSequence == null || !sourceSequences.includes(Number(shot.frameSequence))) return found;
+      if (nativeSession && shot.observationSessionId && shot.observationSessionId !== nativeSession) return found;
+      return index;
+    }, -1);
+    const selected = { index: matchingSourceIndex >= 0 ? matchingSourceIndex : images.length - 1 };
+    const pickerLabel = document.createElement("label");
+    pickerLabel.className = "guidebook-keyframe-label";
+    pickerLabel.textContent = "选择已保存关键帧";
+    const picker = document.createElement("select");
+    picker.className = "form-control guidebook-keyframe-select";
+    picker.setAttribute("aria-label", "选择已保存关键帧");
+    images.forEach((shot, index) => {
+      const option = document.createElement("option");
+      option.value = String(index);
+      const kindLabel = shot.kind === "native-observation" ? "局内观察" : shot.kind === "manual-game" ? "手动截图" : "结算截图";
+      const frameLabel = shot.frameSequence == null ? `保存图 ${shot.sequence || index + 1}` : `第 ${shot.frameSequence} 帧`;
+      const roundLabel = shot.round == null ? "" : ` · 第 ${shot.round} 回合`;
+      const sessionLabel = shot.observationSessionId ? ` · 会话 ${String(shot.observationSessionId).slice(0, 8)}` : "";
+      option.textContent = `${frameLabel}${roundLabel} · ${shot.capturedAt || "时间未记录"} · ${kindLabel}${sessionLabel}`;
+      picker.appendChild(option);
+    });
+    picker.value = String(selected.index);
+    pickerLabel.appendChild(picker);
+    container.appendChild(pickerLabel);
+    const panel = document.createElement("div");
+    panel.className = "guidebook-keyframe-viewer";
+    container.appendChild(panel);
+
+    const renderSelected = () => {
+      panel.replaceChildren();
+      const index = selected.index;
+      const shot = images[index];
+      if (!shot) return;
+      const kindLabel = shot.kind === "native-observation" ? "局内观察原图" : shot.kind === "manual-game" ? "手动截图" : "结算截图";
+      const meta = document.createElement("p");
+      const frameLabel = shot.frameSequence == null ? `保存图 ${shot.sequence || index + 1}` : `第 ${shot.frameSequence} 帧`;
+      const targetLabel = shot.targetInstance?.pid != null ? ` · 目标进程 ${shot.targetInstance.pid}` : "";
+      const roundLabel = shot.round == null ? "" : ` · 第 ${shot.round} 回合`;
+      const sessionLabel = shot.observationSessionId ? ` · 观察会话 ${shot.observationSessionId}` : "";
+      const shaPrefix = shot.sha256 ? ` · SHA-256 ${shot.sha256.slice(0, 8)}…` : "";
+      meta.className = "guidebook-keyframe-meta";
+      meta.textContent = `${frameLabel} · ${kindLabel}${roundLabel} · ${shot.capturedAt || "时间未记录"}${sessionLabel}${targetLabel}${shaPrefix}${shot.error ? " · " + shot.error : ""}`;
+      panel.appendChild(meta);
+
+      const linkedFacts = record ? sources.filter(item => {
+        const linked = guidebookObservationSourceFrame(item, record);
+        if (!linked) return false;
+        if (shot.frameSequence != null && linked.frameSequence != null) {
+          return Number(linked.frameSequence) === Number(shot.frameSequence)
+            && (!linked.observationSessionId || !shot.observationSessionId || linked.observationSessionId === shot.observationSessionId);
+        }
+        return Boolean(shot.capturedAt && linked.capturedAt === shot.capturedAt);
+      }) : [];
+      const provenance = document.createElement("p");
+      provenance.className = "guidebook-frame-provenance";
+      if (linkedFacts.length) {
+        const factLabels = [...new Set(linkedFacts.map(item => GUIDEBOOK_FACT_LABELS[item.field] || item.field || "局内事实"))];
+        provenance.textContent = `事实来源帧：${factLabels.join("、")} · 首次来源原图已保存`;
+      } else {
+        const priorFactSequence = sources.map(item => item?.frameSequence ?? item?.sourceFrameSequence)
+          .filter(value => value != null).map(Number).filter(Number.isFinite);
+        const sameSession = !nativeSession || !shot.observationSessionId || nativeSession === shot.observationSessionId;
+        const laterThanKnownSource = shot.frameSequence != null && sameSession
+          && priorFactSequence.some(sequence => Number(shot.frameSequence) > sequence);
+        provenance.textContent = laterThanKnownSource
+          ? "后续关键帧：仅供回看；没有保存“事实仍显示在此帧”的关联，不能作为首次来源或佐证。"
+          : "未记录事实与此帧的首次来源关系；原图仅供回看，不代替首次来源。";
+      }
+      panel.appendChild(provenance);
+      if (shot.dataUrl) {
+        const img = document.createElement("img");
+        img.src = shot.dataUrl;
+        img.alt = `本局关键帧 ${frameLabel}`;
+        img.className = "guidebook-keyframe-image";
+        panel.appendChild(img);
+      } else {
+        const missing = document.createElement("p");
+        missing.className = "guidebook-source-missing";
+        missing.textContent = "这张关键帧原图未保存或当前无法读取。";
+        panel.appendChild(missing);
+      }
       if (!shot.readOnly) {
         const remove = document.createElement("button");
         remove.type = "button";
         remove.className = "btn-wb-action";
         remove.textContent = "删除截图";
         remove.title = "从本局及历史截图列表移除，原始证据文件保留；可撤销";
-        remove.style.marginLeft = "12px";
         remove.addEventListener("click", event => {
           event.preventDefault();
           event.stopPropagation();
           changeOriginalScreenshot("delete_original_screenshot", pending.recordId, shot.evidenceId, containerId, remove, pending.source);
         });
-        label.appendChild(remove);
+        panel.appendChild(remove);
       }
-      if (shot.dataUrl) {
-        const img = document.createElement("img");
-        img.src = shot.dataUrl;
-        img.alt = `本局原始截图 ${index + 1}`;
-        img.style.cssText = "max-width:100%;height:auto;display:block;margin-top:6px;border-radius:4px;border:1px solid var(--border,#334155)";
-        details.appendChild(img);
-      }
-      container.appendChild(details);
-    }
+    };
+    picker.addEventListener("change", () => {
+      const index = Number(picker.value);
+      if (!Number.isInteger(index) || index < 0 || index >= images.length) return;
+      selected.index = index;
+      renderSelected();
+    });
+    renderSelected();
   }
 }
 
@@ -4297,6 +4552,19 @@ function handleNativeMessage(event) {
       }
     }
     return;
+  }
+  if (payload.action === "request_guidebook_sources" && payload.guidebookSources) {
+    if (dashboard.guidebookSourcesRequestId && payload.requestId !== dashboard.guidebookSourcesRequestId) return;
+    dashboard.guidebookSourcesRequestId = null;
+    if (payload.guidebookSources.ok) {
+      dashboard.guidebookSources = payload.guidebookSources;
+      dashboard.guidebookSourcesError = null;
+    } else {
+      dashboard.guidebookSources = { items: [], roles: [], counts: {} };
+      dashboard.guidebookSourcesError = payload.guidebookSources.message || "1.4 图鉴资料读取失败";
+    }
+    dashboard.guidebookCatalog = null;
+    if (dashboard.currentView === "guidebook") renderGuidebook();
   }
   if (payload.action === "manual_facts" && payload.manualFactsResult) {
     renderManualCommandReceipt(payload.manualCommandResult || {
@@ -4676,6 +4944,16 @@ document.addEventListener("DOMContentLoaded", () => {
   const guidebookSearch = document.getElementById("guidebook-catalog-search");
   if (guidebookSearch) guidebookSearch.addEventListener("input", () => {
     dashboard.guidebookSearch = guidebookSearch.value || "";
+    renderGuidebookCatalog();
+  });
+  const guidebookCategory = document.getElementById("guidebook-category-filter");
+  if (guidebookCategory) guidebookCategory.addEventListener("change", () => {
+    dashboard.guidebookCategory = guidebookCategory.value || "all";
+    renderGuidebookCatalog();
+  });
+  const guidebookGrid = document.getElementById("guidebook-grid-filter");
+  if (guidebookGrid) guidebookGrid.addEventListener("change", () => {
+    dashboard.guidebookGridSize = guidebookGrid.value || "all";
     renderGuidebookCatalog();
   });
   const guidebookAssistant = document.getElementById("guidebook-open-assistant");

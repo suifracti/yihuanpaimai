@@ -1922,6 +1922,7 @@ input, select { font: inherit; color: var(--text); }
 .guidebook-tab.is-active { color: var(--text); border-bottom-color: var(--accent-hover); }
 .guidebook-panel { padding: 14px; border: 1px solid var(--border); border-radius: var(--radius-md, 8px); background: var(--surface); }
 .guidebook-toolbar { display: flex; align-items: center; gap: 10px; }
+.guidebook-filter-select { min-width: 118px; }
 .guidebook-search-label { color: var(--text-secondary); font-size: 12px; }
 .guidebook-toolbar .form-control { max-width: 340px; }
 .guidebook-rarity-filters { display: flex; flex-wrap: wrap; gap: 6px; margin: 12px 0; }
@@ -1945,6 +1946,23 @@ input, select { font: inherit; color: var(--text); }
 .guidebook-observation { padding: 7px 9px; border-left: 2px solid var(--border-focus); background: rgba(255,255,255,.02); }
 .guidebook-observation strong { font-size: 11px; }
 .guidebook-observation p { margin: 3px 0 0; color: var(--text-secondary); font-size: 11px; }
+.guidebook-frame-provenance { display: block; margin: 5px 0 0; color: var(--text-muted); font-size: 10px; line-height: 1.45; }
+.guidebook-keyframe-label { display: grid; gap: 6px; max-width: 600px; margin: 10px 0; color: var(--text-secondary); font-size: 12px; }
+.guidebook-keyframe-select { width: 100%; }
+.guidebook-keyframe-viewer { padding: 10px; border: 1px solid var(--border); border-radius: 7px; background: var(--bg); }
+.guidebook-keyframe-meta { margin: 0 0 6px; color: var(--text-muted); font-size: 11px; line-height: 1.5; overflow-wrap: anywhere; }
+.guidebook-keyframe-image { display: block; max-width: 100%; max-height: 65vh; width: auto; height: auto; object-fit: contain; margin-top: 8px; border: 1px solid var(--border); border-radius: 5px; }
+.guidebook-character-list { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 10px; margin-top: 14px; }
+.guidebook-character-card { min-width: 0; padding: 12px; border: 1px solid var(--border); border-radius: 7px; background: var(--bg); }
+.guidebook-character-heading { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.guidebook-character-heading h3 { margin: 0; }
+.guidebook-character-card p, .guidebook-character-revelations { color: var(--text-secondary); font-size: 11px; line-height: 1.5; }
+.guidebook-character-flavor { color: var(--text-muted) !important; }
+.guidebook-role-source, .guidebook-source-image { margin-top: 8px; color: var(--text-muted); font-size: 11px; }
+.guidebook-role-source img, .guidebook-source-image img { display: block; max-width: 100%; max-height: 320px; object-fit: contain; margin-top: 6px; border: 1px solid var(--border); border-radius: 5px; }
+.guidebook-role-source small, .guidebook-source-image small { display: block; margin-top: 5px; overflow-wrap: anywhere; }
+.guidebook-source-status { color: var(--text-secondary) !important; }
+.guidebook-conflict, .guidebook-source-missing { color: var(--warning, #fbbf24) !important; font-size: 11px; line-height: 1.5; }
 .guidebook-identity-note, .guidebook-empty { color: var(--text-muted); font-size: 12px; }
 .guidebook-record-card .btn-review-action { margin-top: 6px; }
 @media (max-width: 900px) {

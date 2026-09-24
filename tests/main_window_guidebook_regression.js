@@ -24,6 +24,7 @@ class FakeElement {
     this.attributes = {};
     this.listeners = {};
     this.buttons = [];
+    this.children = [];
     this.value = "";
     this._innerHTML = "";
     this.textContent = "";
@@ -44,6 +45,7 @@ class FakeElement {
   }
   get innerHTML() { return this._innerHTML; }
   querySelectorAll(selector) {
+    if (selector === "button") return this.children.filter(child => child.tagName === "BUTTON");
     if (selector === "[data-guidebook-original]" || selector === "[data-guidebook-confirmed-item]" || selector === "[data-guidebook-item-index]") {
       return this.buttons.filter(button => selector.includes("original")
         ? button.dataset.guidebookOriginal !== undefined
@@ -60,7 +62,8 @@ class FakeElement {
   matches() { return false; }
   closest() { return null; }
   click() { this.listeners.click?.({ target: this }); }
-  replaceChildren() { this.children = []; }
+  appendChild(child) { this.children.push(child); return child; }
+  replaceChildren(...children) { this.children = children; }
 }
 
 const ids = new Map();
@@ -80,6 +83,7 @@ const tabs = ["catalog", "records"].map(name => {
 const rarityButtons = [];
 const document = {
   getElementById: get,
+  createElement(tagName) { const element = new FakeElement(); element.tagName = String(tagName).toUpperCase(); return element; },
   querySelector(selector) {
     let match = selector.match(/^\[data-view-page="([^"]+)"\]$/);
     if (match) return pages.find(page => page.dataset.viewPage === match[1]) || null;
@@ -120,9 +124,13 @@ vm.runInContext(fs.readFileSync("core/main_window.js", "utf8"), sandbox);
 vm.runInContext(`dashboard.lastMainViewState = { history: { liveTrialDrafts: [
   { id: "trial-a", lifecycleStatus: "DRAFT", dataOrigin: "live-trial", playedAt: "2026-09-23T12:00:00+08:00", updatedAt: "t1", factsRevision: 4,
     environment: { venueName: "珊瑚场" },
-    intelCardEvidence: { observations: [{ field: "q", value: 17, status: "OBSERVED", round: 3, rawText: "本局内紫金红合计17件" }] },
+    intelCardEvidence: { observations: [{ field: "q", value: 17, status: "OBSERVED", round: 3, rawText: "本局内紫金红合计17件", frameSequence: 10, observationSessionId: "session-a" }] },
     warehouse: { slots: [{ rarity: "gold", status: "CANDIDATE", candidates: [{ name: "待确认藏品", catalogId: "candidate-1", confidence: 0.99 }] }] },
-    auctionEvidence: { nativeObservation: { sourceFrames: [{ evidenceId: "evidence-1" }] } } },
+    auctionEvidence: { nativeObservation: { observationSessionId: "session-a", sourceFrames: [
+      { evidenceId: "evidence-1", frameSequence: 9, observationSessionId: "session-a", capturedAt: "t9", round: 2 },
+      { evidenceId: "evidence-2", frameSequence: 10, observationSessionId: "session-a", capturedAt: "t10", round: 3 },
+      { evidenceId: "evidence-3", frameSequence: 11, observationSessionId: "session-a", capturedAt: "t11", round: 4 }
+    ] } } },
   { id: "trial-c", lifecycleStatus: "DRAFT", dataOrigin: "live-trial", q: 5, updatedAt: "t0", intelCardEvidence: { observations: [] } },
   { id: "trial-confirmed", lifecycleStatus: "DRAFT", dataOrigin: "live-trial", updatedAt: "t2",
     warehouse: { slots: [{ status: "CONFIRMED", catalogId: "gold-confirmed", identifiedName: "独立目录条目", rarity: "gold" }] } },
@@ -134,8 +142,36 @@ assert.equal(vm.runInContext("dashboard.currentView", sandbox), "guidebook");
 assert.equal(get("page-guidebook").hidden, false);
 assert.equal(get("page-overview").hidden, true);
 assert.equal(get("nav-guidebook").classList.contains("is-active"), true);
+assert.equal(sent[0].action, "request_guidebook_sources");
 assert.match(get("guidebook-catalog-grid").innerHTML, /独立目录条目/);
 assert.match(get("guidebook-item-detail").innerHTML, /基础参考价/);
+
+const sourceRequestId = sent[0].requestId;
+sandbox.handleNativeMessage({ data: {
+  type: "app_status", action: "request_guidebook_sources", requestId: sourceRequestId,
+  guidebookSources: { ok: true, counts: { uniqueSourceEntries: 3 }, items: [
+    { sourceId: "vertical-source", name: "纵向来源样本", sourceName: "纵向来源样本", category: "古董", sourceGeometry: "1x2", sourceRarity: "blue", sourceOnly: true, sourcePrice: null, sourcePriceStatus: "UNKNOWN_NOT_PROMOTED", sourceImages: [{ uri: "file:///source-v.png", path: "1.4更新/古董/1x2/source.png" }] },
+    { sourceId: "horizontal-source", name: "横向来源样本", sourceName: "横向来源样本", category: "科技", sourceGeometry: "2x1", sourceRarity: "blue", sourceOnly: true, sourcePrice: null, sourcePriceStatus: "UNKNOWN_NOT_PROMOTED", sourceImages: [{ uri: "file:///source-h.png", path: "1.4更新/科技/2x1/source.png" }] },
+    { sourceId: "linked-source", name: "独立目录条目", category: "日用", sourceGeometry: "2x2", sourceRarity: "gold", sourceOnly: false, solverMatch: { key: "gold:0:独立目录条目" }, sourcePrice: null, sourcePriceStatus: "UNKNOWN_NOT_PROMOTED", sourceImages: [] }
+  ], roles: [{ name: "黑羽", skillName: "未卜先知", skillDescription: "每三回合随机揭示一项命运线索。", revelations: ["线索A"], newInThisBatch: true, sourceImage: { uri: "file:///black-feather.png", path: "1.4更新/角色/black.png" } }] }
+} });
+assert.match(get("guidebook-item-detail").innerHTML, /基础参考价/);
+assert.match(get("guidebook-item-detail").innerHTML, /来源图片/);
+sandbox.renderGuidebookCharacters();
+assert.match(get("guidebook-character-list").innerHTML, /黑羽/);
+assert.match(get("guidebook-character-list").innerHTML, /file:\/\/\/black-feather.png/);
+vm.runInContext(`dashboard.guidebookCategory = "古董"; dashboard.guidebookGridSize = "1x2";`, sandbox);
+sandbox.renderGuidebookCatalog();
+assert.match(get("guidebook-catalog-grid").innerHTML, /纵向来源样本/);
+assert.doesNotMatch(get("guidebook-catalog-grid").innerHTML, /横向来源样本/);
+vm.runInContext(`dashboard.guidebookCategory = "科技"; dashboard.guidebookGridSize = "2x1";`, sandbox);
+sandbox.renderGuidebookCatalog();
+assert.match(get("guidebook-catalog-grid").innerHTML, /横向来源样本/);
+assert.doesNotMatch(get("guidebook-catalog-grid").innerHTML, /纵向来源样本/);
+vm.runInContext(`dashboard.guidebookCategory = "all"; dashboard.guidebookGridSize = "all";`, sandbox);
+sandbox.renderGuidebookCatalog();
+assert.match(get("guidebook-catalog-grid").innerHTML, /来源字段待确认 · 仅展示/);
+assert.doesNotMatch(get("guidebook-catalog-grid").innerHTML, /原图 0/);
 
 sandbox.setGuidebookTab("records");
 assert.equal(get("guidebook-catalog-panel").hidden, true);
@@ -209,11 +245,32 @@ sandbox.renderManualCommandReceipt({ status: "REJECTED", reason: "observation-fr
 assert.match(commandStatus.textContent, /画面长时间未更新，修改未生效/);
 
 const matchBeforeRead = vm.runInContext("JSON.stringify(dashboard.matchState)", sandbox);
+const originalRequestStart = sent.length;
 list.querySelectorAll("[data-guidebook-original]")[0].click();
-assert.equal(sent.length, 1);
-assert.equal(sent[0].action, "request_original_screenshots");
-assert.equal(sent[0].source, "live-trial");
-assert.equal(sent[0].recordId, "trial-a");
+assert.equal(sent.length, originalRequestStart + 1);
+const originalRequest = sent.at(-1);
+assert.equal(originalRequest.action, "request_original_screenshots");
+assert.equal(originalRequest.source, "live-trial");
+assert.equal(originalRequest.recordId, "trial-a");
+sandbox.handleNativeMessage({ data: {
+  type: "app_status", action: "request_original_screenshots", requestId: originalRequest.requestId,
+  originalScreenshots: { ok: true, recordId: "trial-a", source: "live-trial", images: [
+    { sequence: 1, evidenceId: "evidence-1", frameSequence: 9, observationSessionId: "session-a", capturedAt: "t9", round: 2, kind: "native-observation", readOnly: true, dataUrl: "data:image/png;base64,AA==" },
+    { sequence: 2, evidenceId: "evidence-2", frameSequence: 10, observationSessionId: "session-a", capturedAt: "t10", round: 3, kind: "native-observation", readOnly: true, dataUrl: "data:image/png;base64,AA==" },
+    { sequence: 3, evidenceId: "evidence-3", frameSequence: 11, observationSessionId: "session-a", capturedAt: "t11", round: 4, kind: "native-observation", readOnly: true, dataUrl: "data:image/png;base64,AA==" }
+  ] }
+} });
+const viewer = get("guidebook-source-0");
+const picker = viewer.children.find(child => child.className === "guidebook-keyframe-label").children[0];
+const imagePanel = viewer.children.find(child => child.className === "guidebook-keyframe-viewer");
+assert.equal(picker.value, "1");
+assert.match(imagePanel.children[0].textContent, /第 10 帧/);
+assert.match(imagePanel.children[1].textContent, /事实来源帧：总高阶件数 Q/);
+picker.value = "2";
+picker.listeners.change();
+assert.match(imagePanel.children[0].textContent, /第 11 帧/);
+assert.match(imagePanel.children[1].textContent, /后续关键帧/);
+assert.doesNotMatch(imagePanel.children[1].textContent, /首次来源原图已保存/);
 assert.equal(vm.runInContext("JSON.stringify(dashboard.matchState)", sandbox), matchBeforeRead);
 
 vm.runInContext(`dashboard.matchState = {
@@ -240,4 +297,4 @@ assert.equal(sent.at(-1).action, "manual_facts");
 assert.equal(sent.at(-1).facts.fieldCondition, "standard");
 assert.equal(sent.at(-1).expectedMatchId, "live-now");
 
-console.log("guidebook navigation, bundled catalog, isolated recognition records and read-only original lookup: passed");
+console.log("guidebook categories and dimensions, source-only pricing, role provenance, isolated records and selectable frame provenance: passed");

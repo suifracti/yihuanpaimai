@@ -872,6 +872,7 @@
 
           <nav class="guidebook-tabs" aria-label="图鉴内容">
             <button class="guidebook-tab is-active" type="button" data-guidebook-tab="catalog" aria-current="page">藏品图鉴</button>
+            <button class="guidebook-tab" type="button" data-guidebook-tab="characters">竞拍角色</button>
             <button class="guidebook-tab" type="button" data-guidebook-tab="records">识别记录</button>
           </nav>
 
@@ -879,6 +880,21 @@
             <div class="guidebook-toolbar">
               <label class="guidebook-search-label" for="guidebook-catalog-search">搜索藏品</label>
               <input class="form-control" id="guidebook-catalog-search" type="search" placeholder="按名称筛选" autocomplete="off">
+              <label class="guidebook-search-label" for="guidebook-category-filter">分类</label>
+              <select class="form-control guidebook-filter-select" id="guidebook-category-filter" aria-label="按用户分类筛选">
+                <option value="all">全部分类</option>
+                <option value="古董">古董</option>
+                <option value="科技">科技</option>
+                <option value="日用">日用</option>
+                <option value="食品">食品</option>
+                <option value="异象">异象</option>
+                <option value="珠宝">珠宝</option>
+                <option value="other">其他现有目录</option>
+              </select>
+              <label class="guidebook-search-label" for="guidebook-grid-filter">格子尺寸</label>
+              <select class="form-control guidebook-filter-select" id="guidebook-grid-filter" aria-label="按格子宽高筛选">
+                <option value="all">全部尺寸</option>
+              </select>
               <span class="tag" id="guidebook-catalog-count">加载本地目录中</span>
             </div>
             <div class="guidebook-rarity-filters" role="group" aria-label="按品质筛选">
@@ -899,6 +915,18 @@
               </aside>
             </div>
             <p class="guidebook-source-note" id="guidebook-catalog-source">来源：与现有估值路径相同的本地 AuctionEngine 目录。只读浏览，不会改变当前对局。</p>
+          </section>
+
+          <section class="guidebook-panel" id="guidebook-characters-panel" aria-label="竞拍角色" hidden>
+            <div class="guidebook-records-heading">
+              <div>
+                <h2>竞拍角色资料</h2>
+                <p>展示角色卡面与技能原文。资料浏览不会改变识别准入、场地规则或求解公式。</p>
+              </div>
+              <span class="tag" id="guidebook-character-count">0 名</span>
+            </div>
+            <div class="guidebook-character-list" id="guidebook-character-list"></div>
+            <p class="guidebook-empty" id="guidebook-characters-empty" hidden>角色资料尚未加载。</p>
           </section>
 
           <section class="guidebook-panel" id="guidebook-records-panel" aria-label="识别记录" hidden>
