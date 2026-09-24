@@ -144,6 +144,7 @@ class WarehouseTemplateMatcher:
         self.catalog: List[Dict[str, Any]] = []
         self.catalog_by_shape_rarity: Dict[Tuple[str, str], List[Dict[str, Any]]] = {}
         self.templates: Dict[str, np.ndarray] = {}
+        self.gameplay_templates_by_id: Dict[str, List[Dict[str, Any]]] = {}
         self.derived_templates_by_id: Dict[str, Dict[str, Any]] = {}
         
         # 确定路径
@@ -163,9 +164,12 @@ class WarehouseTemplateMatcher:
             from visual_catalog import load_derived_warehouse_templates
             self.derived_templates_by_id = load_derived_warehouse_templates()
         except Exception:
-            # Derived references are optional and fail closed. Legacy matching
-            # remains available if the manifest or image bundle is unavailable.
             self.derived_templates_by_id = {}
+        try:
+            from visual_catalog import load_verified_warehouse_gameplay_templates
+            self.gameplay_templates_by_id = load_verified_warehouse_gameplay_templates()
+        except Exception:
+            self.gameplay_templates_by_id = {}
 
     def _load_catalog(self):
         if os.path.exists(self.catalog_path):
@@ -249,44 +253,30 @@ class WarehouseTemplateMatcher:
     ) -> Tuple[Optional[Dict[str, Any]], float, float, Dict[str, Any]]:
         """Return the strict winner and its reference provenance.
 
-        DIRECT means the pre-existing legacy template path. DERIVED_UNVERIFIED
-        may rank a candidate, but the caller must keep it unresolved.
+        DIRECT means a pre-existing legacy template or a hash-verified,
+        independently labelled gameplay crop. DERIVED_UNVERIFIED may rank a
+        candidate, but the caller must keep it unresolved.
         """
         if not candidates or roi_img is None or roi_img.size == 0:
             return None, 0.0, 0.0, {"referenceKind": "NONE", "accepted": False}
 
-        roi_h, roi_w = roi_img.shape[:2]
         scores: List[Tuple[float, Optional[float], int, Dict[str, Any]]] = []
+        direct_sources: Dict[int, str] = {}
         for index, candidate in enumerate(candidates):
-            img_file = candidate.get("File") or candidate.get("ImageFile")
-            direct = self.templates.get(img_file) if img_file else None
-            if direct is None:
-                cand_name = str(candidate.get("Name") or "")
-                direct = next((image for filename, image in self.templates.items()
-                               if cand_name and cand_name in filename), None)
             catalog_id = str(candidate.get("Id") or candidate.get("catalogId") or "")
             derived_entry = self.derived_templates_by_id.get(catalog_id)
             derived = derived_entry.get("image") if isinstance(derived_entry, dict) else None
-            direct_score = 0.0
+            direct_score, direct_source = self.score_direct_reference(roi_img, candidate)
             derived_score: Optional[float] = None
-            for template, kind in ((direct, "DIRECT"), (derived, "DERIVED_UNVERIFIED")):
-                if template is None:
-                    continue
-                try:
-                    resized = cv2.resize(template, (roi_w, roi_h))
-                    result = cv2.matchTemplate(roi_img, resized, cv2.TM_CCOEFF_NORMED)
-                    score = float(cv2.minMaxLoc(result)[1])
-                except Exception:
-                    continue
-                if kind == "DIRECT":
-                    direct_score = score
-                else:
-                    derived_score = score
+            if direct_source != "NONE":
+                direct_sources[index] = direct_source
+            if derived is not None:
+                derived_score = self._template_match_score(roi_img, derived)
             scores.append((direct_score, derived_score, index, candidate))
 
-        # Preserve the pre-existing direct-template exact path byte-for-byte in
-        # its decision boundary. Derived images are considered only when the
-        # trusted direct templates do not already produce an exact result.
+        # Keep the pre-existing confidence and margin gate for all trusted
+        # direct references. Derived images are considered only when direct
+        # references do not already produce an exact result.
         direct_ranked = sorted(scores, key=lambda row: (-row[0], row[2]))
         direct_top = direct_ranked[0]
         direct_second = direct_ranked[1][0] if len(direct_ranked) > 1 else 0.0
@@ -296,6 +286,7 @@ class WarehouseTemplateMatcher:
             direct_item = direct_top[3]
             return {**direct_item, "_matchReferenceKind": "DIRECT"}, direct_top[0], direct_margin, {
                 "referenceKind": "DIRECT",
+                "referenceSource": direct_sources.get(direct_top[2], "LEGACY_CATALOG_TEMPLATE"),
                 "accepted": True,
                 "catalogId": str(direct_item.get("Id") or direct_item.get("catalogId") or ""),
             }
@@ -319,10 +310,58 @@ class WarehouseTemplateMatcher:
         accepted = top_score >= config.MATCH_CONFIDENCE_THRESHOLD and margin >= config.MATCH_MARGIN_THRESHOLD
         evidence = {
             "referenceKind": reference_kind,
+            "referenceSource": direct_sources.get(scores[0][2]) if reference_kind == "DIRECT" else (
+                "DERIVED_CATALOG_REFERENCE" if reference_kind == "DERIVED_UNVERIFIED" else "NONE"
+            ),
             "accepted": accepted,
             "catalogId": str(top_item.get("Id") or top_item.get("catalogId") or ""),
         }
         return {**top_item, "_matchReferenceKind": reference_kind}, top_score, margin, evidence
+
+    def score_direct_reference(self, roi_img: np.ndarray, candidate: Dict[str, Any]) -> Tuple[float, str]:
+        """Score only references permitted to produce an exact identity."""
+        img_file = candidate.get("File") or candidate.get("ImageFile")
+        direct = getattr(self, "templates", {}).get(img_file) if img_file else None
+        if direct is None:
+            cand_name = str(candidate.get("Name") or "")
+            direct = next((image for filename, image in getattr(self, "templates", {}).items()
+                           if cand_name and cand_name in filename), None)
+        best_score = self._template_match_score(roi_img, direct) if direct is not None else 0.0
+        best_source = "LEGACY_CATALOG_TEMPLATE" if best_score > 0 else "NONE"
+
+        catalog_id = str(candidate.get("Id") or candidate.get("catalogId") or "")
+        roi_h, roi_w = roi_img.shape[:2]
+        roi_aspect = roi_w / max(1, roi_h)
+        for reference in getattr(self, "gameplay_templates_by_id", {}).get(catalog_id, []):
+            template = reference.get("image") if isinstance(reference, dict) else None
+            metadata = reference.get("metadata") if isinstance(reference, dict) else None
+            if template is None or not isinstance(metadata, dict):
+                continue
+            ref_width = int(metadata.get("widthCells") or 0)
+            ref_height = int(metadata.get("heightCells") or 0)
+            if ref_width <= 0 or ref_height <= 0:
+                continue
+            # Do not squash a 1x2 sample into a 2x1 slot. Only compare a
+            # stored crop in the orientation in which it was annotated.
+            ref_aspect = ref_width / ref_height
+            if abs(np.log(max(roi_aspect, 1e-8) / ref_aspect)) > 0.18:
+                continue
+            score = self._template_match_score(roi_img, template)
+            if score > best_score:
+                best_score = score
+                best_source = "VERIFIED_GAMEPLAY_REFERENCE"
+        return best_score, best_source
+
+    @staticmethod
+    def _template_match_score(roi_img: np.ndarray, template: np.ndarray) -> float:
+        if roi_img is None or template is None or not roi_img.size or not template.size:
+            return 0.0
+        try:
+            resized = cv2.resize(template, (roi_img.shape[1], roi_img.shape[0]))
+            result = cv2.matchTemplate(roi_img, resized, cv2.TM_CCOEFF_NORMED)
+            return float(cv2.minMaxLoc(result)[1])
+        except Exception:
+            return 0.0
 
 # ==============================================================================
 # 4. Warehouse Vision v1 主引擎与时序追踪器

@@ -148,6 +148,148 @@ def load_visual_templates(include_development=False):
     return templates
 
 
+@lru_cache(maxsize=4)
+def load_verified_warehouse_gameplay_templates(root=None):
+    """Load hash-checked, human-labelled warehouse crops from separate matches.
+
+    Only the two reviewed visible-viewport records are admitted. Settlement
+    reveals, the 144037 check group, and generated/derived pictures are not
+    gameplay references here. Each loaded crop keeps its match, frame, source
+    card, grid placement, and hashes so a direct match can be traced back.
+    """
+    base_root = Path(root).resolve() if root else asset_root().resolve()
+    group_specs = (
+        (
+            "assets/items/video_ground_truth_reference_134436_match2_visible.json",
+            "video_audit_20260908_134436_match2",
+        ),
+        (
+            "assets/items/video_ground_truth_reference_134043_visible.json",
+            "video_audit_20260908_134043",
+        ),
+    )
+    official_path = base_root / "assets/catalog_065.json"
+    try:
+        official_rows = json.loads(official_path.read_text(encoding="utf-8-sig"))
+        official = {str(row.get("Id") or ""): row for row in official_rows if row.get("Id")}
+        registry_path = base_root / "assets/items/verified_source_card_registry.json"
+        registry_rows = json.loads(registry_path.read_text(encoding="utf-8-sig")).get("cards", [])
+    except (OSError, ValueError, TypeError):
+        return {}
+    registry = {str(row.get("cardKey") or ""): row for row in registry_rows if row.get("cardKey")}
+
+    quality_alias = {
+        "金": "gold", "gold": "gold",
+        "紫": "purple", "purple": "purple",
+        "红": "red", "red": "red",
+        "蓝": "blue", "blue": "blue",
+        "绿": "green", "green": "green",
+        "白": "white", "灰": "white", "white": "white", "gray": "white", "grey": "white",
+    }
+
+    def safe_file(relative):
+        candidate = (base_root / str(relative or "")).resolve()
+        if not candidate.is_relative_to(base_root) or not candidate.is_file():
+            return None
+        return candidate
+
+    output = {}
+    for relative_json, expected_group in group_specs:
+        json_path = safe_file(relative_json)
+        if json_path is None:
+            continue
+        try:
+            payload = json.loads(json_path.read_text(encoding="utf-8"))
+        except (OSError, ValueError, TypeError):
+            continue
+        group_meta = payload.get("metadata") or {}
+        if (group_meta.get("recordStableKey") != expected_group
+                or group_meta.get("annotationScope") != "VISIBLE_VIEWPORT_ONLY"
+                or group_meta.get("coverageStatus") != "PARTIAL"):
+            continue
+
+        frame_path = safe_file(group_meta.get("sourceFramePath"))
+        frame_sha = str(group_meta.get("sourceFrameSha256") or "").lower()
+        # The development checkout has the original full frame. Frozen builds
+        # need only the hash-pinned reviewed crop; they may not package build/.
+        if frame_path is not None and frame_sha:
+            if hashlib.sha256(frame_path.read_bytes()).hexdigest() != frame_sha:
+                continue
+
+        for row in payload.get("items") or []:
+            catalog_id = str(row.get("catalogId") or "")
+            model = official.get(catalog_id)
+            geometry = row.get("gridBoundingBox") or {}
+            width = int(geometry.get("width") or 0)
+            height = int(geometry.get("height") or 0)
+            if (not model or row.get("identityStatus") != "VISUALLY_CHECKED_SOURCE_CARD"
+                    or str(row.get("canonicalName") or "") != str(model.get("Name") or "")
+                    or width != int(model.get("Width") or 0)
+                    or height != int(model.get("Height") or 0)
+                    or quality_alias.get(str(row.get("quality") or "").strip().lower())
+                    != quality_alias.get(str(model.get("Quality") or "").strip().lower())):
+                continue
+
+            crop_path = safe_file(row.get("localCropPath"))
+            crop_sha = str(row.get("cropSha256") or "").lower()
+            if (crop_path is None or len(crop_sha) != 64
+                    or hashlib.sha256(crop_path.read_bytes()).hexdigest() != crop_sha):
+                continue
+
+            source_card_path = safe_file(row.get("sourceScreenshot"))
+            source_card_sha = str(row.get("sourceScreenshotSha256") or "").lower()
+            bbox = row.get("cardBbox") or []
+            if (source_card_path is None or len(source_card_sha) != 64
+                    or hashlib.sha256(source_card_path.read_bytes()).hexdigest() != source_card_sha
+                    or len(bbox) != 4):
+                continue
+            source_key = f"{str(row.get('sourceScreenshot') or '').replace(chr(92), '/')}:" + ",".join(
+                str(int(value)) for value in bbox
+            )
+            registered = registry.get(source_key)
+            if (registered is None
+                    or str(registered.get("catalogId") or "") != catalog_id
+                    or str(registered.get("name") or "") != str(model.get("Name") or "")
+                    or str(registered.get("sourceScreenshotSha256") or "").lower() != source_card_sha
+                    or (int(registered.get("widthCells") or 0), int(registered.get("heightCells") or 0)) != (width, height)
+                    or quality_alias.get(str(registered.get("quality") or "").strip().lower())
+                    != quality_alias.get(str(model.get("Quality") or "").strip().lower())):
+                continue
+            card = cv2.imdecode(np.fromfile(str(source_card_path), np.uint8), cv2.IMREAD_COLOR)
+            if card is None:
+                continue
+            x, y, w, h = (int(value) for value in bbox)
+            if w <= 0 or h <= 0 or x < 0 or y < 0 or x + w > card.shape[1] or y + h > card.shape[0]:
+                continue
+
+            image = cv2.imdecode(np.fromfile(str(crop_path), np.uint8), cv2.IMREAD_COLOR)
+            if image is None or not image.size:
+                continue
+            metadata = {
+                "catalogId": catalog_id,
+                "name": model.get("Name"),
+                "widthCells": width,
+                "heightCells": height,
+                "quality": row.get("quality"),
+                "groupId": expected_group,
+                "groundTruthPath": relative_json,
+                "referenceId": row.get("referenceId"),
+                "localCropPath": str(row.get("localCropPath") or ""),
+                "cropSha256": crop_sha,
+                "sourceFramePath": group_meta.get("sourceFramePath"),
+                "sourceFrameSha256": frame_sha,
+                "sourceFrameTimeSec": row.get("sourceFrameTimeSec", group_meta.get("sourceFrameTimeSec")),
+                "sourceFrameBbox": row.get("sourceFrameBbox", row.get("pixelBboxOnCanvas")),
+                "sourceScreenshot": str(row.get("sourceScreenshot") or ""),
+                "sourceScreenshotSha256": source_card_sha,
+                "cardBbox": bbox,
+                "labelAuthority": "independently visually checked stable catalog ID + verified source card + hash-pinned gameplay crop",
+                "sampleClass": "development-training-reference",
+            }
+            output.setdefault(catalog_id, []).append({"image": image, "metadata": metadata})
+    return output
+
+
 def development_reference_for_template(template_reference):
     prefix = "video-dev/"
     if not str(template_reference or "").startswith(prefix):

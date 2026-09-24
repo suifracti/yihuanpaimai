@@ -14,7 +14,7 @@ sys.path.insert(0, str(ROOT / "architecture" / "v2" / "host" / "engine_v22"))
 from current_match import CurrentMatch
 from deferred_identity_analyzer import deferred_identity_result_is_current
 from nte_engine_v22 import RealEngine
-from visual_catalog import load_derived_warehouse_templates
+from visual_catalog import load_derived_warehouse_templates, load_verified_warehouse_gameplay_templates
 from warehouse_vision import WarehouseTemplateMatcher, WarehouseVisionConfig
 from vision_pipeline import NTEVisionPipeline
 
@@ -86,6 +86,33 @@ class DerivedWarehouseIdentityBoundaryTests(unittest.TestCase):
         self.assertEqual(evidence["referenceKind"], "DERIVED_UNVERIFIED")
         self.assertTrue(evidence["accepted"])
         self.assertIsNone(matcher.match_candidates(roi, candidates, WarehouseVisionConfig())[0])
+
+    def test_verified_gameplay_crop_uses_existing_strict_direct_gate(self):
+        check_path = ROOT / "assets/items/video_ground_truth_reference_144037.json"
+        check = json.loads(check_path.read_text(encoding="utf-8"))
+        item = next(row for row in check["items"] if row["referenceId"] == "ref_144037_05")
+        geometry = item["gridBoundingBox"]
+        roi = cv2.imdecode(np.fromfile(str(ROOT / item["localCropPath"]), np.uint8), cv2.IMREAD_COLOR)
+        matcher = WarehouseTemplateMatcher()
+        references = load_verified_warehouse_gameplay_templates(root=ROOT)
+
+        best, _score, _margin, evidence = matcher.match_candidate_evidence(
+            roi,
+            matcher.get_candidates(item["quality"], geometry["width"], geometry["height"]),
+            WarehouseVisionConfig(),
+        )
+
+        self.assertEqual(best["Id"], item["catalogId"])
+        self.assertTrue(evidence["accepted"])
+        self.assertEqual(evidence["referenceSource"], "VERIFIED_GAMEPLAY_REFERENCE")
+        self.assertTrue(references)
+        self.assertTrue(all(
+            reference["metadata"]["groupId"] in {
+                "video_audit_20260908_134043",
+                "video_audit_20260908_134436_match2",
+            }
+            for group in references.values() for reference in group
+        ))
 
     def test_direct_exact_result_keeps_legacy_priority_over_derived_image(self):
         roi = np.random.default_rng(41).integers(0, 256, (36, 36, 3), dtype=np.uint8)
