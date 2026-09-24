@@ -1,7 +1,10 @@
 import copy
 import json
 import sys
+import time
+import types
 import unittest
+from unittest.mock import patch
 from pathlib import Path
 
 import cv2
@@ -12,7 +15,7 @@ sys.path.insert(0, str(ROOT / "core"))
 sys.path.insert(0, str(ROOT / "architecture" / "v2" / "host" / "engine_v22"))
 
 from current_match import CurrentMatch
-from deferred_identity_analyzer import deferred_identity_result_is_current
+from deferred_identity_analyzer import DeferredIdentityAnalyzer, deferred_identity_result_is_current
 from nte_engine_v22 import RealEngine
 from visual_catalog import load_derived_warehouse_templates, load_verified_warehouse_gameplay_templates
 from warehouse_vision import WarehouseTemplateMatcher, WarehouseVisionConfig
@@ -48,6 +51,62 @@ def _engine(current_match, catalog):
 
 
 class DerivedWarehouseIdentityBoundaryTests(unittest.TestCase):
+    def test_deferred_identity_reuses_static_matcher_but_resets_tracks_on_round_change(self):
+        instances = []
+
+        class _FakeWarehouseVision:
+            def __init__(self):
+                self.track_id = 0
+                self.reset_count = 0
+                instances.append(self)
+
+            def reset(self):
+                self.track_id = 0
+                self.reset_count += 1
+
+            def process_frame(self, _frame):
+                self.track_id += 1
+                return {"slots": [{"trackId": self.track_id}]}
+
+        fake_module = types.ModuleType("warehouse_vision")
+        fake_module.WarehouseVisionV1 = _FakeWarehouseVision
+        analyzer = DeferredIdentityAnalyzer()
+        frame = np.zeros((2, 2, 3), dtype=np.uint8)
+
+        def wait_result():
+            deadline = time.monotonic() + 2.0
+            while time.monotonic() < deadline:
+                results = analyzer.poll()
+                if results:
+                    return results[0]
+                time.sleep(0.001)
+            self.fail("deferred identity result did not arrive")
+
+        def submit(round_no, sequence):
+            self.assertTrue(analyzer.submit({
+                "kind": "warehouse", "sessionId": "session", "generationId": 1,
+                "matchId": "match", "matchSequence": 1, "pipelineMatchGeneration": 1,
+                "invalidationGeneration": 0, "round": round_no, "frameSequence": sequence,
+            }, frame))
+            return wait_result()
+
+        try:
+            with patch.dict(sys.modules, {"warehouse_vision": fake_module}):
+                first = submit(1, 1)
+                second = submit(1, 2)
+                next_round = submit(2, 3)
+        finally:
+            analyzer.close()
+
+        self.assertEqual(len(instances), 1)
+        self.assertEqual(
+            [first["warehouseVision"]["slots"][0]["trackId"],
+             second["warehouseVision"]["slots"][0]["trackId"],
+             next_round["warehouseVision"]["slots"][0]["trackId"]],
+            [1, 2, 1],
+        )
+        self.assertEqual(instances[0].reset_count, 1)
+
     def test_deferred_take_transfers_frame_descriptor_without_mutating_context(self):
         pipeline = NTEVisionPipeline.__new__(NTEVisionPipeline)
         marker = {"scene": "IN_AUCTION", "round": 5, "warehouseVision": {"slots": []}}
@@ -148,6 +207,102 @@ class DerivedWarehouseIdentityBoundaryTests(unittest.TestCase):
         self.assertEqual(current.facts["knownGold"], item["Name"])
         self.assertEqual(current.to_canonical()["warehouse"]["slots"][0]["identifiedName"], item["Name"])
 
+    def test_native_commit_counts_repeated_catalog_items_by_grid_instance_across_track_resets(self):
+        catalog = json.loads((ROOT / "assets/catalog_065.json").read_text(encoding="utf-8-sig"))
+        item = next(row for row in catalog if row.get("Id") == "image30-1-2")
+        manifest = json.loads((ROOT / "assets/items/video_ground_truth_reference_134436_match2_visible.json").read_text(encoding="utf-8"))
+        repeated = [row for row in manifest["items"] if row.get("catalogId") == item["Id"]]
+        self.assertEqual(item["Quality"], "金")
+        self.assertEqual(len(repeated), 2)
+        positions = [
+            (int(row["gridBoundingBox"]["row"]), int(row["gridBoundingBox"]["col"]))
+            for row in repeated
+        ]
+        self.assertEqual(len(set(positions)), 2)
+
+        current = CurrentMatch()
+        current.id = "match-current"
+        current.apply_facts({"roundNo": 1}, source="vision", intent="observe")
+        engine = _engine(current, [item])
+
+        def slots(track_ids):
+            return [
+                {
+                    "col": int(row["gridBoundingBox"]["col"]),
+                    "row": int(row["gridBoundingBox"]["row"]),
+                    "w": int(row["gridBoundingBox"]["width"]),
+                    "h": int(row["gridBoundingBox"]["height"]),
+                    "rarity": "gold",
+                    "evidenceLevel": "EXACT_IDENTIFIED",
+                    "identityStatus": "EXACT",
+                    "identifiedCatalogId": item["Id"],
+                    "identifiedName": item["Name"],
+                    "identityReferenceKind": "DIRECT",
+                    "candidates": [{"catalogId": item["Id"], "name": item["Name"]}],
+                    "trackId": track_id,
+                }
+                for row, track_id in zip(repeated, track_ids)
+            ]
+
+        first = self._result(engine, {"slots": slots([3, 8])}, frame_sequence=10, round_value=1)
+        self.assertTrue(engine._commit_deferred_identity(first))
+        expected = f"{item['Name']}+{item['Name']}"
+        self.assertEqual(current.facts["knownGold"], expected)
+        self.assertEqual(len(current.facts["warehouse"]["slots"]), 2)
+        self.assertEqual(
+            current.to_canonical()["qualities"]["gold"]["knownItems"],
+            [{"name": item["Name"]}, {"name": item["Name"]}],
+        )
+
+        # The temporal track numbers are worker-local. Reobserving the same
+        # physical grid cells must keep the same two constraints.
+        second = self._result(engine, {"slots": slots([31, 84])}, frame_sequence=11, round_value=1)
+        self.assertTrue(engine._commit_deferred_identity(second))
+        self.assertEqual(current.facts["knownGold"], expected)
+
+        # A round-scoped recognizer restarts its track numbering; the match's
+        # canonical warehouse grid remains the instance ledger.
+        current.apply_facts({"roundNo": 2}, source="vision", intent="observe")
+        engine.last_context = {"scene": "IN_AUCTION", "inAuction": True, "round": 2}
+        third = self._result(engine, {"slots": slots([1, 2])}, frame_sequence=12, round_value=2)
+        self.assertTrue(engine._commit_deferred_identity(third))
+        self.assertEqual(current.facts["knownGold"], expected)
+
+        # A resumed observation session gets a fresh temporal tracker too.
+        resumed = _engine(current, [item])
+        resumed.session_id = "session-resumed"
+        resumed.last_context = {"scene": "IN_AUCTION", "inAuction": True, "round": 2}
+        resumed_result = self._result(resumed, {"slots": slots([201, 202])}, frame_sequence=13, round_value=2)
+        self.assertTrue(resumed._commit_deferred_identity(resumed_result))
+        self.assertEqual(current.facts["knownGold"], expected)
+
+        current.begin_next_match()
+        current.id = "match-next"
+        self.assertEqual(current.facts["knownGold"], "")
+        self.assertIsNone(current.facts["warehouse"])
+
+    def test_native_identity_observation_cannot_replace_manually_protected_known_items(self):
+        catalog = json.loads((ROOT / "assets/catalog_065.json").read_text(encoding="utf-8-sig"))
+        item = next(row for row in catalog if row.get("Quality") == "金" and row.get("Width") == 1 and row.get("Height") == 1)
+        current = CurrentMatch()
+        current.id = "match-current"
+        current.apply_facts({"roundNo": 1}, source="vision", intent="observe")
+        current.apply_facts({"knownGold": "手动保护值"}, source="manual", intent="confirm")
+        engine = _engine(current, [item])
+        slot = {
+            "col": 0, "row": 0, "w": 1, "h": 1, "rarity": "gold",
+            "evidenceLevel": "EXACT_IDENTIFIED", "identityStatus": "EXACT",
+            "identifiedCatalogId": item["Id"], "identifiedName": item["Name"],
+            "identityReferenceKind": "DIRECT",
+            "candidates": [{"catalogId": item["Id"], "name": item["Name"]}],
+        }
+        result = self._result(engine, {"slots": [slot]})
+
+        self.assertTrue(engine._commit_deferred_identity(result))
+        self.assertEqual(current.facts["knownGold"], "手动保护值")
+        self.assertEqual(current.field_states["knownGold"].source, "manual")
+        self.assertTrue(current.field_states["knownGold"].protected)
+
     def test_derived_candidate_is_not_promoted_to_solver_known_fact(self):
         current = CurrentMatch()
         current.id = "match-current"
@@ -223,16 +378,16 @@ class DerivedWarehouseIdentityBoundaryTests(unittest.TestCase):
         self.assertEqual(engine._identity_last_committed_sequence, {active_key: 11})
 
     @staticmethod
-    def _result(engine, warehouse_vision):
+    def _result(engine, warehouse_vision, *, frame_sequence=10, round_value=1):
         return {
             "kind": "warehouse", "sessionId": engine.session_id, "generationId": engine.generation_id,
             "matchId": engine.current_match.id, "matchSequence": engine.current_match._seq,
             "pipelineMatchGeneration": engine.pipeline._match_gen,
             "pipelineSessionGeneration": engine.pipeline._session_generation,
             "factsRevisionAtDispatch": engine.current_match.facts_revision,
-            "invalidationGeneration": 0, "round": 1, "scene": "IN_AUCTION",
+            "invalidationGeneration": 0, "round": round_value, "scene": "IN_AUCTION",
             "recognitionMode": "auto",
-            "frameSequence": 10, "captureTimestampNs": 2000, "capturedAt": "2026-09-24T00:00:00+00:00",
+            "frameSequence": frame_sequence, "captureTimestampNs": 2000, "capturedAt": "2026-09-24T00:00:00+00:00",
             "pixelSha256": "a" * 64, "warehouseVision": copy.deepcopy(warehouse_vision),
         }
 

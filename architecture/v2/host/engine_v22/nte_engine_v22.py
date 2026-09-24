@@ -28,6 +28,7 @@ import struct
 import sys
 import threading
 import time
+from collections import Counter
 from ctypes import wintypes
 from pathlib import Path
 from typing import Any, Dict, Mapping, Optional
@@ -1158,6 +1159,178 @@ class RealEngine:
                      pixelSha256=descriptor["pixelSha256"])
 
     @staticmethod
+    def _warehouse_slot_anchor(slot: dict) -> Optional[tuple[int, int]]:
+        """Use the existing grid placement as a match-stable item instance key.
+
+        trackId belongs to the temporal image tracker and is reset when its
+        worker is recreated (including round/session scope changes). A grid
+        origin remains the physical instance address in the match's warehouse.
+        """
+        try:
+            return int(slot["row"]), int(slot["col"])
+        except (KeyError, TypeError, ValueError):
+            return None
+
+    @staticmethod
+    def _warehouse_slot_identity(slot: dict) -> Optional[tuple[Optional[str], str]]:
+        if not isinstance(slot, dict) or slot.get("identityStatus") != "EXACT":
+            return None
+        name = str(slot.get("identifiedName") or "").strip()
+        if not name:
+            return None
+        candidates = [
+            candidate for candidate in (slot.get("candidates") or [])
+            if isinstance(candidate, dict)
+            and str(candidate.get("name") or "").strip() == name
+            and str(candidate.get("catalogId") or "").strip()
+        ]
+        if len(candidates) == 1:
+            return str(candidates[0]["catalogId"]), name
+        return None, name
+
+    @staticmethod
+    def _merge_warehouse_fact_slots(previous: Any, incoming: dict) -> dict:
+        """Accumulate known item identities by physical grid origin, not trackId."""
+        previous_slots = previous.get("slots") if isinstance(previous, dict) else []
+        slots: list[dict] = []
+        indexes: dict[tuple[int, int], int] = {}
+        for raw in previous_slots or []:
+            if not isinstance(raw, dict):
+                continue
+            anchor = RealEngine._warehouse_slot_anchor(raw)
+            if anchor is None or anchor in indexes:
+                continue
+            indexes[anchor] = len(slots)
+            slots.append(copy.deepcopy(raw))
+
+        for raw in incoming.get("slots") or []:
+            if not isinstance(raw, dict):
+                continue
+            anchor = RealEngine._warehouse_slot_anchor(raw)
+            if anchor is None:
+                continue
+            if anchor not in indexes:
+                indexes[anchor] = len(slots)
+                slots.append(copy.deepcopy(raw))
+                continue
+
+            index = indexes[anchor]
+            old = slots[index]
+            old_identity = RealEngine._warehouse_slot_identity(old)
+            new_identity = RealEngine._warehouse_slot_identity(raw)
+            if old.get("identityConflict"):
+                merged = copy.deepcopy(raw)
+                candidates = {
+                    (str(item.get("catalogId") or ""), str(item.get("name") or "")): copy.deepcopy(item)
+                    for item in (old.get("candidates") or []) + (raw.get("candidates") or [])
+                    if isinstance(item, dict) and item.get("catalogId")
+                }
+                merged["candidates"] = list(candidates.values())
+                merged["identityStatus"] = "CANDIDATE"
+                merged["evidenceLevel"] = "CANDIDATE_SET"
+                merged.pop("identifiedName", None)
+                merged["identityConflict"] = True
+                slots[index] = merged
+                continue
+
+            if old_identity and new_identity and (
+                old_identity[1] != new_identity[1]
+                or (old_identity[0] and new_identity[0] and old_identity[0] != new_identity[0])
+            ):
+                merged = copy.deepcopy(raw)
+                candidates = {
+                    (str(item.get("catalogId") or ""), str(item.get("name") or "")): copy.deepcopy(item)
+                    for item in (old.get("candidates") or []) + (raw.get("candidates") or [])
+                    if isinstance(item, dict) and item.get("catalogId")
+                }
+                merged["candidates"] = list(candidates.values())
+                merged["identityStatus"] = "CANDIDATE"
+                merged["evidenceLevel"] = "CANDIDATE_SET"
+                merged.pop("identifiedName", None)
+                merged["identityConflict"] = True
+                slots[index] = merged
+                continue
+
+            merged = copy.deepcopy(raw)
+            if old_identity and not new_identity:
+                # A transient weak/derived frame cannot erase a direct identity
+                # already confirmed for this same physical grid position.
+                for key in ("identityStatus", "evidenceLevel", "identifiedName", "candidates"):
+                    if key in old:
+                        merged[key] = copy.deepcopy(old[key])
+            slots[index] = merged
+
+        slots.sort(key=lambda slot: (int(slot["row"]), int(slot["col"])))
+        return {"slots": slots}
+
+    @staticmethod
+    def _known_fact_entries(value: Any) -> list[str]:
+        entries: list[str] = []
+        raw_tokens: list[tuple[str, int]] = []
+        if isinstance(value, list):
+            for item in value:
+                if isinstance(item, dict):
+                    name = str(item.get("name") or "").strip()
+                    try:
+                        count = int(item.get("count") or 1)
+                    except (TypeError, ValueError):
+                        count = 1
+                    if name and count > 0:
+                        raw_tokens.append((name, count))
+                else:
+                    name = str(item or "").strip()
+                    if name:
+                        raw_tokens.append((name, 1))
+        else:
+            for token in str(value or "").split("+"):
+                token = token.strip()
+                if not token:
+                    continue
+                name, sep, count_text = token.rpartition("*")
+                if sep and name.strip() and count_text.isdigit():
+                    count = int(count_text)
+                    if count > 0:
+                        raw_tokens.append((name.strip(), count))
+                        continue
+                raw_tokens.append((token, 1))
+        for name, count in raw_tokens:
+            entries.extend([name] * count)
+        return entries
+
+    @staticmethod
+    def _warehouse_known_names(warehouse: dict, official_by_id: dict, quality_targets: dict) -> dict[str, list[str]]:
+        names = {field: [] for field, _quality in quality_targets.values()}
+        by_name_quality: dict[tuple[str, str], list[dict]] = {}
+        for official in official_by_id.values():
+            key = (str(official.get("Quality") or ""), str(official.get("Name") or ""))
+            by_name_quality.setdefault(key, []).append(official)
+        seen_anchors: set[tuple[int, int]] = set()
+        for slot in warehouse.get("slots") or []:
+            if not isinstance(slot, dict):
+                continue
+            anchor = RealEngine._warehouse_slot_anchor(slot)
+            if anchor is None or anchor in seen_anchors:
+                continue
+            seen_anchors.add(anchor)
+            identity = RealEngine._warehouse_slot_identity(slot)
+            if identity is None:
+                continue
+            catalog_id, name = identity
+            target = quality_targets.get(str(slot.get("rarity") or ""))
+            if target is None or not name or "+" in name:
+                continue
+            field, expected_quality = target
+            official = official_by_id.get(catalog_id) if catalog_id else None
+            if official is None:
+                matches = by_name_quality.get((expected_quality, name), [])
+                official = matches[0] if len(matches) == 1 else None
+            if (official is None or str(official.get("Quality") or "") != expected_quality
+                    or str(official.get("Name") or "") != name):
+                continue
+            names[field].append(name)
+        return names
+
+    @staticmethod
     def _warehouse_fact_projection(vision: dict) -> dict:
         projected = []
         for raw in vision.get("slots") or []:
@@ -1166,6 +1339,24 @@ class RealEngine:
             try:
                 if any(raw.get(key) is None for key in ("col", "row", "w", "h")):
                     continue
+                candidates = [
+                    {"catalogId": str(c.get("catalogId") or c.get("Id") or ""),
+                     "name": str(c.get("name") or c.get("Name") or "")}
+                    for c in (raw.get("candidates") or []) if isinstance(c, dict)
+                    and (c.get("catalogId") or c.get("Id"))
+                ]
+                direct_name = str(raw.get("identifiedName") or "")
+                direct_id = str(raw.get("identifiedCatalogId") or "")
+                is_direct_exact = (
+                    raw.get("identityStatus") == "EXACT"
+                    and raw.get("identityReferenceKind") == "DIRECT"
+                    and direct_name and direct_id
+                )
+                if is_direct_exact:
+                    selected = next((candidate for candidate in candidates
+                                     if candidate["catalogId"] == direct_id
+                                     and candidate["name"] == direct_name), None)
+                    candidates = [selected or {"catalogId": direct_id, "name": direct_name}]
                 slot = {
                     "col": int(raw["col"]),
                     "row": int(raw["row"]),
@@ -1174,12 +1365,7 @@ class RealEngine:
                     "rarity": str(raw.get("rarity") or "unknown"),
                     "evidenceLevel": str(raw.get("evidenceLevel") or "OUTLINE_ONLY"),
                     "identityStatus": str(raw.get("identityStatus") or "UNKNOWN"),
-                    "candidates": [
-                        {"catalogId": str(c.get("catalogId") or c.get("Id") or ""),
-                         "name": str(c.get("name") or c.get("Name") or "")}
-                        for c in (raw.get("candidates") or []) if isinstance(c, dict)
-                        and (c.get("catalogId") or c.get("Id"))
-                    ],
+                    "candidates": candidates,
                 }
                 if raw.get("trackId") is not None:
                     slot["trackId"] = int(raw["trackId"])
@@ -1248,45 +1434,32 @@ class RealEngine:
             context["warehouseSlots"] = copy.deepcopy(vision.get("slots") or [])
             context["warehouseExpectedVal"] = vision.get("totalExpectedVal", 0)
             context["warehouseValRange"] = copy.deepcopy(vision.get("valRange") or [0, 0])
-            projected = self._warehouse_fact_projection(vision)
-            if projected["slots"] and projected != self.current_match.facts.get("warehouse"):
-                patch["warehouse"] = projected
-
             official_by_id = {
                 str(row.get("Id") or ""): row for row in (self.pipeline.catalog or [])
                 if isinstance(row, dict) and row.get("Id")
             }
             quality_targets = {"gold": ("knownGold", "金"), "purple": ("knownPurple", "紫"), "red": ("knownRed", "红")}
-            exact_names: dict[str, dict[str, str]] = {field: {} for field, _quality in quality_targets.values()}
-            for raw in vision.get("slots") or []:
-                if not isinstance(raw, dict) or raw.get("identityStatus") != "EXACT":
-                    continue
-                if raw.get("identityReferenceKind") != "DIRECT":
-                    continue
-                catalog_id = str(raw.get("identifiedCatalogId") or "")
-                official = official_by_id.get(catalog_id)
-                if official is None:
-                    continue
-                fact_key_quality = quality_targets.get(str(raw.get("rarity") or ""))
-                if (fact_key_quality is None or str(official.get("Quality") or "") != fact_key_quality[1]
-                        or str(official.get("Name") or "") != str(raw.get("identifiedName") or "")):
-                    continue
-                field = fact_key_quality[0]
-                name = str(official.get("Name") or "")
-                if name and "+" not in name:
-                    exact_names[field][catalog_id] = name
-            for field, items in exact_names.items():
-                if not items:
-                    continue
-                old = self.current_match.facts.get(field) or ""
-                if isinstance(old, list):
-                    names = [str(item.get("name") or item) if isinstance(item, dict) else str(item) for item in old]
-                else:
-                    names = [part.strip() for part in str(old).split("+") if part.strip()]
-                merged = list(dict.fromkeys(names + list(items.values())))
-                joined = "+".join(merged)
-                if joined and joined != ("+".join(names)):
-                    patch[field] = joined
+            projected = self._warehouse_fact_projection(vision)
+            previous_warehouse = self.current_match.facts.get("warehouse")
+            if projected["slots"]:
+                merged_warehouse = self._merge_warehouse_fact_slots(previous_warehouse, projected)
+                if merged_warehouse != previous_warehouse:
+                    patch["warehouse"] = merged_warehouse
+                old_names = self._warehouse_known_names(previous_warehouse or {"slots": []}, official_by_id, quality_targets)
+                merged_names = self._warehouse_known_names(merged_warehouse, official_by_id, quality_targets)
+                for field, _quality in quality_targets.values():
+                    existing = self.current_match.facts.get(field) or ""
+                    prior_entries = self._known_fact_entries(existing)
+                    warehouse_to_remove = Counter(old_names[field])
+                    preserved = []
+                    for entry in prior_entries:
+                        if warehouse_to_remove[entry] > 0:
+                            warehouse_to_remove[entry] -= 1
+                        else:
+                            preserved.append(entry)
+                    joined = "+".join(preserved + merged_names[field])
+                    if joined != existing:
+                        patch[field] = joined
         elif kind == "settlement":
             settlement_items = result.get("settlementItems")
             if not isinstance(settlement_items, list):

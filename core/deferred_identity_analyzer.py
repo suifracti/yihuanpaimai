@@ -119,7 +119,12 @@ class DeferredIdentityAnalyzer:
                     task.get("invalidationGeneration"), task.get("round"),
                 )
                 if task_key != owner_key:
-                    warehouse = None
+                    # Scope changes invalidate temporal tracks, but the
+                    # catalog/template matcher is session-independent and
+                    # expensive to reload (verified source assets are static).
+                    # Keep that cache alive while resetting only observations.
+                    if warehouse is not None:
+                        warehouse.reset()
                     settlement = None
                     owner_key = task_key
 
