@@ -1633,6 +1633,13 @@
       "derivedThresholdWrongBlocked": 0,
       "combinedUnresolved": 18
     },
+    "exclusiveIdentityOutcomes": {
+      "correctDirectConfirmed": 3,
+      "correctDerivedCandidateBlocked": 1,
+      "incorrectConfirmed": 0,
+      "ordinaryUnresolved": 18,
+      "eligibleTotal": 22
+    },
     "rows": [
       {
         "referenceId": "ref_144037_02",
@@ -1921,7 +1928,7 @@
         "combinedThresholdWouldPassButStillUnverified": false
       }
     ],
-    "rankingInterpretation": "directTopByOrderCorrect includes deterministic candidate-order tie breaks; positive-score and unique-winner counts identify actual visual ranking. The historical 7/22 direct baseline had zero positive scores.",
+    "rankingInterpretation": "Combined top-candidate ranking is correct for 19/22 items, but this is not identity accuracy. The mutually exclusive combined outcomes are 3 direct correct confirmations, 1 correct derived candidate that remains blocked from confirmation, 0 incorrect confirmations, and 18 ordinary unresolved. The historical 7/22 direct baseline was a deterministic order tie with zero positive scores and is not a valid visual baseline. The single raw top-candidate regression is ref_144037_29: its direct top score is tied at zero, so the order change is not a measured visual regression; the combined top remains incorrect.",
     "productionExactGate": "DERIVED_UNVERIFIED never upgrades to EXACT_IDENTIFIED; only trusted direct catalog or independently labelled gameplay references may pass the existing strict gate"
   },
   "records": [
@@ -2191,7 +2198,7 @@
       "isGameplayEvidence": false,
       "solverIdentityEligible": false,
       "imagePath": "assets/items/derived_warehouse_icon_references_v1/image11-0-0.png",
-      "imageSha256": "eadb7172e9f025da9b3a80928194b36b174d8be4f175660e9df39a0510bb5d39",
+      "imageSha256": "8e5559a56886f0a76997b2953fafc7bd8750d2a1d98c717d24add0a1e772b6d9",
       "catalogSource": {
         "sourcePath": "assets/items/catalog_screenshots/1X3/{4B4BA98A-9DF4-4399-8B1B-754510B27C7A}.png",
         "sourceSha256": "b76f26da9abcbb2f7cb3cb040bc0de2eb2b9cf6f2a053eae678203cf93295885",
@@ -2201,6 +2208,7 @@
           387,
           259
         ],
+        "generationInput": "verified sourcePath + cardBbox",
         "cropPath": "assets/items/reference_crops_v1/image11-0-0.png",
         "cropSha256": "4bb3138544e55007ccafdc4be32cefdcb4aee164e772abf3765215acde5d3456"
       },
@@ -2209,7 +2217,13 @@
         "pairCount": 2
       },
       "transform": {
-        "cropMethod": "catalog_reference_body",
+        "cropMethod": "verified_catalog_screenshot_card_bbox_then_reference_body",
+        "sourceCardBbox": [
+          774,
+          0,
+          387,
+          259
+        ],
         "cropFractions": {
           "x": [
             0.2,
@@ -2229,18 +2243,18 @@
           0.37109375
         ],
         "sourceForegroundPixels": [
-          191,
-          65
+          77,
+          133
         ],
         "outputCanvasPixels": [
           128,
           384
         ],
         "outputObjectRect": [
-          8,
-          173,
-          111,
-          38
+          23,
+          121,
+          82,
+          142
         ],
         "backgroundSource": "median HSV edge of catalog body crop"
       }

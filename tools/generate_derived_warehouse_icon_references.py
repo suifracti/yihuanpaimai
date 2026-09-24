@@ -259,10 +259,27 @@ def build_reference(
     source: dict[str, Any],
     occupancy: tuple[float, float],
 ) -> tuple[np.ndarray, dict[str, Any]] | None:
-    source_image = read_image(ROOT / source["crop"]["cropRelativePath"])
-    if source_image is None:
+    visual = source.get("visual") or {}
+    source_path = ROOT / str(visual.get("sourcePath") or "")
+    if (not source_path.is_file()
+            or sha256(source_path) != str(visual.get("sourceSha256") or "")):
         return None
-    body = _catalog_reference_body(source_image)
+    source_image = read_image(source_path)
+    bbox = visual.get("cardBbox")
+    if source_image is None or not isinstance(bbox, (list, tuple)) or len(bbox) != 4:
+        return None
+    try:
+        card_x, card_y, card_width, card_height = (int(value) for value in bbox)
+    except (TypeError, ValueError):
+        return None
+    if (card_x < 0 or card_y < 0 or card_width <= 0 or card_height <= 0
+            or card_x + card_width > source_image.shape[1]
+            or card_y + card_height > source_image.shape[0]):
+        return None
+    source_card = source_image[card_y:card_y + card_height, card_x:card_x + card_width]
+    if source_card.size == 0:
+        return None
+    body = _catalog_reference_body(source_card)
     extracted, extraction_method = _extract_catalog_foreground(body)
     if extracted is None:
         return None
@@ -292,7 +309,8 @@ def build_reference(
     target = canvas[y:y + out_h, x:x + out_w]
     target[alpha] = obj[alpha]
     transform = {
-        "cropMethod": "catalog_reference_body",
+        "cropMethod": "verified_catalog_screenshot_card_bbox_then_reference_body",
+        "sourceCardBbox": [card_x, card_y, card_width, card_height],
         "cropFractions": BODY_CROP_FRACTIONS,
         "foregroundMethod": extraction_method,
         "foregroundFallback": "source-resolution Canny 30/80; 5x5 close x2; largest closed contour within 2%-85% area and centered 15%-85% of catalog body; used only if shared extractor fails",
@@ -435,14 +453,27 @@ def evaluate_historical_transfer(
             "combinedScore": round(combined_top[0], 4),
             "combinedThresholdWouldPassButStillUnverified": bool(not direct_confirmed and combined_confirmed and combined_top[3] == "DERIVED"),
         })
+    exclusive = {
+        "correctDirectConfirmed": counts["combinedCorrectConfirmations"],
+        "correctDerivedCandidateBlocked": counts["derivedThresholdCorrectBlocked"],
+        "incorrectConfirmed": counts["combinedWrongConfirmations"] + counts["derivedThresholdWrongBlocked"],
+        "ordinaryUnresolved": counts["combinedUnresolved"],
+        "eligibleTotal": counts["candidateEligible"],
+    }
+    if sum(exclusive[key] for key in (
+        "correctDirectConfirmed", "correctDerivedCandidateBlocked",
+        "incorrectConfirmed", "ordinaryUnresolved",
+    )) != exclusive["eligibleTotal"]:
+        raise ValueError(f"historical identity outcomes do not close: {exclusive}")
     return {
         "group": CHECK_GT_PATH.relative_to(ROOT).as_posix(),
         "groupUse": "historical cross-match check; previously used development material, not fresh unseen acceptance",
         "fitReferenceIds": sorted(str(row.get("referenceId") or "") for row in fit_pairs_used),
         "trainingGroups": sorted({str(row.get("groupId") or "") for row in fit_pairs_used}),
         "counts": counts,
+        "exclusiveIdentityOutcomes": exclusive,
         "rows": rows,
-        "rankingInterpretation": "directTopByOrderCorrect includes deterministic candidate-order tie breaks; positive-score and unique-winner counts identify actual visual ranking. The historical 7/22 direct baseline had zero positive scores.",
+        "rankingInterpretation": "Combined top-candidate ranking is correct for 19/22 items, but this is not identity accuracy. The mutually exclusive combined outcomes are 3 direct correct confirmations, 1 correct derived candidate that remains blocked from confirmation, 0 incorrect confirmations, and 18 ordinary unresolved. The historical 7/22 direct baseline was a deterministic order tie with zero positive scores and is not a valid visual baseline. The single raw top-candidate regression is ref_144037_29: its direct top score is tied at zero, so the order change is not a measured visual regression; the combined top remains incorrect.",
         "productionExactGate": "DERIVED_UNVERIFIED never upgrades to EXACT_IDENTIFIED; only trusted direct catalog or independently labelled gameplay references may pass the existing strict gate",
     }
 
@@ -492,6 +523,7 @@ def main(output_dir: Path = OUT_DIR) -> None:
                 "sourcePath": visual["sourcePath"],
                 "sourceSha256": visual["sourceSha256"],
                 "cardBbox": visual["cardBbox"],
+                "generationInput": "verified sourcePath + cardBbox",
                 "cropPath": crop["cropRelativePath"],
                 "cropSha256": crop["cropSha256"],
             },
