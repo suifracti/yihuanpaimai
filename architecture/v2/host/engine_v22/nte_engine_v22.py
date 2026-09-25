@@ -1352,11 +1352,17 @@ class RealEngine:
                     and raw.get("identityReferenceKind") == "DIRECT"
                     and direct_name and direct_id
                 )
+                best_candidate_id = str(raw.get("bestCandidateId") or "")
                 if is_direct_exact:
                     selected = next((candidate for candidate in candidates
                                      if candidate["catalogId"] == direct_id
                                      and candidate["name"] == direct_name), None)
                     candidates = [selected or {"catalogId": direct_id, "name": direct_name}]
+                elif best_candidate_id:
+                    best = next((candidate for candidate in candidates
+                                 if candidate["catalogId"] == best_candidate_id), None)
+                    if best is not None:
+                        candidates = [best] + [candidate for candidate in candidates if candidate is not best]
                 slot = {
                     "col": int(raw["col"]),
                     "row": int(raw["row"]),
@@ -1367,6 +1373,12 @@ class RealEngine:
                     "identityStatus": str(raw.get("identityStatus") or "UNKNOWN"),
                     "candidates": candidates,
                 }
+                if best_candidate_id:
+                    slot["bestCandidateId"] = best_candidate_id
+                if raw.get("bestCandidateName"):
+                    slot["bestCandidateName"] = str(raw["bestCandidateName"])
+                if raw.get("identityReferenceKind"):
+                    slot["identityReferenceKind"] = str(raw["identityReferenceKind"])
                 if raw.get("trackId") is not None:
                     slot["trackId"] = int(raw["trackId"])
                 if (slot["identityStatus"] == "EXACT"

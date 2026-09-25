@@ -46,6 +46,7 @@ class FakeElement {
   get innerHTML() { return this._innerHTML; }
   querySelectorAll(selector) {
     if (selector === "button") return this.children.filter(child => child.tagName === "BUTTON");
+    if (selector === "[data-wh-catalog-id]") return this.buttons.filter(button => button.dataset.whCatalogId !== undefined);
     if (selector === "[data-guidebook-original]" || selector === "[data-guidebook-confirmed-item]" || selector === "[data-guidebook-item-index]") {
       return this.buttons.filter(button => selector.includes("original")
         ? button.dataset.guidebookOriginal !== undefined
@@ -152,11 +153,11 @@ sandbox.handleNativeMessage({ data: {
   guidebookSources: { ok: true, counts: { uniqueSourceEntries: 3 }, items: [
     { sourceId: "vertical-source", name: "纵向来源样本", sourceName: "纵向来源样本", category: "古董", sourceGeometry: "1x2", sourceRarity: "blue", sourceOnly: true, sourcePrice: null, sourcePriceStatus: "UNKNOWN_NOT_PROMOTED", sourceImages: [{ uri: "file:///source-v.png", path: "1.4更新/古董/1x2/source.png" }] },
     { sourceId: "horizontal-source", name: "横向来源样本", sourceName: "横向来源样本", category: "科技", sourceGeometry: "2x1", sourceRarity: "blue", sourceOnly: true, sourcePrice: null, sourcePriceStatus: "UNKNOWN_NOT_PROMOTED", sourceImages: [{ uri: "file:///source-h.png", path: "1.4更新/科技/2x1/source.png" }] },
-    { sourceId: "linked-source", name: "独立目录条目", category: "日用", sourceGeometry: "2x2", sourceRarity: "gold", sourceOnly: false, solverMatch: { key: "gold:0:独立目录条目" }, sourcePrice: null, sourcePriceStatus: "UNKNOWN_NOT_PROMOTED", sourceImages: [] }
+    { sourceId: "linked-source", visualCatalogId: "candidate-1", name: "独立目录条目", category: "日用", sourceGeometry: "2x2", sourceRarity: "gold", sourceOnly: false, solverMatch: { key: "gold:0:独立目录条目" }, sourcePrice: null, sourcePriceStatus: "UNKNOWN_NOT_PROMOTED", sourceImages: [{ uri: "file:///candidate-source.png", path: "1.4更新/日用/2x2/candidate-source.png" }] }
   ], roles: [{ name: "黑羽", skillName: "未卜先知", skillDescription: "每三回合随机揭示一项命运线索。", revelations: ["线索A"], newInThisBatch: true, sourceImage: { uri: "file:///black-feather.png", path: "1.4更新/角色/black.png" } }] }
 } });
 assert.match(get("guidebook-item-detail").innerHTML, /基础参考价/);
-assert.match(get("guidebook-item-detail").innerHTML, /来源图片/);
+assert.match(get("guidebook-item-detail").innerHTML, /查看来源原图/);
 sandbox.renderGuidebookCharacters();
 assert.match(get("guidebook-character-list").innerHTML, /黑羽/);
 assert.match(get("guidebook-character-list").innerHTML, /file:\/\/\/black-feather.png/);
@@ -190,6 +191,28 @@ list.querySelectorAll("[data-guidebook-confirmed-item]")[0].click();
 assert.equal(get("guidebook-catalog-panel").hidden, false);
 assert.match(get("guidebook-item-detail").innerHTML, /独立目录条目/);
 sandbox.setGuidebookTab("records");
+
+sandbox.showView("match");
+const liveMatchBeforeCandidateBrowse = vm.runInContext("JSON.stringify(dashboard.matchState)", sandbox);
+sandbox.renderWarehouseSlots({ slots: [
+  { row: 3, col: 0, w: 2, h: 2, rarity: "gold", identityStatus: "CANDIDATE", bestCandidateId: "candidate-1", bestCandidateName: "独立目录条目", identityReferenceKind: "DIRECT", candidates: [
+    { catalogId: "other-candidate", name: "其他相似条目" },
+    { catalogId: "candidate-1", name: "独立目录条目" }
+  ] },
+  { row: 3, col: 2, w: 1, h: 1, rarity: "gold", identityStatus: "EXACT", identifiedName: "已确证条目", candidates: [{ catalogId: "confirmed-id", name: "已确证条目" }] }
+] });
+const liveWarehouse = get("match-wh-slots-list");
+assert.match(liveWarehouse.innerHTML, /第 4 行 · 第 1 列/);
+assert.match(liveWarehouse.innerHTML, /候选 · 未确证/);
+assert.match(liveWarehouse.innerHTML, /已确证/);
+assert.match(liveWarehouse.innerHTML, /独立目录条目/);
+const liveCandidateLinks = liveWarehouse.querySelectorAll("[data-wh-catalog-id]");
+assert.equal(liveCandidateLinks[0].dataset.whCatalogId, "candidate-1");
+liveCandidateLinks[0].click();
+assert.equal(get("page-guidebook").hidden, false);
+assert.match(get("guidebook-item-detail").innerHTML, /独立目录条目/);
+assert.match(get("guidebook-item-detail").innerHTML, /candidate-source\.png/);
+assert.equal(vm.runInContext("JSON.stringify(dashboard.matchState)", sandbox), liveMatchBeforeCandidateBrowse);
 
 sandbox.renderSolverAdmissionStatus({
   observationProfile: "native-readonly-v1",

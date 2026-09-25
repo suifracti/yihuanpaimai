@@ -4271,6 +4271,19 @@ def _compact_warehouse_vision(ctx: Dict[str, Any]) -> Dict[str, Any]:
     wh = ctx.get("warehouseVision") or {}
     slots = []
     for s in (wh.get("slots") or []):
+        candidates = [
+            {
+                "catalogId": str(candidate.get("catalogId") or candidate.get("Id") or ""),
+                "name": str(candidate.get("name") or candidate.get("Name") or ""),
+            }
+            for candidate in (s.get("candidates") or [])
+            if isinstance(candidate, dict) and (candidate.get("catalogId") or candidate.get("Id"))
+        ]
+        best_candidate_id = str(s.get("bestCandidateId") or "")
+        if best_candidate_id:
+            best = next((item for item in candidates if item["catalogId"] == best_candidate_id), None)
+            if best is not None:
+                candidates = [best] + [item for item in candidates if item is not best]
         slots.append({
             "col": s.get("col"),
             "row": s.get("row"),
@@ -4283,9 +4296,10 @@ def _compact_warehouse_vision(ctx: Dict[str, Any]) -> Dict[str, Any]:
             "identifiedName": s.get("identifiedName") if (
                 s.get("identityStatus") == "EXACT" and s.get("identityReferenceKind") == "DIRECT"
             ) else None,
-            "bestCandidateName": s.get("bestCandidateName") if (
-                s.get("identityReferenceKind") == "DERIVED_UNVERIFIED"
-            ) else None,
+            "bestCandidateId": best_candidate_id or None,
+            "bestCandidateName": s.get("bestCandidateName") if s.get("identityStatus") == "CANDIDATE" else None,
+            "candidateCount": int(s.get("candidateCount") or len(candidates)),
+            "candidates": candidates[:3],
             "identityReferenceKind": s.get("identityReferenceKind"),
         })
     grid = wh.get("grid") or {}

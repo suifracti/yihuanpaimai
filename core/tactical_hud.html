@@ -1115,14 +1115,20 @@
         const klass = rarityClass(slot.rarity);
         let identityHint = "";
         if(slot.identityStatus === "EXACT" && slot.identityReferenceKind === "DIRECT" && slot.identifiedName) {
-          identityHint = `已由原始图鉴模板精确匹配：${slot.identifiedName}`;
-        } else if(slot.identityReferenceKind === "DERIVED_UNVERIFIED" && slot.bestCandidateName) {
-          identityHint = `候选外观参考（未经实局确证）：${slot.bestCandidateName}`;
+          identityHint = `已通过直接参考门禁：${slot.identifiedName}`;
+        } else if(slot.bestCandidateName) {
+          identityHint = slot.identityReferenceKind === "DERIVED_UNVERIFIED"
+            ? `派生外观候选（未确证）：${slot.bestCandidateName}`
+            : `视觉候选（未达到身份确证条件）：${slot.bestCandidateName}`;
         } else if(slot.identityStatus === "CANDIDATE") {
-          identityHint = "候选集合，尚未精确确认";
+          identityHint = "候选集合，身份未确证";
         }
         const sizeHint = slot.size || (slot.w && slot.h ? `${slot.w}×${slot.h}` : "尺寸未知");
-        const tooltip = [slot.rarity || "品质未知", sizeHint, identityHint].filter(Boolean).join(" · ");
+        const positionHint = slot.row != null && slot.col != null
+          && Number.isInteger(Number(slot.row)) && Number.isInteger(Number(slot.col))
+          ? `第 ${Number(slot.row) + 1} 行 · 第 ${Number(slot.col) + 1} 列`
+          : "槽位位置未记录";
+        const tooltip = [positionHint, slot.rarity || "品质未知", sizeHint, identityHint].filter(Boolean).join(" · ");
         for(let rr=row; rr<row+h && rr<rows; rr++) {
           for(let cc=col; cc<col+w && cc<cols; cc++) {
             const idx = rr * GRID_COLS + cc;

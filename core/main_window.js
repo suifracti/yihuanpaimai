@@ -1291,14 +1291,36 @@ function renderGuidebookCatalog() {
   const sourceNote = document.getElementById("guidebook-catalog-source");
   if (!grid || !count || !detail) return;
   const rows = guidebookCatalogRows();
+  const pendingCandidate = dashboard.pendingGuidebookCandidate;
+  if (pendingCandidate && dashboard.guidebookSources) {
+    const idMatches = rows.filter(item => (item.sourceRecords || []).some(source =>
+      String(source.visualCatalogId || source.catalogId || "") === pendingCandidate.catalogId
+    ));
+    const nameMatches = rows.filter(item => item.name === pendingCandidate.name
+      && (!pendingCandidate.rarity || item.rarity === pendingCandidate.rarity));
+    const selected = idMatches.length === 1 ? idMatches[0] : (idMatches.length === 0 && nameMatches.length === 1 ? nameMatches[0] : null);
+    if (selected) {
+      dashboard.guidebookSelectedItem = selected.key;
+      dashboard.guidebookSearch = "";
+    } else {
+      dashboard.guidebookSelectedItem = null;
+      dashboard.guidebookSearch = pendingCandidate.name || pendingCandidate.catalogId;
+    }
+    dashboard.pendingGuidebookCandidate = null;
+  }
   renderGuidebookFilters(rows);
   const query = String(dashboard.guidebookSearch || "").trim().toLowerCase();
+  const searchInput = document.getElementById("guidebook-catalog-search");
+  if (searchInput && document.activeElement !== searchInput) searchInput.value = dashboard.guidebookSearch || "";
   const filtered = rows.filter(item => {
     const categoryMatch = dashboard.guidebookCategory === "all"
       || (dashboard.guidebookCategory === "other" ? !(item.sourceRecords || []).length
         : guidebookFilterCategory(item).includes(dashboard.guidebookCategory));
     const size = /^\d+x\d+$/i.test(item.footprint || "") ? item.footprint.toLowerCase() : "unknown";
-    const queryText = [item.name, ...(item.sourceRecords || []).flatMap(source => [source.sourceName, ...(source.sourceNames || [])])]
+    const queryText = [item.name, item.key, ...(item.sourceRecords || []).flatMap(source => [
+      source.sourceName, source.visualCatalogId, source.catalogId, source.sourceId, source.solverMatch?.key,
+      ...(source.sourceNames || [])
+    ])]
       .filter(Boolean).join(" ").toLowerCase();
     return categoryMatch
       && (dashboard.guidebookRarity === "all" || item.rarity === dashboard.guidebookRarity)
@@ -2483,6 +2505,78 @@ function renderCurrentAuctionDetails(currentMatch) {
   }
 }
 
+function openGuidebookWarehouseCandidate(catalogId, name, rarity) {
+  const candidate = {
+    catalogId: String(catalogId || "").trim(),
+    name: String(name || "").trim(),
+    rarity: String(rarity || "").trim()
+  };
+  if (!candidate.catalogId && !candidate.name) return;
+  dashboard.pendingGuidebookCandidate = candidate;
+  dashboard.guidebookSearch = candidate.catalogId || candidate.name;
+  dashboard.guidebookCategory = "all";
+  dashboard.guidebookGridSize = "all";
+  dashboard.guidebookRarity = "all";
+  dashboard.guidebookSelectedItem = null;
+  showView("guidebook");
+  setGuidebookTab("catalog");
+  renderGuidebook();
+}
+
+function renderWarehouseSlots(warehouse) {
+  const slotsListEl = document.getElementById("match-wh-slots-list");
+  if (!slotsListEl) return;
+  const slots = warehouse?.slots || [];
+  if (!slots.length) {
+    slotsListEl.innerHTML = `<div style="color: var(--text-dim, #888); font-size: 12px; padding: 4px 0;">暂无仓库槽位数据</div>`;
+    return;
+  }
+
+  slotsListEl.innerHTML = slots.map((slot, index) => {
+    const candidates = Array.isArray(slot.candidates) ? slot.candidates.slice() : [];
+    const bestId = String(slot.bestCandidateId || "");
+    if (bestId) candidates.sort((a, b) => {
+      const aBest = String(a?.catalogId || a?.Id || "") === bestId;
+      const bBest = String(b?.catalogId || b?.Id || "") === bestId;
+      return Number(bBest) - Number(aBest);
+    });
+    const best = candidates.find(item => String(item?.catalogId || item?.Id || "") === bestId)
+      || candidates[0] || null;
+    const exact = slot.identityStatus === "EXACT" && slot.identifiedName;
+    const candidateName = slot.bestCandidateName || best?.name || best?.Name || "";
+    const rarityLabel = ({ gold: "金", purple: "紫", red: "红", blue: "蓝", green: "绿", white: "白" })[slot.rarity] || "品质待确认";
+    const size = slot.w && slot.h ? `${slot.w}×${slot.h}` : "尺寸待确认";
+    const position = slot.row != null && slot.col != null
+      && Number.isInteger(Number(slot.row)) && Number.isInteger(Number(slot.col))
+      ? `第 ${Number(slot.row) + 1} 行 · 第 ${Number(slot.col) + 1} 列`
+      : `实例 ${index + 1}`;
+    const status = exact
+      ? `<span class="wh-identity-state is-confirmed">已确证</span>`
+      : slot.identityStatus === "CANDIDATE" || candidates.length
+        ? `<span class="wh-identity-state is-candidate">候选 · 未确证</span>`
+        : `<span class="wh-identity-state is-unknown">身份未知</span>`;
+    const identity = exact
+      ? `已识别：${escapeHtml(slot.identifiedName)}`
+      : candidateName
+        ? `${slot.identityReferenceKind === "DERIVED_UNVERIFIED" ? "派生参考候选" : "视觉候选"}：${escapeHtml(candidateName)}（未达到身份确证条件）`
+        : candidates.length ? "候选集合待核对" : "当前只确认槽位与品质/尺寸";
+    const candidateButtons = candidates.slice(0, 3).map(item => {
+      const id = String(item?.catalogId || item?.Id || "");
+      const label = String(item?.name || item?.Name || "待辨认");
+      if (!id) return `<span class="wh-candidate-name">${escapeHtml(label)}</span>`;
+      return `<button type="button" class="wh-candidate-link" data-wh-catalog-id="${escapeHtml(id)}" data-wh-catalog-name="${escapeHtml(label)}" data-wh-rarity="${escapeHtml(slot.rarity || "")}" title="打开图鉴条目与可用来源">图鉴：${escapeHtml(label)}</button>`;
+    }).join("");
+    const omitted = candidates.length > 3 ? `<small class="wh-candidate-more">另有 ${candidates.length - 3} 个候选</small>` : "";
+    return `<article class="wh-slot-item"><div class="wh-slot-heading"><strong>${position} · ${size} · ${rarityLabel}</strong>${status}</div><div class="wh-slot-identity">${identity}</div>${candidateButtons ? `<div class="wh-slot-candidates">${candidateButtons}${omitted}</div>` : ""}</article>`;
+  }).join("");
+
+  slotsListEl.querySelectorAll("[data-wh-catalog-id]").forEach(button => {
+    button.addEventListener("click", () => openGuidebookWarehouseCandidate(
+      button.dataset.whCatalogId, button.dataset.whCatalogName, button.dataset.whRarity
+    ));
+  });
+}
+
 function renderMatch(currentMatch, overlayVisible) {
   if (!currentMatch) return;
   // Keep live auction facts visible even if an unrelated details widget fails
@@ -3015,7 +3109,7 @@ function renderMatch(currentMatch, overlayVisible) {
     overviewEmptyCard.hidden = hasActiveDraft;
   }
   if (hasActiveDraft) {
-    if (overviewMatchTitle) overviewMatchTitle.textContent = `${venueName} · ${boxName}`;
+    if (overviewMatchTitle) overviewMatchTitle.textContent = `${venueDisplayName} · ${boxDisplayName}`;
     if (overviewMatchRule) overviewMatchRule.textContent = env.fieldConditionName || "标准规则";
     if (overviewMatchLifecycle) {
       overviewMatchLifecycle.textContent = currentMatch.lifecycleStatus === "FINALIZED" ? "已完成" : "进行中";
@@ -3102,29 +3196,7 @@ function renderMatch(currentMatch, overlayVisible) {
   }
   if (whCount) whCount.textContent = `${wh.itemCount || 0} 件 (${wh.exactCount || 0} 确诊)`;
 
-  const slotsListEl = document.getElementById("match-wh-slots-list");
-  if (slotsListEl) {
-    const slots = wh.slots || [];
-    if (!slots.length) {
-      slotsListEl.innerHTML = `<div style="color: var(--text-dim, #888); font-size: 12px; padding: 4px 0;">暂无仓库槽位数据</div>`;
-    } else {
-      slotsListEl.innerHTML = slots.map((s, idx) => {
-        let label = "未知";
-        if (s.identityStatus === "EXACT" && s.identifiedName) {
-          label = `已识别：${s.identifiedName}`;
-        } else if (s.candidates && s.candidates.length > 0) {
-          const names = s.candidates.slice(0, 3).map(c => typeof c === "string" ? c : (c.name || "待辨认"));
-          const suffix = s.candidates.length > 3 ? " 等" : "";
-          label = `可能：${names.join(" / ")}${suffix}`;
-        }
-        const sizeStr = (s.w && s.h) ? `${s.w}x${s.h}` : "";
-        return `<div class="wh-slot-item" style="font-size: 12px; padding: 4px 8px; background: rgba(255,255,255,0.03); border: 1px solid var(--border-subtle, rgba(255,255,255,0.08)); border-radius: 4px; display: flex; justify-content: space-between; align-items: center;">
-          <span style="color: var(--text-muted, #aaa);">槽位 ${idx + 1} (${sizeStr || s.rarity || "未知"})</span>
-          <span class="wh-slot-label" style="color: var(--text, #eee); font-weight: 500;">${label}</span>
-        </div>`;
-      }).join("");
-    }
-  }
+  renderWarehouseSlots(wh);
 
   // Section G: History Trace Navigation
   const navIdEl = document.getElementById("match-nav-match-id");

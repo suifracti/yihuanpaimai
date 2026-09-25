@@ -313,6 +313,93 @@ def load_verified_warehouse_gameplay_templates(root=None):
                 "sampleClass": "development-training-reference",
             }
             output.setdefault(catalog_id, []).append({"image": image, "metadata": metadata})
+
+    # A small set of curated activity-reveal crops predates the runtime
+    # manifest. Development use alone does not invalidate a reference, but
+    # these rows still need an official identity/geometry match, a pinned
+    # crop hash, and traceable source-frame coordinates before they can enter
+    # the direct-reference matcher. They remain development samples for all
+    # evaluation and are never treated as independent acceptance material.
+    development_path = safe_file("assets/items/video_development_references_v1.json")
+    if development_path is not None:
+        try:
+            development = json.loads(development_path.read_text(encoding="utf-8"))
+            development_records = development.get("records") or []
+            development_contract_ok = (
+                development.get("schemaVersion") == "video-development-reference.v1"
+                and "development-only" in str(development.get("scope") or "").lower()
+            )
+        except (OSError, ValueError, TypeError):
+            development_records = []
+            development_contract_ok = False
+        if development_contract_ok:
+            for row in development_records:
+                if not isinstance(row, dict) or row.get("sampleClass") != "development-reference":
+                    continue
+                catalog_id = str(row.get("catalogId") or "")
+                model = official.get(catalog_id)
+                width = int(row.get("width") or 0)
+                height = int(row.get("height") or 0)
+                quality = quality_alias.get(str(row.get("rarity") or "").strip().lower())
+                if (not model or not row.get("name")
+                        or str(row.get("name")) != str(model.get("Name") or "")
+                        or width <= 0 or height <= 0
+                        or width != int(model.get("Width") or 0)
+                        or height != int(model.get("Height") or 0)
+                        or quality is None
+                        or quality != quality_alias.get(str(model.get("Quality") or "").strip().lower())):
+                    continue
+                crop_path = safe_file(row.get("imagePath"))
+                crop_sha = str(row.get("imageSha256") or "").lower()
+                source_video = str(row.get("sourceVideo") or "")
+                source_video_sha = str(row.get("sourceVideoSha256") or "").lower()
+                try:
+                    source_seconds = float(row.get("sourceSeconds"))
+                    source_fps = float(row.get("sourceFps"))
+                    frame_index = int(row.get("sourceFrameIndex"))
+                    source_rect = [int(value) for value in row.get("sourceRect") or []]
+                except (TypeError, ValueError):
+                    continue
+                if (crop_path is None or len(crop_sha) != 64
+                        or hashlib.sha256(crop_path.read_bytes()).hexdigest() != crop_sha
+                        or not source_video or len(source_video_sha) != 64
+                        or any(value not in "0123456789abcdef" for value in source_video_sha)
+                        or not math.isfinite(source_seconds) or source_seconds < 0
+                        or not math.isfinite(source_fps) or source_fps <= 0
+                        or round(source_seconds * source_fps) != frame_index
+                        or len(source_rect) != 4 or min(source_rect) < 0
+                        or source_rect[2:] != [width, height]):
+                    continue
+                image = cv2.imdecode(np.fromfile(str(crop_path), np.uint8), cv2.IMREAD_COLOR)
+                if image is None or not image.size:
+                    continue
+                metadata = {
+                    "catalogId": catalog_id,
+                    "name": model.get("Name"),
+                    "widthCells": width,
+                    "heightCells": height,
+                    "quality": row.get("rarity"),
+                    "groupId": "video_development_references_v1",
+                    "referenceId": f"video-dev:{catalog_id}",
+                    "localCropPath": str(row.get("imagePath") or ""),
+                    "cropSha256": crop_sha,
+                    "sourceVideoPath": source_video,
+                    "sourceVideoSha256": source_video_sha,
+                    "sourceFrameTimeSec": source_seconds,
+                    "sourceFrameIndex": frame_index,
+                    "sourceGridBoundingBox": {
+                        "row": source_rect[0], "col": source_rect[1],
+                        "width": source_rect[2], "height": source_rect[3],
+                    },
+                    "sourceSceneKind": "ACTIVE_AUCTION_REVEAL",
+                    "referenceRole": "VISUAL_TEMPLATE_ONLY",
+                    "labelAuthority": (
+                        "curated activity-reveal catalog ID bound to official name, quality, "
+                        "geometry and hash-pinned crop/source-frame coordinates"
+                    ),
+                    "sampleClass": "development-training-reference",
+                }
+                output.setdefault(catalog_id, []).append({"image": image, "metadata": metadata})
     return output
 
 

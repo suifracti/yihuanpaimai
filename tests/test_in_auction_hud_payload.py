@@ -119,7 +119,6 @@ class TestInAuctionHudPayload(unittest.TestCase):
         self.assertGreaterEqual(len(payload["warehouseVision"]["slots"]), 4)
         self.assertEqual(payload["warehouseVision"]["cols"], 10)
         self.assertNotIn("gridCells", payload)
-
         img = cv2.imdecode(np.fromfile(late, dtype=np.uint8), cv2.IMREAD_COLOR)
         pipe.process_frame(img)
         ctx = pipe.process_frame(img)
@@ -130,6 +129,27 @@ class TestInAuctionHudPayload(unittest.TestCase):
         self.assertTrue(6 in bids or 66 in bids)
         self.assertEqual(payload["leaderBid"], 300001)
         self.assertTrue(payload.get("leaderName") and "墨" in payload["leaderName"])
+
+    def test_unconfirmed_visual_winner_survives_hud_projection(self):
+        payload = build_in_auction_hud_payload(_ctx(warehouseVision={
+            "grid": {"cols": 10, "rows": 10},
+            "slots": [{
+                "row": 3, "col": 2, "w": 1, "h": 1, "rarity": "green",
+                "identityStatus": "CANDIDATE", "identityReferenceKind": "DIRECT",
+                "bestCandidateId": "image9-0-1", "bestCandidateName": "炭火脆皮烤肉",
+                "candidateCount": 6,
+                "candidates": [
+                    {"catalogId": "image9-0-0", "name": "几何灯"},
+                    {"catalogId": "image9-0-1", "name": "炭火脆皮烤肉"},
+                ],
+            }],
+        }))
+        slot = payload["warehouseVision"]["slots"][0]
+        self.assertEqual((slot["row"], slot["col"]), (3, 2))
+        self.assertEqual(slot["bestCandidateId"], "image9-0-1")
+        self.assertEqual(slot["bestCandidateName"], "炭火脆皮烤肉")
+        self.assertEqual(slot["candidates"][0]["catalogId"], "image9-0-1")
+        self.assertIsNone(slot["identifiedName"])
 
     def test_hud_html_consumes_slots_not_old_grid(self):
         with open(HUD_HTML, encoding="utf-8") as fh:
