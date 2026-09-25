@@ -589,6 +589,257 @@ class TestLiveShadowPresentationPayloadV1(unittest.TestCase):
             for name, value in original_native_state.items():
                 setattr(app_main, name, value)
 
+    def test_next_match_preparation_is_one_shot_worker_owned_and_match_bound(self):
+        class _Bridge:
+            running = True
+
+            def __init__(self):
+                self.accept = True
+                self.commands = []
+
+            def send_control(self, message):
+                self.commands.append(message)
+                return self.accept
+
+        bridge = _Bridge()
+        target = self._target()
+        old_match = CurrentMatch()
+        old_match.id = "prep-match-old"
+        old_match.apply_facts({"q": 17}, source="manual", intent="confirm")
+        holder = ActivePredictionSnapshotHolder()
+        holder.update(old_match.id, snapshot={"matchId": old_match.id}, frozen_prediction={"recommendedMax": 700})
+        shadow_calls = []
+
+        def frame(worker_match, session, sequence, match_id, facts_revision, *, venue_id=None):
+            return self._native_frame(
+                worker_match, session=session, sequence=sequence, match_id=match_id,
+                facts_revision=facts_revision, round_no=1, target=target, venue_id=venue_id,
+            )
+
+        def event(status, session, **kwargs):
+            app_main._native_observation_event({
+                "type": "native_observation", "schemaVersion": "native-observation-v1",
+                "status": status, "observationSessionId": session,
+                "sourceKind": "native_wgc", "inputActions": False,
+                "formalHistoryWriter": False, **kwargs,
+            })
+
+        def acknowledge(wire):
+            app_main._native_observation_event({
+                "type": "native_observation", "schemaVersion": "native-observation-v1",
+                "status": "CONTROL", "observationSessionId": wire["expectedObservationSessionId"],
+                "sourceKind": "native_wgc", "inputActions": False,
+                "formalHistoryWriter": False,
+                "details": {
+                    "controlRevision": wire["revision"], "commandStatus": "ACK",
+                    "commandResult": {"status": "ACK", "resultData": {
+                        "echo": "match.apply_control", "controlRevision": wire["revision"],
+                        "matchId": wire["expectedMatchId"],
+                        "factsRevision": wire["expectedFactsRevision"],
+                        "reset": False, "expectedMatchId": wire["expectedMatchId"],
+                        "expectedFactsRevision": wire["expectedFactsRevision"],
+                        "expectedRound": wire["expectedRound"],
+                        "expectedObservationSessionId": wire["expectedObservationSessionId"],
+                    }},
+                },
+            })
+
+        with mock.patch.multiple(
+            app_main,
+            CURRENT_MATCH=old_match,
+            LATEST_PAYLOAD={},
+            LATEST_VISION_PAYLOAD={},
+            ACTIVE_SNAPSHOT_HOLDER=holder,
+            ACTIVE_SETTLEMENT_TRUTH_HOLDER=mock.Mock(),
+            _NATIVE_CONTROL_BINDINGS={},
+            _NATIVE_OBSERVATION_RECEIVER=None,
+            _NATIVE_OBSERVATION_SESSION=None,
+            _NATIVE_EXPECTED_SESSION=None,
+            _NATIVE_OBSERVATION_SEQUENCE=0,
+            _NATIVE_OBSERVATION_LAST_FRAME_NS=None,
+            _NATIVE_SOLVER_INVALIDATION_GENERATION=0,
+            _NATIVE_SOLVER_LEASE=None,
+            _NATIVE_INSTANCE_DECISION_GENERATION=0,
+            _NATIVE_INSTANCE_DECISION_SCOPE=None,
+            _NATIVE_WAREHOUSE_DECISION_RECEIPT={},
+            _NATIVE_TRIAL_FRAME_MATCH_ID=None,
+            _NATIVE_TRIAL_SOURCE_FRAMES=[],
+            _NATIVE_TRIAL_WAREHOUSE_MATCH_ID=None,
+            _NATIVE_TRIAL_WAREHOUSE_SOURCES={},
+            _NATIVE_TRIAL_WAREHOUSE_DECISIONS={},
+            _LIVE_MANUAL_OVERRIDES={},
+            _LIVE_CONTROL_REVISION=0,
+            _LIVE_CONTROL_WAITING_EXIT=False,
+            _LIVE_VISION_ACTIVE=False,
+            _LIVE_VISION_MATCH_ID=None,
+            _NEXT_MATCH_PREPARATION={"status": "NONE", "revision": None, "settings": None},
+            NATIVE_OBSERVATION_BRIDGE=bridge,
+        ), mock.patch.object(app_main, "native_observation_enabled", return_value=True), \
+             mock.patch.object(app_main, "_native_start_frame_watchdog_locked"), \
+             mock.patch.object(app_main, "_native_post_main_status"), \
+             mock.patch.object(app_main, "schedule_draft_save"), \
+             mock.patch.object(app_main, "flush_draft_save_sync"), \
+             mock.patch.object(app_main, "_persist_current_draft_now", return_value=None), \
+             mock.patch.object(app_main, "publish_manual_payload"), \
+             mock.patch.object(app_main.PRESENTATION_RUNTIME, "set_vision_process_state"), \
+             mock.patch.object(app_main.PRESENTATION_RUNTIME, "observe_transport"), \
+             mock.patch.object(live_shadow, "invalidate_match_shadow", return_value=0), \
+             mock.patch.object(live_shadow, "attach_live_shadow", side_effect=lambda *a, **k: shadow_calls.append(a[0])):
+            original_facts = dict(old_match.facts)
+            original_revision = old_match.facts_revision
+            invalid = app_main.manage_next_match_preparation({
+                "operation": "SAVE",
+                "settings": {"venueId": "unknown-venue", "boxId": "unknown-box", "fieldCondition": "standard"},
+            })
+            self.assertFalse(invalid["ok"])
+            self.assertEqual(old_match.facts, original_facts)
+            self.assertEqual(old_match.facts_revision, original_revision)
+
+            saved = app_main.manage_next_match_preparation({
+                "operation": "SAVE",
+                "settings": {"venueId": "venue-shanhu", "boxId": "box-shanhu-glass", "fieldCondition": "standard"},
+            })
+            self.assertTrue(saved["ok"])
+            self.assertEqual(old_match.facts, original_facts)
+            self.assertEqual(old_match.facts_revision, original_revision)
+            self.assertEqual(bridge.commands, [])
+            self.assertIsNotNone(holder.get_snapshot_for_match(old_match.id))
+
+            event("STARTING", "prep-session-a")
+            app_main._native_observation_event(frame(old_match, "prep-session-a", 1, old_match.id, 11))
+            event("PAUSED", "prep-session-a", reason="focus-lost")
+            event("STARTING", "prep-session-b")
+            app_main._native_observation_event(frame(old_match, "prep-session-b", 1, old_match.id, 11))
+            self.assertEqual(app_main._NEXT_MATCH_PREPARATION["status"], "PREPARED")
+            self.assertEqual(bridge.commands, [])
+            self.assertEqual(old_match.facts, original_facts)
+
+            next_worker_match = CurrentMatch()
+            next_worker_match.id = "prep-match-new"
+            app_main._native_observation_event(frame(next_worker_match, "prep-session-b", 2, next_worker_match.id, 1))
+            self.assertEqual(app_main._NEXT_MATCH_PREPARATION["status"], "APPLYING")
+            self.assertEqual(len(bridge.commands), 1)
+            wire = bridge.commands[0]["command"]
+            self.assertEqual(wire["expectedMatchId"], next_worker_match.id)
+            self.assertEqual(wire["snapshot"]["id"], next_worker_match.id)
+            self.assertEqual(wire["facts"]["venueId"], "venue-shanhu")
+            self.assertIsNone(app_main.CURRENT_MATCH.facts["venueId"])
+            self.assertIsNone(holder.get_snapshot_for_match(next_worker_match.id))
+            self.assertIsNone(holder.get_snapshot_for_match(old_match.id))
+            self.assertEqual(shadow_calls, [])
+
+            acknowledge(wire)
+            self.assertEqual(app_main._NEXT_MATCH_PREPARATION["status"], "APPLIED")
+            self.assertEqual(app_main.CURRENT_MATCH.facts["venueId"], "venue-shanhu")
+            self.assertTrue(app_main.CURRENT_MATCH.field_states["venueId"].protected)
+            next_worker_match.apply_facts(wire["facts"], source="manual", intent="confirm", command_id="native-control-test")
+            app_main._native_observation_event(frame(
+                next_worker_match, "prep-session-b", 3, next_worker_match.id,
+                next_worker_match.facts_revision,
+            ))
+            self.assertEqual(len(bridge.commands), 1)
+
+            conflicted = app_main.manage_next_match_preparation({
+                "operation": "SAVE", "settings": saved["preparation"]["settings"],
+            })
+            self.assertTrue(conflicted["ok"])
+            conflict_worker_match = CurrentMatch()
+            conflict_worker_match.id = "prep-match-conflict"
+            conflict_worker_match.apply_facts({"venueId": "venue-other"}, source="vision", intent="observe")
+            app_main._native_observation_event(frame(
+                conflict_worker_match, "prep-session-b", 4, conflict_worker_match.id,
+                conflict_worker_match.facts_revision,
+            ))
+            self.assertEqual(app_main._NEXT_MATCH_PREPARATION["status"], "CONFLICT")
+            self.assertEqual(len(bridge.commands), 1)
+            confirm_prepared = app_main.manage_next_match_preparation({
+                "operation": "CONFIRM_PREPARED",
+                "preparationRevision": app_main._NEXT_MATCH_PREPARATION["revision"],
+            })
+            self.assertTrue(confirm_prepared["ok"])
+            self.assertEqual(app_main._NEXT_MATCH_PREPARATION["status"], "APPLYING")
+            self.assertEqual(app_main.CURRENT_MATCH.facts["venueId"], "venue-other",
+                             "prepared values stay out of CurrentMatch until the worker ACK")
+            confirmed_wire = bridge.commands[-1]["command"]
+            acknowledge(confirmed_wire)
+            self.assertEqual(app_main._NEXT_MATCH_PREPARATION["status"], "APPLIED")
+            self.assertEqual(app_main.CURRENT_MATCH.facts["venueId"], "venue-shanhu")
+            self.assertTrue(app_main.CURRENT_MATCH.field_states["venueId"].protected)
+            conflict_worker_match.apply_facts(
+                confirmed_wire["facts"], source="manual", intent="confirm",
+                command_id="native-control-confirmed",
+            )
+            app_main._native_observation_event(frame(
+                conflict_worker_match, "prep-session-b", 5, conflict_worker_match.id,
+                conflict_worker_match.facts_revision,
+            ))
+            self.assertEqual(len(bridge.commands), 2)
+
+            second_plan = app_main.manage_next_match_preparation({
+                "operation": "SAVE", "settings": saved["preparation"]["settings"],
+            })
+            self.assertTrue(second_plan["ok"])
+            observed_worker_match = CurrentMatch()
+            observed_worker_match.id = "prep-match-observed"
+            observed_worker_match.apply_facts({"venueId": "venue-other"}, source="vision", intent="observe")
+            app_main._native_observation_event(frame(
+                observed_worker_match, "prep-session-b", 6, observed_worker_match.id,
+                observed_worker_match.facts_revision,
+            ))
+            self.assertEqual(app_main._NEXT_MATCH_PREPARATION["status"], "CONFLICT")
+            use_observed = app_main.manage_next_match_preparation({
+                "operation": "USE_OBSERVED",
+                "preparationRevision": app_main._NEXT_MATCH_PREPARATION["revision"],
+            })
+            self.assertTrue(use_observed["ok"])
+            self.assertEqual(observed_worker_match.facts["venueId"], "venue-other")
+            self.assertEqual(len(bridge.commands), 2)
+
+            saved_again = app_main.manage_next_match_preparation({
+                "operation": "SAVE", "settings": saved["preparation"]["settings"],
+            })
+            self.assertTrue(saved_again["ok"])
+            failed_worker_match = CurrentMatch()
+            failed_worker_match.id = "prep-match-retry"
+            bridge.accept = False
+            app_main._native_observation_event(frame(
+                failed_worker_match, "prep-session-b", 7, failed_worker_match.id, 1,
+            ))
+            self.assertEqual(app_main._NEXT_MATCH_PREPARATION["status"], "FAILED")
+            self.assertTrue(app_main._NEXT_MATCH_PREPARATION["retryable"])
+            self.assertIsNone(app_main.CURRENT_MATCH.facts["venueId"])
+            bridge.accept = True
+            app_main._native_observation_event(frame(
+                failed_worker_match, "prep-session-b", 8, failed_worker_match.id, 1,
+            ))
+            retried = app_main.manage_next_match_preparation({
+                "operation": "RETRY",
+                "preparationRevision": app_main._NEXT_MATCH_PREPARATION["revision"],
+            })
+            self.assertTrue(retried["ok"])
+            retry_wire = bridge.commands[-1]["command"]
+            self.assertEqual(retry_wire["expectedMatchId"], failed_worker_match.id)
+            self.assertEqual(app_main._NEXT_MATCH_PREPARATION["status"], "APPLYING")
+
+            switched_worker_match = CurrentMatch()
+            switched_worker_match.id = "prep-match-after-retry"
+            app_main._native_observation_event(frame(
+                switched_worker_match, "prep-session-b", 9, switched_worker_match.id, 1,
+            ))
+            self.assertEqual(app_main.CURRENT_MATCH.id, switched_worker_match.id)
+            self.assertIsNone(app_main.CURRENT_MATCH.facts["venueId"])
+            self.assertEqual(app_main._NEXT_MATCH_PREPARATION["matchId"], failed_worker_match.id)
+            self.assertEqual(app_main._NEXT_MATCH_PREPARATION["status"], "FAILED")
+            acknowledge(retry_wire)
+            self.assertEqual(app_main.CURRENT_MATCH.id, switched_worker_match.id)
+            self.assertIsNone(app_main.CURRENT_MATCH.facts["venueId"])
+            cancelled = app_main.manage_next_match_preparation({
+                "operation": "CANCEL",
+                "preparationRevision": app_main._NEXT_MATCH_PREPARATION["revision"],
+            })
+            self.assertTrue(cancelled["ok"])
+            self.assertEqual(cancelled["preparation"]["status"], "CANCELLED")
+
     def test_qualified_node_prediction_reaches_native_owner(self):
         history_path = Path(PROJECT_ROOT) / "异环拍卖数据.json"
         if not history_path.is_file() or not shutil.which("node"):

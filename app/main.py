@@ -1132,6 +1132,7 @@ def get_current_match_presentation_summary() -> dict:
             "shadowUpdating": bool(native_payload.get("shadowUpdating")) if native_profile else False,
             "nativeControlResult": dict(native_payload.get("nativeControlResult") or {}),
             "manualCommandResult": dict(native_payload.get("manualCommandResult") or {}),
+            "nextMatchPreparation": _next_match_preparation_presentation(),
             "nativeInstanceDecisionGeneration": _NATIVE_INSTANCE_DECISION_GENERATION,
             "warehouseInstanceDecisionResult": copy.deepcopy(
                 _NATIVE_WAREHOUSE_DECISION_RECEIPT
@@ -1203,6 +1204,7 @@ def get_current_match_presentation_summary() -> dict:
             "sessionAccounting": accounting_from_facts(facts),
             "settlement": settlement_summary,
             "warehouse": warehouse_summary,
+            "nextMatchPreparation": _next_match_preparation_presentation(),
             "factsRevision": snap.get("factsRevision"),
             "fieldStates": snap.get("fieldStates") or {},
         }
@@ -1211,6 +1213,7 @@ def get_current_match_presentation_summary() -> dict:
         return {
             "matchId": getattr(CURRENT_MATCH, "id", "draft_fallback"),
             "observationProfile": native_observation_profile(),
+            "nextMatchPreparation": _next_match_preparation_presentation(),
             "scene": "UNKNOWN",
             "inAuction": False,
             "solverStatus": "paused" if native_fallback else "incomplete",
@@ -1743,6 +1746,42 @@ def _native_reject_pending_controls_locked(reason: str) -> None:
             continue
         if binding.get("kind") == "warehouse_instance_decision":
             preserved[control_revision] = binding
+            continue
+        if binding.get("kind") == "next_match_preparation":
+            preparation = copy.deepcopy(_next_match_preparation_presentation())
+            if (
+                reason == "observation-scope-changed"
+                and preparation.get("revision") == binding.get("preparationRevision")
+                and preparation.get("status") == "APPLYING"
+                and CURRENT_MATCH.id == binding.get("matchId")
+                and binding.get("sessionId") == _NATIVE_EXPECTED_SESSION == _NATIVE_OBSERVATION_SESSION
+                and binding.get("targetInstance") == _native_target_instance(LATEST_PAYLOAD.get("target"))
+            ):
+                # Round/fact changes inside the same worker-confirmed match do
+                # not retarget the command. Keep its receipt binding so a late
+                # ACK can still be attributed to that match.
+                preserved[control_revision] = binding
+                continue
+            if (preparation.get("revision") == binding.get("preparationRevision")
+                    and preparation.get("status") == "APPLYING"):
+                preparation.update({
+                    "status": "FAILED",
+                    "reason": reason or "OBSERVATION_SCOPE_INVALIDATED",
+                    "reasonLabel": _next_match_preparation_failure_label(reason),
+                    "retryable": False,
+                    "receiptState": "INVALIDATED",
+                })
+                _store_next_match_preparation_locked(preparation)
+            receipt = {
+                "commandId": f"native-control-{control_revision}",
+                "revision": control_revision,
+                "status": "REJECTED",
+                "reason": reason or "OBSERVATION_SCOPE_INVALIDATED",
+                "matchId": binding.get("matchId"),
+                "preparationRevision": binding.get("preparationRevision"),
+            }
+            LATEST_PAYLOAD["nativeControlResult"] = receipt
+            LATEST_PAYLOAD["manualCommandResult"] = receipt
             continue
         if (
             CURRENT_MATCH.id == binding.get("projectedMatchId")
@@ -2300,6 +2339,83 @@ def _native_observation_event(event: Dict[str, Any]) -> None:
                     LATEST_PAYLOAD["warehouseInstanceDecisionResult"] = receipt
                     if accepted:
                         LATEST_PAYLOAD["currentMatch"] = get_current_match_presentation_summary()
+                elif binding.get("kind") == "next_match_preparation":
+                    preparation = copy.deepcopy(_next_match_preparation_presentation())
+                    plan_is_current = bool(
+                        preparation.get("revision") == binding.get("preparationRevision")
+                        and preparation.get("status") == "APPLYING"
+                    )
+                    scope_is_current = bool(
+                        plan_is_current
+                        and binding.get("sessionId") == incoming_session == _NATIVE_EXPECTED_SESSION == _NATIVE_OBSERVATION_SESSION
+                        and binding.get("targetInstance") == _native_target_instance(LATEST_PAYLOAD.get("target"))
+                        and CURRENT_MATCH.id == binding.get("matchId") == LATEST_PAYLOAD.get("matchId")
+                        and LATEST_PAYLOAD.get("observationSessionId") == binding.get("sessionId")
+                    )
+                    prepared_facts = binding.get("preparedFacts") if isinstance(binding.get("preparedFacts"), dict) else {}
+                    worker_result_matches = bool(
+                        result_data.get("echo") == "match.apply_control"
+                        and result_data.get("controlRevision") == control_revision
+                        and str(result_data.get("matchId") or "") == str(binding.get("matchId") or "")
+                        and result_data.get("expectedMatchId") == binding.get("matchId")
+                        and result_data.get("expectedFactsRevision") == binding.get("workerFactsRevision")
+                        and type(result_data.get("factsRevision")) is int
+                        and result_data.get("factsRevision") >= binding.get("workerFactsRevision")
+                        and result_data.get("expectedRound") == binding.get("round")
+                        and result_data.get("expectedObservationSessionId") == binding.get("sessionId")
+                        and result_data.get("reset") is False
+                    )
+                    accepted = worker_status == "ACK" and scope_is_current and worker_result_matches
+                    reason = None if accepted else (
+                        command_result.get("errorDetails") or details.get("error")
+                        or ("回执到达时本局观察范围已变化，未投影到当前局" if worker_status == "ACK"
+                            else str(worker_status))
+                    )
+                    if accepted:
+                        _native_invalidate_solver_locked("next-match-preparation-applied")
+                        CURRENT_MATCH.apply_facts(
+                            prepared_facts,
+                            source="manual",
+                            intent="confirm",
+                            command_id=str(details.get("commandId") or ""),
+                        )
+                        _LIVE_MANUAL_OVERRIDES.update(copy.deepcopy(prepared_facts))
+                        preparation.update({
+                            "status": "APPLIED",
+                            "matchId": binding.get("matchId"),
+                            "sessionId": binding.get("sessionId"),
+                            "reason": None,
+                            "reasonLabel": None,
+                            "retryable": False,
+                            "receiptState": "ACK",
+                            "receipt": {
+                                "commandId": details.get("commandId"),
+                                "status": "ACK",
+                                "matchId": binding.get("matchId"),
+                                "sessionId": binding.get("sessionId"),
+                            },
+                        })
+                    else:
+                        preparation.update({
+                            "status": "FAILED",
+                            "reason": reason or "WORKER_REJECTED",
+                            "reasonLabel": _next_match_preparation_failure_label(reason or "WORKER_REJECTED"),
+                            "retryable": worker_status in {"REJECT", "NACK"} and plan_is_current,
+                            "receiptState": "REJECTED" if worker_status in {"REJECT", "NACK"} else "UNCONFIRMED",
+                        })
+                    if plan_is_current:
+                        _store_next_match_preparation_locked(preparation)
+                    receipt = {
+                        "commandId": details.get("commandId"),
+                        "revision": control_revision,
+                        "status": "ACK" if accepted else "REJECTED",
+                        "matchId": binding.get("matchId"),
+                        "preparationRevision": binding.get("preparationRevision"),
+                        "reason": reason,
+                    }
+                    LATEST_PAYLOAD["nextMatchPreparation"] = copy.deepcopy(_NEXT_MATCH_PREPARATION)
+                    LATEST_PAYLOAD["nativeControlResult"] = receipt
+                    LATEST_PAYLOAD["manualCommandResult"] = receipt
                 else:
                     expected_result_match = binding.get("projectedMatchId") if binding.get("reset") else binding.get("matchId")
                     scope_is_current = bool(
@@ -2342,8 +2458,10 @@ def _native_observation_event(event: Dict[str, Any]) -> None:
                 LATEST_PAYLOAD["visionHealth"] = health
                 control_message = {
                     "type": "vision_control",
-                    "nativeControlResult": receipt if binding.get("kind") != "warehouse_instance_decision" else None,
+                    "nativeControlResult": receipt if binding.get("kind") not in {"warehouse_instance_decision", "next_match_preparation"} else None,
                     "warehouseInstanceDecisionResult": receipt if binding.get("kind") == "warehouse_instance_decision" else None,
+                    "nextMatchPreparation": copy.deepcopy(_NEXT_MATCH_PREPARATION)
+                    if binding.get("kind") == "next_match_preparation" else None,
                     "visionHealth": health,
                     "observationProfile": "native-readonly-v1",
                 }
@@ -2361,6 +2479,10 @@ def _native_observation_event(event: Dict[str, Any]) -> None:
                 manual_state = build_manual_alpha_payload(include_solver_input=False)
                 if binding.get("kind") == "warehouse_instance_decision":
                     manual_state["warehouseInstanceDecisionResult"] = receipt
+                elif binding.get("kind") == "next_match_preparation":
+                    manual_state["nextMatchPreparation"] = copy.deepcopy(_NEXT_MATCH_PREPARATION)
+                    manual_state["nativeControlResult"] = receipt
+                    manual_state["manualCommandResult"] = receipt
                 else:
                     manual_state["nativeControlResult"] = receipt
                     manual_state["manualCommandResult"] = receipt
@@ -2450,11 +2572,12 @@ def _native_observation_event(event: Dict[str, Any]) -> None:
         prior_engine_revision = prior.get("engineFactsRevision")
         current_engine_revision = snapshot.get("factsRevision")
         try:
+            same_match = str(prior.get("matchId") or "") == str(snapshot.get("id") or "")
             stale_business = bool(prior) and (
-                (prior_engine_revision is not None and current_engine_revision is not None
-                 and int(current_engine_revision) < int(prior_engine_revision))
-                or (prior.get("capturedAtNs") is not None and capture_ns <= int(prior["capturedAtNs"]))
-                or (prior.get("matchId") == snapshot.get("id") and prior.get("round") is not None
+                (prior.get("capturedAtNs") is not None and capture_ns <= int(prior["capturedAtNs"]))
+                or (same_match and prior_engine_revision is not None and current_engine_revision is not None
+                    and int(current_engine_revision) < int(prior_engine_revision))
+                or (same_match and prior.get("round") is not None
                     and snapshot.get("roundNo") is not None and int(snapshot["roundNo"]) < int(prior["round"]))
             )
         except (TypeError, ValueError):
@@ -2638,7 +2761,14 @@ def _native_observation_event(event: Dict[str, Any]) -> None:
             if any(previous_identity) and previous_identity != current_identity:
                 _native_invalidate_solver_locked("observation-scope-changed")
             lease = _native_accept_observation_locked(data)
-            mapped, missing_reason = _native_solver_admission(facts)
+            # The preparation command must validate against this exact accepted
+            # worker frame, including its newly projected match identity.
+            LATEST_PAYLOAD.update(data)
+            preparation_waiting = _next_match_preparation_frame_gate(data, lease)
+            if preparation_waiting:
+                mapped, missing_reason = None, "下一局设置正在等待本局 worker 回执"
+            else:
+                mapped, missing_reason = _native_solver_admission(facts)
             data.update(
                 predictionSnapshot=None, frozenPrediction=None, probabilityProfile=None,
                 solverStatus="incomplete", solverMissingReason=missing_reason,
@@ -2652,6 +2782,15 @@ def _native_observation_event(event: Dict[str, Any]) -> None:
                     solverMissingReason="等待当前有效的局内观察帧",
                 )
                 _native_invalidate_solver_locked("observation-not-current-auction")
+            elif preparation_waiting:
+                data.update(
+                    predictionSnapshot=None,
+                    frozenPrediction=None,
+                    probabilityProfile=None,
+                    solverStatus="paused",
+                    solverMissingReason="下一局设置正在等待本局 worker 回执；收到新鲜帧后重新评估建议",
+                    shadowUpdating=False,
+                )
             elif in_auction and mapped is not None and _native_solver_lease_matches(data):
                 from live_shadow import attach_live_shadow
                 solver_ctx = dict(data)
@@ -2738,6 +2877,7 @@ def _native_observation_event(event: Dict[str, Any]) -> None:
 def _send_native_manual_control(
     command: Optional[Dict[str, Any]], *, rollback_state: Optional[Dict[str, Any]] = None,
     validated_observation_scope: Optional[Dict[str, Any]] = None,
+    binding_metadata: Optional[Dict[str, Any]] = None,
 ) -> Optional[Dict[str, Any]]:
     if not native_observation_enabled() or not isinstance(command, dict):
         return None
@@ -2822,6 +2962,8 @@ def _send_native_manual_control(
             "rollbackState": copy.deepcopy(rollback_state),
             "reset": False,
         }
+        if isinstance(binding_metadata, dict):
+            binding.update(copy.deepcopy(binding_metadata))
         _NATIVE_CONTROL_BINDINGS[control_revision] = binding
     elif control_revision is not None and command.get("reset"):
         binding = {
@@ -2837,6 +2979,8 @@ def _send_native_manual_control(
             "rollbackState": copy.deepcopy(rollback_state),
             "reset": True,
         }
+        if isinstance(binding_metadata, dict):
+            binding.update(copy.deepcopy(binding_metadata))
         _NATIVE_CONTROL_BINDINGS[control_revision] = binding
     sent = bridge.send_control({"type": "native_control", "command": command})
     if not sent and control_revision is not None:
@@ -3547,6 +3691,424 @@ def _manual_options() -> Dict[str, Any]:
     }
 
 
+def _next_match_preparation_presentation() -> Dict[str, Any]:
+    state = globals().get("_NEXT_MATCH_PREPARATION")
+    if not isinstance(state, dict):
+        return {"status": "NONE", "revision": None, "settings": None}
+    return copy.deepcopy(state)
+
+
+def _store_next_match_preparation_locked(state: Dict[str, Any]) -> Dict[str, Any]:
+    global _NEXT_MATCH_PREPARATION
+    _NEXT_MATCH_PREPARATION = copy.deepcopy(state)
+    LATEST_PAYLOAD["nextMatchPreparation"] = copy.deepcopy(_NEXT_MATCH_PREPARATION)
+    return copy.deepcopy(_NEXT_MATCH_PREPARATION)
+
+
+def _build_next_match_preparation_settings(raw: Any) -> tuple[Optional[Dict[str, Any]], Optional[str]]:
+    if not isinstance(raw, dict):
+        return None, "请明确选择会场、宝箱和规则"
+    venue_id = str(raw.get("venueId") or "").strip()
+    box_id = str(raw.get("boxId") or "").strip()
+    field_condition = str(raw.get("fieldCondition") or "").strip()
+    if not venue_id or not box_id or not field_condition:
+        return None, "会场、宝箱和规则均须明确选择；未知项不能按默认值保存"
+    try:
+        selection = catalog_selection(VENUE_BOX_CATALOG, venue_id, box_id)
+    except CatalogContractError as exc:
+        return None, f"目录不接受该会场与宝箱组合：{exc}"
+    if selection.get("venueId") != venue_id or selection.get("boxId") != box_id:
+        return None, "目录未确认该会场与宝箱组合"
+    cost = selection.get("entryCost")
+    if type(cost) is not int or cost < 0:
+        return None, "该会场没有可追溯的入场费，设置未保存"
+    conditions = field_conditions()
+    condition = next((item for item in conditions if item.get("id") == field_condition), None)
+    if condition is None or canonicalize_field_condition(field_condition) != field_condition:
+        return None, "该规则不在现有已知规则目录中，设置未保存"
+    provenance = canonical_catalog_provenance(VENUE_BOX_CATALOG)
+    return {
+        "venueId": selection["venueId"],
+        "venue": selection["venue"],
+        "boxId": selection["boxId"],
+        "box": selection["box"],
+        "fieldCondition": field_condition,
+        "fieldConditionName": condition.get("name") or condition.get("label") or field_condition,
+        "entryCost": cost,
+        "catalogVersion": provenance["catalogVersion"],
+        "catalogApprovalStatus": provenance["catalogApprovalStatus"],
+        "catalogSha256": provenance["catalogSha256"],
+        "gameEvidenceCohort": provenance["gameEvidenceCohort"],
+        "venueEvidenceClass": selection["venueEvidenceClass"],
+        "boxEvidenceClass": selection["boxEvidenceClass"],
+        "entryCostSource": "venue_box_catalog_v1",
+    }, None
+
+
+def _next_match_preparation_facts(settings: Dict[str, Any]) -> Dict[str, Any]:
+    return {key: copy.deepcopy(settings[key]) for key in (
+        "venueId", "venue", "boxId", "box", "fieldCondition", "fieldConditionName",
+        "entryCost", "catalogVersion", "catalogApprovalStatus", "catalogSha256",
+        "gameEvidenceCohort", "venueEvidenceClass", "boxEvidenceClass",
+    )}
+
+
+def _next_match_preparation_conflicts(settings: Dict[str, Any]) -> list[Dict[str, Any]]:
+    field_labels = {
+        "venueId": "会场", "boxId": "宝箱", "fieldCondition": "规则", "entryCost": "入场费",
+    }
+    display_fields = {"venueId": "venue", "boxId": "box", "fieldCondition": "fieldConditionName"}
+    conflicts = []
+    for key, label in field_labels.items():
+        field_state = CURRENT_MATCH.field_states.get(key)
+        if field_state is None:
+            continue
+        status = str(getattr(field_state, "status", "")).lower()
+        source = str(getattr(field_state, "source", "")).lower()
+        reliable = status in {"observed", "confirmed"} and source in {"vision", "manual"}
+        reliable = reliable or bool(getattr(field_state, "protected", False))
+        if not reliable:
+            continue
+        observed = CURRENT_MATCH.facts.get(key)
+        prepared = settings.get(key)
+        if observed is None or observed == "" or observed == "unknown" or observed == prepared:
+            continue
+        observed_label = CURRENT_MATCH.facts.get(display_fields.get(key, ""), observed)
+        prepared_label = settings.get(display_fields.get(key, ""), prepared)
+        conflicts.append({
+            "key": key,
+            "label": label,
+            "observed": copy.deepcopy(observed),
+            "prepared": copy.deepcopy(prepared),
+            "observedLabel": str(observed_label),
+            "preparedLabel": str(prepared_label),
+        })
+    return conflicts
+
+
+def _next_match_preparation_failure_label(reason: Any) -> str:
+    value = str(reason or "").upper()
+    labels = {
+        "OBSERVATION_SCOPE_INVALIDATED": "观察范围已失效，worker 回执未确认",
+        "OBSERVATION-SESSION-REPLACED": "观察会话已更换，未确认本局是否接受",
+        "MATCH-REPLACED": "目标局已更换，迟到回执不会应用到当前局",
+        "OBSERVATION-SCOPE-CHANGED": "局内观察版本已变化，请在本局新鲜帧上处理",
+        "FOCUS-LOST": "目标窗口失焦，worker 回执未确认",
+        "OBSERVATION-FRAME-TIMEOUT": "观察帧超时，worker 回执未确认",
+        "NEXT-MATCH-PREPARATION-AWAITING-WORKER": "设置正在等待 worker 回执",
+        "NEXT-MATCH-PREPARATION-APPLIED": "worker 已确认准备设置",
+        "STALE_FACTS_REVISION": "worker 事实版本已变化，设置未接受",
+        "STALE_ROUND": "回合已变化，设置未接受",
+        "MATCH_CHANGED": "worker 已切换对局，设置未接受",
+        "STALE_TARGET_INSTANCE": "观察目标已变化，设置未接受",
+        "COMMAND_PENDING": "另一条 worker 命令仍在等待回执",
+        "NATIVE_CONTROL_CHANNEL_FAILED": "无法将设置发送给观察 worker",
+        "STALE_MATCH_COMMAND": "当前观察已过期，设置未发送",
+    }
+    if value.startswith("SCENE-BOUNDARY:"):
+        return f"场景已离开竞拍，worker 回执未确认（{str(reason).split(':', 1)[-1]}）"
+    return labels.get(value, str(reason or "worker 未接受设置"))
+
+
+def _next_match_preparation_current_scope(scope: Optional[Dict[str, Any]] = None) -> Optional[Dict[str, Any]]:
+    if not native_observation_enabled():
+        return None
+    candidate = scope if isinstance(scope, dict) else LATEST_PAYLOAD
+    try:
+        freshness_ms = float(candidate.get("freshnessMs"))
+    except (TypeError, ValueError):
+        return None
+    match_id = str(candidate.get("matchId") or "").strip()
+    session_id = str(candidate.get("observationSessionId") or "").strip()
+    target = _native_target_instance(candidate.get("target"))
+    if (
+        candidate.get("observationStatus") != "FRAME"
+        or candidate.get("scene") != "IN_AUCTION"
+        or candidate.get("inAuction") is not True
+        or candidate.get("isSettlement") is True
+        or candidate.get("nativeInvalidated") is True
+        or not match_id
+        or match_id != CURRENT_MATCH.id
+        or match_id != str(LATEST_PAYLOAD.get("matchId") or "")
+        or not session_id
+        or session_id != _NATIVE_EXPECTED_SESSION
+        or session_id != _NATIVE_OBSERVATION_SESSION
+        or session_id != str(LATEST_PAYLOAD.get("observationSessionId") or "")
+        or target is None
+        or target != _native_target_instance(LATEST_PAYLOAD.get("target"))
+        or type(candidate.get("factsRevision")) is not int
+        or candidate.get("factsRevision") != LATEST_PAYLOAD.get("factsRevision")
+        or type(candidate.get("round")) is not int
+        or candidate.get("round") != LATEST_PAYLOAD.get("round")
+        or candidate.get("frameSequence") != LATEST_PAYLOAD.get("frameSequence")
+        or freshness_ms < 0
+        or freshness_ms > _NATIVE_FRAME_TIMEOUT_SECONDS * 1000
+    ):
+        return None
+    return {
+        "matchId": match_id,
+        "sessionId": session_id,
+        "factsRevision": candidate.get("factsRevision"),
+        "round": candidate.get("round"),
+        "target": copy.deepcopy(candidate.get("target")),
+        "targetInstance": copy.deepcopy(target),
+        "frameSequence": candidate.get("frameSequence"),
+        "freshnessMs": freshness_ms,
+        "observationStatus": candidate.get("observationStatus"),
+        "nativeInvalidated": candidate.get("nativeInvalidated"),
+    }
+
+
+def _dispatch_next_match_preparation_locked(
+    preparation: Dict[str, Any], scope: Dict[str, Any], *, retry: bool = False,
+) -> Dict[str, Any]:
+    global _LIVE_CONTROL_REVISION
+    validated_scope = _next_match_preparation_current_scope(scope)
+    match_id = str(preparation.get("matchId") or "")
+    if validated_scope is None or validated_scope.get("matchId") != match_id:
+        return {"sent": False, "reason": "STALE_MATCH_COMMAND", "retryable": True}
+    if _NATIVE_CONTROL_BINDINGS:
+        return {"sent": False, "reason": "COMMAND_PENDING", "retryable": True}
+    send_scope = copy.deepcopy(scope)
+
+    facts = _next_match_preparation_facts(preparation["settings"])
+    _native_invalidate_solver_locked("next-match-preparation-awaiting-worker")
+    _LIVE_CONTROL_REVISION += 1
+    control_revision = _LIVE_CONTROL_REVISION
+    command = {
+        "revision": control_revision,
+        "expectedMatchId": match_id,
+        "snapshot": CURRENT_MATCH.snapshot(),
+        "facts": copy.deepcopy(facts),
+        "reset": False,
+        "expectedObservationSessionId": validated_scope["sessionId"],
+        "expectedFactsRevision": validated_scope["factsRevision"],
+        "expectedRound": validated_scope["round"],
+        "expectedTargetInstance": copy.deepcopy(validated_scope["targetInstance"]),
+        "expectedInvalidationGeneration": _NATIVE_SOLVER_INVALIDATION_GENERATION,
+    }
+    send_result = _send_native_manual_control(
+        command,
+        validated_observation_scope=send_scope,
+        binding_metadata={
+            "kind": "next_match_preparation",
+            "preparationRevision": preparation.get("revision"),
+            "preparedFacts": copy.deepcopy(facts),
+            "attempt": int(preparation.get("attempts") or 0) + 1,
+        },
+    )
+    if send_result is None or send_result.get("status") != "PENDING":
+        return {
+            "sent": False,
+            "reason": (send_result or {}).get("reason") or "NATIVE_CONTROL_CHANNEL_FAILED",
+            "retryable": bool((send_result or {}).get("reason") in {
+                "NATIVE_CONTROL_CHANNEL_FAILED", "COMMAND_PENDING", "STALE_MATCH_COMMAND",
+            }),
+        }
+    updated = copy.deepcopy(preparation)
+    updated.update({
+        "status": "APPLYING",
+        "sessionId": validated_scope["sessionId"],
+        "targetInstance": copy.deepcopy(validated_scope["targetInstance"]),
+        "frameSequence": validated_scope["frameSequence"],
+        "factsRevision": validated_scope["factsRevision"],
+        "round": validated_scope["round"],
+        "controlRevision": control_revision,
+        "commandId": f"native-control-{control_revision}",
+        "attempts": int(preparation.get("attempts") or 0) + 1,
+        "reason": None,
+        "reasonLabel": None,
+        "retryable": False,
+        "receiptState": "WAITING",
+    })
+    _store_next_match_preparation_locked(updated)
+    return {"sent": True, "preparation": updated, "retry": retry}
+
+
+def _next_match_preparation_frame_gate(data: Dict[str, Any], lease: Optional[Dict[str, Any]]) -> bool:
+    """Bind a saved plan to exactly one worker-confirmed new match and pause its solver until ACK."""
+    if not isinstance(lease, dict):
+        return False
+    preparation = copy.deepcopy(_next_match_preparation_presentation())
+    status = str(preparation.get("status") or "NONE").upper()
+    match_id = str(data.get("matchId") or "")
+    if status == "PREPARED":
+        base_match_id = str(preparation.get("baseMatchId") or "")
+        if not match_id or not base_match_id or match_id == base_match_id:
+            return False
+        preparation.update({
+            "status": "BOUND",
+            "matchId": match_id,
+            "sessionId": data.get("observationSessionId"),
+            "targetInstance": copy.deepcopy(_native_target_instance(data.get("target"))),
+            "conflicts": [],
+            "reason": None,
+            "retryable": False,
+        })
+        conflicts = _next_match_preparation_conflicts(preparation.get("settings") or {})
+        if conflicts:
+            preparation.update({"status": "CONFLICT", "conflicts": conflicts})
+            _store_next_match_preparation_locked(preparation)
+            return False
+        _store_next_match_preparation_locked(preparation)
+        sent = _dispatch_next_match_preparation_locked(preparation, data)
+        if not sent.get("sent"):
+            failed = copy.deepcopy(_NEXT_MATCH_PREPARATION)
+            failed.update({
+                "status": "FAILED",
+                "reason": sent.get("reason"),
+                "reasonLabel": _next_match_preparation_failure_label(sent.get("reason")),
+                "retryable": bool(sent.get("retryable")),
+                "receiptState": "NOT_SENT",
+            })
+            _store_next_match_preparation_locked(failed)
+        return True
+    if status == "APPLYING" and match_id == str(preparation.get("matchId") or ""):
+        return True
+    return False
+
+
+def manage_next_match_preparation(request: Optional[Dict[str, Any]]) -> Dict[str, Any]:
+    """Save, cancel or explicitly resolve a one-shot next-match plan."""
+    payload = request if isinstance(request, dict) else {}
+    operation = str(payload.get("operation") or "").strip().upper()
+    with _MANUAL_STATE_LOCK:
+        preparation = copy.deepcopy(_next_match_preparation_presentation())
+        current_revision = preparation.get("revision")
+        supplied_revision = payload.get("preparationRevision")
+        if operation != "SAVE" and supplied_revision != current_revision:
+            return {
+                "ok": False, "status": preparation.get("status"),
+                "message": "下一局设置已变化，请按页面当前状态重新选择。",
+                "preparation": preparation,
+            }
+
+        if operation == "SAVE":
+            if preparation.get("status") in {"APPLYING", "CONFLICT", "FAILED"}:
+                return {
+                    "ok": False, "status": preparation.get("status"),
+                    "message": "请先处理当前绑定对局中的准备设置，再保存新的设置。",
+                    "preparation": preparation,
+                }
+            settings, error = _build_next_match_preparation_settings(payload.get("settings"))
+            if settings is None:
+                return {"ok": False, "status": preparation.get("status"), "message": error, "preparation": preparation}
+            if preparation.get("status") == "PREPARED":
+                base_match_id = preparation.get("baseMatchId")
+                base_session_id = preparation.get("baseSessionId")
+            else:
+                base_match_id = str(CURRENT_MATCH.id or "")
+                base_session_id = str(_NATIVE_OBSERVATION_SESSION or "") or None
+            preparation = {
+                "status": "PREPARED",
+                "revision": uuid.uuid4().hex,
+                "settings": settings,
+                "baseMatchId": base_match_id,
+                "baseSessionId": base_session_id,
+                "savedAtUtc": datetime.now(timezone.utc).isoformat(),
+                "attempts": 0,
+                "reason": None,
+                "retryable": False,
+            }
+            _store_next_match_preparation_locked(preparation)
+            LATEST_PAYLOAD["nextMatchPreparation"] = copy.deepcopy(preparation)
+            return {"ok": True, "status": "PREPARED", "message": "下一局准备设置已保存；当前局事实未改。", "preparation": preparation}
+
+        if operation == "CANCEL":
+            if preparation.get("status") == "APPLIED":
+                return {
+                    "ok": False, "status": "APPLIED",
+                    "message": "设置已由 worker 应用于本局；如需准备下一局，请重新选择并保存。",
+                    "preparation": preparation,
+                }
+            if preparation.get("status") == "APPLYING":
+                return {"ok": False, "status": "APPLYING", "message": "worker 正在处理，等待回执后再操作。", "preparation": preparation}
+            uncertain = preparation.get("receiptState") in {"INVALIDATED", "UNCONFIRMED"}
+            preparation.update({
+                "status": "CANCELLED", "settings": None, "conflicts": [],
+                "reason": "USER_CANCELLED_PREPARATION",
+                "reasonLabel": (
+                    "准备已取消且不会重发；worker 回执未确认，请以本局新鲜观察事实为准。"
+                    if uncertain else "下一局准备已取消；当前局事实未改。"
+                ),
+                "retryable": False,
+            })
+            _store_next_match_preparation_locked(preparation)
+            LATEST_PAYLOAD["nextMatchPreparation"] = copy.deepcopy(preparation)
+            message = preparation["reasonLabel"]
+            return {"ok": True, "status": "CANCELLED", "message": message, "preparation": preparation}
+
+        if operation in {"CONFIRM_PREPARED", "USE_OBSERVED", "RETRY"}:
+            expected_state = {
+                "CONFIRM_PREPARED": "CONFLICT",
+                "USE_OBSERVED": "CONFLICT",
+                "RETRY": "FAILED",
+            }[operation]
+            if preparation.get("status") != expected_state:
+                return {"ok": False, "status": preparation.get("status"), "message": "当前准备状态不支持此操作。", "preparation": preparation}
+            if operation == "RETRY" and preparation.get("retryable") is not True:
+                return {
+                    "ok": False, "status": "FAILED",
+                    "message": "上次回执未能确认是否已执行，不能重复发送；等待本局新鲜观察核实，或取消准备。",
+                    "preparation": preparation,
+                }
+            scope = _next_match_preparation_current_scope()
+            bound_match_id = str(preparation.get("matchId") or "")
+            if scope is None or scope.get("matchId") != bound_match_id:
+                return {
+                    "ok": False, "status": preparation.get("status"),
+                    "message": "当前没有属于已绑定对局的新鲜有效竞拍帧；设置不会转给其他局。",
+                    "preparation": preparation,
+                }
+            if operation == "USE_OBSERVED":
+                preparation.update({
+                    "status": "CANCELLED", "settings": None, "conflicts": [],
+                    "reason": "USER_CHOSE_OBSERVED_FACTS", "reasonLabel": "已按本局观察事实继续",
+                    "retryable": False,
+                })
+                _store_next_match_preparation_locked(preparation)
+                LATEST_PAYLOAD["nextMatchPreparation"] = copy.deepcopy(preparation)
+                return {"ok": True, "status": "CANCELLED", "message": "已保留 worker 观察事实；准备值未写入本局。", "preparation": preparation}
+
+            if operation == "CONFIRM_PREPARED":
+                conflicts = _next_match_preparation_conflicts(preparation.get("settings") or {})
+                if not conflicts:
+                    return {
+                        "ok": False, "status": "CONFLICT",
+                        "message": "当前新鲜事实已不再冲突，请等待页面更新后按当前事实继续。",
+                        "preparation": preparation,
+                    }
+                preparation["conflicts"] = conflicts
+            _store_next_match_preparation_locked(preparation)
+            dispatched = _dispatch_next_match_preparation_locked(preparation, LATEST_PAYLOAD, retry=operation == "RETRY")
+            if dispatched.get("sent"):
+                return {
+                    "ok": True, "status": "APPLYING",
+                    "message": "准备设置已发送到绑定对局，等待 worker 回执。",
+                    "preparation": copy.deepcopy(_NEXT_MATCH_PREPARATION),
+                }
+            preparation = copy.deepcopy(_NEXT_MATCH_PREPARATION)
+            if operation == "RETRY" or operation == "CONFIRM_PREPARED":
+                preparation.update({
+                    "status": "FAILED",
+                    "reason": dispatched.get("reason"),
+                    "reasonLabel": _next_match_preparation_failure_label(dispatched.get("reason")),
+                    "retryable": bool(dispatched.get("retryable")),
+                    "receiptState": "NOT_SENT",
+                })
+                _store_next_match_preparation_locked(preparation)
+            return {
+                "ok": False, "status": preparation.get("status"),
+                "message": _next_match_preparation_failure_label(dispatched.get("reason")),
+                "preparation": preparation,
+            }
+
+        return {
+            "ok": False, "status": preparation.get("status"),
+            "message": "不支持的下一局准备操作。", "preparation": preparation,
+        }
+
+
 def _canonical_from_current_match() -> Dict[str, Any]:
     return CURRENT_MATCH.to_canonical()
 
@@ -3558,6 +4120,7 @@ _LIVE_CONTROL_REVISION = 0
 _LIVE_WORKER_SOCKET = None
 _LIVE_MANUAL_OVERRIDES = {}
 _LIVE_CONTROL_WAITING_EXIT = False
+_NEXT_MATCH_PREPARATION: Dict[str, Any] = {"status": "NONE", "revision": None, "settings": None}
 _MANUAL_MATCH_PLAYED_AT: Dict[str, str] = {}
 _CAPTURE_SOURCE_INSTANCE_ID = f"desktop_{uuid.uuid4().hex}"
 _LIVE_VISION_ACTIVE = False
@@ -7057,6 +7620,7 @@ def run_hud_app():
             settlement_review_service=settlement_review_service,
             legacy_archive_provider=lambda: legacy_archive,
             manual_facts_provider=lambda facts: publish_manual_payload(apply_manual_facts(facts)),
+            next_match_preparation_provider=lambda req: manage_next_match_preparation(req),
             warehouse_slot_evidence_provider=handle_request_warehouse_slot_evidence,
             warehouse_instance_decision_provider=handle_warehouse_instance_decision,
             start_vision_provider=lambda resume_same_match=False: start_vision_worker(

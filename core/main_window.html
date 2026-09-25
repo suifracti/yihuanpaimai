@@ -356,6 +356,52 @@
                     </div>
                   </div>
                 </div>
+                <div class="next-match-preparation" id="next-match-preparation">
+                  <div class="section-caption">
+                    <span class="caption-title">下一局准备</span>
+                    <span class="section-caption-sub">只暂存；不会修改当前局或启动观察</span>
+                  </div>
+                  <div class="form-grid-3">
+                    <div class="form-field">
+                      <label class="form-field-label" for="next-match-venue-trigger">会场</label>
+                      <div class="custom-dropdown" id="next-match-venue-dropdown">
+                        <button class="dropdown-trigger" id="next-match-venue-trigger" type="button">
+                          <span id="next-match-venue-display">请选择会场</span><span class="dropdown-arrow">▼</span>
+                        </button>
+                        <div class="dropdown-menu" id="next-match-venue-menu" hidden></div>
+                      </div>
+                    </div>
+                    <div class="form-field">
+                      <label class="form-field-label" for="next-match-box-trigger">宝箱</label>
+                      <div class="custom-dropdown" id="next-match-box-dropdown">
+                        <button class="dropdown-trigger" id="next-match-box-trigger" type="button">
+                          <span id="next-match-box-display">请选择宝箱</span><span class="dropdown-arrow">▼</span>
+                        </button>
+                        <div class="dropdown-menu" id="next-match-box-menu" hidden></div>
+                      </div>
+                    </div>
+                    <div class="form-field">
+                      <label class="form-field-label" for="next-match-cond-trigger">规则</label>
+                      <div class="custom-dropdown" id="next-match-cond-dropdown">
+                        <button class="dropdown-trigger" id="next-match-cond-trigger" type="button">
+                          <span id="next-match-cond-display">请选择规则</span><span class="dropdown-arrow">▼</span>
+                        </button>
+                        <div class="dropdown-menu" id="next-match-cond-menu" hidden></div>
+                      </div>
+                    </div>
+                  </div>
+                  <div class="snapshot-status-hint" id="next-match-preparation-status" role="status" aria-live="polite">
+                    尚未保存下一局设置；留空表示未知，不会自动填入默认规则或费用。
+                  </div>
+                  <div class="snapshot-status-hint" id="next-match-preparation-cost-source"></div>
+                  <div class="action-row" style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px">
+                    <button class="btn-wb-action" id="next-match-preparation-save" type="button">保存下一局设置</button>
+                    <button class="btn-wb-action" id="next-match-preparation-cancel" type="button" hidden>取消准备</button>
+                    <button class="btn-wb-action" id="next-match-preparation-apply" type="button" hidden>保留准备值并应用</button>
+                    <button class="btn-wb-action" id="next-match-preparation-observed" type="button" hidden>按观察事实继续</button>
+                    <button class="btn-wb-action" id="next-match-preparation-retry" type="button" hidden>在本局重试</button>
+                  </div>
+                </div>
               </div>
 
               <!-- 整仓与全局参数 (从品质区剥离独立放置) -->

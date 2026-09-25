@@ -440,4 +440,73 @@ assert.equal(sent.at(-1).action, "manual_facts");
 assert.equal(sent.at(-1).facts.fieldCondition, "standard");
 assert.equal(sent.at(-1).expectedMatchId, "live-now");
 
+const matchBeforeNextPreparation = JSON.stringify(vm.runInContext("dashboard.matchState", sandbox));
+const preparationMatch = {
+  observationProfile: "native-readonly-v1",
+  matchId: "live-now",
+  observationSessionId: null,
+  visionHealth: { stage: "stopped" },
+  options: {
+    catalogVersion: "approved-catalog-v1",
+    venues: [{
+      venueId: "venue-shanhu", displayName: "珊瑚场", entryCost: 5000,
+      venueEvidenceClass: "CURRENT_GAME_VALID",
+      boxes: [{ boxId: "box-shanhu-glass", displayName: "玻璃箱", boxEvidenceClass: "CURRENT_GAME_VALID" }]
+    }],
+    fieldConditions: [{ id: "standard", name: "标准对局" }]
+  },
+  nextMatchPreparation: { status: "NONE", revision: null, settings: null },
+  facts: { venueId: "venue-a", boxId: "box-a", fieldCondition: null }
+};
+vm.runInContext("dashboard.lastCurrentMatch = null", sandbox);
+sandbox.preparationMatch = preparationMatch;
+sandbox.populateMatchOptions(preparationMatch.options);
+sandbox.renderNextMatchPreparation(preparationMatch);
+vm.runInContext("dashboard.lastCurrentMatch = preparationMatch", sandbox);
+const unsavedBefore = sent.length;
+sandbox.setNextMatchPreparationVenue("venue-shanhu", "珊瑚场");
+sandbox.setNextMatchPreparationBox("box-shanhu-glass", "玻璃箱");
+sandbox.setNextMatchPreparationCondition("standard", "标准对局");
+assert.equal(JSON.stringify(vm.runInContext("dashboard.matchState", sandbox)), matchBeforeNextPreparation,
+  "editing a next-match plan must not modify current live facts");
+get("next-match-preparation-save").click();
+assert.equal(sent.length, unsavedBefore + 1);
+const preparationRequest = sent.at(-1);
+assert.equal(preparationRequest.action, "next_match_preparation");
+assert.equal(preparationRequest.operation, "SAVE");
+assert.equal(preparationRequest.preparationRevision, null);
+assert.deepEqual(preparationRequest.settings, {
+  venueId: "venue-shanhu", venue: "珊瑚场",
+  boxId: "box-shanhu-glass", box: "玻璃箱",
+  fieldCondition: "standard", fieldConditionName: "标准对局"
+});
+assert.equal(JSON.stringify(vm.runInContext("dashboard.matchState", sandbox)), matchBeforeNextPreparation);
+const savedPreparation = {
+  status: "PREPARED", revision: "preparation-revision-1",
+  baseMatchId: "live-now",
+  settings: {
+    venueId: "venue-shanhu", venue: "珊瑚场",
+    boxId: "box-shanhu-glass", box: "玻璃箱",
+    fieldCondition: "standard", fieldConditionName: "标准对局",
+    entryCost: 5000, entryCostSource: "venue_box_catalog_v1",
+    catalogVersion: "approved-catalog-v1", venueEvidenceClass: "CURRENT_GAME_VALID"
+  }
+};
+sandbox.handleNativeMessage({ data: {
+  type: "app_status", action: "next_match_preparation", requestId: preparationRequest.requestId,
+  nextMatchPreparationResult: { ok: true, status: "PREPARED", preparation: savedPreparation }
+} });
+assert.match(get("next-match-preparation-status").textContent, /下一局设置已保存/);
+assert.match(get("next-match-preparation-cost-source").textContent, /批准目录 approved-catalog-v1/);
+assert.equal(preparationMatch.facts.venueId, "venue-a", "saved settings remain separate from observed facts");
+const conflictPreparation = {
+  ...savedPreparation, status: "CONFLICT", matchId: "match-next",
+  conflicts: [{ label: "会场", observedLabel: "另一会场", preparedLabel: "珊瑚场" }]
+};
+preparationMatch.nextMatchPreparation = conflictPreparation;
+sandbox.renderNextMatchPreparation(preparationMatch);
+assert.match(get("next-match-preparation-status").textContent, /worker 观察与准备值冲突/);
+assert.equal(get("next-match-preparation-apply").hidden, false);
+assert.equal(get("next-match-preparation-observed").hidden, false);
+
 console.log("guidebook categories and dimensions, source-only pricing, role provenance, isolated records and selectable frame provenance: passed");

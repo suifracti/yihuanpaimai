@@ -104,6 +104,11 @@ const dashboard = {
     venues: [],
     fieldConditions: [],
   },
+  nextMatchPreparation: null,
+  nextMatchPreparationDraft: null,
+  nextMatchPreparationDirty: false,
+  nextMatchPreparationRequestId: null,
+  nextMatchPreparationVersion: null,
   matchSyncTimer: null,
   lastSnapshotResult: null,
   warehouseReview: null,
@@ -1866,24 +1871,172 @@ function populateMatchOptions(options) {
   if (!options) return;
   if (options.venues && options.venues.length) {
     dashboard.matchOptions.venues = options.venues;
-    const venueMenu = document.getElementById("match-venue-menu");
-    if (venueMenu && (!venueMenu.children.length || venueMenu.dataset.version !== String(options.venues.length))) {
-      venueMenu.dataset.version = String(options.venues.length);
-      venueMenu.innerHTML = options.venues.map(v => 
-        `<div class="dropdown-item" data-venue-id="${v.venueId}" data-venue-name="${v.displayName}">${v.displayName}</div>`
-      ).join("");
+    for (const menuId of ["match-venue-menu", "next-match-venue-menu"]) {
+      const venueMenu = document.getElementById(menuId);
+      if (venueMenu && (!venueMenu.children.length || venueMenu.dataset.version !== String(options.venues.length))) {
+        venueMenu.dataset.version = String(options.venues.length);
+        venueMenu.innerHTML = options.venues.map(v =>
+          `<div class="dropdown-item" data-venue-id="${escapeHtml(v.venueId)}" data-venue-name="${escapeHtml(v.displayName)}">${escapeHtml(v.displayName)}</div>`
+        ).join("");
+      }
     }
   }
   if (options.fieldConditions && options.fieldConditions.length) {
     dashboard.matchOptions.fieldConditions = options.fieldConditions;
-    const condMenu = document.getElementById("match-cond-menu");
-    if (condMenu && (!condMenu.children.length || condMenu.dataset.version !== String(options.fieldConditions.length))) {
-      condMenu.dataset.version = String(options.fieldConditions.length);
-      condMenu.innerHTML = options.fieldConditions.map(c => 
-        `<div class="dropdown-item" data-cond-id="${c.id}" data-cond-name="${c.name}">${c.name}</div>`
-      ).join("");
+    for (const menuId of ["match-cond-menu", "next-match-cond-menu"]) {
+      const condMenu = document.getElementById(menuId);
+      if (condMenu && (!condMenu.children.length || condMenu.dataset.version !== String(options.fieldConditions.length))) {
+        condMenu.dataset.version = String(options.fieldConditions.length);
+        condMenu.innerHTML = options.fieldConditions.map(c =>
+          `<div class="dropdown-item" data-cond-id="${escapeHtml(c.id)}" data-cond-name="${escapeHtml(c.name)}">${escapeHtml(c.name)}</div>`
+        ).join("");
+      }
     }
   }
+}
+
+function updateNextMatchPreparationBoxDropdown(venueId) {
+  const menu = document.getElementById("next-match-box-menu");
+  const display = document.getElementById("next-match-box-display");
+  if (!menu) return;
+  const venue = (dashboard.matchOptions.venues || []).find(item => item.venueId === venueId);
+  const boxes = venue?.boxes || [];
+  menu.innerHTML = boxes.map(box =>
+    `<div class="dropdown-item" data-box-id="${escapeHtml(box.boxId)}" data-box-name="${escapeHtml(box.displayName)}">${escapeHtml(box.displayName)}</div>`
+  ).join("");
+  if (!boxes.length) {
+    menu.innerHTML = `<div class="dropdown-item" style="color:#64748b;cursor:default">请先选择会场</div>`;
+    if (display) display.textContent = "请选择宝箱";
+  }
+}
+
+function setNextMatchPreparationVenue(venueId, venueName) {
+  dashboard.nextMatchPreparationDraft = dashboard.nextMatchPreparationDraft || {};
+  Object.assign(dashboard.nextMatchPreparationDraft, {
+    venueId, venue: venueName, boxId: null, box: null,
+  });
+  dashboard.nextMatchPreparationDirty = true;
+  document.getElementById("next-match-venue-display").textContent = venueName || "请选择会场";
+  document.getElementById("next-match-box-display").textContent = "请选择宝箱";
+  updateNextMatchPreparationBoxDropdown(venueId);
+  renderNextMatchPreparation(dashboard.lastCurrentMatch);
+}
+
+function setNextMatchPreparationBox(boxId, boxName) {
+  dashboard.nextMatchPreparationDraft = dashboard.nextMatchPreparationDraft || {};
+  Object.assign(dashboard.nextMatchPreparationDraft, { boxId, box: boxName });
+  dashboard.nextMatchPreparationDirty = true;
+  document.getElementById("next-match-box-display").textContent = boxName || "请选择宝箱";
+  renderNextMatchPreparation(dashboard.lastCurrentMatch);
+}
+
+function setNextMatchPreparationCondition(conditionId, conditionName) {
+  dashboard.nextMatchPreparationDraft = dashboard.nextMatchPreparationDraft || {};
+  Object.assign(dashboard.nextMatchPreparationDraft, {
+    fieldCondition: conditionId, fieldConditionName: conditionName,
+  });
+  dashboard.nextMatchPreparationDirty = true;
+  document.getElementById("next-match-cond-display").textContent = conditionName || "请选择规则";
+  renderNextMatchPreparation(dashboard.lastCurrentMatch);
+}
+
+function submitNextMatchPreparation(operation) {
+  const settings = dashboard.nextMatchPreparationDraft || {};
+  if (operation === "SAVE" && (!settings.venueId || !settings.boxId || !settings.fieldCondition)) {
+    const status = document.getElementById("next-match-preparation-status");
+    if (status) status.textContent = "请明确选择会场、宝箱和规则后再保存；未知项不能自动补默认值。";
+    return;
+  }
+  const requestId = postNative("next_match_preparation", {
+    operation,
+    settings,
+    preparationRevision: dashboard.nextMatchPreparation?.revision || null,
+  });
+  if (requestId) {
+    dashboard.nextMatchPreparationRequestId = requestId;
+    const status = document.getElementById("next-match-preparation-status");
+    if (status) status.textContent = operation === "SAVE" ? "正在保存下一局准备设置…" : "正在处理下一局设置…";
+  } else {
+    const status = document.getElementById("next-match-preparation-status");
+    if (status) status.textContent = "界面连接尚未就绪；设置未保存。";
+  }
+}
+
+function renderNextMatchPreparation(currentMatch = dashboard.lastCurrentMatch) {
+  const panel = document.getElementById("next-match-preparation");
+  if (!panel) return;
+  const native = currentMatch?.observationProfile === "native-readonly-v1";
+  panel.hidden = !native;
+  if (!native) return;
+
+  const state = currentMatch.nextMatchPreparation || dashboard.nextMatchPreparation || { status: "NONE" };
+  dashboard.nextMatchPreparation = state;
+  const version = `${state.revision || ""}:${state.status || "NONE"}`;
+  if (dashboard.nextMatchPreparationDraft === null ||
+      (dashboard.nextMatchPreparationVersion !== version && !dashboard.nextMatchPreparationDirty)) {
+    dashboard.nextMatchPreparationDraft = state.settings ? { ...state.settings } : {};
+    dashboard.nextMatchPreparationDirty = false;
+  }
+  dashboard.nextMatchPreparationVersion = version;
+  const draft = dashboard.nextMatchPreparationDraft || {};
+  const venue = (dashboard.matchOptions.venues || []).find(item => item.venueId === draft.venueId);
+  const box = venue?.boxes?.find(item => item.boxId === draft.boxId);
+  const condition = (dashboard.matchOptions.fieldConditions || []).find(item => item.id === draft.fieldCondition);
+  document.getElementById("next-match-venue-display").textContent = draft.venue || venue?.displayName || "请选择会场";
+  updateNextMatchPreparationBoxDropdown(draft.venueId);
+  if (draft.box) document.getElementById("next-match-box-display").textContent = draft.box;
+  else if (box) document.getElementById("next-match-box-display").textContent = box.displayName;
+  document.getElementById("next-match-cond-display").textContent = draft.fieldConditionName || condition?.name || "请选择规则";
+
+  const cost = state.settings?.entryCost ?? (venue?.entryCost ?? null);
+  const source = document.getElementById("next-match-preparation-cost-source");
+  if (source) {
+    source.textContent = cost === null || cost === undefined
+      ? "入场费未知；选择有依据的会场后由目录提供，不会自动补零。"
+      : `入场费 ${formatCurrency(Number(cost))} · 来源：批准目录 ${state.settings?.catalogVersion || currentMatch.options?.catalogVersion || "当前目录"}（${state.settings?.venueEvidenceClass || venue?.venueEvidenceClass || "来源待核"}）`;
+  }
+
+  const status = document.getElementById("next-match-preparation-status");
+  const save = document.getElementById("next-match-preparation-save");
+  const cancel = document.getElementById("next-match-preparation-cancel");
+  const apply = document.getElementById("next-match-preparation-apply");
+  const observed = document.getElementById("next-match-preparation-observed");
+  const retry = document.getElementById("next-match-preparation-retry");
+  const prepStatus = String(state.status || "NONE").toUpperCase();
+  const changed = dashboard.nextMatchPreparationDirty;
+  const factsReady = Boolean(draft.venueId && draft.boxId && draft.fieldCondition);
+  const health = currentMatch.visionHealth || {};
+  const observerStarted = Boolean(currentMatch.observationSessionId)
+    || ["native-starting", "native-ready", "native-refreshing"].includes(health.stage);
+  const baseState = observerStarted ? "等待下一局新鲜竞拍帧" : "观察尚未启动";
+  if (status) {
+    if (prepStatus === "APPLYING") status.textContent = `设置正在由 worker 应用于本局 ${state.matchId || state.boundMatchId || "…"}，等待回执；建议资格暂未恢复。`;
+    else if (prepStatus === "CONFLICT") status.textContent = `本局 worker 观察与准备值冲突：${(state.conflicts || []).map(item => `${item.label}（观察：${item.observedLabel}；准备：${item.preparedLabel}）`).join("；")}。请选择如何处理。`;
+    else if (prepStatus === "FAILED") status.textContent = state.retryable === true
+      ? `应用失败：${state.reasonLabel || state.reason || "worker 未接受"}。设置仍绑定原局，重试只会针对本局。`
+      : `结果未确认：${state.reasonLabel || state.reason || "观察范围已变化"}。不会自动重发；等待本局新鲜事实核实，或取消准备。`;
+    else if (prepStatus === "APPLIED") status.textContent = `worker 已确认应用于本局 ${state.matchId || ""}。这次设置不会自动沿用到下一局。`;
+    else if (prepStatus === "CANCELLED") status.textContent = state.reasonLabel || "下一局准备已取消；当前局事实未改。";
+    else if (changed && factsReady) status.textContent = "所选设置尚未保存；已保存的准备方案保持不变，当前局事实未改。";
+    else if (prepStatus === "PREPARED") status.textContent = `下一局设置已保存 · ${draft.venue || venue?.displayName || "会场待选"} · ${draft.box || box?.displayName || "宝箱待选"} · ${draft.fieldConditionName || condition?.name || "规则待选"}。${baseState}；当前局事实未改。`;
+    else status.textContent = "尚未保存下一局设置；留空表示未知，不会自动填入默认规则或费用。";
+  }
+  const busy = prepStatus === "APPLYING" || prepStatus === "CONFLICT";
+  const unresolved = ["APPLYING", "CONFLICT", "FAILED"].includes(prepStatus);
+  for (const id of ["next-match-venue-trigger", "next-match-box-trigger", "next-match-cond-trigger"]) {
+    const trigger = document.getElementById(id);
+    if (trigger) trigger.disabled = unresolved;
+  }
+  if (save) { save.disabled = unresolved || !factsReady; save.textContent = prepStatus === "APPLIED" ? "明确准备再下一局" : "保存下一局设置"; }
+  if (cancel) cancel.hidden = !["PREPARED", "CONFLICT", "FAILED"].includes(prepStatus);
+  if (apply) apply.hidden = prepStatus !== "CONFLICT";
+  if (observed) observed.hidden = prepStatus !== "CONFLICT";
+  if (retry) retry.hidden = prepStatus !== "FAILED" || state.retryable !== true;
+  if (save) save.onclick = () => submitNextMatchPreparation("SAVE");
+  if (cancel) cancel.onclick = () => submitNextMatchPreparation("CANCEL");
+  if (apply) apply.onclick = () => submitNextMatchPreparation("CONFIRM_PREPARED");
+  if (observed) observed.onclick = () => submitNextMatchPreparation("USE_OBSERVED");
+  if (retry) retry.onclick = () => submitNextMatchPreparation("RETRY");
 }
 
 function updateMatchBoxDropdown(venueId) {
@@ -2926,6 +3079,7 @@ function renderMatch(currentMatch, overlayVisible) {
   if (currentMatch.options) {
     populateMatchOptions(currentMatch.options);
   }
+  renderNextMatchPreparation(currentMatch);
 
   // Environment facts & Form Inputs
   const env = currentMatch.environment || {};
@@ -3791,6 +3945,12 @@ function initCustomDropdowns() {
         }
       } else if (dropdown.id === "match-cond-dropdown") {
         setMatchCondition(item.dataset.condId, item.dataset.condName);
+      } else if (dropdown.id === "next-match-venue-dropdown") {
+        setNextMatchPreparationVenue(item.dataset.venueId, item.dataset.venueName);
+      } else if (dropdown.id === "next-match-box-dropdown") {
+        setNextMatchPreparationBox(item.dataset.boxId, item.dataset.boxName);
+      } else if (dropdown.id === "next-match-cond-dropdown") {
+        setNextMatchPreparationCondition(item.dataset.condId, item.dataset.condName);
       }
     });
   });
@@ -4928,6 +5088,25 @@ function handleNativeMessage(event) {
       updatePlayerDisplayNameStatus(null, { error: payload.manualFactsResult.error || "写入失败" });
     } else {
       dashboard.isPlayerNameEditing = false;
+    }
+  }
+  if (payload.action === "next_match_preparation" && payload.nextMatchPreparationResult) {
+    const result = payload.nextMatchPreparationResult;
+    if (!dashboard.nextMatchPreparationRequestId || payload.requestId === dashboard.nextMatchPreparationRequestId) {
+      dashboard.nextMatchPreparationRequestId = null;
+      if (result.preparation) {
+        dashboard.nextMatchPreparation = result.preparation;
+        dashboard.nextMatchPreparationVersion = null;
+        dashboard.nextMatchPreparationDirty = false;
+        if (dashboard.lastCurrentMatch) {
+          dashboard.lastCurrentMatch.nextMatchPreparation = result.preparation;
+        }
+      }
+      if (result.ok === false) {
+        const status = document.getElementById("next-match-preparation-status");
+        if (status) status.textContent = result.message || "下一局准备未生效。";
+      }
+      renderNextMatchPreparation(dashboard.lastCurrentMatch);
     }
   }
   if (payload.action === "manual_finalize") {

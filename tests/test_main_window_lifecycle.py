@@ -143,6 +143,28 @@ class MainWindowLifecycleTests(unittest.TestCase):
         self.assertEqual(evidence["warehouseSlotEvidence"]["evidenceId"], "crop-a")
         self.assertEqual(decision["warehouseInstanceDecision"]["status"], "PENDING")
 
+    def test_main_bridge_routes_next_match_preparation_and_returns_current_state(self):
+        request = {
+            "action": "next_match_preparation", "requestId": "prep-1",
+            "operation": "SAVE", "settings": {"venueId": "venue-a"},
+        }
+        calls = []
+        preparation = {"status": "PREPARED", "revision": "prep-rev", "baseMatchId": "old-match"}
+        bridge = MainWindowBridge(
+            OverlayVisibilityController(_FakeOverlay()),
+            next_match_preparation_provider=lambda payload: calls.append(payload) or {
+                "ok": True, "status": "PREPARED", "preparation": preparation,
+            },
+            current_match_provider=lambda: {"matchId": "old-match", "nextMatchPreparation": preparation},
+        )
+
+        response = bridge.dispatch(request)
+
+        self.assertEqual(calls, [request])
+        self.assertEqual(response["requestId"], "prep-1")
+        self.assertEqual(response["nextMatchPreparationResult"]["preparation"], preparation)
+        self.assertEqual(response["currentMatch"]["nextMatchPreparation"], preparation)
+
     def test_hide_show_keeps_overlay_and_runtime_identity(self):
         overlay = _FakeOverlay()
         controller = OverlayVisibilityController(overlay)

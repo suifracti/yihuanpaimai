@@ -322,6 +322,7 @@ class MainWindowBridge:
             "save_settlement_review",
             "settlement_item_review_action",
             "manual_facts",
+            "next_match_preparation",
             "manual_next_match",
             "manual_finalize",
             "manual_bootstrap",
@@ -384,6 +385,7 @@ class MainWindowBridge:
         settlement_review_service=None,
         legacy_archive_provider=None,
         manual_facts_provider=None,
+        next_match_preparation_provider=None,
         manual_next_match_provider=None,
         manual_finalize_provider=None,
         manual_bootstrap_provider=None,
@@ -411,6 +413,7 @@ class MainWindowBridge:
         self._settlement_review_service = settlement_review_service
         self._legacy_archive_provider = legacy_archive_provider
         self._manual_facts_provider = manual_facts_provider
+        self._next_match_preparation_provider = next_match_preparation_provider
         self._warehouse_slot_evidence_provider = warehouse_slot_evidence_provider
         self._warehouse_instance_decision_provider = warehouse_instance_decision_provider
         self._manual_next_match_provider = manual_next_match_provider
@@ -968,6 +971,23 @@ class MainWindowBridge:
                 response["manualFactsResult"] = {"ok": False, "error": "NO_MANUAL_FACTS_PROVIDER"}
                 response["manualCommandResult"] = {"status": "ERROR", "reason": "手动修改服务未就绪"}
 
+        if action == "next_match_preparation":
+            if self._next_match_preparation_provider is not None:
+                try:
+                    response["nextMatchPreparationResult"] = self._next_match_preparation_provider(payload)
+                except Exception as exc:
+                    response["nextMatchPreparationResult"] = {
+                        "ok": False,
+                        "status": "ERROR",
+                        "message": f"下一局准备处理失败：{exc}",
+                    }
+            else:
+                response["nextMatchPreparationResult"] = {
+                    "ok": False,
+                    "status": "ERROR",
+                    "message": "下一局准备服务未就绪",
+                }
+
         if action == "manual_next_match":
             if self._manual_next_match_provider is not None:
                 try:
@@ -1486,6 +1506,7 @@ def create_main_window_type(WinForms, Drawing):
             settlement_review_service=None,
             legacy_archive_provider=None,
             manual_facts_provider=None,
+            next_match_preparation_provider=None,
             manual_next_match_provider=None,
             manual_finalize_provider=None,
             manual_bootstrap_provider=None,
@@ -1514,6 +1535,7 @@ def create_main_window_type(WinForms, Drawing):
                 settlement_review_service,
                 legacy_archive_provider,
                 manual_facts_provider=manual_facts_provider,
+                next_match_preparation_provider=next_match_preparation_provider,
                 warehouse_slot_evidence_provider=warehouse_slot_evidence_provider,
                 warehouse_instance_decision_provider=warehouse_instance_decision_provider,
                 manual_next_match_provider=manual_next_match_provider,
