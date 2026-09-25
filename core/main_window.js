@@ -1418,6 +1418,52 @@ function guidebookUnresolvedItemNotes(record) {
   }).filter((note, index, rows) => note && rows.indexOf(note) === index);
 }
 
+function guidebookInstanceReviewMarkup(record) {
+  const native = record?.auctionEvidence?.nativeObservation || {};
+  const slots = [
+    record?.warehouse?.slots,
+    record?.observedFacts?.warehouse?.slots,
+    record?.warehouseSummary?.slots,
+    record?.auctionEvidence?.warehouse?.slots,
+    record?.auctionEvidence?.warehouseEvidence?.slots
+  ].find(rows => Array.isArray(rows) && rows.length) || [];
+  const confirmedCount = slots.filter(item => item?.manualDecision?.action === "CONFIRM_CANDIDATE"
+    || item?.status === "CONFIRMED" || ["CONFIRMED", "EXACT", "MANUAL_CONFIRMED"].includes(String(item?.identityStatus || ""))
+    || ["EXACT_IDENTIFIED", "UNIQUE_IN_CATALOG"].includes(String(item?.evidenceLevel || ""))).length;
+  const slotsMarkup = slots.length
+    ? `<p class="guidebook-identity-note">物理实例：${slots.length} 件 · ${confirmedCount} 件已确认 · ${slots.length - confirmedCount} 件待确认</p>`
+    : `<p class="guidebook-identity-note">物理实例数量：本草稿未记录槽位。</p>`;
+  const decisions = Array.isArray(native.warehouseInstanceDecisions) ? native.warehouseInstanceDecisions : [];
+  const crops = Array.isArray(native.warehouseSlotSources) ? native.warehouseSlotSources : [];
+  const actionLabels = {
+    CONFIRM_CANDIDATE: "确认候选",
+    REJECT_CANDIDATE: "拒绝候选",
+    RESTORE_AUTOMATIC: "恢复自动处理"
+  };
+  const decisionsMarkup = decisions.map(decision => {
+    const action = actionLabels[decision?.action] || "未知实例决定";
+    const anchor = decision?.instanceAnchor || {};
+    const position = anchor.row != null && anchor.col != null
+      && Number.isFinite(Number(anchor.row)) && Number.isFinite(Number(anchor.col))
+      ? `第 ${Number(anchor.row) + 1} 行 · 第 ${Number(anchor.col) + 1} 列`
+      : "物理位置未记录";
+    const crop = crops.find(item => item?.evidenceId === decision?.activityEvidenceId);
+    const frame = crop?.frameSequence == null ? "活动帧序号未记录" : `活动帧 ${crop.frameSequence}`;
+    const cropNote = decision?.activityEvidenceId
+      ? (crop ? `裁图已关联 · ${frame} · ${decision.activityEvidenceId}` : `裁图引用未找到 · ${decision.activityEvidenceId}`)
+      : "未记录活动裁图引用";
+    const source = decision?.source === "HUMAN_INSTANCE_REVIEW" ? "人工实例复核"
+      : decision?.source ? String(decision.source) : "决定来源未记录";
+    const candidate = decision?.catalogId ? ` · 目录 ID ${escapeHtml(decision.catalogId)}` : "";
+    const session = decision?.sessionId ? ` · 会话 ${decision.sessionId}` : "";
+    return `<div class="guidebook-observation"><strong>每个实例最近保存的决定：${action}${candidate}</strong><p>${escapeHtml(source)} · ${escapeHtml(position)}${escapeHtml(session)}</p><small class="guidebook-frame-provenance">${escapeHtml(cropNote)}</small></div>`;
+  }).join("");
+  const auditMarkup = decisionsMarkup
+    ? `<div class="guidebook-instance-decisions"><strong>实例决定记录</strong>${decisionsMarkup}</div>`
+    : `<p class="guidebook-identity-note">没有保存实例级人工决定记录。</p>`;
+  return `${slotsMarkup}${auditMarkup}`;
+}
+
 function guidebookObservationValue(field, value) {
   if (field === "goldAvg" || field === "purpleAvg") return formatCurrency(value);
   return String(value);
@@ -1501,10 +1547,11 @@ function renderGuidebookRecords() {
       }).join(" ")
       : `<span class="guidebook-identity-note">未保存可关联到正式目录的身份确认项。</span>`;
     const unresolvedMarkup = unresolvedItemNotes.map(note => `<p class="guidebook-identity-note">${escapeHtml(note)}</p>`).join("");
+    const instanceReviewMarkup = guidebookInstanceReviewMarkup(record);
     const namesMarkup = knownNames.length
       ? `<p class="guidebook-identity-note">局内名称字段（未附图鉴身份确认）：${knownNames.map(item => `${GUIDEBOOK_RARITY_LABELS[item.rarity]}色 ${escapeHtml(item.value)}`).join("；")}</p>`
       : "";
-    return `<article class="guidebook-record-card"><div class="guidebook-record-top"><div><h3>${escapeHtml(title)}</h3><p class="guidebook-record-meta">${escapeHtml(record.playedAt || record.updatedAt || "时间未记录")} · ${escapeHtml(record.id || "未知局")}</p></div><span class="tag">live-trial DRAFT</span></div><div class="guidebook-observation-list">${observationMarkup}</div><div class="guidebook-identity-note">藏品身份：${identityMarkup}</div>${unresolvedMarkup}${namesMarkup}<p class="guidebook-record-meta">保存原图：${frames.length} 张 · 隔离草稿，不进入正式 History</p><button type="button" class="btn-review-action" data-guidebook-original="${index}" data-record-id="${escapeHtml(record.id || "")}">查看本局保存原图</button><div class="guidebook-evidence" id="guidebook-source-${index}" data-record-id="" data-source="live-trial"></div></article>`;
+    return `<article class="guidebook-record-card"><div class="guidebook-record-top"><div><h3>${escapeHtml(title)}</h3><p class="guidebook-record-meta">${escapeHtml(record.playedAt || record.updatedAt || "时间未记录")} · ${escapeHtml(record.id || "未知局")}</p></div><span class="tag">live-trial DRAFT</span></div><div class="guidebook-observation-list">${observationMarkup}</div><div class="guidebook-identity-note">藏品身份：${identityMarkup}</div>${unresolvedMarkup}${instanceReviewMarkup}${namesMarkup}<p class="guidebook-record-meta">保存原图：${frames.length} 张 · 隔离草稿，不进入正式 History</p><button type="button" class="btn-review-action" data-guidebook-original="${index}" data-record-id="${escapeHtml(record.id || "")}">查看本局保存原图</button><div class="guidebook-evidence" id="guidebook-source-${index}" data-record-id="" data-source="live-trial"></div></article>`;
   }).join("");
   list.querySelectorAll("[data-guidebook-original]").forEach(button => {
     button.addEventListener("click", () => {

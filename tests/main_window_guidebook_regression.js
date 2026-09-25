@@ -135,11 +135,15 @@ vm.runInContext(`dashboard.lastMainViewState = { history: { liveTrialDrafts: [
   { id: "trial-a", lifecycleStatus: "DRAFT", dataOrigin: "live-trial", playedAt: "2026-09-23T12:00:00+08:00", updatedAt: "t1", factsRevision: 4,
     environment: { venueName: "珊瑚场" },
     intelCardEvidence: { observations: [{ field: "q", value: 17, status: "OBSERVED", round: 3, rawText: "本局内紫金红合计17件", frameSequence: 10, observationSessionId: "session-a" }] },
-    warehouse: { slots: [{ rarity: "gold", status: "CANDIDATE", candidates: [{ name: "待确认藏品", catalogId: "candidate-1", confidence: 0.99 }] }] },
+    warehouse: { slots: [{ row: 3, col: 0, w: 2, h: 2, rarity: "gold", status: "CANDIDATE", candidates: [{ name: "待确认藏品", catalogId: "candidate-1", confidence: 0.99 }] }] },
     auctionEvidence: { nativeObservation: { observationSessionId: "session-a", sourceFrames: [
       { evidenceId: "evidence-1", frameSequence: 9, observationSessionId: "session-a", capturedAt: "t9", round: 2 },
       { evidenceId: "evidence-2", frameSequence: 10, observationSessionId: "session-a", capturedAt: "t10", round: 3 },
       { evidenceId: "evidence-3", frameSequence: 11, observationSessionId: "session-a", capturedAt: "t11", round: 4 }
+    ], warehouseSlotSources: [
+      { evidenceId: "activity-crop-a", frameSequence: 10, row: 3, col: 0 }
+    ], warehouseInstanceDecisions: [
+      { action: "RESTORE_AUTOMATIC", catalogId: null, source: "HUMAN_INSTANCE_REVIEW", matchId: "trial-a", sessionId: "session-a", instanceAnchor: { row: 3, col: 0, w: 2, h: 2, rarity: "gold" }, activityEvidenceId: "activity-crop-a" }
     ] } } },
   { id: "trial-c", lifecycleStatus: "DRAFT", dataOrigin: "live-trial", q: 5, updatedAt: "t0", intelCardEvidence: { observations: [] } },
   { id: "trial-confirmed", lifecycleStatus: "DRAFT", dataOrigin: "live-trial", updatedAt: "t2",
@@ -195,6 +199,10 @@ assert.doesNotMatch(list.innerHTML, /formal-b/);
 assert.match(list.innerHTML, /live-trial DRAFT/);
 assert.match(list.innerHTML, /候选身份（待确认）：待确认藏品/);
 assert.doesNotMatch(list.innerHTML, /已确认：待确认藏品/);
+assert.match(list.innerHTML, /物理实例：1 件 · 0 件已确认 · 1 件待确认/);
+assert.match(list.innerHTML, /每个实例最近保存的决定：恢复自动处理/);
+assert.match(list.innerHTML, /人工实例复核 · 第 4 行 · 第 1 列/);
+assert.match(list.innerHTML, /裁图已关联 · 活动帧 10 · activity-crop-a/);
 assert.match(list.innerHTML, /已确认：独立目录条目/);
 list.querySelectorAll("[data-guidebook-confirmed-item]")[0].click();
 assert.equal(get("guidebook-catalog-panel").hidden, false);
