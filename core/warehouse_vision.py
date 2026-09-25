@@ -292,6 +292,78 @@ class WarehouseTemplateMatcher:
                 "catalogId": str(direct_item.get("Id") or direct_item.get("catalogId") or ""),
             }
 
+        # Whole-cell pixel correlation is sensitive to presentation overlays
+        # such as the settlement grid drawn across an otherwise visible icon.
+        # Reuse the existing geometric visual evidence matcher as a second,
+        # independent gate over verified real-match references only. Keep its
+        # ranking separate from the raw-pixel scores so the two score scales
+        # are never mixed when applying the existing confidence and margin
+        # thresholds. This evidence score is not a calibrated probability.
+        # Derived catalog references remain candidate-only below.
+        feature_ranked = []
+        gameplay_templates = getattr(self, "gameplay_templates_by_id", {})
+        if gameplay_templates:
+            try:
+                from visual_catalog import feature_match_evidence
+            except Exception:
+                feature_match_evidence = None
+            if feature_match_evidence is not None:
+                roi_h, roi_w = roi_img.shape[:2]
+                roi_aspect = roi_w / max(1, roi_h)
+                for index, candidate in enumerate(candidates):
+                    catalog_id = str(candidate.get("Id") or candidate.get("catalogId") or "")
+                    best_score = 0.0
+                    best_source = "NONE"
+                    best_reference_id = None
+                    best_detail = None
+                    for reference in gameplay_templates.get(catalog_id, []):
+                        template = reference.get("image") if isinstance(reference, dict) else None
+                        metadata = reference.get("metadata") if isinstance(reference, dict) else None
+                        if template is None or not isinstance(metadata, dict):
+                            continue
+                        ref_width = int(metadata.get("widthCells") or 0)
+                        ref_height = int(metadata.get("heightCells") or 0)
+                        if ref_width <= 0 or ref_height <= 0:
+                            continue
+                        ref_aspect = ref_width / ref_height
+                        if abs(np.log(max(roi_aspect, 1e-8) / ref_aspect)) > 0.18:
+                            continue
+                        try:
+                            detail = feature_match_evidence(roi_img, template)
+                            score = float(detail.get("score") or 0.0)
+                        except Exception:
+                            continue
+                        if score > best_score:
+                            best_score = score
+                            best_source = (
+                                "VERIFIED_SETTLEMENT_REFERENCE"
+                                if str(metadata.get("sourceSceneKind") or "").upper() == "SETTLEMENT"
+                                else "VERIFIED_GAMEPLAY_REFERENCE"
+                            )
+                            best_reference_id = metadata.get("referenceId")
+                            best_detail = detail
+                    if best_score > 0:
+                        feature_ranked.append((best_score, index, candidate, best_source,
+                                               best_reference_id, best_detail))
+
+        feature_ranked.sort(key=lambda row: (-row[0], row[1]))
+        if feature_ranked:
+            feature_top = feature_ranked[0]
+            feature_second = feature_ranked[1][0] if len(feature_ranked) > 1 else 0.0
+            feature_margin = feature_top[0] - feature_second
+            if (feature_top[0] >= config.MATCH_CONFIDENCE_THRESHOLD
+                    and feature_margin >= config.MATCH_MARGIN_THRESHOLD):
+                item = feature_top[2]
+                return {**item, "_matchReferenceKind": "DIRECT"}, feature_top[0], feature_margin, {
+                    "referenceKind": "DIRECT",
+                    "referenceSource": feature_top[3],
+                    "accepted": True,
+                    "catalogId": str(item.get("Id") or item.get("catalogId") or ""),
+                    "matchingMethod": "RECIPROCAL_FEATURE_GEOMETRY",
+                    "referenceId": feature_top[4],
+                    "visualEvidence": feature_top[5],
+                }
+
         combined_value = lambda row: max(row[0], row[1]) if row[1] is not None else row[0]
         scores.sort(key=lambda row: (-combined_value(row), row[2]))
         if not scores:

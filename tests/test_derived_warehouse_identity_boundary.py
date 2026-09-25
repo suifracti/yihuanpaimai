@@ -187,6 +187,50 @@ class DerivedWarehouseIdentityBoundaryTests(unittest.TestCase):
         self.assertTrue(evidence["accepted"])
         self.assertEqual(evidence["referenceSource"], "VERIFIED_SETTLEMENT_REFERENCE")
 
+    def test_feature_evidence_resolves_low_pixel_score_across_matches_with_lookalike(self):
+        query_path = ROOT / "assets/items/video_ground_truth_reference_134043_visible.json"
+        query_group = json.loads(query_path.read_text(encoding="utf-8"))
+        query_row = next(row for row in query_group["items"] if row["catalogId"] == "image9-1-2")
+        reference_path = ROOT / "assets/items/video_ground_truth_reference_134436_match2_visible.json"
+        reference_group = json.loads(reference_path.read_text(encoding="utf-8"))
+        reference_row = next(row for row in reference_group["items"] if row["catalogId"] == query_row["catalogId"])
+        roi = cv2.imdecode(np.fromfile(str(ROOT / query_row["localCropPath"]), np.uint8), cv2.IMREAD_COLOR)
+
+        matcher = WarehouseTemplateMatcher()
+        references = load_verified_warehouse_gameplay_templates(root=ROOT)
+        query_reference = next(
+            item for group in references.values() for item in group
+            if item["metadata"]["referenceId"] == query_row["referenceId"]
+        )
+        query_match_id = query_reference["metadata"]["groupId"]
+        matcher.templates = {}
+        matcher.derived_templates_by_id = {}
+        matcher.gameplay_templates_by_id = {
+            catalog_id: [item for item in group if item["metadata"].get("groupId") != query_match_id]
+            for catalog_id, group in references.items()
+        }
+        geometry = query_row["gridBoundingBox"]
+        candidates = matcher.get_candidates(query_row["quality"], geometry["width"], geometry["height"])
+        truth = next(item for item in candidates if item["Id"] == query_row["catalogId"])
+        lookalike_id = "image9-0-2"
+        lookalike = next(item for item in candidates if item["Id"] == lookalike_id)
+        raw_score, _ = matcher.score_direct_reference(roi, truth)
+        lookalike_raw_score, _ = matcher.score_direct_reference(roi, lookalike)
+
+        best, score, margin, evidence = matcher.match_candidate_evidence(
+            roi, candidates, WarehouseVisionConfig()
+        )
+
+        self.assertEqual(reference_group["metadata"]["sourceSceneKind"], "SETTLEMENT")
+        self.assertLess(raw_score, WarehouseVisionConfig.MATCH_CONFIDENCE_THRESHOLD)
+        self.assertLess(lookalike_raw_score, WarehouseVisionConfig.MATCH_CONFIDENCE_THRESHOLD)
+        self.assertEqual(best["Id"], query_row["catalogId"])
+        self.assertGreaterEqual(score, WarehouseVisionConfig.MATCH_CONFIDENCE_THRESHOLD)
+        self.assertGreaterEqual(margin, WarehouseVisionConfig.MATCH_MARGIN_THRESHOLD)
+        self.assertTrue(evidence["accepted"])
+        self.assertEqual(evidence["referenceKind"], "DIRECT")
+        self.assertEqual(evidence["matchingMethod"], "RECIPROCAL_FEATURE_GEOMETRY")
+
     def test_direct_exact_result_keeps_legacy_priority_over_derived_image(self):
         roi = np.random.default_rng(41).integers(0, 256, (36, 36, 3), dtype=np.uint8)
         matcher = WarehouseTemplateMatcher.__new__(WarehouseTemplateMatcher)
