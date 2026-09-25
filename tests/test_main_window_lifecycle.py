@@ -120,6 +120,29 @@ class MainWindowLifecycleTests(unittest.TestCase):
         self.assertEqual(response["snapshotResult"]["type"], "snapshot_assist_result")
         self.assertFalse(response["snapshotResult"]["ok"])
 
+    def test_main_bridge_routes_activity_review_and_returns_worker_decision_status(self):
+        evidence_payload = {"action": "request_warehouse_slot_evidence", "requestId": "e-1",
+                            "matchId": "live-a", "activityEvidenceId": "crop-a"}
+        decision_payload = {"action": "warehouse_instance_decision", "requestId": "d-1",
+                            "matchId": "live-a", "decision": "CONFIRM_CANDIDATE"}
+        calls = []
+        bridge = MainWindowBridge(
+            OverlayVisibilityController(_FakeOverlay()),
+            warehouse_slot_evidence_provider=lambda payload: calls.append(("evidence", payload)) or {
+                "ok": True, "sourceAvailable": True, "evidenceId": "crop-a",
+            },
+            warehouse_instance_decision_provider=lambda payload: calls.append(("decision", payload)) or {
+                "status": "PENDING", "commandId": "native-control-14",
+            },
+        )
+
+        evidence = bridge.dispatch(evidence_payload)
+        decision = bridge.dispatch(decision_payload)
+
+        self.assertEqual(calls, [("evidence", evidence_payload), ("decision", decision_payload)])
+        self.assertEqual(evidence["warehouseSlotEvidence"]["evidenceId"], "crop-a")
+        self.assertEqual(decision["warehouseInstanceDecision"]["status"], "PENDING")
+
     def test_hide_show_keeps_overlay_and_runtime_identity(self):
         overlay = _FakeOverlay()
         controller = OverlayVisibilityController(overlay)
@@ -303,7 +326,7 @@ class MainWindowLifecycleTests(unittest.TestCase):
         self.assertNotIn("hudWsClient", javascript)
         self.assertEqual(
             MainWindowBridge.ALLOWED_ACTIONS,
-            frozenset(("toggle_overlay", "get_overlay_visibility", "toggle_main_pin", "set_main_pin", "request_app_status", "delete_history_record", "delete_history_records", "request_legacy_archive", "select_legacy_archive_source", "request_settlement_review", "import_settlement_screenshot", "replace_settlement_screenshot", "delete_settlement_screenshot", "rerun_settlement_recognition", "save_settlement_review", "settlement_item_review_action", "manual_facts", "manual_next_match", "manual_finalize", "manual_bootstrap", "start_live_vision", "request_original_screenshots", "delete_original_screenshot", "restore_original_screenshot", "export_reviewed_labels", "triggered_snapshot", "save_settlement_screenshot", "save_game_screenshot", "start_warehouse_capture", "prepare_warehouse_capture", "confirm_warehouse_capture", "stop_warehouse_capture", "warehouse_identity_review", "export_history_records", "import_history_bundle")),
+            frozenset(("toggle_overlay", "get_overlay_visibility", "toggle_main_pin", "set_main_pin", "request_app_status", "delete_history_record", "delete_history_records", "request_legacy_archive", "select_legacy_archive_source", "request_settlement_review", "import_settlement_screenshot", "replace_settlement_screenshot", "delete_settlement_screenshot", "rerun_settlement_recognition", "save_settlement_review", "settlement_item_review_action", "manual_facts", "manual_next_match", "manual_finalize", "manual_bootstrap", "start_live_vision", "request_original_screenshots", "delete_original_screenshot", "restore_original_screenshot", "export_reviewed_labels", "triggered_snapshot", "save_settlement_screenshot", "save_game_screenshot", "start_warehouse_capture", "prepare_warehouse_capture", "confirm_warehouse_capture", "stop_warehouse_capture", "request_warehouse_slot_evidence", "warehouse_instance_decision", "warehouse_identity_review", "export_history_records", "import_history_bundle")),
         )
 
     def test_mascot_presentation_does_not_expand_native_bridge_authority(self):
@@ -315,7 +338,7 @@ class MainWindowLifecycleTests(unittest.TestCase):
         self.assertNotIn('postNative("set_mascot_state")', javascript)
         self.assertEqual(
             MainWindowBridge.ALLOWED_ACTIONS,
-            frozenset(("toggle_overlay", "get_overlay_visibility", "toggle_main_pin", "set_main_pin", "request_app_status", "delete_history_record", "delete_history_records", "request_legacy_archive", "select_legacy_archive_source", "request_settlement_review", "import_settlement_screenshot", "replace_settlement_screenshot", "delete_settlement_screenshot", "rerun_settlement_recognition", "save_settlement_review", "settlement_item_review_action", "manual_facts", "manual_next_match", "manual_finalize", "manual_bootstrap", "start_live_vision", "request_original_screenshots", "delete_original_screenshot", "restore_original_screenshot", "export_reviewed_labels", "triggered_snapshot", "save_settlement_screenshot", "save_game_screenshot", "start_warehouse_capture", "prepare_warehouse_capture", "confirm_warehouse_capture", "stop_warehouse_capture", "warehouse_identity_review", "export_history_records", "import_history_bundle")),
+            frozenset(("toggle_overlay", "get_overlay_visibility", "toggle_main_pin", "set_main_pin", "request_app_status", "delete_history_record", "delete_history_records", "request_legacy_archive", "select_legacy_archive_source", "request_settlement_review", "import_settlement_screenshot", "replace_settlement_screenshot", "delete_settlement_screenshot", "rerun_settlement_recognition", "save_settlement_review", "settlement_item_review_action", "manual_facts", "manual_next_match", "manual_finalize", "manual_bootstrap", "start_live_vision", "request_original_screenshots", "delete_original_screenshot", "restore_original_screenshot", "export_reviewed_labels", "triggered_snapshot", "save_settlement_screenshot", "save_game_screenshot", "start_warehouse_capture", "prepare_warehouse_capture", "confirm_warehouse_capture", "stop_warehouse_capture", "request_warehouse_slot_evidence", "warehouse_instance_decision", "warehouse_identity_review", "export_history_records", "import_history_bundle")),
         )
 
 

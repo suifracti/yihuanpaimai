@@ -55,6 +55,159 @@ class TestLiveShadowPresentationPayloadV1(unittest.TestCase):
             _LIVE_VISION_MATCH_ID=match_id,
         )
 
+    def test_warehouse_instance_command_carries_host_target_and_rejects_replaced_match(self):
+        class _Bridge:
+            running = True
+
+            def __init__(self):
+                self.commands = []
+
+            def send_control(self, message):
+                self.commands.append(message)
+                return True
+
+        class _DraftStore:
+            @staticmethod
+            def read_source_image_descriptor(_descriptor):
+                return {"data": b"activity-crop"}
+
+        target = self._target()
+        target_instance = app_main._native_target_instance(target)
+        slot = {
+            "row": 2, "col": 1, "w": 1, "h": 2, "rarity": "purple",
+            "identityStatus": "CANDIDATE",
+            "candidates": [{"catalogId": "candidate-one", "name": "候选一"}],
+            "activityEvidence": {
+                "evidenceId": "activity-evidence-one", "sessionId": "decision-session",
+                "generationId": 14, "matchId": "decision-match",
+            },
+            "instanceDecisionToken": "decision-token-one",
+            "instanceDecisionGeneration": 3,
+        }
+        match = CurrentMatch()
+        match.id = "decision-match"
+        match.facts["warehouse"] = {"slots": [slot]}
+        payload = {
+            "scene": "IN_AUCTION", "inAuction": True, "observationStatus": "FRAME",
+            "nativeInvalidated": False, "observationSessionId": "decision-session",
+            "matchId": match.id, "round": 4, "target": target,
+        }
+        bridge = _Bridge()
+        with mock.patch.multiple(
+            app_main,
+            CURRENT_MATCH=match,
+            LATEST_PAYLOAD=payload,
+            _NATIVE_EXPECTED_SESSION="decision-session",
+            _NATIVE_OBSERVATION_SESSION="decision-session",
+            _NATIVE_INSTANCE_DECISION_GENERATION=8,
+            _NATIVE_INSTANCE_DECISION_SCOPE=None,
+            _NATIVE_CONTROL_BINDINGS={},
+            _LIVE_CONTROL_REVISION=30,
+            NATIVE_OBSERVATION_BRIDGE=bridge,
+            NATIVE_TRIAL_DRAFT_STORE=_DraftStore(),
+            _NATIVE_TRIAL_WAREHOUSE_SOURCES={
+                "activity-evidence-one": {
+                    "evidenceId": "activity-evidence-one", "matchId": "decision-match",
+                    "sessionId": "decision-session", "generationId": 14,
+                    "sourceKind": "native_wgc", "box": [10, 20, 30, 40],
+                }
+            },
+            _WAREHOUSE_REVIEW_GUIDEBOOK_ITEMS={
+                "candidate-one": {"sourceImages": [{"available": True, "uri": "file:///catalog.png"}]}
+            },
+        ), mock.patch.object(app_main, "native_observation_enabled", return_value=True):
+            scope = app_main._native_instance_decision_scope_key(payload)
+            self.assertIsNotNone(scope)
+            app_main._NATIVE_INSTANCE_DECISION_SCOPE = scope
+            evidence = app_main.handle_request_warehouse_slot_evidence({
+                "matchId": match.id, "sessionId": "decision-session", "round": 4,
+                "targetInstance": target, "mainDecisionGeneration": 8,
+                "instanceAnchor": {key: slot[key] for key in ("row", "col", "w", "h", "rarity")},
+                "activityEvidenceId": "activity-evidence-one",
+                "instanceDecisionToken": "decision-token-one", "candidateIds": ["candidate-one"],
+            })
+            self.assertTrue(evidence["ok"])
+            self.assertTrue(evidence["decisionAllowed"])
+            self.assertEqual(evidence["candidates"][0]["sourceImages"][0]["uri"], "file:///catalog.png")
+            result = app_main.handle_warehouse_instance_decision({
+                "sessionId": "decision-session", "matchId": match.id, "round": 4,
+                "targetInstance": target, "mainDecisionGeneration": 8,
+                "instanceAnchor": {key: slot[key] for key in ("row", "col", "w", "h", "rarity")},
+                "activityEvidenceId": "activity-evidence-one",
+                "instanceDecisionToken": "decision-token-one", "expectedGenerationId": 14,
+                "expectedInvalidationGeneration": 3,
+                "decision": "CONFIRM_CANDIDATE", "catalogId": "candidate-one",
+            })
+            self.assertEqual(result["status"], "PENDING", result)
+            self.assertEqual(bridge.commands[0]["command"]["expectedTargetInstance"], target_instance)
+
+            command = bridge.commands[0]["command"]
+            decision = {
+                "action": "CONFIRM_CANDIDATE", "catalogId": "candidate-one",
+                "name": "候选一", "source": "HUMAN_INSTANCE_REVIEW",
+                "manualIdentity": {"catalogId": "candidate-one", "name": "候选一", "rarity": "purple"},
+            }
+            result_data = {
+                "echo": "warehouse.instance_decision", "status": "APPLIED",
+                "sessionId": "decision-session", "matchId": "decision-match", "round": 4,
+                "instanceDecisionToken": "decision-token-one",
+                "activityEvidenceId": "activity-evidence-one",
+                "instanceAnchor": {key: slot[key] for key in ("row", "col", "w", "h", "rarity")},
+                "decision": decision,
+                "warehouse": {"slots": [{**slot, "manualDecision": decision}]},
+            }
+            with mock.patch.multiple(
+                app_main,
+                _native_invalidate_solver_locked=mock.DEFAULT,
+                schedule_draft_save=mock.DEFAULT,
+                draft_write_status=mock.DEFAULT,
+                get_current_match_presentation_summary=mock.DEFAULT,
+                build_manual_alpha_payload=mock.DEFAULT,
+                publish_manual_payload=mock.DEFAULT,
+                _native_post_main_status=mock.DEFAULT,
+                WS_EVENT_LOOP=None,
+            ) as patched:
+                patched["_native_invalidate_solver_locked"].return_value = None
+                patched["schedule_draft_save"].return_value = None
+                patched["draft_write_status"].return_value = "SAVED"
+                patched["get_current_match_presentation_summary"].return_value = {
+                    "matchId": "decision-match", "warehouse": result_data["warehouse"],
+                }
+                patched["build_manual_alpha_payload"].return_value = {}
+                patched["publish_manual_payload"].return_value = None
+                patched["_native_post_main_status"].return_value = None
+                app_main._native_observation_event({
+                    "type": "native_observation", "schemaVersion": "native-observation-v1",
+                    "status": "CONTROL", "observationSessionId": "decision-session",
+                    "sourceKind": "native_wgc", "inputActions": False,
+                    "formalHistoryWriter": False,
+                    "details": {
+                        "controlRevision": command["revision"],
+                        "commandId": f"native-control-{command['revision']}",
+                        "commandStatus": "ACK",
+                        "commandResult": {"status": "ACK", "resultData": result_data},
+                    },
+                })
+            self.assertEqual(app_main.LATEST_PAYLOAD["warehouseInstanceDecisionResult"]["status"], "ACK")
+            self.assertEqual(
+                match.facts["warehouse"]["slots"][0]["manualDecision"]["source"],
+                "HUMAN_INSTANCE_REVIEW",
+            )
+
+            app_main._NATIVE_CONTROL_BINDINGS.clear()
+            match.id = "next-match"
+            rejected = app_main.handle_warehouse_instance_decision({
+                "sessionId": "decision-session", "matchId": "decision-match", "round": 4,
+                "targetInstance": target, "mainDecisionGeneration": 8,
+                "instanceAnchor": {key: slot[key] for key in ("row", "col", "w", "h", "rarity")},
+                "activityEvidenceId": "activity-evidence-one",
+                "instanceDecisionToken": "decision-token-one", "expectedGenerationId": 14,
+                "expectedInvalidationGeneration": 3,
+                "decision": "CONFIRM_CANDIDATE", "catalogId": "candidate-one",
+            })
+            self.assertEqual(rejected["status"], "REJECTED")
+            self.assertEqual(len(bridge.commands), 1)
+
     def _native_frame(self, match, *, session, sequence, match_id, facts_revision,
                       round_no, target, leader_bid=None, venue_id=None):
         snapshot = match.snapshot()

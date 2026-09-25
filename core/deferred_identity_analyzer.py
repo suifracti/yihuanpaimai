@@ -143,6 +143,10 @@ class DeferredIdentityAnalyzer:
                     payload = settlement.parse_settlement_ledger(frame, actual_total=actual_total)
                 else:
                     continue
-                self._publish({**task, **payload})
+                # The image belongs to this bounded result until the business
+                # worker validates its scope. Consumers may derive small,
+                # source-linked crops from this safe copy; nobody may revisit
+                # the released MMF slot.
+                self._publish({**task, **payload, "sourceFrameBgr": frame})
             except Exception as exc:
                 self._publish({**task, "error": f"{type(exc).__name__}: {exc}"})

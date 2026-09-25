@@ -53,6 +53,11 @@ class FakeElement {
         : selector.includes("confirmed") ? button.dataset.guidebookConfirmedItem !== undefined
           : button.dataset.guidebookItemIndex !== undefined);
     }
+    const dataAttribute = selector.match(/^\[data-([\w-]+)\]$/);
+    if (dataAttribute) {
+      const key = dataAttribute[1].replace(/-([a-z])/g, (_m, ch) => ch.toUpperCase());
+      return this.buttons.filter(button => Object.hasOwn(button.dataset, key));
+    }
     return [];
   }
   addEventListener(type, handler) { this.listeners[type] = handler; }
@@ -62,7 +67,11 @@ class FakeElement {
   focus() {}
   matches() { return false; }
   closest() { return null; }
-  click() { this.listeners.click?.({ target: this }); }
+  click() {
+    if (this.disabled) return;
+    this.listeners.click?.({ target: this });
+    this.onclick?.({ target: this });
+  }
   appendChild(child) { this.children.push(child); return child; }
   replaceChildren(...children) { this.children = children; }
 }
@@ -213,6 +222,106 @@ assert.equal(get("page-guidebook").hidden, false);
 assert.match(get("guidebook-item-detail").innerHTML, /独立目录条目/);
 assert.match(get("guidebook-item-detail").innerHTML, /candidate-source\.png/);
 assert.equal(vm.runInContext("JSON.stringify(dashboard.matchState)", sandbox), liveMatchBeforeCandidateBrowse);
+
+const reviewMatch = {
+  matchId: "live-review", observationSessionId: "session-review", observationRound: 5,
+  observationTarget: { pid: 42, processStartTime: "start-review" },
+  nativeInstanceDecisionGeneration: 12, warehouseDecisionEligible: true,
+  warehouse: { slots: [] }
+};
+const reviewSlots = [0, 1].map(col => ({
+  row: 2, col, w: 1, h: 2, rarity: "purple", identityStatus: "CANDIDATE",
+  candidates: [
+    { catalogId: "candidate-one", name: "同名物品" },
+    { catalogId: "candidate-two", name: "相似候选" }
+  ],
+  activityEvidence: {
+    evidenceId: `activity-${col}`, sourceKind: "offline-replay", sessionId: "session-review",
+    generationId: 31, matchId: "live-review", frameSequence: 81 + col,
+    instanceAnchor: { row: 2, col, w: 1, h: 2, rarity: "purple" }
+  },
+  instanceDecisionToken: `decision-token-${col}`, instanceDecisionGeneration: 4
+}));
+sandbox.renderWarehouseSlots({ slots: reviewSlots }, reviewMatch);
+const reviewButtons = get("match-wh-slots-list").querySelectorAll("[data-wh-open-review]");
+assert.equal(reviewButtons.length, 2);
+reviewButtons[1].click();
+const evidenceRequest = sent.at(-1);
+assert.equal(evidenceRequest.action, "request_warehouse_slot_evidence");
+assert.equal(evidenceRequest.matchId, "live-review");
+assert.equal(evidenceRequest.instanceAnchor.col, 1, "same-name items must open the selected physical slot");
+assert.equal(evidenceRequest.activityEvidenceId, "activity-1");
+sandbox.handleNativeMessage({ data: {
+  type: "app_status", action: "request_warehouse_slot_evidence", requestId: evidenceRequest.requestId,
+  warehouseSlotEvidence: {
+    ok: true, decisionAllowed: true, identityStatus: "CANDIDATE",
+    source: { sourceKind: "offline-replay", matchId: "live-review", sessionId: "session-review", frameSequence: 82, box: [40, 50, 20, 35] },
+    dataUrl: "data:image/png;base64,ACTIVITYCROP",
+    candidates: [
+      { catalogId: "candidate-one", name: "同名物品", sourceImages: [{ available: true, uri: "file:///catalog-one.png" }] },
+      { catalogId: "candidate-two", name: "相似候选", sourceImages: [{ available: true, uri: "file:///catalog-two.png" }] }
+    ]
+  }
+} });
+assert.equal(get("match-wh-instance-review-image").src, "data:image/png;base64,ACTIVITYCROP");
+assert.match(get("match-wh-instance-review-meta").textContent, /离线回放活动帧裁图/);
+assert.match(get("match-wh-instance-review-candidates").innerHTML, /catalog-one\.png/);
+const candidateChoices = get("match-wh-instance-review-candidates").querySelectorAll("[data-wh-review-select]");
+candidateChoices[1].click();
+assert.equal(get("match-wh-instance-confirm").disabled, false);
+get("match-wh-instance-confirm").click();
+const decisionRequest = sent.at(-1);
+assert.equal(decisionRequest.action, "warehouse_instance_decision");
+assert.equal(decisionRequest.instanceAnchor.col, 1);
+assert.equal(decisionRequest.activityEvidenceId, "activity-1");
+assert.equal(decisionRequest.catalogId, "candidate-two");
+assert.equal(get("match-wh-instance-review-status").textContent, "等待观察 worker 回执；修改尚未显示为生效。");
+assert.equal(get("match-wh-instance-review-close").disabled, true);
+reviewButtons[0].click();
+assert.equal(vm.runInContext("dashboard.warehouseInstanceReview.slot.col", sandbox), 1,
+  "a pending decision stays attached to its physical instance until its receipt arrives");
+sandbox.handleNativeMessage({ data: {
+  type: "app_status", action: "warehouse_instance_decision", requestId: decisionRequest.requestId,
+  warehouseInstanceDecision: { status: "PENDING", commandId: "native-control-77" }
+} });
+const staleReceiptMatch = {
+  ...reviewMatch, warehouseDecisionEligible: true,
+  warehouseInstanceDecisionResult: {
+    commandId: "native-control-old", status: "ACK", matchId: "live-review",
+    activityEvidenceId: "activity-1", instanceDecisionToken: "decision-token-1",
+    decision: { action: "CONFIRM_CANDIDATE", catalogId: "candidate-one" }
+  }
+};
+sandbox.syncWarehouseInstanceReviewFromMatch(staleReceiptMatch);
+assert.equal(vm.runInContext("dashboard.warehouseInstanceReview.busy", sandbox), true);
+assert.match(get("match-wh-instance-review-status").textContent, /尚未显示为生效/);
+const acceptedReviewSlots = [{ ...reviewSlots[1], manualDecision: { action: "CONFIRM_CANDIDATE", catalogId: "candidate-two", name: "相似候选" } }];
+sandbox.syncWarehouseInstanceReviewFromMatch({
+  ...reviewMatch,
+  warehouse: { slots: acceptedReviewSlots },
+  warehouseInstanceDecisionResult: {
+    commandId: "native-control-77", status: "ACK", matchId: "live-review",
+    activityEvidenceId: "activity-1", instanceDecisionToken: "decision-token-1",
+    decision: { action: "CONFIRM_CANDIDATE", catalogId: "candidate-two" }
+  }
+});
+assert.equal(vm.runInContext("dashboard.warehouseInstanceReview.busy", sandbox), false);
+assert.match(get("match-wh-instance-review-status").textContent, /worker 已确认这一个实例/);
+sandbox.renderWarehouseSlots({ slots: acceptedReviewSlots }, reviewMatch);
+assert.match(get("match-wh-slots-list").innerHTML, /人工确认 · 本实例/);
+get("match-wh-instance-reject").click();
+const rejectRequest = sent.at(-1);
+assert.equal(rejectRequest.decision, "REJECT_CANDIDATE");
+sandbox.handleNativeMessage({ data: {
+  type: "app_status", action: "warehouse_instance_decision", requestId: rejectRequest.requestId,
+  warehouseInstanceDecision: { status: "REJECTED", reason: "STALE_MATCH_OR_SESSION" }
+} });
+assert.match(get("match-wh-instance-review-status").textContent, /未生效/);
+sandbox.syncWarehouseInstanceReviewFromMatch({
+  ...reviewMatch, matchId: "next-match", warehouseDecisionEligible: false,
+  warehouseInstanceDecisionResult: null
+});
+assert.equal(get("match-wh-instance-confirm").disabled, true);
 
 sandbox.renderSolverAdmissionStatus({
   observationProfile: "native-readonly-v1",

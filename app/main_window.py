@@ -311,6 +311,8 @@ class MainWindowBridge:
             "request_settlement_review",
             "request_original_screenshots",
             "request_guidebook_sources",
+            "request_warehouse_slot_evidence",
+            "warehouse_instance_decision",
             "delete_original_screenshot",
             "restore_original_screenshot",
             "import_settlement_screenshot",
@@ -396,6 +398,8 @@ class MainWindowBridge:
         live_trial_drafts_provider=None,
         topmost_controller=None,
         user_pinned: bool = True,
+        warehouse_slot_evidence_provider=None,
+        warehouse_instance_decision_provider=None,
     ):
         self._overlay_controller = overlay_controller
         self._presentation_runtime_provider = presentation_runtime_provider
@@ -407,6 +411,8 @@ class MainWindowBridge:
         self._settlement_review_service = settlement_review_service
         self._legacy_archive_provider = legacy_archive_provider
         self._manual_facts_provider = manual_facts_provider
+        self._warehouse_slot_evidence_provider = warehouse_slot_evidence_provider
+        self._warehouse_instance_decision_provider = warehouse_instance_decision_provider
         self._manual_next_match_provider = manual_next_match_provider
         self._manual_finalize_provider = manual_finalize_provider
         self._manual_bootstrap_provider = manual_bootstrap_provider
@@ -804,6 +810,32 @@ class MainWindowBridge:
                     "items": [],
                     "roles": [],
                 }
+
+        if action == "request_warehouse_slot_evidence":
+            provider = self._warehouse_slot_evidence_provider
+            if provider is None:
+                response["warehouseSlotEvidence"] = {"ok": False, "message": "活动裁图读取服务未就绪"}
+            else:
+                try:
+                    response["warehouseSlotEvidence"] = provider(payload)
+                except Exception as exc:
+                    response["warehouseSlotEvidence"] = {
+                        "ok": False, "message": f"活动裁图读取失败：{type(exc).__name__}"
+                    }
+
+        if action == "warehouse_instance_decision":
+            provider = self._warehouse_instance_decision_provider
+            if provider is None:
+                response["warehouseInstanceDecision"] = {
+                    "status": "REJECTED", "reason": "实例决策服务未就绪"
+                }
+            else:
+                try:
+                    response["warehouseInstanceDecision"] = provider(payload)
+                except Exception as exc:
+                    response["warehouseInstanceDecision"] = {
+                        "status": "REJECTED", "reason": f"实例决策发送失败：{type(exc).__name__}"
+                    }
 
         if action in ("delete_original_screenshot", "restore_original_screenshot"):
             service = self._settlement_review_service
@@ -1467,6 +1499,8 @@ def create_main_window_type(WinForms, Drawing):
             history_path_provider=None,
             live_trial_drafts_provider=None,
             shutdown_started_provider=None,
+            warehouse_slot_evidence_provider=None,
+            warehouse_instance_decision_provider=None,
         ) -> None:
             self._overlay_controller = overlay_controller
             self._bridge = MainWindowBridge(
@@ -1480,6 +1514,8 @@ def create_main_window_type(WinForms, Drawing):
                 settlement_review_service,
                 legacy_archive_provider,
                 manual_facts_provider=manual_facts_provider,
+                warehouse_slot_evidence_provider=warehouse_slot_evidence_provider,
+                warehouse_instance_decision_provider=warehouse_instance_decision_provider,
                 manual_next_match_provider=manual_next_match_provider,
                 manual_finalize_provider=manual_finalize_provider,
                 manual_bootstrap_provider=manual_bootstrap_provider,

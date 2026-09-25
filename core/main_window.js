@@ -107,6 +107,7 @@ const dashboard = {
   matchSyncTimer: null,
   lastSnapshotResult: null,
   warehouseReview: null,
+  warehouseInstanceReview: null,
   pendingOverrideConfirm: false,
   pendingReasonKind: null,
   wirSaveConfirmOpen: false,
@@ -2523,7 +2524,7 @@ function openGuidebookWarehouseCandidate(catalogId, name, rarity) {
   renderGuidebook();
 }
 
-function renderWarehouseSlots(warehouse) {
+function renderWarehouseSlots(warehouse, currentMatch = dashboard.lastCurrentMatch) {
   const slotsListEl = document.getElementById("match-wh-slots-list");
   if (!slotsListEl) return;
   const slots = warehouse?.slots || [];
@@ -2543,6 +2544,7 @@ function renderWarehouseSlots(warehouse) {
     const best = candidates.find(item => String(item?.catalogId || item?.Id || "") === bestId)
       || candidates[0] || null;
     const exact = slot.identityStatus === "EXACT" && slot.identifiedName;
+    const manualDecision = slot.manualDecision && typeof slot.manualDecision === "object" ? slot.manualDecision : null;
     const candidateName = slot.bestCandidateName || best?.name || best?.Name || "";
     const rarityLabel = ({ gold: "金", purple: "紫", red: "红", blue: "蓝", green: "绿", white: "白" })[slot.rarity] || "品质待确认";
     const size = slot.w && slot.h ? `${slot.w}×${slot.h}` : "尺寸待确认";
@@ -2550,12 +2552,20 @@ function renderWarehouseSlots(warehouse) {
       && Number.isInteger(Number(slot.row)) && Number.isInteger(Number(slot.col))
       ? `第 ${Number(slot.row) + 1} 行 · 第 ${Number(slot.col) + 1} 列`
       : `实例 ${index + 1}`;
-    const status = exact
+    const status = manualDecision?.action === "CONFIRM_CANDIDATE"
+      ? `<span class="wh-identity-state is-candidate">人工确认 · 本实例</span>`
+      : manualDecision?.action === "REJECT_CANDIDATE"
+        ? `<span class="wh-identity-state is-candidate">已排除此候选</span>`
+        : exact
       ? `<span class="wh-identity-state is-confirmed">已确证</span>`
       : slot.identityStatus === "CANDIDATE" || candidates.length
         ? `<span class="wh-identity-state is-candidate">候选 · 未确证</span>`
         : `<span class="wh-identity-state is-unknown">身份未知</span>`;
-    const identity = exact
+    const identity = manualDecision?.action === "CONFIRM_CANDIDATE"
+      ? `人工确认：${escapeHtml(manualDecision.name || manualDecision.manualIdentity?.name || candidateName)}（仅此实例）`
+      : manualDecision?.action === "REJECT_CANDIDATE"
+        ? `已排除：${escapeHtml(manualDecision.name || candidateName)}；其他身份仍待确认`
+        : exact
       ? `已识别：${escapeHtml(slot.identifiedName)}`
       : candidateName
         ? `${slot.identityReferenceKind === "DERIVED_UNVERIFIED" ? "派生参考候选" : "视觉候选"}：${escapeHtml(candidateName)}（未达到身份确证条件）`
@@ -2567,7 +2577,11 @@ function renderWarehouseSlots(warehouse) {
       return `<button type="button" class="wh-candidate-link" data-wh-catalog-id="${escapeHtml(id)}" data-wh-catalog-name="${escapeHtml(label)}" data-wh-rarity="${escapeHtml(slot.rarity || "")}" title="打开图鉴条目与可用来源">图鉴：${escapeHtml(label)}</button>`;
     }).join("");
     const omitted = candidates.length > 3 ? `<small class="wh-candidate-more">另有 ${candidates.length - 3} 个候选</small>` : "";
-    return `<article class="wh-slot-item"><div class="wh-slot-heading"><strong>${position} · ${size} · ${rarityLabel}</strong>${status}</div><div class="wh-slot-identity">${identity}</div>${candidateButtons ? `<div class="wh-slot-candidates">${candidateButtons}${omitted}</div>` : ""}</article>`;
+    const activity = slot.activityEvidence && slot.activityEvidence.evidenceId;
+    const reviewButton = activity
+      ? `<button type="button" class="btn-wb-action" data-wh-open-review="${index}">看活动裁图与候选来源</button>`
+      : `<span class="wh-evidence-missing">本次活动裁图未保存</span>`;
+    return `<article class="wh-slot-item"><div class="wh-slot-heading"><strong>${position} · ${size} · ${rarityLabel}</strong>${status}</div><div class="wh-slot-identity">${identity}</div>${candidateButtons ? `<div class="wh-slot-candidates">${candidateButtons}${omitted}</div>` : ""}<div style="margin-top:5px;">${reviewButton}</div></article>`;
   }).join("");
 
   slotsListEl.querySelectorAll("[data-wh-catalog-id]").forEach(button => {
@@ -2575,6 +2589,192 @@ function renderWarehouseSlots(warehouse) {
       button.dataset.whCatalogId, button.dataset.whCatalogName, button.dataset.whRarity
     ));
   });
+  slotsListEl.querySelectorAll("[data-wh-open-review]").forEach(button => {
+    button.addEventListener("click", () => openWarehouseInstanceReview(
+      slots[Number(button.dataset.whOpenReview)], currentMatch
+    ));
+  });
+  renderWarehouseInstanceReviewPanel();
+}
+
+function warehouseAnchorForSlot(slot) {
+  return {
+    row: Number(slot.row), col: Number(slot.col), w: Number(slot.w),
+    h: Number(slot.h), rarity: String(slot.rarity || "unknown")
+  };
+}
+
+function openWarehouseInstanceReview(slot, currentMatch = dashboard.lastCurrentMatch) {
+  const activity = slot?.activityEvidence;
+  if (!slot || !activity?.evidenceId) return;
+  if (dashboard.warehouseInstanceReview?.busy) return;
+  const match = currentMatch || {};
+  const candidateIds = (Array.isArray(slot.candidates) ? slot.candidates : [])
+    .map(item => String(item?.catalogId || item?.Id || "")).filter(Boolean);
+  const review = {
+    slot: JSON.parse(JSON.stringify(slot)),
+    requestId: null,
+    evidence: null,
+    selectedCandidateId: null,
+    receipt: null,
+    busy: false,
+    matchId: match.matchId,
+    sessionId: activity.sessionId || match.observationSessionId,
+    round: match.observationRound,
+    targetInstance: match.observationTarget || match.target || null,
+    mainDecisionGeneration: match.nativeInstanceDecisionGeneration,
+  };
+  dashboard.warehouseInstanceReview = review;
+  review.requestId = postNative("request_warehouse_slot_evidence", {
+    matchId: review.matchId,
+    sessionId: review.sessionId,
+    round: review.round,
+    targetInstance: review.targetInstance,
+    mainDecisionGeneration: review.mainDecisionGeneration,
+    instanceAnchor: warehouseAnchorForSlot(slot),
+    activityEvidenceId: activity.evidenceId,
+    instanceDecisionToken: slot.instanceDecisionToken,
+    candidateIds,
+  });
+  renderWarehouseInstanceReviewPanel();
+}
+
+function renderWarehouseInstanceReviewPanel() {
+  const panel = document.getElementById("match-wh-instance-review");
+  if (!panel) return;
+  const review = dashboard.warehouseInstanceReview;
+  if (!review?.slot) { panel.hidden = true; return; }
+  panel.hidden = false;
+  const slot = review.slot;
+  const source = review.evidence?.source || slot.activityEvidence || {};
+  const title = document.getElementById("match-wh-instance-review-title");
+  const meta = document.getElementById("match-wh-instance-review-meta");
+  const status = document.getElementById("match-wh-instance-review-status");
+  const image = document.getElementById("match-wh-instance-review-image");
+  const candidateList = document.getElementById("match-wh-instance-review-candidates");
+  const confirmButton = document.getElementById("match-wh-instance-confirm");
+  const rejectButton = document.getElementById("match-wh-instance-reject");
+  const restoreButton = document.getElementById("match-wh-instance-restore");
+  if (title) title.textContent = `活动实例 · 第 ${Number(slot.row) + 1} 行第 ${Number(slot.col) + 1} 列`;
+  if (meta) {
+    const sourceKind = source.sourceKind === "offline-replay" ? "离线回放活动帧裁图"
+      : ["native_wgc", "native"].includes(String(source.sourceKind || "").toLowerCase())
+        ? "Native 活动帧裁图" : "来源类型未知的活动裁图";
+    const box = Array.isArray(source.box) ? source.box.join(", ") : "未知";
+    meta.textContent = `${sourceKind} · 局 ${source.matchId || review.matchId || "未知"} · 会话 ${source.sessionId || review.sessionId || "未知"} · ${source.observedAt || "时间未记录"} · 帧 ${source.frameSequence ?? "未知"} · 原帧坐标 ${box}`;
+  }
+  if (image) {
+    image.hidden = !review.evidence?.dataUrl;
+    image.src = review.evidence?.dataUrl || "";
+  }
+  if (status) {
+    if (review.receipt?.status === "ACK") {
+      const action = review.receipt.decision?.action;
+      status.textContent = action === "CONFIRM_CANDIDATE" ? "观察 worker 已确认这一个实例（人工来源）。"
+        : action === "REJECT_CANDIDATE" ? "观察 worker 已排除此实例的所选候选；其他身份仍未确认。"
+          : "观察 worker 已撤销此实例的人工决定。";
+    } else if (review.receipt?.status === "REJECTED") {
+      status.textContent = `未生效：${review.receipt.reason || "观察 worker 拒绝或观察范围已变化"}`;
+    } else if (review.busy) {
+      status.textContent = "等待观察 worker 回执；修改尚未显示为生效。";
+    } else if (review.evidence?.ok) {
+      status.textContent = review.evidence.decisionAllowed && review.scopeCurrent !== false
+        ? "已打开本次活动裁图和候选来源。选择一个候选后可作实例级决定。"
+        : "活动裁图可回看；当前局、会话或观察资格已变化，实例决定暂不可提交。";
+    } else if (review.evidence) {
+      status.textContent = review.evidence.message || "本次活动裁图缺失；没有使用其他图片替代。";
+    } else {
+      status.textContent = "正在读取与此槽位对应的活动裁图；等待结果期间不会提交决定。";
+    }
+  }
+  const candidates = review.evidence?.candidates || [];
+  if (candidateList) {
+    candidateList.innerHTML = candidates.length ? candidates.map(candidate => {
+      const id = String(candidate.catalogId || candidate.Id || "");
+      const selected = id === review.selectedCandidateId;
+      const manual = slot.manualDecision || {};
+      const rejected = manual.action === "REJECT_CANDIDATE" && manual.catalogId === id;
+      const images = (candidate.sourceImages || []).filter(row => row?.available && row.uri).slice(0, 2)
+        .map(row => `<img src="${escapeHtml(row.uri)}" alt="图鉴来源：${escapeHtml(candidate.name || "候选条目")}" style="width:64px;height:64px;object-fit:contain;background:#0b1220;border-radius:5px;">`).join("");
+      const sourceStatus = images ? "图鉴来源图片" : "图鉴来源图片暂不可用";
+      return `<article style="padding:7px;border:1px solid ${selected ? "#60a5fa" : "var(--border-subtle, #334155)"};border-radius:6px;"><div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;"><strong>${escapeHtml(candidate.name || candidate.Name || "待辨认")}</strong><span>${selected ? "当前选择" : ""}${rejected ? " · 已在本实例排除" : ""}</span><button type="button" class="btn-wb-action" data-wh-review-select="${escapeHtml(id)}">选择此候选</button></div><div style="font-size:11px;opacity:.8;margin:4px 0;">目录 ID：${escapeHtml(id)} · ${sourceStatus}</div><div style="display:flex;gap:5px;">${images}</div></article>`;
+    }).join("") : `<div style="font-size:12px;opacity:.75;">此槽位没有可供人工确认的候选；未知信息保持未知。</div>`;
+    candidateList.querySelectorAll("[data-wh-review-select]").forEach(button => button.addEventListener("click", () => {
+      review.selectedCandidateId = button.dataset.whReviewSelect;
+      renderWarehouseInstanceReviewPanel();
+    }));
+  }
+  const decisionAllowed = Boolean(review.evidence?.decisionAllowed && review.scopeCurrent !== false
+    && !review.busy && review.evidence?.ok);
+  const candidateDecisionAllowed = decisionAllowed && review.evidence?.identityStatus === "CANDIDATE";
+  if (confirmButton) {
+    confirmButton.disabled = !candidateDecisionAllowed || !review.selectedCandidateId;
+    confirmButton.onclick = () => submitWarehouseInstanceDecision("CONFIRM_CANDIDATE");
+  }
+  if (rejectButton) {
+    rejectButton.disabled = !candidateDecisionAllowed || !review.selectedCandidateId;
+    rejectButton.onclick = () => submitWarehouseInstanceDecision("REJECT_CANDIDATE");
+  }
+  if (restoreButton) {
+    restoreButton.hidden = !slot.manualDecision;
+    restoreButton.disabled = !decisionAllowed || review.busy;
+    restoreButton.onclick = () => submitWarehouseInstanceDecision("RESTORE_AUTOMATIC");
+  }
+  const close = document.getElementById("match-wh-instance-review-close");
+  if (close) {
+    close.disabled = review.busy;
+    close.onclick = () => { dashboard.warehouseInstanceReview = null; panel.hidden = true; };
+  }
+}
+
+function submitWarehouseInstanceDecision(decision) {
+  const review = dashboard.warehouseInstanceReview;
+  if (!review?.slot || !review.evidence?.decisionAllowed || review.scopeCurrent === false || review.busy) return;
+  review.busy = true;
+  review.receipt = null;
+  review.pendingCommandId = null;
+  const requestId = postNative("warehouse_instance_decision", {
+    matchId: review.matchId,
+    sessionId: review.sessionId,
+    round: review.round,
+    targetInstance: review.targetInstance,
+    mainDecisionGeneration: review.mainDecisionGeneration,
+    instanceAnchor: warehouseAnchorForSlot(review.slot),
+    activityEvidenceId: review.slot.activityEvidence?.evidenceId,
+    instanceDecisionToken: review.slot.instanceDecisionToken,
+    expectedGenerationId: review.slot.activityEvidence?.generationId,
+    expectedInvalidationGeneration: review.slot.instanceDecisionGeneration,
+    decision,
+    catalogId: decision === "RESTORE_AUTOMATIC" ? null : review.selectedCandidateId,
+  });
+  review.decisionRequestId = requestId;
+  renderWarehouseInstanceReviewPanel();
+}
+
+function syncWarehouseInstanceReviewFromMatch(currentMatch) {
+  if (!currentMatch) return;
+  const activeReview = dashboard.warehouseInstanceReview;
+  if (!activeReview?.slot) return;
+  activeReview.scopeCurrent = currentMatch.matchId === activeReview.matchId
+    && currentMatch.observationSessionId === activeReview.sessionId
+    && currentMatch.warehouseDecisionEligible === true;
+  const receipt = currentMatch.warehouseInstanceDecisionResult;
+  if (receipt && activeReview.pendingCommandId
+      && receipt.commandId === activeReview.pendingCommandId
+      && receipt.matchId === activeReview.matchId
+      && receipt.activityEvidenceId === activeReview.slot.activityEvidence?.evidenceId
+      && receipt.instanceDecisionToken === activeReview.slot.instanceDecisionToken
+      && ["ACK", "REJECTED"].includes(receipt.status)) {
+    activeReview.receipt = receipt;
+    activeReview.busy = false;
+    const updatedSlot = (currentMatch.warehouse?.slots || []).find(slot => {
+      const a = warehouseAnchorForSlot(slot);
+      const b = warehouseAnchorForSlot(activeReview.slot);
+      return a.row === b.row && a.col === b.col && a.w === b.w && a.h === b.h && a.rarity === b.rarity;
+    });
+    if (updatedSlot) activeReview.slot = JSON.parse(JSON.stringify(updatedSlot));
+  }
+  renderWarehouseInstanceReviewPanel();
 }
 
 function renderMatch(currentMatch, overlayVisible) {
@@ -2611,6 +2811,7 @@ function renderMatch(currentMatch, overlayVisible) {
   }
   renderManualCommandReceipt(currentMatch.manualCommandResult || currentMatch.nativeControlResult);
   dashboard.lastCurrentMatch = currentMatch;
+  syncWarehouseInstanceReviewFromMatch(currentMatch);
   dashboard.matchState.factsRevision = Number(currentMatch.factsRevision || 0);
   dashboard.matchState.observationFactsRevision = currentMatch.observationFactsRevision ?? null;
   dashboard.matchState.observationProfile = currentMatch.observationProfile || null;
@@ -3196,7 +3397,7 @@ function renderMatch(currentMatch, overlayVisible) {
   }
   if (whCount) whCount.textContent = `${wh.itemCount || 0} 件 (${wh.exactCount || 0} 确诊)`;
 
-  renderWarehouseSlots(wh);
+  renderWarehouseSlots(wh, currentMatch);
 
   // Section G: History Trace Navigation
   const navIdEl = document.getElementById("match-nav-match-id");
@@ -4637,6 +4838,31 @@ function handleNativeMessage(event) {
     }
     dashboard.guidebookCatalog = null;
     if (dashboard.currentView === "guidebook") renderGuidebook();
+  }
+  if (payload.action === "request_warehouse_slot_evidence" && payload.warehouseSlotEvidence) {
+    const review = dashboard.warehouseInstanceReview;
+    if (!review || review.requestId !== payload.requestId) return;
+    review.evidence = payload.warehouseSlotEvidence;
+    review.busy = false;
+    if (review.evidence.ok) {
+      const firstCandidate = (review.evidence.candidates || []).find(item => item.catalogId || item.Id);
+      review.selectedCandidateId = String(firstCandidate?.catalogId || firstCandidate?.Id || "") || null;
+    }
+    renderWarehouseInstanceReviewPanel();
+  }
+  if (payload.action === "warehouse_instance_decision" && payload.warehouseInstanceDecision) {
+    const review = dashboard.warehouseInstanceReview;
+    if (!review || review.decisionRequestId !== payload.requestId) return;
+    const result = payload.warehouseInstanceDecision;
+    if (result.status === "PENDING") {
+      review.busy = true;
+      review.pendingCommandId = result.commandId;
+      review.receipt = null;
+    } else {
+      review.busy = false;
+      review.receipt = result;
+    }
+    renderWarehouseInstanceReviewPanel();
   }
   if (payload.action === "manual_facts" && payload.manualFactsResult) {
     renderManualCommandReceipt(payload.manualCommandResult || {

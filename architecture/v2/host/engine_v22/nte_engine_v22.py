@@ -316,6 +316,9 @@ class RealEngine:
         self._identity_invalidation_generation = 0
         self._identity_scope_key = None
         self._identity_last_committed_sequence: dict[tuple[str, str, Any], int] = {}
+        self._warehouse_activity_sources: dict[tuple[Any, ...], dict] = {}
+        self._warehouse_review_vision: dict = {}
+        self._warehouse_review_scope: dict = {}
         self.frame_records_path = self.work_dir / "frame_records.ndjson"
         self.state_path = self.work_dir / "engine_state.json"
         self.state_manifest_path = self.work_dir / "engine_state_manifest.json"
@@ -698,6 +701,8 @@ class RealEngine:
     def _state_projection(self) -> dict:
         status = str(self.current_match.lifecycle_status or "DRAFT")
         context = self.last_context or self.pipeline.current_context
+        warehouse = self.current_match.facts.get("warehouse")
+        warehouse_slots = warehouse.get("slots") if isinstance(warehouse, dict) else []
         return {
             "matchId": str(self.current_match.id),
             "matchState": status,
@@ -706,6 +711,9 @@ class RealEngine:
             "finalizedCount": 1 if status == "FINALIZED" else 0,
             "activeAuctionItems": [],
             "bids": self._projection_bids(context),
+            # Presentation/evidence sidecar. The frozen MMF frame contract and
+            # canonical History schema remain unchanged.
+            "warehouseSlots": [copy.deepcopy(slot) for slot in (warehouse_slots or []) if isinstance(slot, dict)],
         }
 
     def handle_state_snapshot_request(self, envelope: dict) -> None:
@@ -913,6 +921,12 @@ class RealEngine:
             self.command_records[command_id] = {"fingerprint": fingerprint, "result": result}
             self.send("COMMAND_RESULT", result, "cmdres", correlation_id=envelope.get("requestId"))
             return
+        elif action == "warehouse.instance_decision":
+            status, error, result_data = self._apply_warehouse_instance_decision(command_id, parameters)
+            result = self._command_result(command_id, status, error=error, result=result_data)
+            self.command_records[command_id] = {"fingerprint": fingerprint, "result": result}
+            self.send("COMMAND_RESULT", result, "cmdres", correlation_id=envelope.get("requestId"))
+            return
         elif action not in {"state.snapshot", "test.stop_heartbeat", "test.resume_heartbeat", "test.wrong_session_snapshot"}:
             result = self._command_result(command_id, "REJECT", error=f"unsupported action: {action}")
             self.command_records[command_id] = {"fingerprint": fingerprint, "result": result}
@@ -1101,6 +1115,10 @@ class RealEngine:
             previous = self._identity_scope_key
             self._identity_scope_key = key
             self._identity_last_committed_sequence.clear()
+            self._warehouse_review_vision = {}
+            self._warehouse_review_scope = {}
+            if previous is not None and previous[0] != key[0]:
+                self._warehouse_activity_sources.clear()
             if previous is not None:
                 self._invalidate_deferred_identity("observation_scope_changed")
         return kind
@@ -1148,6 +1166,7 @@ class RealEngine:
             "capturedAt": str(item.get("capturedAt") or pending.get("captured_at") or ""),
             "pixelSha256": str(item.get("rawSha256") or ""),
             "actualTotal": pending.get("actual_total"),
+            "dataOrigin": self.data_origin,
         }
         frame = pending.get("frame")
         if not isinstance(frame, np.ndarray) or frame.size == 0:
@@ -1170,6 +1189,129 @@ class RealEngine:
             return int(slot["row"]), int(slot["col"])
         except (KeyError, TypeError, ValueError):
             return None
+
+    @staticmethod
+    def _warehouse_instance_footprint(slot: dict) -> Optional[tuple[int, int, int, int, str]]:
+        anchor = RealEngine._warehouse_slot_anchor(slot)
+        try:
+            if anchor is None:
+                return None
+            width, height = int(slot["w"]), int(slot["h"])
+            rarity = str(slot.get("rarity") or "unknown")
+            if width <= 0 or height <= 0 or rarity == "unknown":
+                return None
+            return anchor[0], anchor[1], width, height, rarity
+        except (KeyError, TypeError, ValueError):
+            return None
+
+    @staticmethod
+    def _warehouse_instance_decision_token(scope: dict, slot: dict) -> Optional[str]:
+        footprint = RealEngine._warehouse_instance_footprint(slot)
+        evidence = slot.get("activityEvidence") if isinstance(slot, dict) else None
+        evidence_id = str(evidence.get("evidenceId") or "") if isinstance(evidence, dict) else ""
+        if footprint is None or not evidence_id:
+            return None
+        candidate_ids = sorted({
+            str(candidate.get("catalogId") or candidate.get("Id") or "")
+            for candidate in (slot.get("candidates") or [])
+            if isinstance(candidate, dict) and (candidate.get("catalogId") or candidate.get("Id"))
+        })
+        material = {
+            "sessionId": scope.get("sessionId"),
+            "generationId": scope.get("generationId"),
+            "matchId": scope.get("matchId"),
+            "round": scope.get("round"),
+            "invalidationGeneration": scope.get("invalidationGeneration"),
+            "footprint": footprint,
+            "candidateIds": candidate_ids,
+            "evidenceId": evidence_id,
+        }
+        raw = json.dumps(material, ensure_ascii=False, sort_keys=True, separators=(",", ":")).encode("utf-8")
+        return hashlib.sha256(raw).hexdigest()
+
+    def _activity_evidence_for_slot(self, result: dict, frame: Any, slot: dict) -> Optional[dict]:
+        if not isinstance(frame, np.ndarray) or frame.ndim != 3 or frame.size == 0:
+            return None
+        try:
+            x, y, width, height = (int(value) for value in slot.get("box"))
+            frame_height, frame_width = frame.shape[:2]
+            x0, y0 = max(0, x), max(0, y)
+            x1, y1 = min(frame_width, x + width), min(frame_height, y + height)
+            if x1 <= x0 or y1 <= y0:
+                return None
+            row, col, slot_w, slot_h, rarity = self._warehouse_instance_footprint(slot)
+        except (TypeError, ValueError):
+            return None
+        candidate_ids = tuple(sorted({
+            str(candidate.get("catalogId") or candidate.get("Id") or "")
+            for candidate in (slot.get("candidates") or [])
+            if isinstance(candidate, dict) and (candidate.get("catalogId") or candidate.get("Id"))
+        }))
+        identity_id = str(slot.get("identifiedCatalogId") or "") if slot.get("identityStatus") == "EXACT" else ""
+        # A physical slot is stable for this match. Keep the first useful crop
+        # for that slot instead of writing another image as candidates/order
+        # fluctuate over ordinary frames.
+        source_key = (str(result.get("matchId") or ""), row, col, slot_w, slot_h, rarity)
+        cached = self._warehouse_activity_sources.get(source_key)
+        if cached and (self.work_dir / cached.get("relativePath", "")).is_file():
+            return copy.deepcopy(cached)
+
+        crop = np.ascontiguousarray(frame[y0:y1, x0:x1])
+        encoded_ok, encoded = cv2.imencode(".png", crop)
+        if not encoded_ok:
+            return None
+        raw = encoded.tobytes()
+        image_hash = hashlib.sha256(raw).hexdigest()
+        frame_sequence = int(result.get("frameSequence") or 0)
+        pixel_hash = str(result.get("pixelSha256") or "")
+        evidence_material = {
+            "sessionId": result.get("sessionId"), "matchId": result.get("matchId"),
+            "frameSequence": frame_sequence, "pixelSha256": pixel_hash,
+            "footprint": (row, col, slot_w, slot_h, rarity), "box": (x, y, width, height),
+            "cropSha256": image_hash,
+        }
+        evidence_id = "native-warehouse-crop:" + hashlib.sha256(
+            json.dumps(evidence_material, sort_keys=True, separators=(",", ":")).encode("utf-8")
+        ).hexdigest()
+        relative_path = Path("warehouse-slot-evidence") / f"{image_hash}.png"
+        target = self.work_dir / relative_path
+        target.parent.mkdir(parents=True, exist_ok=True)
+        if target.exists():
+            if hashlib.sha256(target.read_bytes()).hexdigest() != image_hash:
+                return None
+        else:
+            temp = target.with_name(target.name + ".tmp")
+            try:
+                temp.write_bytes(raw)
+                os.replace(temp, target)
+            finally:
+                if temp.exists():
+                    temp.unlink()
+        source_kind = "native_wgc" if str(result.get("dataOrigin") or self.data_origin).lower() in {"live-trial", "native_wgc", "native"} else "offline-replay"
+        descriptor = {
+            "evidenceId": evidence_id,
+            "kind": "warehouse-activity-crop",
+            "sourceKind": source_kind,
+            "dataOrigin": str(result.get("dataOrigin") or self.data_origin),
+            "sessionId": str(result.get("sessionId") or ""),
+            "generationId": result.get("generationId"),
+            "matchId": str(result.get("matchId") or ""),
+            "observedAt": str(result.get("capturedAt") or ""),
+            "captureTimestampNs": result.get("captureTimestampNs"),
+            "frameSequence": frame_sequence,
+            "frameId": f"{result.get('sessionId')}:{frame_sequence}:{pixel_hash[:16]}",
+            "pixelSha256": pixel_hash,
+            "cropSha256": image_hash,
+            "relativePath": relative_path.as_posix(),
+            "mimeType": "image/png",
+            "byteSize": len(raw),
+            "frameWidth": frame_width,
+            "frameHeight": frame_height,
+            "box": [x, y, width, height],
+            "instanceAnchor": {"row": row, "col": col, "w": slot_w, "h": slot_h, "rarity": rarity},
+        }
+        self._warehouse_activity_sources[source_key] = descriptor
+        return copy.deepcopy(descriptor)
 
     @staticmethod
     def _warehouse_slot_identity(slot: dict) -> Optional[tuple[Optional[str], str]]:
@@ -1203,6 +1345,33 @@ class RealEngine:
             indexes[anchor] = len(slots)
             slots.append(copy.deepcopy(raw))
 
+        def preserve_instance_decision(old: dict, merged: dict, incoming_slot: dict) -> dict:
+            decision = old.get("manualDecision")
+            if (not isinstance(decision, dict)
+                    or RealEngine._warehouse_instance_footprint(old)
+                    != RealEngine._warehouse_instance_footprint(incoming_slot)):
+                return merged
+            merged["manualDecision"] = copy.deepcopy(decision)
+            identity = RealEngine._warehouse_slot_identity(merged)
+            decided_id = str(decision.get("catalogId") or "")
+            manual_identity_id = str(
+                (decision.get("manualIdentity") or {}).get("catalogId")
+                or (decided_id if decision.get("action") == "CONFIRM_CANDIDATE" else "")
+            )
+            rejected_exact = decision.get("action") == "REJECT_CANDIDATE" and identity and identity[0] == decided_id
+            conflicting_exact = (
+                decision.get("action") == "CONFIRM_CANDIDATE"
+                and identity and manual_identity_id and identity[0] != manual_identity_id
+            )
+            if rejected_exact or conflicting_exact:
+                merged["identityStatus"] = "CANDIDATE"
+                merged["evidenceLevel"] = "CANDIDATE_SET"
+                merged.pop("identifiedName", None)
+                merged.pop("identifiedCatalogId", None)
+                if conflicting_exact:
+                    merged["identityConflict"] = True
+            return merged
+
         for raw in incoming.get("slots") or []:
             if not isinstance(raw, dict):
                 continue
@@ -1229,7 +1398,9 @@ class RealEngine:
                 merged["identityStatus"] = "CANDIDATE"
                 merged["evidenceLevel"] = "CANDIDATE_SET"
                 merged.pop("identifiedName", None)
+                merged.pop("identifiedCatalogId", None)
                 merged["identityConflict"] = True
+                merged = preserve_instance_decision(old, merged, raw)
                 slots[index] = merged
                 continue
 
@@ -1248,10 +1419,12 @@ class RealEngine:
                 merged["evidenceLevel"] = "CANDIDATE_SET"
                 merged.pop("identifiedName", None)
                 merged["identityConflict"] = True
+                merged = preserve_instance_decision(old, merged, raw)
                 slots[index] = merged
                 continue
 
             merged = copy.deepcopy(raw)
+            merged = preserve_instance_decision(old, merged, raw)
             if old_identity and not new_identity:
                 # A transient weak/derived frame cannot erase a direct identity
                 # already confirmed for this same physical grid position.
@@ -1379,6 +1552,14 @@ class RealEngine:
                     slot["bestCandidateName"] = str(raw["bestCandidateName"])
                 if raw.get("identityReferenceKind"):
                     slot["identityReferenceKind"] = str(raw["identityReferenceKind"])
+                if isinstance(raw.get("activityEvidence"), dict):
+                    slot["activityEvidence"] = copy.deepcopy(raw["activityEvidence"])
+                if raw.get("instanceDecisionToken"):
+                    slot["instanceDecisionToken"] = str(raw["instanceDecisionToken"])
+                if raw.get("instanceDecisionGeneration") is not None:
+                    slot["instanceDecisionGeneration"] = int(raw["instanceDecisionGeneration"])
+                if isinstance(raw.get("manualDecision"), dict):
+                    slot["manualDecision"] = copy.deepcopy(raw["manualDecision"])
                 if raw.get("trackId") is not None:
                     slot["trackId"] = int(raw["trackId"])
                 if (slot["identityStatus"] == "EXACT"
@@ -1389,6 +1570,147 @@ class RealEngine:
             except (TypeError, ValueError):
                 continue
         return {"slots": projected}
+
+    def _apply_warehouse_instance_decision(self, command_id: str, parameters: dict) -> tuple[str, Optional[str], dict]:
+        """Validate and record a human decision for one worker-owned physical slot."""
+        action = str(parameters.get("decision") or "").upper()
+        scope = self._warehouse_review_scope
+        context = self.last_context or {}
+        round_value = context.get("round")
+        if round_value is None:
+            round_value = self.current_match.facts.get("roundNo")
+        try:
+            round_value = int(round_value) if round_value is not None else None
+        except (TypeError, ValueError):
+            round_value = None
+        expected_session = str(parameters.get("expectedObservationSessionId") or "")
+        expected_match = str(parameters.get("expectedMatchId") or "")
+        if (expected_session != self.session_id or expected_match != self.current_match.id
+                or expected_session != scope.get("sessionId") or expected_match != scope.get("matchId")):
+            return "REJECT", "STALE_MATCH_OR_SESSION", {"matchId": self.current_match.id}
+        if (context.get("scene") != "IN_AUCTION" or scope.get("scene") != "IN_AUCTION"
+                or round_value != scope.get("round") or parameters.get("expectedRound") != round_value):
+            return "REJECT", "STALE_ROUND_OR_SCENE", {"round": round_value}
+        if (parameters.get("expectedGenerationId") != self.generation_id
+                or parameters.get("expectedInvalidationGeneration") != scope.get("invalidationGeneration")
+                or scope.get("invalidationGeneration") != self._identity_generation()):
+            return "REJECT", "STALE_INSTANCE_DECISION_GENERATION", {}
+
+        raw_anchor = parameters.get("instanceAnchor")
+        if not isinstance(raw_anchor, dict):
+            return "REJECT", "PHYSICAL_INSTANCE_ANCHOR_REQUIRED", {}
+        try:
+            anchor = {
+                "row": int(raw_anchor["row"]), "col": int(raw_anchor["col"]),
+                "w": int(raw_anchor["w"]), "h": int(raw_anchor["h"]),
+                "rarity": str(raw_anchor["rarity"]),
+            }
+        except (KeyError, TypeError, ValueError):
+            return "REJECT", "PHYSICAL_INSTANCE_ANCHOR_INVALID", {}
+        footprint = (anchor["row"], anchor["col"], anchor["w"], anchor["h"], anchor["rarity"])
+        token = str(parameters.get("instanceDecisionToken") or "")
+        evidence_id = str(parameters.get("activityEvidenceId") or "")
+        observed_slot = None
+        for candidate_slot in self._warehouse_review_vision.get("slots") or []:
+            if not isinstance(candidate_slot, dict) or self._warehouse_instance_footprint(candidate_slot) != footprint:
+                continue
+            activity = candidate_slot.get("activityEvidence") if isinstance(candidate_slot.get("activityEvidence"), dict) else {}
+            current_token = self._warehouse_instance_decision_token(scope, candidate_slot)
+            if current_token and current_token == token and activity.get("evidenceId") == evidence_id:
+                observed_slot = candidate_slot
+                break
+        if observed_slot is None:
+            return "REJECT", "STALE_OR_UNVERIFIABLE_PHYSICAL_INSTANCE", {"instanceAnchor": anchor}
+
+        warehouse = self.current_match.facts.get("warehouse")
+        if not isinstance(warehouse, dict):
+            return "REJECT", "WAREHOUSE_INSTANCE_NOT_IN_CURRENT_MATCH", {}
+        slots = copy.deepcopy(warehouse.get("slots") or [])
+        target = next((slot for slot in slots if isinstance(slot, dict)
+                       and self._warehouse_instance_footprint(slot) == footprint), None)
+        if target is None:
+            return "REJECT", "WAREHOUSE_INSTANCE_NOT_IN_CURRENT_MATCH", {}
+
+        catalog_id = str(parameters.get("catalogId") or "")
+        candidate = next((item for item in (observed_slot.get("candidates") or [])
+                          if isinstance(item, dict)
+                          and str(item.get("catalogId") or item.get("Id") or "") == catalog_id), None)
+        if action in {"CONFIRM_CANDIDATE", "REJECT_CANDIDATE"}:
+            if not catalog_id or candidate is None or observed_slot.get("identityStatus") != "CANDIDATE":
+                return "REJECT", "CANDIDATE_NOT_AVAILABLE_FOR_THIS_INSTANCE", {"instanceAnchor": anchor}
+            name = str(candidate.get("name") or candidate.get("Name") or "").strip()
+            official = next((item for item in (self.pipeline.catalog or []) if isinstance(item, dict)
+                             and str(item.get("Id") or "") == catalog_id), None)
+            expected_quality = {"gold": "金", "purple": "紫", "red": "红", "green": "绿", "blue": "蓝", "white": "白"}.get(anchor["rarity"])
+            if (not name or official is None or str(official.get("Name") or "").strip() != name
+                    or str(official.get("Quality") or "") != expected_quality):
+                return "REJECT", "CANDIDATE_CONFLICTS_WITH_OFFICIAL_CATALOG", {"instanceAnchor": anchor}
+            decision = {
+                "action": action, "catalogId": catalog_id, "name": name,
+                "source": "HUMAN_INSTANCE_REVIEW", "commandId": command_id,
+                "observedAt": _utc_now(), "activityEvidenceId": evidence_id,
+                "instanceAnchor": anchor,
+            }
+            if action == "CONFIRM_CANDIDATE":
+                decision["manualIdentity"] = {"catalogId": catalog_id, "name": name, "rarity": anchor["rarity"]}
+        elif action == "RESTORE_AUTOMATIC":
+            if target.get("manualDecision") is None:
+                return "ACK", None, {
+                    "echo": "warehouse.instance_decision", "status": "UNCHANGED",
+                    "sessionId": self.session_id, "matchId": self.current_match.id,
+                    "round": round_value, "instanceDecisionToken": token,
+                    "instanceAnchor": anchor, "activityEvidenceId": evidence_id,
+                    "warehouse": warehouse, "idempotent": True,
+                }
+            decision = None
+        else:
+            return "REJECT", "INVALID_INSTANCE_DECISION", {"decision": action}
+
+        previous_decision = target.get("manualDecision")
+        if (decision is not None and isinstance(previous_decision, dict)
+                and previous_decision.get("action") == decision.get("action")
+                and previous_decision.get("catalogId") == decision.get("catalogId")):
+            return "ACK", None, {
+                "echo": "warehouse.instance_decision", "status": "UNCHANGED",
+                "sessionId": self.session_id, "matchId": self.current_match.id,
+                "round": round_value, "instanceDecisionToken": token,
+                "instanceAnchor": anchor, "activityEvidenceId": evidence_id,
+                "warehouse": warehouse, "idempotent": True,
+                "decision": copy.deepcopy(previous_decision),
+            }
+        if decision is None:
+            target.pop("manualDecision", None)
+        else:
+            target["manualDecision"] = decision
+        updated_warehouse = {**warehouse, "slots": slots}
+        # This is worker-accepted review metadata only. It does not change
+        # identityStatus, identifiedName or any known* solver fact.
+        self.current_match.apply_facts({"warehouse": updated_warehouse}, source="vision", intent="observe")
+        for vision_slot in (self._warehouse_review_vision.get("slots") or []):
+            if isinstance(vision_slot, dict) and self._warehouse_instance_footprint(vision_slot) == footprint:
+                if decision is None:
+                    vision_slot.pop("manualDecision", None)
+                else:
+                    vision_slot["manualDecision"] = copy.deepcopy(decision)
+                break
+        self.last_context["warehouseVision"] = copy.deepcopy(self._warehouse_review_vision)
+        self.last_context["warehouseSlots"] = copy.deepcopy(self._warehouse_review_vision.get("slots") or [])
+        self._persist_history()
+        self._persist_state(reason="warehouse_instance_decision")
+        result = {
+            "echo": "warehouse.instance_decision", "status": "APPLIED",
+            "sessionId": self.session_id, "matchId": self.current_match.id,
+            "round": round_value, "factsRevision": self.current_match.facts_revision,
+            "instanceDecisionToken": token, "activityEvidenceId": evidence_id,
+            "instanceAnchor": anchor,
+            "decision": copy.deepcopy(decision), "warehouse": updated_warehouse,
+            "idempotent": False,
+        }
+        self.log("warehouse.instance_decision_applied", commandId=command_id,
+                 decision=action, catalogId=catalog_id or None,
+                 instanceAnchor=anchor, matchId=self.current_match.id,
+                 factsRevision=self.current_match.facts_revision)
+        return "ACK", None, result
 
     def _commit_deferred_identity(self, result: dict) -> bool:
         kind = str(result.get("kind") or "")
@@ -1442,6 +1764,28 @@ class RealEngine:
             vision = result.get("warehouseVision")
             if not isinstance(vision, dict):
                 return False
+            vision = copy.deepcopy(vision)
+            review_scope = {
+                "sessionId": self.session_id,
+                "generationId": self.generation_id,
+                "matchId": self.current_match.id,
+                "round": int(result["round"]),
+                "scene": "IN_AUCTION",
+                "invalidationGeneration": self._identity_generation(),
+            }
+            source_frame = result.get("sourceFrameBgr")
+            for vision_slot in vision.get("slots") or []:
+                if not isinstance(vision_slot, dict):
+                    continue
+                activity = self._activity_evidence_for_slot(result, source_frame, vision_slot)
+                if activity is not None:
+                    vision_slot["activityEvidence"] = activity
+                    decision_token = self._warehouse_instance_decision_token(review_scope, vision_slot)
+                    if decision_token:
+                        vision_slot["instanceDecisionToken"] = decision_token
+                        vision_slot["instanceDecisionGeneration"] = review_scope["invalidationGeneration"]
+            self._warehouse_review_vision = copy.deepcopy(vision)
+            self._warehouse_review_scope = review_scope
             context["warehouseVision"] = copy.deepcopy(vision)
             context["warehouseSlots"] = copy.deepcopy(vision.get("slots") or [])
             context["warehouseExpectedVal"] = vision.get("totalExpectedVal", 0)
@@ -1457,6 +1801,10 @@ class RealEngine:
                 merged_warehouse = self._merge_warehouse_fact_slots(previous_warehouse, projected)
                 if merged_warehouse != previous_warehouse:
                     patch["warehouse"] = merged_warehouse
+                vision["slots"] = copy.deepcopy(merged_warehouse.get("slots") or [])
+                self._warehouse_review_vision = copy.deepcopy(vision)
+                context["warehouseVision"] = copy.deepcopy(vision)
+                context["warehouseSlots"] = copy.deepcopy(vision["slots"])
                 old_names = self._warehouse_known_names(previous_warehouse or {"slots": []}, official_by_id, quality_targets)
                 merged_names = self._warehouse_known_names(merged_warehouse, official_by_id, quality_targets)
                 for field, _quality in quality_targets.values():

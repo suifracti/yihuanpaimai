@@ -51,6 +51,57 @@ def _trial_draft(match_id, q=15):
 
 
 class IsolatedTrialTests(unittest.TestCase):
+    def test_warehouse_activity_crop_and_instance_decision_remain_linked_to_one_trial_draft(self):
+        source_png = PROJECT_ROOT / "assets/items/video_development_references_v1/paper-v4-reveal-4.20.png"
+        self.assertTrue(source_png.is_file())
+        original = source_png.read_bytes()
+        with tempfile.TemporaryDirectory(dir=str(PROJECT_ROOT / "build")) as folder:
+            root = Path(folder)
+            store = NativeTrialDraftStore(root / "trial-drafts" / "canonical-history.json")
+            match_id = "activity-crop-sidecar"
+            anchor = {"row": 1, "col": 2, "w": 1, "h": 2, "rarity": "purple"}
+            crop = store.capture_warehouse_slot_source(source_png, {
+                "evidenceId": "activity-crop:one",
+                "sessionId": "native-session-one",
+                "generationId": 4,
+                "matchId": match_id,
+                "observedAt": "2026-09-25T03:00:00Z",
+                "frameSequence": 18,
+                "frameId": "native-session-one:18:abc",
+                "box": [100, 200, 50, 90],
+                "instanceAnchor": anchor,
+            })
+            decision = {
+                "action": "CONFIRM_CANDIDATE",
+                "catalogId": "catalog-one",
+                "source": "HUMAN_INSTANCE_REVIEW",
+                "matchId": match_id,
+                "sessionId": "native-session-one",
+                "activityEvidenceId": crop["evidenceId"],
+                "instanceAnchor": anchor,
+            }
+            first = store.save_draft(
+                _trial_draft(match_id),
+                warehouse_slot_sources=[crop],
+                warehouse_instance_decisions=[decision],
+            )
+            second = store.save_draft(
+                _trial_draft(match_id),
+                warehouse_slot_sources=[crop],
+                warehouse_instance_decisions=[decision],
+            )
+
+            self.assertEqual(first["id"], second["id"])
+            self.assertEqual(len(store.list_drafts()), 1)
+            native = store.lookup(match_id)["auctionEvidence"]["nativeObservation"]
+            self.assertEqual(len(native["warehouseSlotSources"]), 1)
+            self.assertEqual(native["warehouseSlotSources"][0]["matchId"], match_id)
+            self.assertEqual(native["warehouseSlotSources"][0]["instanceAnchor"], anchor)
+            self.assertEqual(len(native["warehouseInstanceDecisions"]), 1)
+            saved_image = store.warehouse_source_image(match_id, crop["evidenceId"])
+            self.assertEqual(saved_image["data"], original)
+            self.assertTrue((store.root / crop["relativePath"]).is_file())
+
     def test_native_trial_save_retry_and_duplicate_keep_one_isolated_draft_and_original(self):
         frame = PROJECT_ROOT / "tests" / "alpha_live_shots" / "204207_04_full.bmp"
         self.assertTrue(frame.is_file(), "existing P1/P2 frame should be available for the offline save path")

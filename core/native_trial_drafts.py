@@ -137,11 +137,72 @@ class NativeTrialDraftStore:
             "targetInstance": meta.get("targetInstance"),
         }
 
+    def capture_warehouse_slot_source(
+        self, source_path: os.PathLike[str] | str, metadata: Mapping[str, Any]
+    ) -> dict[str, Any]:
+        """Copy one worker-produced activity crop into the existing isolated evidence root."""
+        source = Path(source_path).resolve(strict=True)
+        if not source.is_file():
+            raise NativeTrialDraftError("局内藏品裁图不存在")
+        raw = source.read_bytes()
+        if not raw:
+            raise NativeTrialDraftError("局内藏品裁图为空")
+        digest = hashlib.sha256(raw).hexdigest()
+        self.source_frame_root.mkdir(parents=True, exist_ok=True)
+        target = self.source_frame_root / f"{digest}.png"
+        with self._lock:
+            if target.exists():
+                if self._sha256(target) != digest:
+                    raise NativeTrialDraftError("局内藏品裁图哈希冲突，未覆盖已有证据")
+            else:
+                temp_name = None
+                try:
+                    with tempfile.NamedTemporaryFile(
+                        mode="wb", dir=self.source_frame_root, prefix=".warehouse-", suffix=".tmp", delete=False
+                    ) as stream:
+                        temp_name = stream.name
+                        stream.write(raw)
+                        stream.flush()
+                        try:
+                            os.fsync(stream.fileno())
+                        except OSError:
+                            pass
+                    if target.exists():
+                        if self._sha256(target) != digest:
+                            raise NativeTrialDraftError("局内藏品裁图哈希冲突，未覆盖已有证据")
+                    else:
+                        os.replace(temp_name, target)
+                        temp_name = None
+                except NativeTrialDraftError:
+                    raise
+                except Exception as exc:
+                    raise NativeTrialDraftError(f"无法保存局内藏品裁图：{type(exc).__name__}: {exc}") from exc
+                finally:
+                    if temp_name and Path(temp_name).exists():
+                        try:
+                            Path(temp_name).unlink()
+                        except OSError:
+                            pass
+        meta = dict(metadata or {})
+        return {
+            **meta,
+            "evidenceId": str(meta.get("evidenceId") or f"native-warehouse-crop:{digest}"),
+            "kind": "warehouse-activity-crop",
+            "relativePath": target.relative_to(self.root).as_posix(),
+            "uri": target.relative_to(self.root).as_posix(),
+            "mimeType": "image/png",
+            "sha256": digest,
+            "byteSize": len(raw),
+            "workerRelativePath": str(meta.get("relativePath") or ""),
+        }
+
     def save_draft(
         self,
         record: Mapping[str, Any],
         *,
         source_frames: Iterable[Mapping[str, Any]] = (),
+        warehouse_slot_sources: Iterable[Mapping[str, Any]] = (),
+        warehouse_instance_decisions: Iterable[Mapping[str, Any]] = (),
         observation_scope: Optional[Mapping[str, Any]] = None,
     ) -> dict[str, Any]:
         if not isinstance(record, Mapping):
@@ -185,6 +246,36 @@ class NativeTrialDraftStore:
                 "mainFactsRevision", "round", "frameSequence", "capturedAtUtc",
             ) if key in scope})
             current_native["sourceFrames"] = frames
+            slot_sources_by_instance: dict[str, dict[str, Any]] = {}
+            for candidate in list(prior_native.get("warehouseSlotSources") or []) + list(current_native.get("warehouseSlotSources") or []) + list(warehouse_slot_sources or []):
+                if not isinstance(candidate, Mapping):
+                    continue
+                item = dict(candidate)
+                if not item.get("evidenceId") or not item.get("sha256") or not item.get("relativePath"):
+                    continue
+                if not self._verified_source_path(item):
+                    raise NativeTrialDraftError("已关联的局内藏品裁图缺失或校验失败，草稿未覆盖")
+                instance = item.get("instanceAnchor") if isinstance(item.get("instanceAnchor"), Mapping) else {}
+                instance_key = "|".join(str(value) for value in (
+                    item.get("matchId"), instance.get("row"), instance.get("col"),
+                    instance.get("w"), instance.get("h"), instance.get("rarity"),
+                ))
+                slot_sources_by_instance[instance_key] = item
+            current_native["warehouseSlotSources"] = list(slot_sources_by_instance.values())
+
+            decisions_by_instance: dict[str, dict[str, Any]] = {}
+            for candidate in list(prior_native.get("warehouseInstanceDecisions") or []) + list(current_native.get("warehouseInstanceDecisions") or []) + list(warehouse_instance_decisions or []):
+                if not isinstance(candidate, Mapping):
+                    continue
+                item = dict(candidate)
+                instance = item.get("instanceAnchor") if isinstance(item.get("instanceAnchor"), Mapping) else {}
+                instance_key = "|".join(str(value) for value in (
+                    item.get("matchId"), instance.get("row"), instance.get("col"),
+                    instance.get("w"), instance.get("h"), instance.get("rarity"),
+                ))
+                if instance_key.strip("|"):
+                    decisions_by_instance[instance_key] = item
+            current_native["warehouseInstanceDecisions"] = list(decisions_by_instance.values())
             auction_evidence["nativeObservation"] = current_native
             draft["auctionEvidence"] = auction_evidence
             draft["source"] = "native-live-trial"
@@ -249,6 +340,30 @@ class NativeTrialDraftStore:
                 image["error"] = "原始观察帧缺失或校验失败"
             images.append(image)
         return images
+
+    def warehouse_source_image(self, record_id: str, evidence_id: str) -> Optional[dict[str, Any]]:
+        record = self.lookup(record_id)
+        if record is None:
+            return None
+        native = ((record.get("auctionEvidence") or {}).get("nativeObservation") or {})
+        descriptor = next((item for item in native.get("warehouseSlotSources") or []
+                           if isinstance(item, dict) and item.get("evidenceId") == evidence_id), None)
+        if descriptor is None:
+            return None
+        return self.read_source_image_descriptor(descriptor)
+
+    def read_source_image_descriptor(self, descriptor: Mapping[str, Any]) -> dict[str, Any]:
+        """Read one verified image from the isolated evidence root."""
+        image = dict(descriptor)
+        try:
+            path = self._source_path(image)
+            raw = path.read_bytes()
+            if hashlib.sha256(raw).hexdigest() != image.get("sha256"):
+                raise NativeTrialDraftError("局内藏品裁图哈希不匹配")
+            image["data"] = raw
+        except Exception:
+            image["error"] = "局内藏品裁图缺失或校验失败"
+        return image
 
     def _verified_source_path(self, descriptor: Mapping[str, Any]) -> bool:
         try:

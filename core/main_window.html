@@ -855,6 +855,21 @@
               </div>
             </div>
             <div class="warehouse-slots-list" id="match-wh-slots-list" style="margin-top: 8px; display: flex; flex-direction: column; gap: 6px;"></div>
+            <section id="match-wh-instance-review" hidden aria-label="活动藏品实例复核" style="margin-top: 10px; padding: 10px; border: 1px solid var(--border-subtle, #334155); border-radius: 8px; background: rgba(15,23,42,.55);">
+              <div style="display:flex; justify-content:space-between; align-items:center; gap:8px;">
+                <strong id="match-wh-instance-review-title">活动藏品复核</strong>
+                <button type="button" class="btn-wb-action" id="match-wh-instance-review-close">关闭</button>
+              </div>
+              <div id="match-wh-instance-review-meta" style="font-size:11px; opacity:.8; margin:6px 0;"></div>
+              <div id="match-wh-instance-review-status" role="status" style="font-size:12px; margin:6px 0;"></div>
+              <img id="match-wh-instance-review-image" alt="本次活动观察的藏品裁图" style="display:block; max-width:100%; max-height:220px; object-fit:contain; background:#0b1220; border-radius:6px;">
+              <div id="match-wh-instance-review-candidates" style="display:flex; flex-direction:column; gap:6px; margin-top:8px;"></div>
+              <div style="display:flex; flex-wrap:wrap; gap:6px; margin-top:8px;">
+                <button type="button" class="btn-wb-action" id="match-wh-instance-confirm" disabled>确认此实例</button>
+                <button type="button" class="btn-wb-action" id="match-wh-instance-reject" disabled>排除此候选</button>
+                <button type="button" class="btn-wb-action" id="match-wh-instance-restore" hidden>恢复自动处理</button>
+              </div>
+            </section>
           </div>
 
         </div>

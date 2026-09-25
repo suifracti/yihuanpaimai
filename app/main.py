@@ -16,6 +16,8 @@ import os
 import io
 import math
 import copy
+import base64
+from pathlib import Path
 
 # 运行时路径分两种情况：源码运行时 app/ 是入口目录，打包后
 # BASE_DIR 是发行目录，BUNDLE_DIR 是资源包目录 (_internal)。
@@ -680,6 +682,13 @@ _NATIVE_OBSERVATION_LAST_FRAME_NS: Optional[int] = None
 _NATIVE_CONTROL_BINDINGS: Dict[int, Dict[str, Any]] = {}
 _NATIVE_TRIAL_FRAME_MATCH_ID: Optional[str] = None
 _NATIVE_TRIAL_SOURCE_FRAMES: List[Dict[str, Any]] = []
+_NATIVE_TRIAL_WAREHOUSE_MATCH_ID: Optional[str] = None
+_NATIVE_TRIAL_WAREHOUSE_SOURCES: Dict[str, Dict[str, Any]] = {}
+_NATIVE_TRIAL_WAREHOUSE_DECISIONS: Dict[str, Dict[str, Any]] = {}
+_NATIVE_INSTANCE_DECISION_GENERATION = 0
+_NATIVE_INSTANCE_DECISION_SCOPE: Optional[tuple[Any, ...]] = None
+_NATIVE_WAREHOUSE_DECISION_RECEIPT: Dict[str, Any] = {}
+_WAREHOUSE_REVIEW_GUIDEBOOK_ITEMS: Optional[Dict[str, Dict[str, Any]]] = None
 _NATIVE_DRAFT_SAVE_ERROR: Optional[str] = None
 _NATIVE_DRAFT_SAVE_ERROR_MATCH_ID: Optional[str] = None
 # Solver eligibility is a Main-side lease over the latest worker-accepted
@@ -1005,7 +1014,16 @@ def get_current_match_presentation_summary() -> dict:
 
         # Warehouse Summary
         wh_fact = facts.get("warehouse")
-        warehouse_slots = (wh_fact.get("slots") if isinstance(wh_fact, dict) else []) or []
+        warehouse_slots = copy.deepcopy((wh_fact.get("slots") if isinstance(wh_fact, dict) else []) or [])
+        for slot in warehouse_slots:
+            if not isinstance(slot, dict):
+                continue
+            activity = slot.get("activityEvidence")
+            evidence_id = str(activity.get("evidenceId") or "") if isinstance(activity, dict) else ""
+            stored_source = _NATIVE_TRIAL_WAREHOUSE_SOURCES.get(evidence_id)
+            if (stored_source and str(stored_source.get("matchId") or "") == str(CURRENT_MATCH.id)
+                    and isinstance(activity, dict)):
+                slot["activityEvidence"] = copy.deepcopy(stored_source)
         exact_count = len([
             s for s in warehouse_slots
             if s.get("evidenceLevel") in ("EXACT_IDENTIFIED", "UNIQUE_IN_CATALOG")
@@ -1114,6 +1132,13 @@ def get_current_match_presentation_summary() -> dict:
             "shadowUpdating": bool(native_payload.get("shadowUpdating")) if native_profile else False,
             "nativeControlResult": dict(native_payload.get("nativeControlResult") or {}),
             "manualCommandResult": dict(native_payload.get("manualCommandResult") or {}),
+            "nativeInstanceDecisionGeneration": _NATIVE_INSTANCE_DECISION_GENERATION,
+            "warehouseInstanceDecisionResult": copy.deepcopy(
+                _NATIVE_WAREHOUSE_DECISION_RECEIPT
+                if str(_NATIVE_WAREHOUSE_DECISION_RECEIPT.get("matchId") or "") == str(CURRENT_MATCH.id)
+                else {}
+            ),
+            "warehouseDecisionEligible": _native_instance_decision_scope_key(native_payload) is not None,
             "isolatedTrial": is_isolated_trial(),
             "lifecycleStatus": snap.get("lifecycleStatus", "DRAFT"),
             "hasAnyFact": CURRENT_MATCH.has_any_fact(),
@@ -1588,6 +1613,106 @@ def _native_target_instance(target: Any) -> Optional[Dict[str, Any]]:
     }
 
 
+def _native_warehouse_instance_key(match_id: Any, anchor: Any) -> Optional[str]:
+    if not isinstance(anchor, dict):
+        return None
+    try:
+        values = (
+            str(match_id or ""), int(anchor["row"]), int(anchor["col"]),
+            int(anchor["w"]), int(anchor["h"]), str(anchor["rarity"]),
+        )
+    except (KeyError, TypeError, ValueError):
+        return None
+    return "|".join(str(value) for value in values)
+
+
+def _native_warehouse_slots_from_facts(facts: Any = None) -> list[dict]:
+    facts = CURRENT_MATCH.facts if facts is None else facts
+    warehouse = facts.get("warehouse") if isinstance(facts, dict) else None
+    return [copy.deepcopy(slot) for slot in (warehouse.get("slots") or [])
+            if isinstance(slot, dict)] if isinstance(warehouse, dict) else []
+
+
+def _native_instance_decision_scope_key(payload: Dict[str, Any]) -> Optional[tuple[Any, ...]]:
+    if (not native_observation_enabled()
+            or str(payload.get("scene") or "").upper() != "IN_AUCTION"
+            or payload.get("inAuction") is not True
+            or payload.get("observationStatus") != "FRAME"
+            or payload.get("nativeInvalidated") is True):
+        return None
+    session_id = str(payload.get("observationSessionId") or "")
+    target = _native_target_instance(payload.get("target"))
+    match_id = str(payload.get("matchId") or "")
+    try:
+        round_no = int(payload.get("round"))
+    except (TypeError, ValueError):
+        return None
+    if (not session_id or session_id != _NATIVE_EXPECTED_SESSION
+            or session_id != _NATIVE_OBSERVATION_SESSION or target is None
+            or match_id != CURRENT_MATCH.id):
+        return None
+    worker_generation = next((slot.get("activityEvidence", {}).get("generationId")
+                              for slot in _native_warehouse_slots_from_facts()
+                              if isinstance(slot.get("activityEvidence"), dict)
+                              and slot.get("activityEvidence", {}).get("generationId") is not None), None)
+    worker_invalidation = next((slot.get("instanceDecisionGeneration")
+                                for slot in _native_warehouse_slots_from_facts()
+                                if slot.get("instanceDecisionGeneration") is not None), None)
+    target_token = json.dumps(target, sort_keys=True, separators=(",", ":"))
+    return (session_id, target_token, match_id, round_no, worker_generation, worker_invalidation)
+
+
+def _native_update_instance_decision_scope_locked(payload: Dict[str, Any]) -> None:
+    global _NATIVE_INSTANCE_DECISION_GENERATION, _NATIVE_INSTANCE_DECISION_SCOPE
+    scope = _native_instance_decision_scope_key(payload)
+    if scope != _NATIVE_INSTANCE_DECISION_SCOPE:
+        _native_reject_pending_instance_decisions_locked("OBSERVATION_SCOPE_CHANGED")
+        _NATIVE_INSTANCE_DECISION_GENERATION += 1
+        _NATIVE_INSTANCE_DECISION_SCOPE = scope
+
+
+def _native_capture_warehouse_sources_locked() -> bool:
+    """Copy only worker-selected slot crops into the isolated draft evidence root."""
+    global _NATIVE_TRIAL_WAREHOUSE_MATCH_ID, _NATIVE_TRIAL_WAREHOUSE_SOURCES
+    match_id = str(CURRENT_MATCH.id or "")
+    if not match_id:
+        return False
+    if _NATIVE_TRIAL_WAREHOUSE_MATCH_ID != match_id:
+        _NATIVE_TRIAL_WAREHOUSE_MATCH_ID = match_id
+    with _NATIVE_OBSERVATION_LOCK:
+        bridge = NATIVE_OBSERVATION_BRIDGE
+        session_dir = getattr(bridge, "session_dir", None) if bridge is not None else None
+    if session_dir is None:
+        return False
+    session_root = os.path.realpath(str(session_dir))
+    session_id = str(_NATIVE_OBSERVATION_SESSION or "")
+    changed = False
+    for slot in _native_warehouse_slots_from_facts():
+        activity = slot.get("activityEvidence")
+        if not isinstance(activity, dict):
+            continue
+        evidence_id = str(activity.get("evidenceId") or "")
+        if (not evidence_id or str(activity.get("matchId") or "") != match_id
+                or (session_id and str(activity.get("sessionId") or "") != session_id)):
+            continue
+        if evidence_id in _NATIVE_TRIAL_WAREHOUSE_SOURCES:
+            continue
+        relative = Path(str(activity.get("relativePath") or ""))
+        if relative.is_absolute():
+            continue
+        source_path = os.path.realpath(os.path.join(session_root, str(relative)))
+        try:
+            if os.path.commonpath([session_root, source_path]) != session_root:
+                continue
+            descriptor = NATIVE_TRIAL_DRAFT_STORE.capture_warehouse_slot_source(source_path, activity)
+        except (OSError, ValueError, RuntimeError) as exc:
+            log_stage("DRAFT:NATIVE", f"warehouse activity crop copy failed: {type(exc).__name__}")
+            continue
+        _NATIVE_TRIAL_WAREHOUSE_SOURCES[evidence_id] = descriptor
+        changed = True
+    return changed
+
+
 def _native_start_frame_watchdog_locked() -> None:
     global _NATIVE_FRAME_WATCHDOG_THREAD
     if _NATIVE_FRAME_WATCHDOG_THREAD is not None and _NATIVE_FRAME_WATCHDOG_THREAD.is_alive():
@@ -1612,8 +1737,12 @@ def _native_reject_pending_controls_locked(reason: str) -> None:
         return
     pending = list(_NATIVE_CONTROL_BINDINGS.items())
     _NATIVE_CONTROL_BINDINGS.clear()
+    preserved = {}
     for control_revision, binding in pending:
         if not isinstance(binding, dict):
+            continue
+        if binding.get("kind") == "warehouse_instance_decision":
+            preserved[control_revision] = binding
             continue
         if (
             CURRENT_MATCH.id == binding.get("projectedMatchId")
@@ -1628,6 +1757,26 @@ def _native_reject_pending_controls_locked(reason: str) -> None:
         }
         LATEST_PAYLOAD["nativeControlResult"] = receipt
         LATEST_PAYLOAD["manualCommandResult"] = receipt
+    _NATIVE_CONTROL_BINDINGS.update(preserved)
+
+
+def _native_reject_pending_instance_decisions_locked(reason: str) -> None:
+    global _NATIVE_WAREHOUSE_DECISION_RECEIPT
+    for control_revision, binding in list(_NATIVE_CONTROL_BINDINGS.items()):
+        if not isinstance(binding, dict) or binding.get("kind") != "warehouse_instance_decision":
+            continue
+        _NATIVE_CONTROL_BINDINGS.pop(control_revision, None)
+        receipt = {
+            "commandId": f"native-control-{control_revision}",
+            "revision": control_revision,
+            "status": "REJECTED",
+            "reason": reason or "OBSERVATION_SCOPE_INVALIDATED",
+            "matchId": binding.get("matchId"),
+            "instanceAnchor": copy.deepcopy(binding.get("instanceAnchor")),
+            "instanceDecisionToken": binding.get("instanceDecisionToken"),
+        }
+        _NATIVE_WAREHOUSE_DECISION_RECEIPT = receipt
+        LATEST_PAYLOAD["warehouseInstanceDecisionResult"] = receipt
 
 
 def _native_invalidate_solver_locked(reason: str) -> None:
@@ -1828,12 +1977,18 @@ def _native_capture_trial_frame_locked(path: Any, metadata: Dict[str, Any], *, b
 
 
 def _native_publish_health(event: Dict[str, Any], *, force_main: bool = False) -> Dict[str, Any]:
+    global _NATIVE_INSTANCE_DECISION_GENERATION, _NATIVE_INSTANCE_DECISION_SCOPE
     health = _native_health_from_event(event)
     raw_status = str(event.get("status") or "").upper()
     invalidating = raw_status in {"STARTING", "READY", "PAUSED", "ERROR", "STOPPED"}
     with _MANUAL_STATE_LOCK:
         if invalidating:
             _native_invalidate_solver_locked(str(event.get("reason") or f"native-{raw_status.lower()}"))
+            _native_reject_pending_instance_decisions_locked(
+                str(event.get("reason") or f"native-{raw_status.lower()}")
+            )
+            _NATIVE_INSTANCE_DECISION_GENERATION += 1
+            _NATIVE_INSTANCE_DECISION_SCOPE = None
             LATEST_PAYLOAD["observationStatus"] = raw_status
             LATEST_PAYLOAD.pop("visionState", None)
             LATEST_VISION_PAYLOAD.clear()
@@ -1980,6 +2135,8 @@ def _native_observation_event(event: Dict[str, Any]) -> None:
     global _NATIVE_OBSERVATION_SEQUENCE, _NATIVE_OBSERVATION_LAST_FRAME_NS
     global _NATIVE_EXPECTED_SESSION
     global _LIVE_VISION_ACTIVE, _LIVE_VISION_MATCH_ID, _LIVE_CONTROL_WAITING_EXIT
+    global _NATIVE_TRIAL_WAREHOUSE_SOURCES, _NATIVE_TRIAL_WAREHOUSE_DECISIONS
+    global _NATIVE_WAREHOUSE_DECISION_RECEIPT
 
     if not isinstance(event, dict):
         return
@@ -2030,40 +2187,123 @@ def _native_observation_event(event: Dict[str, Any]) -> None:
                 command_result = details.get("commandResult") if isinstance(details.get("commandResult"), dict) else {}
                 result_data = command_result.get("resultData") if isinstance(command_result.get("resultData"), dict) else {}
                 worker_status = str(details.get("commandStatus") or command_result.get("status") or "ERROR").upper()
-                expected_result_match = binding.get("projectedMatchId") if binding.get("reset") else binding.get("matchId")
-                scope_is_current = bool(
-                    binding.get("sessionId") == incoming_session == _NATIVE_EXPECTED_SESSION == _NATIVE_OBSERVATION_SESSION
-                    and binding.get("invalidationGeneration") == _NATIVE_SOLVER_INVALIDATION_GENERATION
-                    and binding.get("targetInstance") == _native_target_instance(LATEST_PAYLOAD.get("target"))
-                    and CURRENT_MATCH.id == binding.get("projectedMatchId")
-                    and (binding.get("reset") or CURRENT_MATCH.facts_revision == binding.get("appliedMainFactsRevision"))
-                    and str(result_data.get("matchId") or "") == str(expected_result_match or "")
-                    and result_data.get("expectedMatchId") == binding.get("matchId")
-                    and result_data.get("expectedFactsRevision") == binding.get("workerFactsRevision")
-                    and result_data.get("expectedRound") == binding.get("round")
-                    and result_data.get("expectedObservationSessionId") == binding.get("sessionId")
-                )
-                accepted = worker_status == "ACK" and scope_is_current
-                reason = None if accepted else (
-                    command_result.get("errorDetails")
-                    or details.get("error")
-                    or ("OBSERVATION_SCOPE_CHANGED" if worker_status == "ACK" else str(worker_status))
-                )
-                receipt = {
-                    "commandId": details.get("commandId"),
-                    "revision": control_revision,
-                    "status": "ACK" if accepted else "REJECTED",
-                    "messageType": details.get("commandMessageType"),
-                    "result": command_result,
-                    "reason": reason,
-                }
-                if not accepted and (
-                    CURRENT_MATCH.id == binding.get("projectedMatchId")
-                    and CURRENT_MATCH.facts_revision == binding.get("appliedMainFactsRevision")
-                ):
-                    _restore_current_match_state_locked(binding.get("rollbackState"))
-                LATEST_PAYLOAD["nativeControlResult"] = receipt
-                LATEST_PAYLOAD["manualCommandResult"] = receipt
+                if binding.get("kind") == "warehouse_instance_decision":
+                    result_anchor = result_data.get("instanceAnchor") if isinstance(result_data.get("instanceAnchor"), dict) else {}
+                    live_scope = _native_instance_decision_scope_key(LATEST_PAYLOAD)
+                    current_slot = _native_find_warehouse_slot(binding.get("instanceAnchor"))
+                    expected_anchor_key = _native_warehouse_instance_key(binding.get("matchId"), binding.get("instanceAnchor"))
+                    result_anchor_key = _native_warehouse_instance_key(binding.get("matchId"), result_anchor)
+                    scope_is_current = bool(
+                        current_slot is not None
+                        and binding.get("sessionId") == incoming_session == _NATIVE_EXPECTED_SESSION == _NATIVE_OBSERVATION_SESSION
+                        and binding.get("mainDecisionGeneration") == _NATIVE_INSTANCE_DECISION_GENERATION
+                        and binding.get("scope") == live_scope == _NATIVE_INSTANCE_DECISION_SCOPE
+                        and binding.get("targetInstance") == _native_target_instance(LATEST_PAYLOAD.get("target"))
+                        and binding.get("matchId") == CURRENT_MATCH.id == LATEST_PAYLOAD.get("matchId")
+                        and binding.get("round") == LATEST_PAYLOAD.get("round")
+                        and binding.get("instanceDecisionToken") == current_slot.get("instanceDecisionToken")
+                        and binding.get("activityEvidenceId") == (current_slot.get("activityEvidence") or {}).get("evidenceId")
+                    )
+                    worker_result_matches = bool(
+                        result_data.get("echo") == "warehouse.instance_decision"
+                        and str(result_data.get("sessionId") or "") == binding.get("sessionId")
+                        and str(result_data.get("matchId") or "") == binding.get("matchId")
+                        and result_data.get("round") == binding.get("round")
+                        and str(result_data.get("instanceDecisionToken") or "") == binding.get("instanceDecisionToken")
+                        and str(result_data.get("activityEvidenceId") or "") == binding.get("activityEvidenceId")
+                        and result_anchor_key == expected_anchor_key
+                        and result_data.get("status") in {"APPLIED", "UNCHANGED"}
+                        and isinstance(result_data.get("warehouse"), dict)
+                    )
+                    result_decision = result_data.get("decision")
+                    if binding.get("decision") == "RESTORE_AUTOMATIC":
+                        worker_result_matches = worker_result_matches and result_decision is None
+                    else:
+                        worker_result_matches = bool(
+                            worker_result_matches
+                            and isinstance(result_decision, dict)
+                            and result_decision.get("action") == binding.get("decision")
+                            and str(result_decision.get("catalogId") or "") == str(binding.get("catalogId") or "")
+                        )
+                    accepted = worker_status in {"ACK", "DUPLICATE"} and scope_is_current and worker_result_matches
+                    reason = None if accepted else (
+                        command_result.get("errorDetails") or details.get("error")
+                        or ("OBSERVATION_SCOPE_CHANGED" if worker_status in {"ACK", "DUPLICATE"} else str(worker_status))
+                    )
+                    if accepted and result_data.get("status") == "APPLIED":
+                        updated_warehouse = result_data.get("warehouse")
+                        if not isinstance(updated_warehouse, dict):
+                            accepted = False
+                            reason = "WORKER_WAREHOUSE_RECEIPT_MISSING"
+                        else:
+                            CURRENT_MATCH.apply_facts(
+                                {"warehouse": copy.deepcopy(updated_warehouse)},
+                                source="vision", intent="observe",
+                                command_id=str(details.get("commandId") or ""),
+                            )
+                            _native_invalidate_solver_locked("warehouse-instance-decision")
+                    if accepted:
+                        decision = result_data.get("decision") if isinstance(result_data.get("decision"), dict) else {
+                            "action": binding.get("decision"), "catalogId": binding.get("catalogId"),
+                            "source": "HUMAN_INSTANCE_REVIEW",
+                        }
+                        decision_key = _native_warehouse_instance_key(binding.get("matchId"), binding.get("instanceAnchor"))
+                        if decision_key:
+                            _NATIVE_TRIAL_WAREHOUSE_DECISIONS[decision_key] = {
+                                **copy.deepcopy(decision),
+                                "matchId": binding.get("matchId"), "sessionId": binding.get("sessionId"),
+                                "instanceAnchor": copy.deepcopy(binding.get("instanceAnchor")),
+                                "activityEvidenceId": binding.get("activityEvidenceId"),
+                            }
+                    receipt = {
+                        "commandId": details.get("commandId"), "revision": control_revision,
+                        "status": "ACK" if accepted else "REJECTED",
+                        "decisionStatus": result_data.get("status"),
+                        "decision": result_data.get("decision") or {
+                            "action": binding.get("decision"), "catalogId": binding.get("catalogId")
+                        },
+                        "matchId": binding.get("matchId"),
+                        "instanceAnchor": copy.deepcopy(binding.get("instanceAnchor")),
+                        "instanceDecisionToken": binding.get("instanceDecisionToken"),
+                        "activityEvidenceId": binding.get("activityEvidenceId"), "reason": reason,
+                    }
+                    _NATIVE_WAREHOUSE_DECISION_RECEIPT = receipt
+                    LATEST_PAYLOAD["warehouseInstanceDecisionResult"] = receipt
+                    if accepted:
+                        LATEST_PAYLOAD["currentMatch"] = get_current_match_presentation_summary()
+                else:
+                    expected_result_match = binding.get("projectedMatchId") if binding.get("reset") else binding.get("matchId")
+                    scope_is_current = bool(
+                        binding.get("sessionId") == incoming_session == _NATIVE_EXPECTED_SESSION == _NATIVE_OBSERVATION_SESSION
+                        and binding.get("invalidationGeneration") == _NATIVE_SOLVER_INVALIDATION_GENERATION
+                        and binding.get("targetInstance") == _native_target_instance(LATEST_PAYLOAD.get("target"))
+                        and CURRENT_MATCH.id == binding.get("projectedMatchId")
+                        and (binding.get("reset") or CURRENT_MATCH.facts_revision == binding.get("appliedMainFactsRevision"))
+                        and str(result_data.get("matchId") or "") == str(expected_result_match or "")
+                        and result_data.get("expectedMatchId") == binding.get("matchId")
+                        and result_data.get("expectedFactsRevision") == binding.get("workerFactsRevision")
+                        and result_data.get("expectedRound") == binding.get("round")
+                        and result_data.get("expectedObservationSessionId") == binding.get("sessionId")
+                    )
+                    accepted = worker_status == "ACK" and scope_is_current
+                    reason = None if accepted else (
+                        command_result.get("errorDetails")
+                        or details.get("error")
+                        or ("OBSERVATION_SCOPE_CHANGED" if worker_status == "ACK" else str(worker_status))
+                    )
+                    receipt = {
+                        "commandId": details.get("commandId"), "revision": control_revision,
+                        "status": "ACK" if accepted else "REJECTED",
+                        "messageType": details.get("commandMessageType"), "result": command_result,
+                        "reason": reason,
+                    }
+                    if not accepted and (
+                        CURRENT_MATCH.id == binding.get("projectedMatchId")
+                        and CURRENT_MATCH.facts_revision == binding.get("appliedMainFactsRevision")
+                    ):
+                        _restore_current_match_state_locked(binding.get("rollbackState"))
+                    LATEST_PAYLOAD["nativeControlResult"] = receipt
+                    LATEST_PAYLOAD["manualCommandResult"] = receipt
                 LATEST_PAYLOAD["draftSaveStatus"] = draft_write_status()
                 LATEST_PAYLOAD["draftSaved"] = draft_write_status() == "SAVED"
                 health = dict(LATEST_PAYLOAD.get("visionHealth") or {})
@@ -2073,7 +2313,8 @@ def _native_observation_event(event: Dict[str, Any]) -> None:
                 LATEST_PAYLOAD["visionHealth"] = health
                 control_message = {
                     "type": "vision_control",
-                    "nativeControlResult": receipt,
+                    "nativeControlResult": receipt if binding.get("kind") != "warehouse_instance_decision" else None,
+                    "warehouseInstanceDecisionResult": receipt if binding.get("kind") == "warehouse_instance_decision" else None,
                     "visionHealth": health,
                     "observationProfile": "native-readonly-v1",
                 }
@@ -2089,8 +2330,11 @@ def _native_observation_event(event: Dict[str, Any]) -> None:
                 schedule_draft_save(0.5)
             try:
                 manual_state = build_manual_alpha_payload(include_solver_input=False)
-                manual_state["nativeControlResult"] = receipt
-                manual_state["manualCommandResult"] = receipt
+                if binding.get("kind") == "warehouse_instance_decision":
+                    manual_state["warehouseInstanceDecisionResult"] = receipt
+                else:
+                    manual_state["nativeControlResult"] = receipt
+                    manual_state["manualCommandResult"] = receipt
                 publish_manual_payload(manual_state)
             except Exception as exc:
                 log_stage("PRESENTATION:NATIVE", f"manual command receipt publish failed: {type(exc).__name__}")
@@ -2227,6 +2471,14 @@ def _native_observation_event(event: Dict[str, Any]) -> None:
             "snapshot": snapshot,
         }
         previous_match_id = CURRENT_MATCH.id
+        previous_draft_saved = False
+        if incoming_match_id and previous_match_id and incoming_match_id != previous_match_id:
+            # Flush the previous match while its facts and evidence sidecars
+            # are still current, before the receiver switches the projection.
+            try:
+                previous_draft_saved = _persist_current_draft_now() is not None
+            except Exception as exc:
+                log_stage("DRAFT:NATIVE", f"prior match flush failed before switch: {type(exc).__name__}")
         if not receiver.apply(vision_state, CURRENT_MATCH, _LIVE_CONTROL_REVISION):
             stale_frame = True
         else:
@@ -2241,6 +2493,16 @@ def _native_observation_event(event: Dict[str, Any]) -> None:
                 _LIVE_CONTROL_WAITING_EXIT = False
                 LATEST_PAYLOAD.pop("nativeControlResult", None)
                 LATEST_PAYLOAD.pop("manualCommandResult", None)
+                if previous_draft_saved:
+                    _NATIVE_TRIAL_WAREHOUSE_SOURCES = {
+                        key: value for key, value in _NATIVE_TRIAL_WAREHOUSE_SOURCES.items()
+                        if str(value.get("matchId") or "") != str(previous_match_id)
+                    }
+                    _NATIVE_TRIAL_WAREHOUSE_DECISIONS = {
+                        key: value for key, value in _NATIVE_TRIAL_WAREHOUSE_DECISIONS.items()
+                        if str(value.get("matchId") or "") != str(previous_match_id)
+                    }
+                    _NATIVE_WAREHOUSE_DECISION_RECEIPT = {}
             _LIVE_CONTROL_WAITING_EXIT = False
             _LIVE_VISION_MATCH_ID = CURRENT_MATCH.id
             _LIVE_VISION_ACTIVE = True
@@ -2398,6 +2660,8 @@ def _native_observation_event(event: Dict[str, Any]) -> None:
             # Publish the accepted observation scope under the lock before the
             # summary reader decides whether an active native result is eligible.
             LATEST_PAYLOAD.update(data)
+            source_captured = _native_capture_warehouse_sources_locked()
+            _native_update_instance_decision_scope_locked(data)
             data["currentMatch"] = get_current_match_presentation_summary()
             LATEST_VISION_PAYLOAD.clear()
             LATEST_VISION_PAYLOAD.update(data)
@@ -2416,7 +2680,10 @@ def _native_observation_event(event: Dict[str, Any]) -> None:
             should_save_trial_draft = bool(
                 native_observation_enabled()
                 and CURRENT_MATCH.has_any_fact()
-                and _LAST_DRAFT_WRITE != (CURRENT_MATCH.id, CURRENT_MATCH.facts_revision)
+                and (
+                    _LAST_DRAFT_WRITE != (CURRENT_MATCH.id, CURRENT_MATCH.facts_revision)
+                    or source_captured
+                )
             )
 
     if stale_frame:
@@ -2550,6 +2817,201 @@ def _send_native_manual_control(
         "reason": None if sent else "NATIVE_CONTROL_CHANNEL_FAILED",
         "revision": command.get("revision"),
     }
+
+
+def _native_find_warehouse_slot(anchor: Any) -> Optional[Dict[str, Any]]:
+    key = _native_warehouse_instance_key(CURRENT_MATCH.id, anchor)
+    if key is None:
+        return None
+    for slot in _native_warehouse_slots_from_facts():
+        if _native_warehouse_instance_key(CURRENT_MATCH.id, {
+            "row": slot.get("row"), "col": slot.get("col"), "w": slot.get("w"),
+            "h": slot.get("h"), "rarity": slot.get("rarity"),
+        }) == key:
+            return slot
+    return None
+
+
+def handle_request_warehouse_slot_evidence(payload: Dict[str, Any]) -> Dict[str, Any]:
+    """Serve the exact activity crop for a currently projected physical slot."""
+    if not isinstance(payload, dict):
+        return {"ok": False, "message": "活动槽位请求无效"}
+    anchor = payload.get("instanceAnchor")
+    with _MANUAL_STATE_LOCK:
+        match_id = str(payload.get("matchId") or "")
+        if match_id != str(CURRENT_MATCH.id):
+            return {"ok": False, "message": "该活动槽位已不属于当前局"}
+        slot = _native_find_warehouse_slot(anchor)
+        if slot is None:
+            return {"ok": False, "message": "物理槽位已变化，请从当前仓库重新打开"}
+        activity = slot.get("activityEvidence") if isinstance(slot.get("activityEvidence"), dict) else {}
+        evidence_id = str(payload.get("activityEvidenceId") or "")
+        token = str(payload.get("instanceDecisionToken") or "")
+        if (not evidence_id or evidence_id != str(activity.get("evidenceId") or "")
+                or token != str(slot.get("instanceDecisionToken") or "")):
+            return {"ok": False, "message": "活动来源或候选版本已变化，请重新打开"}
+        descriptor = _NATIVE_TRIAL_WAREHOUSE_SOURCES.get(evidence_id)
+        if not isinstance(descriptor, dict) or str(descriptor.get("matchId") or "") != match_id:
+            return {
+                "ok": False, "message": "这次活动观察没有保存原图/裁图；未用图鉴卡或其他帧替代",
+                "sourceAvailable": False,
+                "sourceKind": activity.get("sourceKind"),
+            }
+        image = NATIVE_TRIAL_DRAFT_STORE.read_source_image_descriptor(descriptor)
+        if image.get("error") or not isinstance(image.get("data"), bytes):
+            return {
+                "ok": False, "message": image.get("error") or "活动裁图缺失或校验失败",
+                "sourceAvailable": False,
+                "source": {key: value for key, value in descriptor.items() if key != "data"},
+            }
+        current_slot = copy.deepcopy(slot)
+        live_scope = _native_instance_decision_scope_key(LATEST_PAYLOAD)
+        activity_is_current = bool(
+            str(activity.get("sessionId") or "") == str(LATEST_PAYLOAD.get("observationSessionId") or "")
+            and activity.get("generationId") == (live_scope[4] if live_scope else None)
+        )
+        can_decide = bool(
+            live_scope is not None
+            and live_scope == _NATIVE_INSTANCE_DECISION_SCOPE
+            and payload.get("mainDecisionGeneration") == _NATIVE_INSTANCE_DECISION_GENERATION
+            and str(payload.get("sessionId") or "") == str(LATEST_PAYLOAD.get("observationSessionId") or "")
+            and _native_target_instance(payload.get("targetInstance"))
+                == _native_target_instance(LATEST_PAYLOAD.get("target"))
+            and activity_is_current
+            and (current_slot.get("identityStatus") == "CANDIDATE" or isinstance(current_slot.get("manualDecision"), dict))
+        )
+        requested_candidates = {str(value) for value in (payload.get("candidateIds") or []) if value}
+        candidates = [item for item in (current_slot.get("candidates") or [])
+                      if isinstance(item, dict)
+                      and str(item.get("catalogId") or item.get("Id") or "") in requested_candidates]
+        candidate_ids = {str(item.get("catalogId") or item.get("Id") or "") for item in candidates}
+        if candidate_ids:
+            global _WAREHOUSE_REVIEW_GUIDEBOOK_ITEMS
+            if _WAREHOUSE_REVIEW_GUIDEBOOK_ITEMS is None:
+                from main_window import _load_guidebook_display_sources
+                source_data = _load_guidebook_display_sources(Path(PROJECT_ROOT))
+                _WAREHOUSE_REVIEW_GUIDEBOOK_ITEMS = {}
+                if source_data.get("ok"):
+                    for guide_item in source_data.get("items") or []:
+                        if not isinstance(guide_item, dict):
+                            continue
+                        ids = {
+                            str(guide_item.get("visualCatalogId") or ""),
+                            str(guide_item.get("legacyCatalogId") or ""),
+                        } - {""}
+                        for item_id in ids:
+                            _WAREHOUSE_REVIEW_GUIDEBOOK_ITEMS[item_id] = guide_item
+            for candidate in candidates:
+                catalog_id = str(candidate.get("catalogId") or candidate.get("Id") or "")
+                guide_item = _WAREHOUSE_REVIEW_GUIDEBOOK_ITEMS.get(catalog_id)
+                candidate["sourceImages"] = copy.deepcopy((guide_item or {}).get("sourceImages") or [])
+                candidate["sourceImageStatus"] = "available" if any(
+                    image_row.get("available") and image_row.get("uri")
+                    for image_row in candidate["sourceImages"] if isinstance(image_row, dict)
+                ) else "unavailable"
+        return {
+            "ok": True,
+            "sourceAvailable": True,
+            "source": {key: value for key, value in descriptor.items() if key != "data"},
+            "dataUrl": "data:image/png;base64," + base64.b64encode(image["data"]).decode("ascii"),
+            "candidates": candidates,
+            "identityStatus": current_slot.get("identityStatus"),
+            "manualDecision": copy.deepcopy(current_slot.get("manualDecision")),
+            "decisionAllowed": can_decide,
+            "mainDecisionGeneration": _NATIVE_INSTANCE_DECISION_GENERATION,
+        }
+
+
+def handle_warehouse_instance_decision(payload: Dict[str, Any]) -> Dict[str, Any]:
+    """Send one instance decision to the sole Native business worker."""
+    global _LIVE_CONTROL_REVISION
+    if not isinstance(payload, dict):
+        return {"status": "REJECTED", "reason": "实例决策请求无效"}
+    with _MANUAL_STATE_LOCK:
+        scope = _native_instance_decision_scope_key(LATEST_PAYLOAD)
+        if (scope is None or scope != _NATIVE_INSTANCE_DECISION_SCOPE
+                or payload.get("mainDecisionGeneration") != _NATIVE_INSTANCE_DECISION_GENERATION):
+            return {"status": "REJECTED", "reason": "观察资格或局归属已变化，修改未发送"}
+        session_id = str(payload.get("sessionId") or "")
+        match_id = str(payload.get("matchId") or "")
+        if (session_id != str(LATEST_PAYLOAD.get("observationSessionId") or "")
+                or match_id != str(CURRENT_MATCH.id)
+                or payload.get("round") != LATEST_PAYLOAD.get("round")):
+            return {"status": "REJECTED", "reason": "会话、对局或回合已变化，修改未发送"}
+        target = _native_target_instance(LATEST_PAYLOAD.get("target"))
+        if (not isinstance(target, dict)
+                or _native_target_instance(payload.get("targetInstance")) != target):
+            return {"status": "REJECTED", "reason": "目标实例已变化，修改未发送"}
+        anchor = payload.get("instanceAnchor")
+        slot = _native_find_warehouse_slot(anchor)
+        if slot is None:
+            return {"status": "REJECTED", "reason": "物理槽位已变化，修改未发送"}
+        activity = slot.get("activityEvidence") if isinstance(slot.get("activityEvidence"), dict) else {}
+        if (str(payload.get("activityEvidenceId") or "") != str(activity.get("evidenceId") or "")
+                or str(payload.get("instanceDecisionToken") or "") != str(slot.get("instanceDecisionToken") or "")
+                or payload.get("expectedGenerationId") != activity.get("generationId")
+                or payload.get("expectedInvalidationGeneration") != slot.get("instanceDecisionGeneration")
+                or str(activity.get("sessionId") or "") != session_id):
+            return {"status": "REJECTED", "reason": "实例身份或观察版本已变化，修改未发送"}
+        decision = str(payload.get("decision") or "").upper()
+        catalog_id = str(payload.get("catalogId") or "")
+        if decision in {"CONFIRM_CANDIDATE", "REJECT_CANDIDATE"}:
+            if slot.get("identityStatus") != "CANDIDATE" or not any(
+                str(candidate.get("catalogId") or candidate.get("Id") or "") == catalog_id
+                for candidate in (slot.get("candidates") or []) if isinstance(candidate, dict)
+            ):
+                return {"status": "REJECTED", "reason": "所选候选不属于这个活动实例"}
+        elif decision == "RESTORE_AUTOMATIC":
+            if not isinstance(slot.get("manualDecision"), dict):
+                return {"status": "REJECTED", "reason": "该实例没有可撤销的人工决定"}
+        else:
+            return {"status": "REJECTED", "reason": "不支持的实例决定"}
+        if _NATIVE_CONTROL_BINDINGS:
+            return {"status": "REJECTED", "reason": "另一个观察命令仍在等待回执"}
+        with _NATIVE_OBSERVATION_LOCK:
+            bridge = NATIVE_OBSERVATION_BRIDGE
+        if bridge is None or not bridge.running:
+            return {"status": "REJECTED", "reason": "Native 观察连接已断开，修改未发送"}
+        _LIVE_CONTROL_REVISION += 1
+        revision = _LIVE_CONTROL_REVISION
+        command = {
+            "revision": revision,
+            "workerAction": "warehouse.instance_decision",
+            "expectedObservationSessionId": session_id,
+            "expectedTargetInstance": copy.deepcopy(target),
+            "expectedMatchId": match_id,
+            "expectedRound": int(LATEST_PAYLOAD.get("round")),
+            "expectedGenerationId": activity.get("generationId"),
+            "expectedInvalidationGeneration": slot.get("instanceDecisionGeneration"),
+            "instanceDecisionToken": str(slot.get("instanceDecisionToken") or ""),
+            "activityEvidenceId": str(activity.get("evidenceId") or ""),
+            "instanceAnchor": {
+                key: slot.get(key) for key in ("row", "col", "w", "h", "rarity")
+            },
+            "decision": decision,
+            "catalogId": catalog_id or None,
+        }
+        binding = {
+            "kind": "warehouse_instance_decision",
+            "matchId": match_id,
+            "projectedMatchId": CURRENT_MATCH.id,
+            "sessionId": session_id,
+            "targetInstance": copy.deepcopy(target),
+            "round": int(LATEST_PAYLOAD.get("round")),
+            "mainDecisionGeneration": _NATIVE_INSTANCE_DECISION_GENERATION,
+            "scope": scope,
+            "instanceAnchor": copy.deepcopy(command["instanceAnchor"]),
+            "instanceDecisionToken": command["instanceDecisionToken"],
+            "activityEvidenceId": command["activityEvidenceId"],
+            "decision": decision,
+            "catalogId": catalog_id or None,
+        }
+        _NATIVE_CONTROL_BINDINGS[revision] = binding
+        sent = bridge.send_control({"type": "native_control", "command": command})
+        if not sent:
+            _NATIVE_CONTROL_BINDINGS.pop(revision, None)
+            return {"status": "REJECTED", "reason": "未能发送到观察 worker，修改未生效"}
+        return {"status": "PENDING", "revision": revision, "commandId": f"native-control-{revision}"}
 
 
 def _publish_live_shadow_event(event: Dict[str, Any]) -> None:
@@ -3168,6 +3630,14 @@ def _persist_current_draft_now() -> Optional[Dict[str, Any]]:
                 written = NATIVE_TRIAL_DRAFT_STORE.save_draft(
                     _manual_draft_record(),
                     source_frames=copy.deepcopy(_NATIVE_TRIAL_SOURCE_FRAMES),
+                    warehouse_slot_sources=[
+                        copy.deepcopy(item) for item in _NATIVE_TRIAL_WAREHOUSE_SOURCES.values()
+                        if str(item.get("matchId") or "") == str(CURRENT_MATCH.id)
+                    ],
+                    warehouse_instance_decisions=[
+                        copy.deepcopy(item) for item in _NATIVE_TRIAL_WAREHOUSE_DECISIONS.values()
+                        if str(item.get("matchId") or "") == str(CURRENT_MATCH.id)
+                    ],
                     observation_scope=scope,
                 )
                 _LAST_DRAFT_WRITE = (CURRENT_MATCH.id, CURRENT_MATCH.facts_revision)
@@ -6516,6 +6986,8 @@ def run_hud_app():
             settlement_review_service=settlement_review_service,
             legacy_archive_provider=lambda: legacy_archive,
             manual_facts_provider=lambda facts: publish_manual_payload(apply_manual_facts(facts)),
+            warehouse_slot_evidence_provider=handle_request_warehouse_slot_evidence,
+            warehouse_instance_decision_provider=handle_warehouse_instance_decision,
             start_vision_provider=lambda resume_same_match=False: start_vision_worker(
                 resume_same_match=bool(resume_same_match)
             ) is not None,

@@ -2,6 +2,7 @@ import copy
 import json
 import sys
 import time
+import tempfile
 import types
 import unittest
 from unittest.mock import patch
@@ -106,6 +107,142 @@ class DerivedWarehouseIdentityBoundaryTests(unittest.TestCase):
             [1, 2, 1],
         )
         self.assertEqual(instances[0].reset_count, 1)
+
+    def test_activity_slot_crop_is_the_exact_scoped_source_and_instance_decisions_stay_local(self):
+        catalog = json.loads((ROOT / "assets/catalog_065.json").read_text(encoding="utf-8-sig"))
+        item = next(row for row in catalog if row.get("Quality") == "金" and row.get("Width") == 1 and row.get("Height") == 1)
+        current = CurrentMatch()
+        current.id = "match-review"
+        current.apply_facts({"roundNo": 1, "knownGold": "人工保护值"}, source="manual", intent="confirm")
+        current.apply_facts({"warehouse": {"slots": []}}, source="vision", intent="observe")
+        engine = _engine(current, [item])
+        engine.data_origin = "offline-replay"
+
+        with tempfile.TemporaryDirectory(dir=str(ROOT / "build")) as folder:
+            engine.work_dir = Path(folder)
+            engine._warehouse_activity_sources = {}
+            frame = np.arange(8 * 9 * 3, dtype=np.uint8).reshape((8, 9, 3))
+            source_result = {
+                "sessionId": "session-review", "generationId": 22, "matchId": current.id,
+                "capturedAt": "2026-09-25T03:00:00Z", "captureTimestampNs": 12345,
+                "frameSequence": 81, "pixelSha256": "f" * 64, "dataOrigin": "offline-replay",
+            }
+            visual_slot = {
+                "row": 1, "col": 2, "w": 1, "h": 1, "rarity": "gold",
+                "box": [2, 1, 3, 2], "identityStatus": "CANDIDATE",
+                "candidates": [{"catalogId": item["Id"], "name": item["Name"]}],
+            }
+            evidence = engine._activity_evidence_for_slot(source_result, frame, visual_slot)
+            crop = cv2.imdecode(
+                np.fromfile(str(engine.work_dir / evidence["relativePath"]), dtype=np.uint8),
+                cv2.IMREAD_COLOR,
+            )
+            self.assertEqual(evidence["sourceKind"], "offline-replay")
+            self.assertEqual(evidence["sessionId"], "session-review")
+            self.assertEqual(evidence["matchId"], "match-review")
+            self.assertEqual(evidence["frameSequence"], 81)
+            self.assertEqual(evidence["box"], [2, 1, 3, 2])
+            np.testing.assert_array_equal(crop, frame[1:3, 2:5])
+
+        scope = {
+            "sessionId": "session-current", "generationId": 9, "matchId": current.id,
+            "round": 1, "scene": "IN_AUCTION", "invalidationGeneration": 0,
+        }
+        base_slots = []
+        for col in (0, 1):
+            slot = {
+                "row": 0, "col": col, "w": 1, "h": 1, "rarity": "gold",
+                "trackId": 7, "identityStatus": "CANDIDATE", "evidenceLevel": "CANDIDATE_SET",
+                "candidates": [{"catalogId": item["Id"], "name": item["Name"]}],
+                "activityEvidence": {"evidenceId": f"evidence-{col}", "sessionId": "session-current", "generationId": 9},
+            }
+            slot["instanceDecisionToken"] = engine._warehouse_instance_decision_token(scope, slot)
+            slot["instanceDecisionGeneration"] = 0
+            base_slots.append(slot)
+        current.facts["warehouse"] = {"slots": copy.deepcopy(base_slots)}
+        engine._warehouse_review_scope = copy.deepcopy(scope)
+        engine._warehouse_review_vision = {"slots": copy.deepcopy(base_slots)}
+
+        def command(slot, action, command_id, catalog_id=None):
+            return engine._apply_warehouse_instance_decision(command_id, {
+                "decision": action, "catalogId": catalog_id,
+                "expectedObservationSessionId": "session-current", "expectedMatchId": current.id,
+                "expectedRound": 1, "expectedGenerationId": 9,
+                "expectedInvalidationGeneration": 0,
+                "instanceAnchor": {key: slot[key] for key in ("row", "col", "w", "h", "rarity")},
+                "instanceDecisionToken": slot["instanceDecisionToken"],
+                "activityEvidenceId": slot["activityEvidence"]["evidenceId"],
+            })
+
+        status, error, confirmed = command(base_slots[0], "CONFIRM_CANDIDATE", "confirm-one", item["Id"])
+        self.assertEqual((status, error), ("ACK", None))
+        self.assertEqual(confirmed["status"], "APPLIED")
+        slots_after_confirm = current.facts["warehouse"]["slots"]
+        self.assertEqual(slots_after_confirm[0]["manualDecision"]["source"], "HUMAN_INSTANCE_REVIEW")
+        self.assertEqual(slots_after_confirm[0]["identityStatus"], "CANDIDATE")
+        self.assertNotIn("manualDecision", slots_after_confirm[1])
+        self.assertEqual(current.facts["knownGold"], "人工保护值")
+
+        status, error, retried = command(base_slots[0], "CONFIRM_CANDIDATE", "confirm-retry", item["Id"])
+        self.assertEqual((status, error), ("ACK", None))
+        self.assertTrue(retried["idempotent"])
+        self.assertEqual(len(current.facts["warehouse"]["slots"]), 2)
+
+        status, error, rejected = command(base_slots[1], "REJECT_CANDIDATE", "reject-second", item["Id"])
+        self.assertEqual((status, error), ("ACK", None))
+        self.assertEqual(rejected["status"], "APPLIED")
+        self.assertEqual(len(current.facts["warehouse"]["slots"]), 2)
+        self.assertEqual(current.facts["warehouse"]["slots"][1]["manualDecision"]["action"], "REJECT_CANDIDATE")
+
+        status, error, restored = command(base_slots[1], "RESTORE_AUTOMATIC", "restore-second")
+        self.assertEqual((status, error), ("ACK", None))
+        self.assertEqual(restored["status"], "APPLIED")
+        self.assertNotIn("manualDecision", current.facts["warehouse"]["slots"][1])
+
+        engine.last_context["round"] = 2
+        status, error, _late = command(base_slots[0], "REJECT_CANDIDATE", "old-round", item["Id"])
+        self.assertEqual(status, "REJECT")
+        self.assertEqual(error, "STALE_ROUND_OR_SCENE")
+
+    def test_automatic_frames_preserve_one_instance_decision_without_promoting_it(self):
+        current = CurrentMatch()
+        current.id = "match-review"
+        engine = _engine(current, [])
+        old = {
+            "row": 0, "col": 1, "w": 1, "h": 1, "rarity": "gold",
+            "identityStatus": "CANDIDATE", "evidenceLevel": "CANDIDATE_SET",
+            "candidates": [{"catalogId": "candidate-a", "name": "A"}],
+            "manualDecision": {"action": "CONFIRM_CANDIDATE", "catalogId": "candidate-a", "source": "HUMAN_INSTANCE_REVIEW"},
+        }
+        incoming = {**old, "identityStatus": "EXACT", "identifiedName": "其他身份", "identifiedCatalogId": "candidate-b"}
+        merged = engine._merge_warehouse_fact_slots({"slots": [old]}, {"slots": [incoming]})
+        slot = merged["slots"][0]
+        self.assertEqual(slot["identityStatus"], "CANDIDATE")
+        self.assertTrue(slot["identityConflict"])
+        self.assertEqual(slot["manualDecision"]["catalogId"], "candidate-a")
+
+    def test_rejected_candidate_cannot_reappear_as_an_automatic_exact_identity(self):
+        old = {
+            "row": 0, "col": 1, "w": 1, "h": 1, "rarity": "gold",
+            "identityStatus": "CANDIDATE", "evidenceLevel": "CANDIDATE_SET",
+            "candidates": [{"catalogId": "candidate-a", "name": "A"}],
+            "manualDecision": {
+                "action": "REJECT_CANDIDATE", "catalogId": "candidate-a",
+                "source": "HUMAN_INSTANCE_REVIEW",
+            },
+        }
+        incoming = {
+            **old, "identityStatus": "EXACT", "evidenceLevel": "EXACT_IDENTIFIED",
+            "identifiedCatalogId": "candidate-a", "identifiedName": "A",
+        }
+
+        merged = RealEngine._merge_warehouse_fact_slots({"slots": [old]}, {"slots": [incoming]})
+        slot = merged["slots"][0]
+
+        self.assertEqual(slot["identityStatus"], "CANDIDATE")
+        self.assertNotIn("identifiedCatalogId", slot)
+        self.assertNotIn("identifiedName", slot)
+        self.assertEqual(slot["manualDecision"]["action"], "REJECT_CANDIDATE")
 
     def test_deferred_take_transfers_frame_descriptor_without_mutating_context(self):
         pipeline = NTEVisionPipeline.__new__(NTEVisionPipeline)

@@ -467,11 +467,29 @@ internal static class NativeObservationService
                 });
                 continue;
             }
+            var workerAction = (string?)command["workerAction"] ?? "match.apply_control";
+            if (workerAction is not ("match.apply_control" or "warehouse.instance_decision"))
+            {
+                EmitStatus(sessionId, "CONTROL", "unsupported-worker-action", new
+                {
+                    commandId,
+                    controlRevision = revision,
+                    commandStatus = "REJECT",
+                    commandMessageType = "NACK",
+                    commandResult = new
+                    {
+                        status = "REJECT",
+                        errorDetails = "UNSUPPORTED_WORKER_ACTION",
+                        resultData = new { workerAction },
+                    },
+                });
+                continue;
+            }
             try
             {
                 var result = session.SendCommandWithId(
                     commandId,
-                    "match.apply_control",
+                    workerAction,
                     command.DeepClone() as JsonObject,
                     timeoutMs: 5000);
                 EmitStatus(sessionId, "CONTROL", "command-result", new
