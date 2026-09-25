@@ -1471,6 +1471,26 @@ class RealEngine:
         return entries
 
     @staticmethod
+    def _warehouse_official_catalog_index(catalog: Any) -> dict[str, dict]:
+        rows_by_id: dict[str, list[dict]] = {}
+        for row in catalog or []:
+            if isinstance(row, dict) and row.get("Id"):
+                rows_by_id.setdefault(str(row["Id"]), []).append(row)
+        return {catalog_id: rows[0] for catalog_id, rows in rows_by_id.items() if len(rows) == 1}
+
+    @staticmethod
+    def _warehouse_positive_integer(value: Any) -> Optional[int]:
+        if isinstance(value, bool):
+            return None
+        try:
+            number = float(value)
+        except (TypeError, ValueError):
+            return None
+        if not number.is_integer() or number <= 0:
+            return None
+        return int(number)
+
+    @staticmethod
     def _warehouse_known_names(warehouse: dict, official_by_id: dict, quality_targets: dict) -> dict[str, list[str]]:
         names = {field: [] for field, _quality in quality_targets.values()}
         by_name_quality: dict[tuple[str, str], list[dict]] = {}
@@ -1485,14 +1505,70 @@ class RealEngine:
             if anchor is None or anchor in seen_anchors:
                 continue
             seen_anchors.add(anchor)
+            target = quality_targets.get(str(slot.get("rarity") or ""))
+            if target is None:
+                continue
+            field, expected_quality = target
+            manual = slot.get("manualDecision") if isinstance(slot.get("manualDecision"), dict) else None
+            manual_identity = manual.get("manualIdentity") if manual and isinstance(manual.get("manualIdentity"), dict) else None
+            if (manual and manual.get("action") == "CONFIRM_CANDIDATE"
+                    and manual.get("source") == "HUMAN_INSTANCE_REVIEW"
+                    and manual_identity and manual_identity.get("status") == "MANUAL_CONFIRMED"
+                    and manual_identity.get("source") == "HUMAN_INSTANCE_REVIEW"
+                    and str(manual_identity.get("rarity") or "") == str(slot.get("rarity") or "")):
+                catalog_id = str(manual_identity.get("catalogId") or "")
+                name = str(manual_identity.get("name") or "").strip()
+                proof = manual_identity.get("solverCatalogProof")
+                official = official_by_id.get(catalog_id)
+                matches = by_name_quality.get((expected_quality, name), [])
+                official_value = RealEngine._warehouse_positive_integer(official.get("Value")) if official is not None else None
+                official_width = RealEngine._warehouse_positive_integer(official.get("Width")) if official is not None else None
+                official_height = RealEngine._warehouse_positive_integer(official.get("Height")) if official is not None else None
+                proof_price = RealEngine._warehouse_positive_integer(proof.get("price")) if isinstance(proof, dict) else None
+                proof_width = RealEngine._warehouse_positive_integer(proof.get("width")) if isinstance(proof, dict) else None
+                proof_height = RealEngine._warehouse_positive_integer(proof.get("height")) if isinstance(proof, dict) else None
+                footprint = RealEngine._warehouse_instance_footprint(slot)
+                slot_size_matches = bool(
+                    footprint and (
+                        (footprint[2], footprint[3]) == (official_width, official_height)
+                        or (footprint[2], footprint[3]) == (official_height, official_width)
+                    )
+                )
+                decision_anchor = manual.get("instanceAnchor") if isinstance(manual.get("instanceAnchor"), dict) else {}
+                try:
+                    anchor_matches = bool(
+                        footprint and all(
+                            int(decision_anchor.get(key, -1)) == value
+                            for key, value in zip(("row", "col", "w", "h"), footprint[:4])
+                        ) and str(decision_anchor.get("rarity") or "") == footprint[4]
+                    )
+                except (TypeError, ValueError):
+                    anchor_matches = False
+                if (official is None or not name or "+" in name or len(matches) != 1
+                        or matches[0].get("Id") != catalog_id
+                        or str(official.get("Name") or "").strip() != name
+                        or str(official.get("Quality") or "") != expected_quality
+                        or official_value is None or official_width is None or official_height is None
+                        or not slot_size_matches or not anchor_matches
+                        or not isinstance(proof, dict)
+                        or str(proof.get("catalogId") or "") != catalog_id
+                        or str(proof.get("inputName") or "").strip() != name
+                        or str(proof.get("name") or "").strip() != str(official.get("Name") or "").strip()
+                        or str(proof.get("quality") or "") != str(slot.get("rarity") or "")
+                        or not str(proof.get("catalogVersion") or "").strip()
+                        or not str(proof.get("name") or "").strip()
+                        or proof_price != official_value or proof_width is None or proof_height is None
+                        or (proof_width, proof_height) != (official_width, official_height)):
+                    continue
+                names[field].append(name)
+                continue
+
             identity = RealEngine._warehouse_slot_identity(slot)
             if identity is None:
                 continue
             catalog_id, name = identity
-            target = quality_targets.get(str(slot.get("rarity") or ""))
-            if target is None or not name or "+" in name:
+            if not name or "+" in name:
                 continue
-            field, expected_quality = target
             official = official_by_id.get(catalog_id) if catalog_id else None
             if official is None:
                 matches = by_name_quality.get((expected_quality, name), [])
@@ -1502,6 +1578,34 @@ class RealEngine:
                 continue
             names[field].append(name)
         return names
+
+    @staticmethod
+    def _warehouse_known_fact_delta(
+        current_facts: dict, previous_warehouse: Any, updated_warehouse: Any,
+        official_by_id: dict, quality_targets: dict,
+    ) -> dict[str, str]:
+        previous_names = RealEngine._warehouse_known_names(
+            previous_warehouse if isinstance(previous_warehouse, dict) else {"slots": []},
+            official_by_id, quality_targets,
+        )
+        updated_names = RealEngine._warehouse_known_names(
+            updated_warehouse if isinstance(updated_warehouse, dict) else {"slots": []},
+            official_by_id, quality_targets,
+        )
+        patch: dict[str, str] = {}
+        for field, _quality in quality_targets.values():
+            existing = current_facts.get(field) or ""
+            remove = Counter(previous_names[field])
+            preserved = []
+            for entry in RealEngine._known_fact_entries(existing):
+                if remove[entry] > 0:
+                    remove[entry] -= 1
+                else:
+                    preserved.append(entry)
+            combined = "+".join(preserved + updated_names[field])
+            if combined != existing:
+                patch[field] = combined
+        return patch
 
     @staticmethod
     def _warehouse_fact_projection(vision: dict) -> dict:
@@ -1639,12 +1743,6 @@ class RealEngine:
             if not catalog_id or candidate is None or observed_slot.get("identityStatus") != "CANDIDATE":
                 return "REJECT", "CANDIDATE_NOT_AVAILABLE_FOR_THIS_INSTANCE", {"instanceAnchor": anchor}
             name = str(candidate.get("name") or candidate.get("Name") or "").strip()
-            official = next((item for item in (self.pipeline.catalog or []) if isinstance(item, dict)
-                             and str(item.get("Id") or "") == catalog_id), None)
-            expected_quality = {"gold": "金", "purple": "紫", "red": "红", "green": "绿", "blue": "蓝", "white": "白"}.get(anchor["rarity"])
-            if (not name or official is None or str(official.get("Name") or "").strip() != name
-                    or str(official.get("Quality") or "") != expected_quality):
-                return "REJECT", "CANDIDATE_CONFLICTS_WITH_OFFICIAL_CATALOG", {"instanceAnchor": anchor}
             decision = {
                 "action": action, "catalogId": catalog_id, "name": name,
                 "source": "HUMAN_INSTANCE_REVIEW", "commandId": command_id,
@@ -1652,7 +1750,92 @@ class RealEngine:
                 "instanceAnchor": anchor,
             }
             if action == "CONFIRM_CANDIDATE":
-                decision["manualIdentity"] = {"catalogId": catalog_id, "name": name, "rarity": anchor["rarity"]}
+                known_field_for_rarity = {"gold": "knownGold", "purple": "knownPurple", "red": "knownRed"}
+                expected_quality = {"gold": "金", "purple": "紫", "red": "红"}.get(anchor["rarity"])
+                if expected_quality is None or anchor["rarity"] not in known_field_for_rarity:
+                    return "REJECT", "QUALITY_HAS_NO_EXISTING_SOLVER_KNOWN_CONSTRAINT", {"instanceAnchor": anchor}
+                official_by_id = self._warehouse_official_catalog_index(self.pipeline.catalog)
+                official = official_by_id.get(catalog_id)
+                solver_proof = parameters.get("solverCatalogProof")
+                if official is None or str(official.get("Name") or "").strip() != name or str(official.get("Quality") or "") != expected_quality:
+                    return "REJECT", "CANDIDATE_CONFLICTS_WITH_OFFICIAL_CATALOG", {"instanceAnchor": anchor}
+                official_value = self._warehouse_positive_integer(official.get("Value"))
+                official_width = self._warehouse_positive_integer(official.get("Width"))
+                official_height = self._warehouse_positive_integer(official.get("Height"))
+                proof_price = self._warehouse_positive_integer(solver_proof.get("price")) if isinstance(solver_proof, dict) else None
+                proof_width = self._warehouse_positive_integer(solver_proof.get("width")) if isinstance(solver_proof, dict) else None
+                proof_height = self._warehouse_positive_integer(solver_proof.get("height")) if isinstance(solver_proof, dict) else None
+                if None in (official_value, official_width, official_height, proof_price, proof_width, proof_height):
+                    return "REJECT", "CANDIDATE_VALUE_OR_SIZE_UNCONFIRMED", {"instanceAnchor": anchor}
+                name_matches = [row for row in self.pipeline.catalog or [] if isinstance(row, dict)
+                                and str(row.get("Name") or "").strip() == name
+                                and str(row.get("Quality") or "") == expected_quality]
+                footprint = self._warehouse_instance_footprint(observed_slot)
+                slot_size_matches = bool(
+                    footprint and (
+                        (footprint[2], footprint[3]) == (official_width, official_height)
+                        or (footprint[2], footprint[3]) == (official_height, official_width)
+                    )
+                )
+                candidate_quality = str(candidate.get("quality") or candidate.get("Quality") or candidate.get("rarity") or "").strip()
+                quality_aliases = {
+                    anchor["rarity"], expected_quality,
+                    {"gold": "金色", "purple": "紫色", "red": "红色"}[anchor["rarity"]],
+                }
+                candidate_size = None
+                try:
+                    candidate_width = candidate.get("Width", candidate.get("width"))
+                    candidate_height = candidate.get("Height", candidate.get("height"))
+                    if candidate_width is not None or candidate_height is not None:
+                        candidate_size = (
+                            self._warehouse_positive_integer(candidate_width),
+                            self._warehouse_positive_integer(candidate_height),
+                        )
+                    elif candidate.get("size") is not None or candidate.get("footprint") is not None:
+                        size_text = str(candidate.get("size") or candidate.get("footprint") or "").lower()
+                        parts = size_text.split("x")
+                        if len(parts) != 2:
+                            raise ValueError("unreadable candidate size")
+                        candidate_size = (
+                            self._warehouse_positive_integer(parts[0]),
+                            self._warehouse_positive_integer(parts[1]),
+                        )
+                except (TypeError, ValueError):
+                    return "REJECT", "CANDIDATE_SIZE_CONFLICTS_WITH_OFFICIAL_CATALOG", {"instanceAnchor": anchor}
+                candidate_size_matches = candidate_size is None or candidate_size in {
+                    (official_width, official_height), (official_height, official_width),
+                }
+                if (official_value <= 0 or official_width <= 0 or official_height <= 0
+                        or len(name_matches) != 1 or not slot_size_matches
+                        or (candidate_quality and candidate_quality not in quality_aliases)
+                        or not candidate_size_matches
+                        or any(bool(source.get(flag)) for source in (candidate, observed_slot)
+                               for flag in ("qualityConflict", "sizeConflict", "catalogConflict"))):
+                    return "REJECT", "CANDIDATE_HAS_UNRESOLVED_QUALITY_SIZE_OR_CATALOG_CONFLICT", {"instanceAnchor": anchor}
+                if (not isinstance(solver_proof, dict)
+                        or str(solver_proof.get("catalogId") or "") != catalog_id
+                        or str(solver_proof.get("inputName") or "").strip() != name
+                        or str(solver_proof.get("name") or "").strip() != str(official.get("Name") or "").strip()
+                        or str(solver_proof.get("quality") or "") != anchor["rarity"]
+                        or not str(solver_proof.get("catalogVersion") or "").strip()
+                        or proof_price != official_value
+                        or (proof_width, proof_height) != (official_width, official_height)):
+                    return "REJECT", "IDENTITY_NOT_AVAILABLE_IN_CURRENT_SOLVER_CATALOG", {"instanceAnchor": anchor}
+                decision["manualIdentity"] = {
+                    "catalogId": catalog_id, "name": name, "rarity": anchor["rarity"],
+                    "status": "MANUAL_CONFIRMED", "source": "HUMAN_INSTANCE_REVIEW",
+                    "solverCatalogProof": {
+                        "catalogId": catalog_id,
+                        "inputName": name,
+                        "name": str(solver_proof["name"]),
+                        "quality": anchor["rarity"],
+                        "price": official_value,
+                        "width": official_width,
+                        "height": official_height,
+                        "catalogVersion": str(solver_proof["catalogVersion"]),
+                    },
+                }
+                decision["resolvedIdentityConflict"] = bool(target.get("identityConflict") or observed_slot.get("identityConflict"))
         elif action == "RESTORE_AUTOMATIC":
             if target.get("manualDecision") is None:
                 return "ACK", None, {
@@ -1660,7 +1843,9 @@ class RealEngine:
                     "sessionId": self.session_id, "matchId": self.current_match.id,
                     "round": round_value, "instanceDecisionToken": token,
                     "instanceAnchor": anchor, "activityEvidenceId": evidence_id,
-                    "warehouse": warehouse, "idempotent": True,
+                    "factsRevision": self.current_match.facts_revision,
+                    "warehouse": warehouse, "knownFacts": {}, "valuationInputChanged": False,
+                    "idempotent": True,
                 }
             decision = None
         else:
@@ -1675,7 +1860,9 @@ class RealEngine:
                 "sessionId": self.session_id, "matchId": self.current_match.id,
                 "round": round_value, "instanceDecisionToken": token,
                 "instanceAnchor": anchor, "activityEvidenceId": evidence_id,
-                "warehouse": warehouse, "idempotent": True,
+                "factsRevision": self.current_match.facts_revision,
+                "warehouse": warehouse, "knownFacts": {}, "valuationInputChanged": False,
+                "idempotent": True,
                 "decision": copy.deepcopy(previous_decision),
             }
         if decision is None:
@@ -1683,9 +1870,14 @@ class RealEngine:
         else:
             target["manualDecision"] = decision
         updated_warehouse = {**warehouse, "slots": slots}
-        # This is worker-accepted review metadata only. It does not change
-        # identityStatus, identifiedName or any known* solver fact.
         self.current_match.apply_facts({"warehouse": updated_warehouse}, source="vision", intent="observe")
+        official_by_id = self._warehouse_official_catalog_index(self.pipeline.catalog)
+        quality_targets = {"gold": ("knownGold", "金"), "purple": ("knownPurple", "紫"), "red": ("knownRed", "红")}
+        known_facts = self._warehouse_known_fact_delta(
+            self.current_match.facts, warehouse, updated_warehouse, official_by_id, quality_targets,
+        )
+        if known_facts:
+            self.current_match.apply_warehouse_identity_projection(known_facts, command_id=command_id)
         for vision_slot in (self._warehouse_review_vision.get("slots") or []):
             if isinstance(vision_slot, dict) and self._warehouse_instance_footprint(vision_slot) == footprint:
                 if decision is None:
@@ -1695,6 +1887,10 @@ class RealEngine:
                 break
         self.last_context["warehouseVision"] = copy.deepcopy(self._warehouse_review_vision)
         self.last_context["warehouseSlots"] = copy.deepcopy(self._warehouse_review_vision.get("slots") or [])
+        for field, value in known_facts.items():
+            self.last_context[field] = value
+            if isinstance(getattr(self.pipeline, "current_context", None), dict):
+                self.pipeline.current_context[field] = value
         self._persist_history()
         self._persist_state(reason="warehouse_instance_decision")
         result = {
@@ -1704,12 +1900,15 @@ class RealEngine:
             "instanceDecisionToken": token, "activityEvidenceId": evidence_id,
             "instanceAnchor": anchor,
             "decision": copy.deepcopy(decision), "warehouse": updated_warehouse,
+            "knownFacts": copy.deepcopy(known_facts),
+            "valuationInputChanged": bool(known_facts),
             "idempotent": False,
         }
         self.log("warehouse.instance_decision_applied", commandId=command_id,
                  decision=action, catalogId=catalog_id or None,
                  instanceAnchor=anchor, matchId=self.current_match.id,
-                 factsRevision=self.current_match.facts_revision)
+                 factsRevision=self.current_match.facts_revision,
+                 valuationInputChanged=bool(known_facts))
         return "ACK", None, result
 
     def _commit_deferred_identity(self, result: dict) -> bool:
@@ -1790,10 +1989,7 @@ class RealEngine:
             context["warehouseSlots"] = copy.deepcopy(vision.get("slots") or [])
             context["warehouseExpectedVal"] = vision.get("totalExpectedVal", 0)
             context["warehouseValRange"] = copy.deepcopy(vision.get("valRange") or [0, 0])
-            official_by_id = {
-                str(row.get("Id") or ""): row for row in (self.pipeline.catalog or [])
-                if isinstance(row, dict) and row.get("Id")
-            }
+            official_by_id = self._warehouse_official_catalog_index(self.pipeline.catalog)
             quality_targets = {"gold": ("knownGold", "金"), "purple": ("knownPurple", "紫"), "red": ("knownRed", "红")}
             projected = self._warehouse_fact_projection(vision)
             previous_warehouse = self.current_match.facts.get("warehouse")
@@ -1805,21 +2001,10 @@ class RealEngine:
                 self._warehouse_review_vision = copy.deepcopy(vision)
                 context["warehouseVision"] = copy.deepcopy(vision)
                 context["warehouseSlots"] = copy.deepcopy(vision["slots"])
-                old_names = self._warehouse_known_names(previous_warehouse or {"slots": []}, official_by_id, quality_targets)
-                merged_names = self._warehouse_known_names(merged_warehouse, official_by_id, quality_targets)
-                for field, _quality in quality_targets.values():
-                    existing = self.current_match.facts.get(field) or ""
-                    prior_entries = self._known_fact_entries(existing)
-                    warehouse_to_remove = Counter(old_names[field])
-                    preserved = []
-                    for entry in prior_entries:
-                        if warehouse_to_remove[entry] > 0:
-                            warehouse_to_remove[entry] -= 1
-                        else:
-                            preserved.append(entry)
-                    joined = "+".join(preserved + merged_names[field])
-                    if joined != existing:
-                        patch[field] = joined
+                patch.update(self._warehouse_known_fact_delta(
+                    self.current_match.facts, previous_warehouse, merged_warehouse,
+                    official_by_id, quality_targets,
+                ))
         elif kind == "settlement":
             settlement_items = result.get("settlementItems")
             if not isinstance(settlement_items, list):

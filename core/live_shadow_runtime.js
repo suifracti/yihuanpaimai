@@ -12,6 +12,7 @@ const ROOT = path.resolve(__dirname, "..");
 const engine = require(path.join(__dirname, "auction_engine_v06.js"));
 const shared = require(path.join(__dirname, "shadow_profile_v06.js"));
 const computeModule = require(path.join(__dirname, "live_shadow_compute.js"));
+let solverCore = null;
 
 function installHeadlessHost() {
   if (typeof global.document !== "undefined") return;
@@ -40,10 +41,18 @@ function loadSolver() {
   global.candidateStateWeight = core.candidateStateWeight;
   global.expandStatesForValuation = core.expandStatesForValuation;
   global.state = typeof core.getState === "function" ? core.getState() : global.state;
+  return core;
 }
 
 function compute(req, records) {
   return computeModule.compute(req, records, global, engine, shared, "live_shadow_runtime");
+}
+
+function resolveKnownIdentity(req) {
+  const item = solverCore && typeof solverCore.resolveKnownCatalogItem === "function"
+    ? solverCore.resolveKnownCatalogItem(req.ctx || {}, req.quality, req.name)
+    : null;
+  return { ok: true, available: Boolean(item), item: item || null };
 }
 
 function loadRecords(dbPath) {
@@ -64,7 +73,7 @@ for (let i = 0; i < args.length; i++) {
   if (args[i] === "--once") once = true;
 }
 
-loadSolver();
+solverCore = loadSolver();
 let records = loadRecords(dbPath);
 
 if (once) {
@@ -74,7 +83,7 @@ if (once) {
   process.stdin.on("end", () => {
     try {
       const req = JSON.parse(chunks.join("") || "{}");
-      emit(compute(req, records));
+      emit(req && req.action === "resolveKnownIdentity" ? resolveKnownIdentity(req) : compute(req, records));
     } catch (error) {
       emit({ ok: false, error: String(error && error.message || error) });
       process.exitCode = 1;
@@ -91,6 +100,10 @@ if (once) {
       if (req && req.action === "setRecords") {
         records = Array.isArray(req.records) ? req.records : [];
         emit({ ok: true, updated: true, nRecords: records.length });
+        return;
+      }
+      if (req && req.action === "resolveKnownIdentity") {
+        emit(resolveKnownIdentity(req));
         return;
       }
       emit(compute(req, records));

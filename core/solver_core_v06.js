@@ -83,6 +83,18 @@
     }
     function conditionRules(ctx={}){return normalizeFieldCondition(ctx.fieldCondition??ctx.condition??ctx.fieldMode);}
     function baseCatalogFor(ctx={}){return CATALOG_SNAPSHOTS[catalogVersionFor(ctx)]||CATALOG_SNAPSHOTS[CATALOG_VERSION_0813];}
+    function resolveKnownCatalogItem(ctx={},quality,name){
+      const rarity=({gold:"gold",purple:"purple",red:"red"})[String(quality||"").trim().toLowerCase()];
+      const inputName=String(name||"").trim();
+      if(!rarity||!inputName)return null;
+      const canonical=CATALOG_NAME_ALIASES[inputName]||inputName;
+      const matches=(baseCatalogFor(ctx)[rarity]||[]).filter(item=>Array.isArray(item)&&(item[0]===inputName||item[0]===canonical));
+      if(matches.length!==1)return null;
+      const [resolvedName,rawPrice,rawSize]=matches[0],price=Number(rawPrice),size=String(rawSize||"");
+      const dimensions=size.match(/^(\d+)x(\d+)$/i);
+      if(!Number.isFinite(price)||price<=0||!dimensions||Number(dimensions[1])<=0||Number(dimensions[2])<=0)return null;
+      return {inputName,name:resolvedName,quality:rarity,price,size,width:Number(dimensions[1]),height:Number(dimensions[2]),catalogVersion:catalogVersionFor(ctx)};
+    }
     function conditionPriceMultiplier(ctx,rarity){const rules=conditionRules(ctx);return rarity==="gold"?rules.goldMultiplier:rarity==="purple"?rules.purpleMultiplier:1;}
     function effectiveCatalog(ctx={}){
       const base=baseCatalogFor(ctx),rules=conditionRules(ctx),scale=(items,m)=>items.map(x=>[x[0],Number(x[1])*m,x[2]]);
@@ -4292,6 +4304,7 @@ const recordInputs=["recordQ","recordGoldAvg","recordGoldTotal","recordGoldCount
         stateComponents,
         candidateStateWeight,
         expandStatesForValuation,
+        resolveKnownCatalogItem,
         getState: function(){ return state; }
       };
       if (typeof globalThis !== "undefined") {
@@ -4305,4 +4318,3 @@ const recordInputs=["recordQ","recordGoldAvg","recordGoldTotal","recordGoldCount
         module.exports = api;
       }
     })();
-  

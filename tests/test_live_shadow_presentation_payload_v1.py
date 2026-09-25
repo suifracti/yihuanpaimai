@@ -129,7 +129,11 @@ class TestLiveShadowPresentationPayloadV1(unittest.TestCase):
             self.assertTrue(evidence["ok"])
             self.assertTrue(evidence["decisionAllowed"])
             self.assertEqual(evidence["candidates"][0]["sourceImages"][0]["uri"], "file:///catalog.png")
-            result = app_main.handle_warehouse_instance_decision({
+            solver_item = {
+                "inputName": "候选一", "name": "候选一", "quality": "purple", "price": 10000,
+                "width": 1, "height": 2, "catalogVersion": "2026-08-13",
+            }
+            decision_payload = {
                 "sessionId": "decision-session", "matchId": match.id, "round": 4,
                 "targetInstance": target, "mainDecisionGeneration": 8,
                 "instanceAnchor": {key: slot[key] for key in ("row", "col", "w", "h", "rarity")},
@@ -137,19 +141,41 @@ class TestLiveShadowPresentationPayloadV1(unittest.TestCase):
                 "instanceDecisionToken": "decision-token-one", "expectedGenerationId": 14,
                 "expectedInvalidationGeneration": 3,
                 "decision": "CONFIRM_CANDIDATE", "catalogId": "candidate-one",
-            })
+            }
+            with mock.patch(
+                "live_shadow.resolve_solver_catalog_identity",
+                return_value={"ok": True, "available": False, "item": None},
+            ):
+                unavailable = app_main.handle_warehouse_instance_decision(decision_payload)
+            self.assertEqual(unavailable["status"], "REJECTED")
+            self.assertEqual(len(bridge.commands), 0)
+            with mock.patch(
+                "live_shadow.resolve_solver_catalog_identity",
+                return_value={"ok": True, "available": True, "item": solver_item},
+            ):
+                result = app_main.handle_warehouse_instance_decision(decision_payload)
             self.assertEqual(result["status"], "PENDING", result)
             self.assertEqual(bridge.commands[0]["command"]["expectedTargetInstance"], target_instance)
+            expected_solver_proof = {
+                **solver_item, "catalogId": "candidate-one",
+            }
+            self.assertEqual(bridge.commands[0]["command"]["solverCatalogProof"], expected_solver_proof)
 
             command = bridge.commands[0]["command"]
             decision = {
                 "action": "CONFIRM_CANDIDATE", "catalogId": "candidate-one",
                 "name": "候选一", "source": "HUMAN_INSTANCE_REVIEW",
-                "manualIdentity": {"catalogId": "candidate-one", "name": "候选一", "rarity": "purple"},
+                "manualIdentity": {
+                    "catalogId": "candidate-one", "name": "候选一", "rarity": "purple",
+                    "status": "MANUAL_CONFIRMED", "source": "HUMAN_INSTANCE_REVIEW",
+                    "solverCatalogProof": expected_solver_proof,
+                },
             }
             result_data = {
                 "echo": "warehouse.instance_decision", "status": "APPLIED",
                 "sessionId": "decision-session", "matchId": "decision-match", "round": 4,
+                "factsRevision": 21, "knownFacts": {"knownPurple": "候选一"},
+                "valuationInputChanged": True,
                 "instanceDecisionToken": "decision-token-one",
                 "activityEvidenceId": "activity-evidence-one",
                 "instanceAnchor": {key: slot[key] for key in ("row", "col", "w", "h", "rarity")},
@@ -192,6 +218,16 @@ class TestLiveShadowPresentationPayloadV1(unittest.TestCase):
             self.assertEqual(
                 match.facts["warehouse"]["slots"][0]["manualDecision"]["source"],
                 "HUMAN_INSTANCE_REVIEW",
+            )
+            self.assertEqual(match.facts["knownPurple"], "候选一")
+            self.assertTrue(patched["_native_invalidate_solver_locked"].called)
+            self.assertEqual(
+                patched["_native_invalidate_solver_locked"].call_args.args[0],
+                "warehouse-identity-valuation-input-changed",
+            )
+            self.assertEqual(
+                app_main.LATEST_PAYLOAD["warehouseInstanceDecisionResult"]["solverRefreshStatus"],
+                "WAITING_FOR_FRESH_OBSERVATION",
             )
 
             app_main._NATIVE_CONTROL_BINDINGS.clear()

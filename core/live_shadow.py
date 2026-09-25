@@ -759,6 +759,63 @@ def _compute_via_node(ctx: Dict[str, Any], db_path: str, records: List[Dict[str,
     return parsed
 
 
+def resolve_solver_catalog_identity(
+    ctx: Dict[str, Any], quality: str, name: str,
+) -> Optional[Dict[str, Any]]:
+    """Resolve one name against the catalog the production solver will consume.
+
+    This read-only query uses the same persistent Node runtime and catalog
+    version selection as solver computation; it does not run valuation.
+    ``None`` means the runtime could not answer. A mapping with
+    ``available=False`` means the current solver catalog has no unique match.
+    """
+    global _RUNTIME
+    quality_key = str(quality or "").strip().lower()
+    item_name = str(name or "").strip()
+    if quality_key not in {"gold", "purple", "red"} or not item_name:
+        return {"ok": True, "available": False, "item": None}
+
+    request = {
+        "action": "resolveKnownIdentity",
+        "ctx": _solver_ctx(ctx if isinstance(ctx, dict) else {}, []),
+        "quality": quality_key,
+        "name": item_name,
+    }
+    timeout = compute_timeout_s()
+    # Catalog lookup does not need, and should not open, official History.
+    lookup_records = os.path.join(PROJECT_ROOT, "build", "native-observation", "solver-catalog-lookup-empty.json")
+    with _RUNTIME_LOCK:
+        proc = _RUNTIME
+        if proc is None or proc.poll() is not None:
+            proc = _start_runtime(lookup_records)
+            if proc is None:
+                _RUNTIME = None
+                return None
+            try:
+                ready = _read_json_line(proc, timeout=timeout)
+            except Exception:
+                ready = None
+            if not isinstance(ready, dict) or ready.get("ready") is not True:
+                _kill_runtime(proc)
+                _RUNTIME = None
+                return None
+            _RUNTIME = proc
+        if not proc.stdin or not proc.stdout:
+            return None
+        try:
+            proc.stdin.write(json.dumps(request, ensure_ascii=False) + "\n")
+            proc.stdin.flush()
+            parsed = _read_json_line(proc, timeout=timeout)
+        except Exception as exc:
+            _LOG.warning("Solver catalog lookup failed: %s", exc)
+            _kill_runtime(proc)
+            _RUNTIME = None
+            return None
+    if not isinstance(parsed, dict) or parsed.get("ok") is not True:
+        return None
+    return parsed
+
+
 def _runtime_compute(ctx: Dict[str, Any], db_path: str) -> Dict[str, Any]:
     records = list(_SNAPSHOT or [])
     node_res = _compute_via_node(ctx, db_path, records)

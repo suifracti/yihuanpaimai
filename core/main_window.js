@@ -2670,9 +2670,13 @@ function renderWarehouseInstanceReviewPanel() {
   if (status) {
     if (review.receipt?.status === "ACK") {
       const action = review.receipt.decision?.action;
-      status.textContent = action === "CONFIRM_CANDIDATE" ? "观察 worker 已确认这一个实例（人工来源）。"
+      const valuationStatus = review.receipt.solverRefreshStatus === "WAITING_FOR_FRESH_OBSERVATION"
+        ? "估值输入已变更，旧建议已撤销；等待新鲜有效帧后按现有准入重新求解。"
+        : "估值输入未变化；建议状态以求解状态卡为准。";
+      status.textContent = action === "CONFIRM_CANDIDATE" ? `观察 worker 已确认这一个实例（人工来源）。${valuationStatus}`
         : action === "REJECT_CANDIDATE" ? "观察 worker 已排除此实例的所选候选；其他身份仍未确认。"
-          : "观察 worker 已撤销此实例的人工决定。";
+          : `观察 worker 已撤销此实例的人工决定。${valuationStatus}`;
+      if (action === "REJECT_CANDIDATE") status.textContent += ` ${valuationStatus}`;
     } else if (review.receipt?.status === "REJECTED") {
       status.textContent = `未生效：${review.receipt.reason || "观察 worker 拒绝或观察范围已变化"}`;
     } else if (review.busy) {

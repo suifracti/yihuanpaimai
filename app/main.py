@@ -2215,6 +2215,15 @@ def _native_observation_event(event: Dict[str, Any]) -> None:
                         and result_data.get("status") in {"APPLIED", "UNCHANGED"}
                         and isinstance(result_data.get("warehouse"), dict)
                     )
+                    result_known_facts = result_data.get("knownFacts")
+                    known_facts_valid = bool(
+                        isinstance(result_known_facts, dict)
+                        and set(result_known_facts).issubset({"knownGold", "knownPurple", "knownRed"})
+                        and all(isinstance(value, str) for value in result_known_facts.values())
+                        and isinstance(result_data.get("valuationInputChanged"), bool)
+                        and result_data.get("valuationInputChanged") is bool(result_known_facts)
+                    )
+                    worker_result_matches = worker_result_matches and known_facts_valid
                     result_decision = result_data.get("decision")
                     if binding.get("decision") == "RESTORE_AUTOMATIC":
                         worker_result_matches = worker_result_matches and result_decision is None
@@ -2225,6 +2234,15 @@ def _native_observation_event(event: Dict[str, Any]) -> None:
                             and result_decision.get("action") == binding.get("decision")
                             and str(result_decision.get("catalogId") or "") == str(binding.get("catalogId") or "")
                         )
+                        if binding.get("decision") == "CONFIRM_CANDIDATE":
+                            manual_identity = result_decision.get("manualIdentity") if isinstance(result_decision, dict) else None
+                            worker_result_matches = bool(
+                                worker_result_matches
+                                and isinstance(manual_identity, dict)
+                                and manual_identity.get("status") == "MANUAL_CONFIRMED"
+                                and manual_identity.get("source") == "HUMAN_INSTANCE_REVIEW"
+                                and manual_identity.get("solverCatalogProof") == binding.get("solverCatalogProof")
+                            )
                     accepted = worker_status in {"ACK", "DUPLICATE"} and scope_is_current and worker_result_matches
                     reason = None if accepted else (
                         command_result.get("errorDetails") or details.get("error")
@@ -2241,7 +2259,13 @@ def _native_observation_event(event: Dict[str, Any]) -> None:
                                 source="vision", intent="observe",
                                 command_id=str(details.get("commandId") or ""),
                             )
-                            _native_invalidate_solver_locked("warehouse-instance-decision")
+                            if result_known_facts:
+                                CURRENT_MATCH.apply_warehouse_identity_projection(
+                                    copy.deepcopy(result_known_facts),
+                                    command_id=str(details.get("commandId") or ""),
+                                )
+                            if result_data.get("valuationInputChanged"):
+                                _native_invalidate_solver_locked("warehouse-identity-valuation-input-changed")
                     if accepted:
                         decision = result_data.get("decision") if isinstance(result_data.get("decision"), dict) else {
                             "action": binding.get("decision"), "catalogId": binding.get("catalogId"),
@@ -2266,6 +2290,11 @@ def _native_observation_event(event: Dict[str, Any]) -> None:
                         "instanceAnchor": copy.deepcopy(binding.get("instanceAnchor")),
                         "instanceDecisionToken": binding.get("instanceDecisionToken"),
                         "activityEvidenceId": binding.get("activityEvidenceId"), "reason": reason,
+                        "solverRefreshStatus": (
+                            "WAITING_FOR_FRESH_OBSERVATION"
+                            if accepted and result_data.get("valuationInputChanged")
+                            else "INPUT_UNCHANGED"
+                        ),
                     }
                     _NATIVE_WAREHOUSE_DECISION_RECEIPT = receipt
                     LATEST_PAYLOAD["warehouseInstanceDecisionResult"] = receipt
@@ -2966,6 +2995,45 @@ def handle_warehouse_instance_decision(payload: Dict[str, Any]) -> Dict[str, Any
                 return {"status": "REJECTED", "reason": "该实例没有可撤销的人工决定"}
         else:
             return {"status": "REJECTED", "reason": "不支持的实例决定"}
+        solver_catalog_proof = None
+        if decision == "CONFIRM_CANDIDATE":
+            rarity = str(slot.get("rarity") or "")
+            candidate = next((item for item in (slot.get("candidates") or [])
+                              if isinstance(item, dict)
+                              and str(item.get("catalogId") or item.get("Id") or "") == catalog_id), None)
+            candidate_name = str((candidate or {}).get("name") or (candidate or {}).get("Name") or "").strip()
+            if rarity not in {"gold", "purple", "red"} or not candidate_name:
+                return {"status": "REJECTED", "reason": "该品质或候选名称没有可用的现有求解器已知藏品约束"}
+            try:
+                from live_shadow import resolve_solver_catalog_identity
+                solver_catalog_result = resolve_solver_catalog_identity(
+                    CURRENT_MATCH.to_canonical(), rarity, candidate_name,
+                )
+            except Exception:
+                solver_catalog_result = None
+            if not isinstance(solver_catalog_result, dict):
+                return {"status": "REJECTED", "reason": "无法读取当前求解器目录，人工确认未发送"}
+            resolved = solver_catalog_result.get("item") if solver_catalog_result.get("available") else None
+            if (not isinstance(resolved, dict)
+                    or str(resolved.get("inputName") or "").strip() != candidate_name
+                    or str(resolved.get("quality") or "") != rarity):
+                return {"status": "REJECTED", "reason": "该身份不在当前求解器可用的正式目录中，估值身份未确认"}
+            try:
+                solver_catalog_proof = {
+                    "catalogId": catalog_id,
+                    "inputName": candidate_name,
+                    "name": str(resolved["name"]),
+                    "quality": rarity,
+                    "price": int(resolved["price"]),
+                    "width": int(resolved["width"]),
+                    "height": int(resolved["height"]),
+                    "catalogVersion": str(resolved["catalogVersion"]),
+                }
+            except (KeyError, TypeError, ValueError):
+                return {"status": "REJECTED", "reason": "求解器目录缺少可核对的价格或尺寸，人工确认未发送"}
+            if (solver_catalog_proof["price"] <= 0 or solver_catalog_proof["width"] <= 0
+                    or solver_catalog_proof["height"] <= 0 or not solver_catalog_proof["catalogVersion"]):
+                return {"status": "REJECTED", "reason": "求解器目录价格或尺寸无效，人工确认未发送"}
         if _NATIVE_CONTROL_BINDINGS:
             return {"status": "REJECTED", "reason": "另一个观察命令仍在等待回执"}
         with _NATIVE_OBSERVATION_LOCK:
@@ -2991,6 +3059,8 @@ def handle_warehouse_instance_decision(payload: Dict[str, Any]) -> Dict[str, Any
             "decision": decision,
             "catalogId": catalog_id or None,
         }
+        if solver_catalog_proof is not None:
+            command["solverCatalogProof"] = copy.deepcopy(solver_catalog_proof)
         binding = {
             "kind": "warehouse_instance_decision",
             "matchId": match_id,
@@ -3005,6 +3075,7 @@ def handle_warehouse_instance_decision(payload: Dict[str, Any]) -> Dict[str, Any
             "activityEvidenceId": command["activityEvidenceId"],
             "decision": decision,
             "catalogId": catalog_id or None,
+            "solverCatalogProof": copy.deepcopy(solver_catalog_proof),
         }
         _NATIVE_CONTROL_BINDINGS[revision] = binding
         sent = bridge.send_control({"type": "native_control", "command": command})

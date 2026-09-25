@@ -552,6 +552,64 @@ class CurrentMatch:
             candidate=candidate,
         )
 
+    def apply_warehouse_identity_projection(
+        self,
+        patch: Optional[Dict[str, Any]],
+        *,
+        command_id: Optional[str] = None,
+        observed_at: Optional[str] = None,
+    ) -> Dict[str, Any]:
+        """Apply the worker's multiset projection of physical warehouse identities.
+
+        The projection may recompose a manually protected known-items field
+        from its preserved user entries and the current warehouse ledger. Keep
+        the protection bit while recording that the combined value now comes
+        from the instance ledger.
+        """
+        if not isinstance(patch, dict):
+            return self.snapshot()
+        allowed = {"knownGold", "knownPurple", "knownRed"}
+        if any(key not in allowed for key in patch):
+            raise ValueError("warehouse identity projection contains an unsupported fact")
+        stamp = observed_at or _now_stamp()
+        cmd_id = command_id or uuid.uuid4().hex
+        for key, raw in patch.items():
+            value = self._coerce_value(key, raw)
+            old_value = self.facts.get(key)
+            if value == old_value:
+                continue
+            previous = self.field_states.get(key)
+            self.facts_revision += 1
+            self.facts[key] = value
+            self.field_states[key] = FieldState(
+                value=value,
+                source="warehouse_identity_ledger",
+                status=previous.status if previous and previous.status not in {"empty", "cleared"} else "observed",
+                observed_at=(previous.observed_at if previous and previous.observed_at else stamp),
+                evidence_refs=previous.evidence_refs if previous else None,
+                match_generation=self._seq,
+                revision=self.facts_revision,
+                protected=bool(previous.protected) if previous else False,
+                candidate=previous.candidate if previous else None,
+            )
+            self._record_audit({
+                "commandId": cmd_id,
+                "field": key,
+                "decision": "accept",
+                "reason": "WAREHOUSE_IDENTITY_LEDGER_PROJECTION",
+                "oldValue": old_value,
+                "newValue": value,
+                "source": "warehouse_identity_ledger",
+                "intent": "projection",
+                "matchId": self.id,
+                "matchGeneration": self._seq,
+                "factsRevision": self.facts_revision,
+                "sceneGeneration": None,
+                "observedAt": stamp,
+            })
+        self.updated_at = stamp
+        return self.snapshot()
+
     def apply_facts(
         self,
         patch: Optional[Dict[str, Any]],
@@ -1326,6 +1384,7 @@ class CurrentMatch:
                             for c in (s.get("candidates") or [])
                             if isinstance(c, dict)
                         ],
+                        **({"manualDecision": deepcopy(s["manualDecision"])} if isinstance(s.get("manualDecision"), dict) else {}),
                         "identifiedName": str(s["identifiedName"]) if (s.get("identityStatus") == "EXACT" or (s.get("identifiedName") and s.get("identityStatus") != "CANDIDATE")) and s.get("identifiedName") and s.get("rarity") != "unknown" and s.get("evidenceLevel") != "OUTLINE_ONLY" else None,
                         **({"trackId": int(s["trackId"])} if s.get("trackId") is not None else {}),
                     }

@@ -110,12 +110,13 @@ class DerivedWarehouseIdentityBoundaryTests(unittest.TestCase):
 
     def test_activity_slot_crop_is_the_exact_scoped_source_and_instance_decisions_stay_local(self):
         catalog = json.loads((ROOT / "assets/catalog_065.json").read_text(encoding="utf-8-sig"))
-        item = next(row for row in catalog if row.get("Quality") == "金" and row.get("Width") == 1 and row.get("Height") == 1)
+        item = next(row for row in catalog if row.get("Id") == "image31-0-1")
+        alternate = next(row for row in catalog if row.get("Id") == "image31-0-2")
         current = CurrentMatch()
         current.id = "match-review"
         current.apply_facts({"roundNo": 1, "knownGold": "人工保护值"}, source="manual", intent="confirm")
         current.apply_facts({"warehouse": {"slots": []}}, source="vision", intent="observe")
-        engine = _engine(current, [item])
+        engine = _engine(current, [item, alternate])
         engine.data_origin = "offline-replay"
 
         with tempfile.TemporaryDirectory(dir=str(ROOT / "build")) as folder:
@@ -153,7 +154,12 @@ class DerivedWarehouseIdentityBoundaryTests(unittest.TestCase):
             slot = {
                 "row": 0, "col": col, "w": 1, "h": 1, "rarity": "gold",
                 "trackId": 7, "identityStatus": "CANDIDATE", "evidenceLevel": "CANDIDATE_SET",
-                "candidates": [{"catalogId": item["Id"], "name": item["Name"]}],
+                "candidates": [
+                    {"catalogId": item["Id"], "name": item["Name"], "quality": "gold", "width": 1, "height": 1},
+                    {"catalogId": alternate["Id"], "name": alternate["Name"], "quality": "gold", "width": 1, "height": 1},
+                ] if col == 0 else [
+                    {"catalogId": item["Id"], "name": item["Name"], "quality": "gold", "width": 1, "height": 1},
+                ],
                 "activityEvidence": {"evidenceId": f"evidence-{col}", "sessionId": "session-current", "generationId": 9},
             }
             slot["instanceDecisionToken"] = engine._warehouse_instance_decision_token(scope, slot)
@@ -163,9 +169,19 @@ class DerivedWarehouseIdentityBoundaryTests(unittest.TestCase):
         engine._warehouse_review_scope = copy.deepcopy(scope)
         engine._warehouse_review_vision = {"slots": copy.deepcopy(base_slots)}
 
+        def proof(official):
+            return {
+                "catalogId": official["Id"], "inputName": official["Name"],
+                "name": official["Name"], "quality": "gold", "price": official["Value"],
+                "width": official["Width"], "height": official["Height"],
+                "catalogVersion": "2026-08-13",
+            }
+
         def command(slot, action, command_id, catalog_id=None):
             return engine._apply_warehouse_instance_decision(command_id, {
                 "decision": action, "catalogId": catalog_id,
+                "solverCatalogProof": proof(item if catalog_id == item["Id"] else alternate)
+                    if action == "CONFIRM_CANDIDATE" else None,
                 "expectedObservationSessionId": "session-current", "expectedMatchId": current.id,
                 "expectedRound": 1, "expectedGenerationId": 9,
                 "expectedInvalidationGeneration": 0,
@@ -177,20 +193,49 @@ class DerivedWarehouseIdentityBoundaryTests(unittest.TestCase):
         status, error, confirmed = command(base_slots[0], "CONFIRM_CANDIDATE", "confirm-one", item["Id"])
         self.assertEqual((status, error), ("ACK", None))
         self.assertEqual(confirmed["status"], "APPLIED")
+        self.assertEqual(confirmed["knownFacts"], {"knownGold": f"人工保护值+{item['Name']}"})
+        self.assertTrue(confirmed["valuationInputChanged"])
         slots_after_confirm = current.facts["warehouse"]["slots"]
         self.assertEqual(slots_after_confirm[0]["manualDecision"]["source"], "HUMAN_INSTANCE_REVIEW")
+        self.assertEqual(slots_after_confirm[0]["manualDecision"]["manualIdentity"]["status"], "MANUAL_CONFIRMED")
+        self.assertEqual(slots_after_confirm[0]["manualDecision"]["manualIdentity"]["source"], "HUMAN_INSTANCE_REVIEW")
         self.assertEqual(slots_after_confirm[0]["identityStatus"], "CANDIDATE")
         self.assertNotIn("manualDecision", slots_after_confirm[1])
-        self.assertEqual(current.facts["knownGold"], "人工保护值")
+        self.assertEqual(current.facts["knownGold"], f"人工保护值+{item['Name']}")
+        self.assertTrue(current.field_states["knownGold"].protected)
+        self.assertEqual(current.field_states["knownGold"].source, "warehouse_identity_ledger")
+        canonical = current.to_canonical()
+        self.assertEqual(canonical["warehouse"]["slots"][0]["identityStatus"], "CANDIDATE")
+        self.assertEqual(canonical["warehouse"]["slots"][0]["manualDecision"]["source"], "HUMAN_INSTANCE_REVIEW")
+        self.assertEqual(
+            [row["name"] for row in canonical["qualities"]["gold"]["knownItems"]].count(item["Name"]), 1,
+        )
+
+        status, error, confirmed_second = command(base_slots[1], "CONFIRM_CANDIDATE", "confirm-second", item["Id"])
+        self.assertEqual((status, error), ("ACK", None))
+        self.assertEqual(confirmed_second["knownFacts"], {"knownGold": f"人工保护值+{item['Name']}+{item['Name']}"})
+        self.assertEqual(current.facts["knownGold"], f"人工保护值+{item['Name']}+{item['Name']}")
+        self.assertEqual(
+            [row["name"] for row in current.to_canonical()["qualities"]["gold"]["knownItems"]].count(item["Name"]), 2,
+        )
 
         status, error, retried = command(base_slots[0], "CONFIRM_CANDIDATE", "confirm-retry", item["Id"])
         self.assertEqual((status, error), ("ACK", None))
         self.assertTrue(retried["idempotent"])
+        self.assertFalse(retried["valuationInputChanged"])
+        self.assertEqual(retried["knownFacts"], {})
         self.assertEqual(len(current.facts["warehouse"]["slots"]), 2)
+
+        status, error, reidentified = command(base_slots[0], "CONFIRM_CANDIDATE", "reidentify-one", alternate["Id"])
+        self.assertEqual((status, error), ("ACK", None))
+        self.assertEqual(current.facts["knownGold"], f"人工保护值+{alternate['Name']}+{item['Name']}")
+        self.assertEqual(reidentified["knownFacts"], {"knownGold": f"人工保护值+{alternate['Name']}+{item['Name']}"})
 
         status, error, rejected = command(base_slots[1], "REJECT_CANDIDATE", "reject-second", item["Id"])
         self.assertEqual((status, error), ("ACK", None))
         self.assertEqual(rejected["status"], "APPLIED")
+        self.assertEqual(rejected["knownFacts"], {"knownGold": f"人工保护值+{alternate['Name']}"})
+        self.assertFalse(rejected["decision"].get("manualIdentity"))
         self.assertEqual(len(current.facts["warehouse"]["slots"]), 2)
         self.assertEqual(current.facts["warehouse"]["slots"][1]["manualDecision"]["action"], "REJECT_CANDIDATE")
 
@@ -198,6 +243,16 @@ class DerivedWarehouseIdentityBoundaryTests(unittest.TestCase):
         self.assertEqual((status, error), ("ACK", None))
         self.assertEqual(restored["status"], "APPLIED")
         self.assertNotIn("manualDecision", current.facts["warehouse"]["slots"][1])
+        self.assertEqual(restored["knownFacts"], {})
+        self.assertFalse(restored["valuationInputChanged"])
+        self.assertEqual(current.facts["knownGold"], f"人工保护值+{alternate['Name']}")
+
+        status, error, restored_first = command(base_slots[0], "RESTORE_AUTOMATIC", "restore-first")
+        self.assertEqual((status, error), ("ACK", None))
+        self.assertEqual(restored_first["knownFacts"], {"knownGold": "人工保护值"})
+        self.assertTrue(restored_first["valuationInputChanged"])
+        self.assertNotIn("manualDecision", current.facts["warehouse"]["slots"][0])
+        self.assertEqual(current.facts["knownGold"], "人工保护值")
 
         engine.last_context["round"] = 2
         status, error, _late = command(base_slots[0], "REJECT_CANDIDATE", "old-round", item["Id"])
@@ -220,6 +275,130 @@ class DerivedWarehouseIdentityBoundaryTests(unittest.TestCase):
         self.assertEqual(slot["identityStatus"], "CANDIDATE")
         self.assertTrue(slot["identityConflict"])
         self.assertEqual(slot["manualDecision"]["catalogId"], "candidate-a")
+
+    def test_manual_valuation_rejects_display_only_ids_and_catalog_size_conflicts(self):
+        catalog = json.loads((ROOT / "assets/catalog_065.json").read_text(encoding="utf-8-sig"))
+        official = next(row for row in catalog if row.get("Id") == "image31-0-1")
+        proof = {
+            "catalogId": official["Id"], "inputName": official["Name"], "name": official["Name"],
+            "quality": "gold", "price": official["Value"], "width": official["Width"],
+            "height": official["Height"], "catalogVersion": "2026-08-13",
+        }
+
+        def run_decision(*, selected_id, row, candidate, official_rows, proof_name=None):
+            current = CurrentMatch()
+            current.id = "match-manual-eligibility"
+            current.apply_facts({"roundNo": 1}, source="vision", intent="observe")
+            engine = _engine(current, official_rows)
+            scope = {
+                "sessionId": "session-current", "generationId": 9, "matchId": current.id,
+                "round": 1, "scene": "IN_AUCTION", "invalidationGeneration": 0,
+            }
+            slot = {
+                "row": 0, "col": 0, "w": row["w"], "h": row["h"], "rarity": "gold",
+                "identityStatus": "CANDIDATE", "evidenceLevel": "CANDIDATE_SET",
+                "candidates": [candidate],
+                "activityEvidence": {"evidenceId": "eligibility-evidence", "sessionId": "session-current", "generationId": 9},
+            }
+            slot["instanceDecisionToken"] = engine._warehouse_instance_decision_token(scope, slot)
+            current.facts["warehouse"] = {"slots": [copy.deepcopy(slot)]}
+            engine._warehouse_review_scope = copy.deepcopy(scope)
+            engine._warehouse_review_vision = {"slots": [copy.deepcopy(slot)]}
+            return engine._apply_warehouse_instance_decision("eligibility-command", {
+                "decision": "CONFIRM_CANDIDATE", "catalogId": selected_id,
+                "solverCatalogProof": {**proof, "catalogId": selected_id,
+                                        **({"name": proof_name} if proof_name is not None else {})},
+                "expectedObservationSessionId": "session-current", "expectedMatchId": current.id,
+                "expectedRound": 1, "expectedGenerationId": 9, "expectedInvalidationGeneration": 0,
+                "instanceAnchor": {key: slot[key] for key in ("row", "col", "w", "h", "rarity")},
+                "instanceDecisionToken": slot["instanceDecisionToken"],
+                "activityEvidenceId": "eligibility-evidence",
+            }), current
+
+        (status, error, _result), current = run_decision(
+            selected_id="display-only-id", row={"w": 1, "h": 1},
+            candidate={"catalogId": "display-only-id", "name": official["Name"], "quality": "gold"},
+            official_rows=[official],
+        )
+        self.assertEqual(status, "REJECT")
+        self.assertEqual(error, "CANDIDATE_CONFLICTS_WITH_OFFICIAL_CATALOG")
+        self.assertEqual(current.facts["knownGold"], "")
+        self.assertNotIn("manualDecision", current.facts["warehouse"]["slots"][0])
+
+        (status, error, _result), current = run_decision(
+            selected_id=official["Id"], row={"w": official["Width"], "h": official["Height"]},
+            candidate={"catalogId": official["Id"], "name": official["Name"], "quality": "gold"},
+            official_rows=[official], proof_name="unrelated solver name",
+        )
+        self.assertEqual(status, "REJECT")
+        self.assertEqual(error, "IDENTITY_NOT_AVAILABLE_IN_CURRENT_SOLVER_CATALOG")
+        self.assertEqual(current.facts["knownGold"], "")
+        self.assertNotIn("manualDecision", current.facts["warehouse"]["slots"][0])
+
+        (status, error, _result), current = run_decision(
+            selected_id=official["Id"], row={"w": 2, "h": 1},
+            candidate={"catalogId": official["Id"], "name": official["Name"], "quality": "gold", "width": 1, "height": 1},
+            official_rows=[official],
+        )
+        self.assertEqual(status, "REJECT")
+        self.assertEqual(error, "CANDIDATE_HAS_UNRESOLVED_QUALITY_SIZE_OR_CATALOG_CONFLICT")
+        self.assertEqual(current.facts["knownGold"], "")
+        self.assertNotIn("manualDecision", current.facts["warehouse"]["slots"][0])
+
+    def test_restoring_manual_confirmation_reuses_same_valid_automatic_identity_once(self):
+        catalog = json.loads((ROOT / "assets/catalog_065.json").read_text(encoding="utf-8-sig"))
+        item = next(row for row in catalog if row.get("Id") == "image31-0-1")
+        current = CurrentMatch()
+        current.id = "match-restore-auto"
+        current.apply_facts({"roundNo": 1}, source="vision", intent="observe")
+        engine = _engine(current, [item])
+        scope = {
+            "sessionId": "session-current", "generationId": 9, "matchId": current.id,
+            "round": 1, "scene": "IN_AUCTION", "invalidationGeneration": 0,
+        }
+        slot = {
+            "row": 0, "col": 0, "w": 1, "h": 1, "rarity": "gold",
+            "identityStatus": "CANDIDATE", "evidenceLevel": "CANDIDATE_SET",
+            "candidates": [{"catalogId": item["Id"], "name": item["Name"]}],
+            "activityEvidence": {"evidenceId": "restore-evidence", "sessionId": "session-current", "generationId": 9},
+        }
+        slot["instanceDecisionToken"] = engine._warehouse_instance_decision_token(scope, slot)
+        current.facts["warehouse"] = {"slots": [copy.deepcopy(slot)]}
+        engine._warehouse_review_scope = copy.deepcopy(scope)
+        engine._warehouse_review_vision = {"slots": [copy.deepcopy(slot)]}
+        command_base = {
+            "expectedObservationSessionId": "session-current", "expectedMatchId": current.id,
+            "expectedRound": 1, "expectedGenerationId": 9, "expectedInvalidationGeneration": 0,
+            "instanceAnchor": {key: slot[key] for key in ("row", "col", "w", "h", "rarity")},
+            "instanceDecisionToken": slot["instanceDecisionToken"], "activityEvidenceId": "restore-evidence",
+        }
+        proof = {
+            "catalogId": item["Id"], "inputName": item["Name"], "name": item["Name"],
+            "quality": "gold", "price": item["Value"], "width": item["Width"],
+            "height": item["Height"], "catalogVersion": "2026-08-13",
+        }
+        status, error, confirmed = engine._apply_warehouse_instance_decision(
+            "confirm-auto-backed", {**command_base, "decision": "CONFIRM_CANDIDATE", "catalogId": item["Id"], "solverCatalogProof": proof},
+        )
+        self.assertEqual((status, error), ("ACK", None))
+        self.assertEqual(confirmed["knownFacts"]["knownGold"], item["Name"])
+
+        automatic_slot = copy.deepcopy(current.facts["warehouse"]["slots"][0])
+        automatic_slot.update({
+            "identityStatus": "EXACT", "evidenceLevel": "EXACT_IDENTIFIED",
+            "identifiedCatalogId": item["Id"], "identifiedName": item["Name"],
+            "identityReferenceKind": "DIRECT",
+        })
+        current.apply_facts({"warehouse": {"slots": [automatic_slot]}}, source="vision", intent="observe")
+        status, error, restored = engine._apply_warehouse_instance_decision(
+            "restore-auto-backed", {**command_base, "decision": "RESTORE_AUTOMATIC"},
+        )
+        self.assertEqual((status, error), ("ACK", None))
+        self.assertEqual(restored["knownFacts"], {})
+        self.assertFalse(restored["valuationInputChanged"])
+        self.assertEqual(current.facts["knownGold"], item["Name"])
+        self.assertEqual(current.facts["warehouse"]["slots"][0]["identityStatus"], "EXACT")
+        self.assertNotIn("manualDecision", current.facts["warehouse"]["slots"][0])
 
     def test_rejected_candidate_cannot_reappear_as_an_automatic_exact_identity(self):
         old = {

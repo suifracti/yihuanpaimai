@@ -302,11 +302,14 @@ sandbox.syncWarehouseInstanceReviewFromMatch({
   warehouseInstanceDecisionResult: {
     commandId: "native-control-77", status: "ACK", matchId: "live-review",
     activityEvidenceId: "activity-1", instanceDecisionToken: "decision-token-1",
+    solverRefreshStatus: "WAITING_FOR_FRESH_OBSERVATION",
     decision: { action: "CONFIRM_CANDIDATE", catalogId: "candidate-two" }
   }
 });
 assert.equal(vm.runInContext("dashboard.warehouseInstanceReview.busy", sandbox), false);
 assert.match(get("match-wh-instance-review-status").textContent, /worker 已确认这一个实例/);
+assert.match(get("match-wh-instance-review-status").textContent, /旧建议已撤销/);
+assert.match(get("match-wh-instance-review-status").textContent, /等待新鲜有效帧/);
 sandbox.renderWarehouseSlots({ slots: acceptedReviewSlots }, reviewMatch);
 assert.match(get("match-wh-slots-list").innerHTML, /人工确认 · 本实例/);
 get("match-wh-instance-reject").click();
