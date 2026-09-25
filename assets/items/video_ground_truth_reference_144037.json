@@ -2,7 +2,7 @@
   "metadata": {
     "videoPath": "D:\\video\\2026-09-08 14-40-37.mkv",
     "annotatedBy": "independent_visual_inspection_with_stitched_cross_check",
-    "provenanceNote": "Items and boundaries established from raw video frames and stitched 10x25 canvas. 39 items independently cross-verified against official catalog screenshots in assets/items/catalog_screenshots and verified source card registry. Machine candidates were strictly separated and not copied as ground truth.",
+    "provenanceNote": "Items and boundaries established from raw video frames and stitched 10x25 canvas. 39 items independently cross-verified against official catalog screenshots in assets/items/catalog_screenshots and verified source card registry. Machine candidates were strictly separated and not copied as ground truth. The annotated frames at 158-168s show the settlement screen. Admitted crops are settlement-origin visual templates only; they are not auction-time facts and must not be backfilled into the source match.",
     "boardDimensions": {
       "columns": 10,
       "rows": 25,
@@ -13,7 +13,13 @@
     "totalOccupiedCells": 168,
     "totalEmptyCells": 82,
     "verifiedFromCatalogScreenshotCount": 39,
-    "unconfirmedCount": 0
+    "unconfirmedCount": 0,
+    "recordStableKey": "video_audit_20260908_144037_settlement",
+    "annotationScope": "SETTLEMENT_IMAGE_CROPS",
+    "coverageStatus": "PARTIAL",
+    "sourceSceneKind": "SETTLEMENT",
+    "referenceRole": "VISUAL_TEMPLATE_ONLY",
+    "repositoryVideoPath": "data/videos/2026-09-08 14-40-37.mkv"
   },
   "items": [
     {
@@ -55,7 +61,8 @@
       "sourceScreenshotSha256": "8db9eab490ec8ace9a753b78d232ee8c861e6461f492232f7920d154215ae8dc",
       "officialValue": 3598,
       "sourceCardKey": "assets/items/catalog_screenshots/2X3/{E2B97A18-0919-4B0C-9C04-6D8C2BF9F692}.png:20,22,366,236",
-      "independentVerificationBasis": "Independently cross-verified against official catalog screenshot card 'assets/items/catalog_screenshots/2X3/{E2B97A18-0919-4B0C-9C04-6D8C2BF9F692}.png:20,22,366,236'. Visual icon, title '销魂挠挠爪', shape '2x3', and quality 'blue' match video frame at t=158.0s."
+      "independentVerificationBasis": "Independently cross-verified against official catalog screenshot card 'assets/items/catalog_screenshots/2X3/{E2B97A18-0919-4B0C-9C04-6D8C2BF9F692}.png:20,22,366,236'. Visual icon, title '销魂挠挠爪', shape '2x3', and quality 'blue' match video frame at t=158.0s.",
+      "cropSha256": "c34e0292818c11fe6a37079b0eb3c2d3af47a837546fa4cb1a0a07a3e43f8c50"
     },
     {
       "referenceId": "ref_144037_02",
@@ -96,7 +103,8 @@
       "sourceScreenshotSha256": "b76f26da9abcbb2f7cb3cb040bc0de2eb2b9cf6f2a053eae678203cf93295885",
       "officialValue": 3987,
       "sourceCardKey": "assets/items/catalog_screenshots/1X3/{4B4BA98A-9DF4-4399-8B1B-754510B27C7A}.png:16,260,366,236",
-      "independentVerificationBasis": "Independently cross-verified against official catalog screenshot card 'assets/items/catalog_screenshots/1X3/{4B4BA98A-9DF4-4399-8B1B-754510B27C7A}.png:16,260,366,236'. Visual icon, title '烟紫水晶', shape '1x3', and quality 'blue' match video frame at t=158.0s."
+      "independentVerificationBasis": "Independently cross-verified against official catalog screenshot card 'assets/items/catalog_screenshots/1X3/{4B4BA98A-9DF4-4399-8B1B-754510B27C7A}.png:16,260,366,236'. Visual icon, title '烟紫水晶', shape '1x3', and quality 'blue' match video frame at t=158.0s.",
+      "cropSha256": "4baee8f871eabc6f64da67a459a15808332e9c9b483e22b27cd92ff236f0f136"
     },
     {
       "referenceId": "ref_144037_03",
@@ -137,7 +145,8 @@
       "sourceScreenshotSha256": "89d7bad3a71362066a37d6320ca33b3cec047a712298a081568448391a386b9a",
       "officialValue": 548,
       "sourceCardKey": "assets/items/catalog_screenshots/1x1/{9A13C48F-EF9F-4E97-80BF-F2DF347E15DD}.png:783,273,366,236",
-      "independentVerificationBasis": "Independently cross-verified against official catalog screenshot card 'assets/items/catalog_screenshots/1x1/{9A13C48F-EF9F-4E97-80BF-F2DF347E15DD}.png:783,273,366,236'. Visual icon, title '拍拍球', shape '1x1', and quality 'green' match video frame at t=158.0s."
+      "independentVerificationBasis": "Independently cross-verified against official catalog screenshot card 'assets/items/catalog_screenshots/1x1/{9A13C48F-EF9F-4E97-80BF-F2DF347E15DD}.png:783,273,366,236'. Visual icon, title '拍拍球', shape '1x1', and quality 'green' match video frame at t=158.0s.",
+      "cropSha256": "6047cd06fa9c932fc2d7e3241a491cce2853ae4e9483789a6698f375c4619c31"
     },
     {
       "referenceId": "ref_144037_04",
@@ -178,7 +187,8 @@
       "sourceScreenshotSha256": "89d7bad3a71362066a37d6320ca33b3cec047a712298a081568448391a386b9a",
       "officialValue": 610,
       "sourceCardKey": "assets/items/catalog_screenshots/1x1/{9A13C48F-EF9F-4E97-80BF-F2DF347E15DD}.png:392,0,391,260",
-      "independentVerificationBasis": "Independently cross-verified against official catalog screenshot card 'assets/items/catalog_screenshots/1x1/{9A13C48F-EF9F-4E97-80BF-F2DF347E15DD}.png:392,0,391,260'. Visual icon, title '金月', shape '1x1', and quality 'green' match video frame at t=158.0s."
+      "independentVerificationBasis": "Independently cross-verified against official catalog screenshot card 'assets/items/catalog_screenshots/1x1/{9A13C48F-EF9F-4E97-80BF-F2DF347E15DD}.png:392,0,391,260'. Visual icon, title '金月', shape '1x1', and quality 'green' match video frame at t=158.0s.",
+      "cropSha256": "a629160e00acf7b9e8e40e6a43557206972e08fa75ca6897e8a04f42f452899c"
     },
     {
       "referenceId": "ref_144037_05",
@@ -219,7 +229,8 @@
       "sourceScreenshotSha256": "cf0981c366d1f48083a3c7f2acd476edbd941eca32a1c1ab587224d2d26148e5",
       "officialValue": 1682,
       "sourceCardKey": "assets/items/catalog_screenshots/2X1/{E065324C-AC60-41CF-B56A-8043A3B76C53}.png:391,20,366,236",
-      "independentVerificationBasis": "Independently cross-verified against official catalog screenshot card 'assets/items/catalog_screenshots/2X1/{E065324C-AC60-41CF-B56A-8043A3B76C53}.png:391,20,366,236'. Visual icon, title '复古圆桌', shape '2x1', and quality 'blue' match video frame at t=158.0s."
+      "independentVerificationBasis": "Independently cross-verified against official catalog screenshot card 'assets/items/catalog_screenshots/2X1/{E065324C-AC60-41CF-B56A-8043A3B76C53}.png:391,20,366,236'. Visual icon, title '复古圆桌', shape '2x1', and quality 'blue' match video frame at t=158.0s.",
+      "cropSha256": "739fe6175a355286c35747b437c31c44fd1a634a4fbc977c0745b0b56ebe02fc"
     },
     {
       "referenceId": "ref_144037_06",
@@ -260,7 +271,8 @@
       "sourceScreenshotSha256": "5846d029ee2213c1f19321b6baac89c770ec6cd5ba731efd34a961b403b40fad",
       "officialValue": 996,
       "sourceCardKey": "assets/items/catalog_screenshots/1x1/{92DEEC27-CED4-4688-95EC-5A01A337AF9D}.png:787,0,394,266",
-      "independentVerificationBasis": "Independently cross-verified against official catalog screenshot card 'assets/items/catalog_screenshots/1x1/{92DEEC27-CED4-4688-95EC-5A01A337AF9D}.png:787,0,394,266'. Visual icon, title '（未来的）大师飞镖', shape '1x1', and quality 'blue' match video frame at t=158.0s."
+      "independentVerificationBasis": "Independently cross-verified against official catalog screenshot card 'assets/items/catalog_screenshots/1x1/{92DEEC27-CED4-4688-95EC-5A01A337AF9D}.png:787,0,394,266'. Visual icon, title '（未来的）大师飞镖', shape '1x1', and quality 'blue' match video frame at t=158.0s.",
+      "cropSha256": "946ed3c927646ce72857dccbec760665f28da0a6df6f3ef37f27927d477294c1"
     },
     {
       "referenceId": "ref_144037_07",
@@ -301,7 +313,8 @@
       "sourceScreenshotSha256": "24b1a803efaa5a13edc21494a4aa5d266026e5424327dca035b8cf63b3d08bba",
       "officialValue": 1056,
       "sourceCardKey": "assets/items/catalog_screenshots/2X1/{48710325-8642-4753-AAFD-302E079D2B93}.png:24,19,366,236",
-      "independentVerificationBasis": "Independently cross-verified against official catalog screenshot card 'assets/items/catalog_screenshots/2X1/{48710325-8642-4753-AAFD-302E079D2B93}.png:24,19,366,236'. Visual icon, title '惠比寿宫廷小塔', shape '2x1', and quality 'green' match video frame at t=158.0s."
+      "independentVerificationBasis": "Independently cross-verified against official catalog screenshot card 'assets/items/catalog_screenshots/2X1/{48710325-8642-4753-AAFD-302E079D2B93}.png:24,19,366,236'. Visual icon, title '惠比寿宫廷小塔', shape '2x1', and quality 'green' match video frame at t=158.0s.",
+      "cropSha256": "585d6475c3d4a2c52553594d10e49a20232be29f91a184a656cccee052da1716"
     },
     {
       "referenceId": "ref_144037_08",
@@ -342,7 +355,8 @@
       "sourceScreenshotSha256": "52c13ad0ec367c44ca512749fe03cfb1106c7f9c814a468d588249c1235dbdaf",
       "officialValue": 6069,
       "sourceCardKey": "assets/items/catalog_screenshots/3X3/{AF7A8555-2180-49BC-9395-F0DD5444F0EE}.png:795,298,366,236",
-      "independentVerificationBasis": "Independently cross-verified against official catalog screenshot card 'assets/items/catalog_screenshots/3X3/{AF7A8555-2180-49BC-9395-F0DD5444F0EE}.png:795,298,366,236'. Visual icon, title '艺术画「深林」', shape '3x3', and quality 'blue' match video frame at t=158.0s."
+      "independentVerificationBasis": "Independently cross-verified against official catalog screenshot card 'assets/items/catalog_screenshots/3X3/{AF7A8555-2180-49BC-9395-F0DD5444F0EE}.png:795,298,366,236'. Visual icon, title '艺术画「深林」', shape '3x3', and quality 'blue' match video frame at t=158.0s.",
+      "cropSha256": "bd3168cc32b16ae692449cc732651732c429ef6ed5920c7f51c700793bf82f45"
     },
     {
       "referenceId": "ref_144037_09",
@@ -383,7 +397,8 @@
       "sourceScreenshotSha256": "52c13ad0ec367c44ca512749fe03cfb1106c7f9c814a468d588249c1235dbdaf",
       "officialValue": 240208,
       "sourceCardKey": "assets/items/catalog_screenshots/3X3/{AF7A8555-2180-49BC-9395-F0DD5444F0EE}.png:409,43,366,236",
-      "independentVerificationBasis": "Independently cross-verified against official catalog screenshot card 'assets/items/catalog_screenshots/3X3/{AF7A8555-2180-49BC-9395-F0DD5444F0EE}.png:409,43,366,236'. Visual icon, title '九格小食', shape '3x3', and quality 'red' match video frame at t=158.0s."
+      "independentVerificationBasis": "Independently cross-verified against official catalog screenshot card 'assets/items/catalog_screenshots/3X3/{AF7A8555-2180-49BC-9395-F0DD5444F0EE}.png:409,43,366,236'. Visual icon, title '九格小食', shape '3x3', and quality 'red' match video frame at t=158.0s.",
+      "cropSha256": "b02dba4abd7b79315ae164ac8d17cb0c879296cf3773266984a521654c14e877"
     },
     {
       "referenceId": "ref_144037_10",
@@ -424,7 +439,8 @@
       "sourceScreenshotSha256": "e0df940f362f4583c644144ab611bd8ff0aff5682eb2d14609324f6cdc430470",
       "officialValue": 1997,
       "sourceCardKey": "assets/items/catalog_screenshots/1x1/{46C9F0D7-4495-419F-9A04-544A2E375631}.png:385,260,386,261",
-      "independentVerificationBasis": "Independently cross-verified against official catalog screenshot card 'assets/items/catalog_screenshots/1x1/{46C9F0D7-4495-419F-9A04-544A2E375631}.png:385,260,386,261'. Visual icon, title '鎏金坠', shape '1x1', and quality 'purple' match video frame at t=158.0s."
+      "independentVerificationBasis": "Independently cross-verified against official catalog screenshot card 'assets/items/catalog_screenshots/1x1/{46C9F0D7-4495-419F-9A04-544A2E375631}.png:385,260,386,261'. Visual icon, title '鎏金坠', shape '1x1', and quality 'purple' match video frame at t=158.0s.",
+      "cropSha256": "97b9d77a410682db02ff392442f4b2bdce5f374da0659fc6a6da5594f5614425"
     },
     {
       "referenceId": "ref_144037_11",
@@ -506,7 +522,8 @@
       "sourceScreenshotSha256": "dc9ce35eaf9fe92425a27cf64d387838a4ae0a199c5333841dbaa8b2d36a1d6c",
       "officialValue": 7222,
       "sourceCardKey": "assets/items/catalog_screenshots/2X2/{E979E688-0FB8-4D82-BED5-C0FA4B86B848}.png:0,260,392,259",
-      "independentVerificationBasis": "Independently cross-verified against official catalog screenshot card 'assets/items/catalog_screenshots/2X2/{E979E688-0FB8-4D82-BED5-C0FA4B86B848}.png:0,260,392,259'. Visual icon, title '跳跳兔盒', shape '2x2', and quality 'purple' match video frame at t=158.0s."
+      "independentVerificationBasis": "Independently cross-verified against official catalog screenshot card 'assets/items/catalog_screenshots/2X2/{E979E688-0FB8-4D82-BED5-C0FA4B86B848}.png:0,260,392,259'. Visual icon, title '跳跳兔盒', shape '2x2', and quality 'purple' match video frame at t=158.0s.",
+      "cropSha256": "c47f773a76fe2f798599a8adf8e7d4ce66a68046f2ec9128ba14829d2d0a3b2c"
     },
     {
       "referenceId": "ref_144037_13",
@@ -547,7 +564,8 @@
       "sourceScreenshotSha256": "89d7bad3a71362066a37d6320ca33b3cec047a712298a081568448391a386b9a",
       "officialValue": 557,
       "sourceCardKey": "assets/items/catalog_screenshots/1x1/{9A13C48F-EF9F-4E97-80BF-F2DF347E15DD}.png:392,260,391,259",
-      "independentVerificationBasis": "Independently cross-verified against official catalog screenshot card 'assets/items/catalog_screenshots/1x1/{9A13C48F-EF9F-4E97-80BF-F2DF347E15DD}.png:392,260,391,259'. Visual icon, title '炭火脆皮烤肉', shape '1x1', and quality 'green' match video frame at t=158.0s."
+      "independentVerificationBasis": "Independently cross-verified against official catalog screenshot card 'assets/items/catalog_screenshots/1x1/{9A13C48F-EF9F-4E97-80BF-F2DF347E15DD}.png:392,260,391,259'. Visual icon, title '炭火脆皮烤肉', shape '1x1', and quality 'green' match video frame at t=158.0s.",
+      "cropSha256": "2b8e8697941f1e324b60884a83a2521d41d20ab1efec0e32b0f325c2aca3d473"
     },
     {
       "referenceId": "ref_144037_14",
@@ -588,7 +606,8 @@
       "sourceScreenshotSha256": "98d67b8ebfb1136178cb7b3897abc3cdd14c6c9cd6607f44d01124e6c8f77fe1",
       "officialValue": 15108,
       "sourceCardKey": "assets/items/catalog_screenshots/2X2/{9D299A9A-2D8E-417A-A566-BC92C203B40B}.png:392,17,366,236",
-      "independentVerificationBasis": "Independently cross-verified against official catalog screenshot card 'assets/items/catalog_screenshots/2X2/{9D299A9A-2D8E-417A-A566-BC92C203B40B}.png:392,17,366,236'. Visual icon, title '蓝焰火花塞', shape '2x2', and quality 'gold' match video frame at t=158.0s."
+      "independentVerificationBasis": "Independently cross-verified against official catalog screenshot card 'assets/items/catalog_screenshots/2X2/{9D299A9A-2D8E-417A-A566-BC92C203B40B}.png:392,17,366,236'. Visual icon, title '蓝焰火花塞', shape '2x2', and quality 'gold' match video frame at t=158.0s.",
+      "cropSha256": "352f6e7f3f98a9802ae6024f0d4d406cea605496858b524ead4056ab8ea1535e"
     },
     {
       "referenceId": "ref_144037_15",
@@ -629,7 +648,8 @@
       "sourceScreenshotSha256": "46444e231c8778da86d71269b924712933a53539beabb46189d91ae3a79ca593",
       "officialValue": 1822,
       "sourceCardKey": "assets/items/catalog_screenshots/3X1/{D344DCA6-157C-48CC-A884-0A5246CC4FFB}.png:783,277,354,236",
-      "independentVerificationBasis": "Independently cross-verified against official catalog screenshot card 'assets/items/catalog_screenshots/3X1/{D344DCA6-157C-48CC-A884-0A5246CC4FFB}.png:783,277,354,236'. Visual icon, title '炫动三角铁', shape '3x1', and quality 'green' match video frame at t=158.0s."
+      "independentVerificationBasis": "Independently cross-verified against official catalog screenshot card 'assets/items/catalog_screenshots/3X1/{D344DCA6-157C-48CC-A884-0A5246CC4FFB}.png:783,277,354,236'. Visual icon, title '炫动三角铁', shape '3x1', and quality 'green' match video frame at t=158.0s.",
+      "cropSha256": "76ebcf6ac086ade9e6cf28a7b14e588a72e4e0443895002b4ceb50491589d092"
     },
     {
       "referenceId": "ref_144037_16",
@@ -711,7 +731,8 @@
       "sourceScreenshotSha256": "b4feb910664ec2c1cfa0b266a22f451ef70597a116171b461522092fe5facf5f",
       "officialValue": 1094,
       "sourceCardKey": "assets/items/catalog_screenshots/宝石类1x1/{913DA7DB-3D46-40C1-8DEB-10F54935A95C}.png:0,269,388,269",
-      "independentVerificationBasis": "Independently cross-verified against official catalog screenshot card 'assets/items/catalog_screenshots/宝石类1x1/{913DA7DB-3D46-40C1-8DEB-10F54935A95C}.png:0,269,388,269'. Visual icon, title '银铃', shape '1x1', and quality 'blue' match video frame at t=158.0s."
+      "independentVerificationBasis": "Independently cross-verified against official catalog screenshot card 'assets/items/catalog_screenshots/宝石类1x1/{913DA7DB-3D46-40C1-8DEB-10F54935A95C}.png:0,269,388,269'. Visual icon, title '银铃', shape '1x1', and quality 'blue' match video frame at t=158.0s.",
+      "cropSha256": "6b84c060ef5ab37c1e1c8d9d34616592d976e9abc2d4faeadca048acf9075c95"
     },
     {
       "referenceId": "ref_144037_18",
@@ -752,7 +773,8 @@
       "sourceScreenshotSha256": "e2a074bd0588230fcfba5467b094d2a27fc7f433b84672206ca4282753958fb3",
       "officialValue": 3667,
       "sourceCardKey": "assets/items/catalog_screenshots/2X1/{4C68408B-B5A3-46E8-8049-C0B8065ADE60}.png:402,21,366,236",
-      "independentVerificationBasis": "Independently cross-verified against official catalog screenshot card 'assets/items/catalog_screenshots/2X1/{4C68408B-B5A3-46E8-8049-C0B8065ADE60}.png:402,21,366,236'. Visual icon, title '大将军章鱼烧', shape '2x1', and quality 'purple' match video frame at t=158.0s."
+      "independentVerificationBasis": "Independently cross-verified against official catalog screenshot card 'assets/items/catalog_screenshots/2X1/{4C68408B-B5A3-46E8-8049-C0B8065ADE60}.png:402,21,366,236'. Visual icon, title '大将军章鱼烧', shape '2x1', and quality 'purple' match video frame at t=158.0s.",
+      "cropSha256": "cfeea36a1fe05633380ac009a2abe98c0a6f357e5b097657bece3ff7fb9da668"
     },
     {
       "referenceId": "ref_144037_19",
@@ -793,7 +815,8 @@
       "sourceScreenshotSha256": "98d67b8ebfb1136178cb7b3897abc3cdd14c6c9cd6607f44d01124e6c8f77fe1",
       "officialValue": 15037,
       "sourceCardKey": "assets/items/catalog_screenshots/2X2/{9D299A9A-2D8E-417A-A566-BC92C203B40B}.png:773,17,366,236",
-      "independentVerificationBasis": "Independently cross-verified against official catalog screenshot card 'assets/items/catalog_screenshots/2X2/{9D299A9A-2D8E-417A-A566-BC92C203B40B}.png:773,17,366,236'. Visual icon, title '盈雪点翠', shape '2x2', and quality 'gold' match video frame at t=160.0s."
+      "independentVerificationBasis": "Independently cross-verified against official catalog screenshot card 'assets/items/catalog_screenshots/2X2/{9D299A9A-2D8E-417A-A566-BC92C203B40B}.png:773,17,366,236'. Visual icon, title '盈雪点翠', shape '2x2', and quality 'gold' match video frame at t=160.0s.",
+      "cropSha256": "794fbce5622d4e7bdf871325b304ef6b444ffa58c57dc3d5afda4d1521d72b2b"
     },
     {
       "referenceId": "ref_144037_20",
@@ -834,7 +857,8 @@
       "sourceScreenshotSha256": "bd6cb12df27f964ebfd3374ef9e16296057caa23f3fbed27b0fdf4f3f1cc7a7e",
       "officialValue": 101,
       "sourceCardKey": "assets/items/catalog_screenshots/1x1/{47545E5E-FC05-4F45-857E-A459326990CC}.png:775,265,387,265",
-      "independentVerificationBasis": "Independently cross-verified against official catalog screenshot card 'assets/items/catalog_screenshots/1x1/{47545E5E-FC05-4F45-857E-A459326990CC}.png:775,265,387,265'. Visual icon, title '绵绵云', shape '1x1', and quality 'grey' match video frame at t=160.0s."
+      "independentVerificationBasis": "Independently cross-verified against official catalog screenshot card 'assets/items/catalog_screenshots/1x1/{47545E5E-FC05-4F45-857E-A459326990CC}.png:775,265,387,265'. Visual icon, title '绵绵云', shape '1x1', and quality 'grey' match video frame at t=160.0s.",
+      "cropSha256": "a0cb9a46a0d08dac4ec65d6b88210314ca6b7828caf175395bf5fcdb167d50af"
     },
     {
       "referenceId": "ref_144037_21",
@@ -916,7 +940,8 @@
       "sourceScreenshotSha256": "8db9eab490ec8ace9a753b78d232ee8c861e6461f492232f7920d154215ae8dc",
       "officialValue": 611,
       "sourceCardKey": "assets/items/catalog_screenshots/2X3/{E2B97A18-0919-4B0C-9C04-6D8C2BF9F692}.png:0,277,381,255",
-      "independentVerificationBasis": "Independently cross-verified against official catalog screenshot card 'assets/items/catalog_screenshots/2X3/{E2B97A18-0919-4B0C-9C04-6D8C2BF9F692}.png:0,277,381,255'. Visual icon, title '方盒随身听', shape '2x3', and quality 'grey' match video frame at t=160.0s."
+      "independentVerificationBasis": "Independently cross-verified against official catalog screenshot card 'assets/items/catalog_screenshots/2X3/{E2B97A18-0919-4B0C-9C04-6D8C2BF9F692}.png:0,277,381,255'. Visual icon, title '方盒随身听', shape '2x3', and quality 'grey' match video frame at t=160.0s.",
+      "cropSha256": "34bf4c2e57455addd46a9a277f3afe061c46e769557441aa865ba56168f9a325"
     },
     {
       "referenceId": "ref_144037_23",
@@ -998,7 +1023,8 @@
       "sourceScreenshotSha256": "9f98e96a63192b44e90e4c530f754d268605fe8283da2b013cde608ac615ccc4",
       "officialValue": 2040,
       "sourceCardKey": "assets/items/catalog_screenshots/1x1/{16B07C02-E13A-4195-8F67-C8A4041C7B87}.png:15,290,366,236",
-      "independentVerificationBasis": "Independently cross-verified against official catalog screenshot card 'assets/items/catalog_screenshots/1x1/{16B07C02-E13A-4195-8F67-C8A4041C7B87}.png:15,290,366,236'. Visual icon, title '幽灵态', shape '1x1', and quality 'purple' match video frame at t=160.0s."
+      "independentVerificationBasis": "Independently cross-verified against official catalog screenshot card 'assets/items/catalog_screenshots/1x1/{16B07C02-E13A-4195-8F67-C8A4041C7B87}.png:15,290,366,236'. Visual icon, title '幽灵态', shape '1x1', and quality 'purple' match video frame at t=160.0s.",
+      "cropSha256": "6ccb2b9f2efd85e03fbdd337bdee6e4bbb8163ddcfb54a9fd4c323daf0900765"
     },
     {
       "referenceId": "ref_144037_25",
@@ -1039,7 +1065,8 @@
       "sourceScreenshotSha256": "f15baceac87e3e0ff496040f2184991f71a94eeb4b7818efeb8654255646db29",
       "officialValue": 7500,
       "sourceCardKey": "assets/items/catalog_screenshots/1X2/{343D8F72-4689-4286-AFFD-80CEC2496DC7}.png:770,278,366,236",
-      "independentVerificationBasis": "Independently cross-verified against official catalog screenshot card 'assets/items/catalog_screenshots/1X2/{343D8F72-4689-4286-AFFD-80CEC2496DC7}.png:770,278,366,236'. Visual icon, title '「方盒科技」智能手表', shape '1x2', and quality 'gold' match video frame at t=160.0s."
+      "independentVerificationBasis": "Independently cross-verified against official catalog screenshot card 'assets/items/catalog_screenshots/1X2/{343D8F72-4689-4286-AFFD-80CEC2496DC7}.png:770,278,366,236'. Visual icon, title '「方盒科技」智能手表', shape '1x2', and quality 'gold' match video frame at t=160.0s.",
+      "cropSha256": "fd98224d1b77698b0f671023a0b94292071227ca40672c60073ccf4eff7aa91d"
     },
     {
       "referenceId": "ref_144037_26",
@@ -1121,7 +1148,8 @@
       "sourceScreenshotSha256": "5846d029ee2213c1f19321b6baac89c770ec6cd5ba731efd34a961b403b40fad",
       "officialValue": 996,
       "sourceCardKey": "assets/items/catalog_screenshots/1x1/{92DEEC27-CED4-4688-95EC-5A01A337AF9D}.png:787,0,394,266",
-      "independentVerificationBasis": "Independently cross-verified against official catalog screenshot card 'assets/items/catalog_screenshots/1x1/{92DEEC27-CED4-4688-95EC-5A01A337AF9D}.png:787,0,394,266'. Visual icon, title '（未来的）大师飞镖', shape '1x1', and quality 'blue' match video frame at t=162.0s."
+      "independentVerificationBasis": "Independently cross-verified against official catalog screenshot card 'assets/items/catalog_screenshots/1x1/{92DEEC27-CED4-4688-95EC-5A01A337AF9D}.png:787,0,394,266'. Visual icon, title '（未来的）大师飞镖', shape '1x1', and quality 'blue' match video frame at t=162.0s.",
+      "cropSha256": "3b0789405403c46f357173ff9072efab7ee87d4eff2c003e0413cb375488e61d"
     },
     {
       "referenceId": "ref_144037_28",
@@ -1203,7 +1231,8 @@
       "sourceScreenshotSha256": "b76f26da9abcbb2f7cb3cb040bc0de2eb2b9cf6f2a053eae678203cf93295885",
       "officialValue": 4034,
       "sourceCardKey": "assets/items/catalog_screenshots/1X3/{4B4BA98A-9DF4-4399-8B1B-754510B27C7A}.png:774,0,387,259",
-      "independentVerificationBasis": "Independently cross-verified against official catalog screenshot card 'assets/items/catalog_screenshots/1X3/{4B4BA98A-9DF4-4399-8B1B-754510B27C7A}.png:774,0,387,259'. Visual icon, title '灯塔', shape '1x3', and quality 'blue' match video frame at t=164.0s."
+      "independentVerificationBasis": "Independently cross-verified against official catalog screenshot card 'assets/items/catalog_screenshots/1X3/{4B4BA98A-9DF4-4399-8B1B-754510B27C7A}.png:774,0,387,259'. Visual icon, title '灯塔', shape '1x3', and quality 'blue' match video frame at t=164.0s.",
+      "cropSha256": "11b56cbce5c36ef206ff396d4c190d304a4b69c66377ace98ca667b905c44f2a"
     },
     {
       "referenceId": "ref_144037_30",
@@ -1244,7 +1273,8 @@
       "sourceScreenshotSha256": "b010fadbdf849fe0d585d2f7120495efd92ab2a2ba63f7b8a2116127fbc7c67e",
       "officialValue": 124816,
       "sourceCardKey": "assets/items/catalog_screenshots/4X3/{3B7415AC-3F8D-4DEE-B5F6-C48D50626046}.png:0,0,390,262",
-      "independentVerificationBasis": "Independently cross-verified against official catalog screenshot card 'assets/items/catalog_screenshots/4X3/{3B7415AC-3F8D-4DEE-B5F6-C48D50626046}.png:0,0,390,262'. Visual icon, title '罐装随心泥', shape '4x3', and quality 'gold' match video frame at t=164.0s."
+      "independentVerificationBasis": "Independently cross-verified against official catalog screenshot card 'assets/items/catalog_screenshots/4X3/{3B7415AC-3F8D-4DEE-B5F6-C48D50626046}.png:0,0,390,262'. Visual icon, title '罐装随心泥', shape '4x3', and quality 'gold' match video frame at t=164.0s.",
+      "cropSha256": "f8295d1691aa0fc7556a0fd5fca77c1656afcd5d4dec143618afd2d5698ae875"
     },
     {
       "referenceId": "ref_144037_31",
@@ -1285,7 +1315,8 @@
       "sourceScreenshotSha256": "ef04a250e0ace23d7939abb74ecf657060936d423d93d9e0079c0479f31d5a59",
       "officialValue": 27246,
       "sourceCardKey": "assets/items/catalog_screenshots/1X5/{DE334641-DA72-4330-9D2A-0D11AE3A8AB4}.png:0,0,409,309",
-      "independentVerificationBasis": "Independently cross-verified against official catalog screenshot card 'assets/items/catalog_screenshots/1X5/{DE334641-DA72-4330-9D2A-0D11AE3A8AB4}.png:0,0,409,309'. Visual icon, title '「强身好伙伴！」', shape '1x5', and quality 'gold' match video frame at t=166.0s."
+      "independentVerificationBasis": "Independently cross-verified against official catalog screenshot card 'assets/items/catalog_screenshots/1X5/{DE334641-DA72-4330-9D2A-0D11AE3A8AB4}.png:0,0,409,309'. Visual icon, title '「强身好伙伴！」', shape '1x5', and quality 'gold' match video frame at t=166.0s.",
+      "cropSha256": "3e1eb21437c7c9a8f762cdd3d80842b928adfd4ee63f3b6d71cce5f1350919fe"
     },
     {
       "referenceId": "ref_144037_32",
@@ -1367,7 +1398,8 @@
       "sourceScreenshotSha256": "c06571615098094064711d59881537eca676fc07420d0153c1f787afcb77ea69",
       "officialValue": 3185,
       "sourceCardKey": "assets/items/catalog_screenshots/2X2/{DFB6F983-7A0D-41C6-AB47-6C150B5F7770}.png:0,259,387,259",
-      "independentVerificationBasis": "Independently cross-verified against official catalog screenshot card 'assets/items/catalog_screenshots/2X2/{DFB6F983-7A0D-41C6-AB47-6C150B5F7770}.png:0,259,387,259'. Visual icon, title '番茄百分百果冻', shape '2x2', and quality 'blue' match video frame at t=166.0s."
+      "independentVerificationBasis": "Independently cross-verified against official catalog screenshot card 'assets/items/catalog_screenshots/2X2/{DFB6F983-7A0D-41C6-AB47-6C150B5F7770}.png:0,259,387,259'. Visual icon, title '番茄百分百果冻', shape '2x2', and quality 'blue' match video frame at t=166.0s.",
+      "cropSha256": "6be461c2c2a9fb7ef5037ce5229b7df2e270be5ec5c4cc9f47dc5485fe0f0394"
     },
     {
       "referenceId": "ref_144037_34",
@@ -1408,7 +1440,8 @@
       "sourceScreenshotSha256": "8a7797b78d26fb9c92308b04d8b504e4abf8ae6957f67907bc6da31cabfd9897",
       "officialValue": 4840,
       "sourceCardKey": "assets/items/catalog_screenshots/3X2/{1C65BF0E-A101-4042-A9D7-9653D84BCAD1}.png:779,0,382,272",
-      "independentVerificationBasis": "Independently cross-verified against official catalog screenshot card 'assets/items/catalog_screenshots/3X2/{1C65BF0E-A101-4042-A9D7-9653D84BCAD1}.png:779,0,382,272'. Visual icon, title '引航者望远镜', shape '3x2', and quality 'blue' match video frame at t=166.0s."
+      "independentVerificationBasis": "Independently cross-verified against official catalog screenshot card 'assets/items/catalog_screenshots/3X2/{1C65BF0E-A101-4042-A9D7-9653D84BCAD1}.png:779,0,382,272'. Visual icon, title '引航者望远镜', shape '3x2', and quality 'blue' match video frame at t=166.0s.",
+      "cropSha256": "35af9ed3268c023ae643164d0a3e17a4a4af4486219f5196daa06abcfe5ef7c3"
     },
     {
       "referenceId": "ref_144037_35",
@@ -1449,7 +1482,8 @@
       "sourceScreenshotSha256": "8f1a2a1d7add0febd9fa2658e81e6ffa4dd2409876e3044e40efb09fc33ba4a6",
       "officialValue": 278,
       "sourceCardKey": "assets/items/catalog_screenshots/2X2/{DDEC982D-9536-4205-837F-B1BF79E86325}.png:396,0,386,277",
-      "independentVerificationBasis": "Independently cross-verified against official catalog screenshot card 'assets/items/catalog_screenshots/2X2/{DDEC982D-9536-4205-837F-B1BF79E86325}.png:396,0,386,277'. Visual icon, title '蟑螂！蟑螂！', shape '2x2', and quality 'grey' match video frame at t=168.0s."
+      "independentVerificationBasis": "Independently cross-verified against official catalog screenshot card 'assets/items/catalog_screenshots/2X2/{DDEC982D-9536-4205-837F-B1BF79E86325}.png:396,0,386,277'. Visual icon, title '蟑螂！蟑螂！', shape '2x2', and quality 'grey' match video frame at t=168.0s.",
+      "cropSha256": "7481bf4b4c4e5b6e6eb63d3325e3ecfaad623e98d25d2573840dabde25c2d307"
     },
     {
       "referenceId": "ref_144037_36",
@@ -1490,7 +1524,8 @@
       "sourceScreenshotSha256": "e2a074bd0588230fcfba5467b094d2a27fc7f433b84672206ca4282753958fb3",
       "officialValue": 2139,
       "sourceCardKey": "assets/items/catalog_screenshots/2X1/{4C68408B-B5A3-46E8-8049-C0B8065ADE60}.png:0,266,388,265",
-      "independentVerificationBasis": "Independently cross-verified against official catalog screenshot card 'assets/items/catalog_screenshots/2X1/{4C68408B-B5A3-46E8-8049-C0B8065ADE60}.png:0,266,388,265'. Visual icon, title '断落的剑格', shape '2x1', and quality 'blue' match video frame at t=168.0s."
+      "independentVerificationBasis": "Independently cross-verified against official catalog screenshot card 'assets/items/catalog_screenshots/2X1/{4C68408B-B5A3-46E8-8049-C0B8065ADE60}.png:0,266,388,265'. Visual icon, title '断落的剑格', shape '2x1', and quality 'blue' match video frame at t=168.0s.",
+      "cropSha256": "19e39bc944be9d8aea048c08936ed0fd28ae19612bef03f79bf9713a27cabed5"
     },
     {
       "referenceId": "ref_144037_37",
@@ -1572,7 +1607,8 @@
       "sourceScreenshotSha256": "c06571615098094064711d59881537eca676fc07420d0153c1f787afcb77ea69",
       "officialValue": 1624,
       "sourceCardKey": "assets/items/catalog_screenshots/2X2/{DFB6F983-7A0D-41C6-AB47-6C150B5F7770}.png:387,259,387,259",
-      "independentVerificationBasis": "Independently cross-verified against official catalog screenshot card 'assets/items/catalog_screenshots/2X2/{DFB6F983-7A0D-41C6-AB47-6C150B5F7770}.png:387,259,387,259'. Visual icon, title '「莲-C198」唱片机', shape '2x2', and quality 'green' match video frame at t=168.0s."
+      "independentVerificationBasis": "Independently cross-verified against official catalog screenshot card 'assets/items/catalog_screenshots/2X2/{DFB6F983-7A0D-41C6-AB47-6C150B5F7770}.png:387,259,387,259'. Visual icon, title '「莲-C198」唱片机', shape '2x2', and quality 'green' match video frame at t=168.0s.",
+      "cropSha256": "12db252fa4ab9be9fe3f085a695e5ed3adf64173e69a5cd9501e99d8201f9fb3"
     },
     {
       "referenceId": "ref_144037_39",
@@ -1613,7 +1649,8 @@
       "sourceScreenshotSha256": "cf0981c366d1f48083a3c7f2acd476edbd941eca32a1c1ab587224d2d26148e5",
       "officialValue": 1815,
       "sourceCardKey": "assets/items/catalog_screenshots/2X1/{E065324C-AC60-41CF-B56A-8043A3B76C53}.png:10,20,366,236",
-      "independentVerificationBasis": "Independently cross-verified against official catalog screenshot card 'assets/items/catalog_screenshots/2X1/{E065324C-AC60-41CF-B56A-8043A3B76C53}.png:10,20,366,236'. Visual icon, title '清凉凉止痛药', shape '2x1', and quality 'blue' match video frame at t=168.0s."
+      "independentVerificationBasis": "Independently cross-verified against official catalog screenshot card 'assets/items/catalog_screenshots/2X1/{E065324C-AC60-41CF-B56A-8043A3B76C53}.png:10,20,366,236'. Visual icon, title '清凉凉止痛药', shape '2x1', and quality 'blue' match video frame at t=168.0s.",
+      "cropSha256": "5962f592e279757c82a4f68650b75c2468e8d368f4fe1e6185d29ec84d3e8144"
     }
   ]
 }

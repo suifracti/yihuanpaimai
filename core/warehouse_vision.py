@@ -254,8 +254,9 @@ class WarehouseTemplateMatcher:
         """Return the strict winner and its reference provenance.
 
         DIRECT means a pre-existing legacy template or a hash-verified,
-        independently labelled gameplay crop. DERIVED_UNVERIFIED may rank a
-        candidate, but the caller must keep it unresolved.
+        independently labelled real-match crop. Settlement provenance remains
+        attached to the reference and never supplies facts for the current match.
+        DERIVED_UNVERIFIED may rank a candidate, but the caller must keep it unresolved.
         """
         if not candidates or roi_img is None or roi_img.size == 0:
             return None, 0.0, 0.0, {"referenceKind": "NONE", "accepted": False}
@@ -349,7 +350,11 @@ class WarehouseTemplateMatcher:
             score = self._template_match_score(roi_img, template)
             if score > best_score:
                 best_score = score
-                best_source = "VERIFIED_GAMEPLAY_REFERENCE"
+                best_source = (
+                    "VERIFIED_SETTLEMENT_REFERENCE"
+                    if str(metadata.get("sourceSceneKind") or "").upper() == "SETTLEMENT"
+                    else "VERIFIED_GAMEPLAY_REFERENCE"
+                )
         return best_score, best_source
 
     @staticmethod

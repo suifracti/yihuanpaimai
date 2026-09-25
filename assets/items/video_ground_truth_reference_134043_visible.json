@@ -6,6 +6,9 @@
     "sourceFramePath": "build/codex_matching_20260912/other-video-inspection/2026-09-08 13-40-43-150.png",
     "annotationScope": "VISIBLE_VIEWPORT_ONLY",
     "coverageStatus": "PARTIAL",
+    "sourceSceneKind": "SETTLEMENT",
+    "referenceRole": "VISUAL_TEMPLATE_ONLY",
+    "repositoryVideoPath": "data/videos/2026-09-08 13-40-43.mkv",
     "visibleGrid": {
       "rows": 10,
       "columns": 10
@@ -14,7 +17,7 @@
     "visibleItemCount": 17,
     "visibleOccupiedCells": 62,
     "visibleEmptyCells": 38,
-    "provenanceNote": "Original frame and catalog cards visually compared before production predictions. No bottom endpoint is recorded; this is not a whole-warehouse answer key.",
+    "provenanceNote": "The source frame at 150s visibly shows the settlement screen. Its catalog-verified crops are settlement-origin visual templates only, not activity-time facts. No bottom endpoint is recorded; this is not a whole-warehouse answer key.",
     "recordStableKey": "video_audit_20260908_134043"
   },
   "items": [

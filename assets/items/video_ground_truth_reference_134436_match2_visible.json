@@ -13,6 +13,9 @@
     ],
     "annotationScope": "VISIBLE_VIEWPORT_ONLY",
     "coverageStatus": "PARTIAL",
+    "sourceSceneKind": "SETTLEMENT",
+    "referenceRole": "VISUAL_TEMPLATE_ONLY",
+    "repositoryVideoPath": "data/videos/2026-09-08 13-44-36.mkv",
     "wholeWarehouseItemCount": null,
     "visibleItemCount": 23,
     "visibleGrid": {
@@ -21,7 +24,7 @@
     },
     "visibleOccupiedCells": 60,
     "visibleEmptyCells": 40,
-    "provenanceNote": "Original unobscured game viewport at 550s and real source cards compared before production reconstruction. TOP only; empty lower viewport cells are not proof of BOTTOM. Repeated items remain distinct placements."
+    "provenanceNote": "The source frame at 550s visibly shows the settlement screen. Catalog-verified crops are settlement-origin visual templates only, not activity-time facts. TOP only; empty lower viewport cells are not proof of BOTTOM. Repeated items remain distinct placements."
   },
   "items": [
     {

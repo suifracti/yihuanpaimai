@@ -150,22 +150,31 @@ def load_visual_templates(include_development=False):
 
 @lru_cache(maxsize=4)
 def load_verified_warehouse_gameplay_templates(root=None):
-    """Load hash-checked, human-labelled warehouse crops from separate matches.
+    """Load hash-checked, independently labelled real-match warehouse crops.
 
-    Only the two reviewed visible-viewport records are admitted. Settlement
-    reveals, the 144037 check group, and generated/derived pictures are not
-    gameplay references here. Each loaded crop keeps its match, frame, source
-    card, grid placement, and hashes so a direct match can be traced back.
+    Active-match and settlement-origin crops keep distinct provenance. A
+    settlement crop is only a visual template; it is never imported as a live
+    match fact. Generated/derived pictures remain candidate-only elsewhere.
     """
     base_root = Path(root).resolve() if root else asset_root().resolve()
     group_specs = (
         (
             "assets/items/video_ground_truth_reference_134436_match2_visible.json",
             "video_audit_20260908_134436_match2",
+            "SETTLEMENT",
+            "VISIBLE_VIEWPORT_ONLY",
         ),
         (
             "assets/items/video_ground_truth_reference_134043_visible.json",
             "video_audit_20260908_134043",
+            "SETTLEMENT",
+            "VISIBLE_VIEWPORT_ONLY",
+        ),
+        (
+            "assets/items/video_ground_truth_reference_144037.json",
+            "video_audit_20260908_144037_settlement",
+            "SETTLEMENT",
+            "SETTLEMENT_IMAGE_CROPS",
         ),
     )
     official_path = base_root / "assets/catalog_065.json"
@@ -194,7 +203,7 @@ def load_verified_warehouse_gameplay_templates(root=None):
         return candidate
 
     output = {}
-    for relative_json, expected_group in group_specs:
+    for relative_json, expected_group, expected_scene, expected_scope in group_specs:
         json_path = safe_file(relative_json)
         if json_path is None:
             continue
@@ -204,8 +213,10 @@ def load_verified_warehouse_gameplay_templates(root=None):
             continue
         group_meta = payload.get("metadata") or {}
         if (group_meta.get("recordStableKey") != expected_group
-                or group_meta.get("annotationScope") != "VISIBLE_VIEWPORT_ONLY"
-                or group_meta.get("coverageStatus") != "PARTIAL"):
+                or group_meta.get("annotationScope") != expected_scope
+                or group_meta.get("coverageStatus") != "PARTIAL"
+                or str(group_meta.get("sourceSceneKind") or "").upper() != expected_scene
+                or group_meta.get("referenceRole") != "VISUAL_TEMPLATE_ONLY"):
             continue
 
         frame_path = safe_file(group_meta.get("sourceFramePath"))
@@ -278,12 +289,27 @@ def load_verified_warehouse_gameplay_templates(root=None):
                 "cropSha256": crop_sha,
                 "sourceFramePath": group_meta.get("sourceFramePath"),
                 "sourceFrameSha256": frame_sha,
-                "sourceFrameTimeSec": row.get("sourceFrameTimeSec", group_meta.get("sourceFrameTimeSec")),
-                "sourceFrameBbox": row.get("sourceFrameBbox", row.get("pixelBboxOnCanvas")),
+                "sourceFrameTimeSec": row.get(
+                    "sourceFrameTimeSec",
+                    row.get("videoSourceFrameTimeSec", group_meta.get("sourceFrameTimeSec")),
+                ),
+                "sourceFrameBbox": (row.get("sourceFrameBbox") if expected_scene == "SETTLEMENT"
+                                     else row.get("sourceFrameBbox", row.get("pixelBboxOnCanvas"))),
+                "sourceGridBoundingBox": row.get("gridBoundingBox"),
+                "sourceCanvasBbox": row.get("pixelBboxOnCanvas") if expected_scene == "SETTLEMENT" else None,
+                "sourceCoordinateSpace": (
+                    "stitched-warehouse-grid" if expected_scene == "SETTLEMENT" else "source-frame"
+                ),
+                "sourceVideoPath": group_meta.get("repositoryVideoPath") or group_meta.get("videoPath"),
                 "sourceScreenshot": str(row.get("sourceScreenshot") or ""),
                 "sourceScreenshotSha256": source_card_sha,
                 "cardBbox": bbox,
-                "labelAuthority": "independently visually checked stable catalog ID + verified source card + hash-pinned gameplay crop",
+                "sourceSceneKind": expected_scene,
+                "referenceRole": group_meta.get("referenceRole", "VISUAL_TEMPLATE_ONLY"),
+                "labelAuthority": (
+                    "independently visually checked stable catalog ID + verified source card + "
+                    "hash-pinned real-match crop"
+                ),
                 "sampleClass": "development-training-reference",
             }
             output.setdefault(catalog_id, []).append({"image": image, "metadata": metadata})

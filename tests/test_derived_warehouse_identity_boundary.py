@@ -146,32 +146,46 @@ class DerivedWarehouseIdentityBoundaryTests(unittest.TestCase):
         self.assertTrue(evidence["accepted"])
         self.assertIsNone(matcher.match_candidates(roi, candidates, WarehouseVisionConfig())[0])
 
-    def test_verified_gameplay_crop_uses_existing_strict_direct_gate(self):
-        check_path = ROOT / "assets/items/video_ground_truth_reference_144037.json"
-        check = json.loads(check_path.read_text(encoding="utf-8"))
-        item = next(row for row in check["items"] if row["referenceId"] == "ref_144037_05")
-        geometry = item["gridBoundingBox"]
-        roi = cv2.imdecode(np.fromfile(str(ROOT / item["localCropPath"]), np.uint8), cv2.IMREAD_COLOR)
+    def test_settlement_reference_matches_labeled_crop_from_another_match(self):
+        settlement_path = ROOT / "assets/items/video_ground_truth_reference_144037.json"
+        settlement = json.loads(settlement_path.read_text(encoding="utf-8"))
+        reference_row = next(row for row in settlement["items"] if row["referenceId"] == "ref_144037_38")
+        other_match_path = ROOT / "assets/items/video_ground_truth_reference_134043_visible.json"
+        other_match = json.loads(other_match_path.read_text(encoding="utf-8"))
+        other_match_row = next(row for row in other_match["items"] if row["catalogId"] == reference_row["catalogId"])
+
+        roi = cv2.imdecode(np.fromfile(str(ROOT / other_match_row["localCropPath"]), np.uint8), cv2.IMREAD_COLOR)
         matcher = WarehouseTemplateMatcher()
         references = load_verified_warehouse_gameplay_templates(root=ROOT)
+        settlement_reference = next(
+            item for item in references[reference_row["catalogId"]]
+            if item["metadata"]["referenceId"] == reference_row["referenceId"]
+        )
+        self.assertEqual(settlement_reference["metadata"]["sourceSceneKind"], "SETTLEMENT")
+        self.assertEqual(settlement_reference["metadata"]["referenceRole"], "VISUAL_TEMPLATE_ONLY")
+        self.assertEqual(settlement_reference["metadata"]["sourceFrameTimeSec"], 168.0)
+        self.assertEqual(other_match["metadata"]["sourceSceneKind"], "SETTLEMENT")
+        self.assertEqual(other_match["metadata"]["sourceFrameTimeSec"], 150)
+        self.assertFalse(any(
+            item["metadata"]["referenceId"] == "ref_144037_23"
+            for group in references.values() for item in group
+        ))
 
-        best, _score, _margin, evidence = matcher.match_candidate_evidence(
-            roi,
-            matcher.get_candidates(item["quality"], geometry["width"], geometry["height"]),
-            WarehouseVisionConfig(),
+        matcher.templates = {}
+        matcher.derived_templates_by_id = {}
+        matcher.gameplay_templates_by_id = {reference_row["catalogId"]: [settlement_reference]}
+        geometry = other_match_row["gridBoundingBox"]
+        candidates = matcher.get_candidates(
+            other_match_row["quality"], geometry["width"], geometry["height"]
         )
 
-        self.assertEqual(best["Id"], item["catalogId"])
+        best, _score, _margin, evidence = matcher.match_candidate_evidence(
+            roi, candidates, WarehouseVisionConfig()
+        )
+
+        self.assertEqual(best["Id"], other_match_row["catalogId"])
         self.assertTrue(evidence["accepted"])
-        self.assertEqual(evidence["referenceSource"], "VERIFIED_GAMEPLAY_REFERENCE")
-        self.assertTrue(references)
-        self.assertTrue(all(
-            reference["metadata"]["groupId"] in {
-                "video_audit_20260908_134043",
-                "video_audit_20260908_134436_match2",
-            }
-            for group in references.values() for reference in group
-        ))
+        self.assertEqual(evidence["referenceSource"], "VERIFIED_SETTLEMENT_REFERENCE")
 
     def test_direct_exact_result_keeps_legacy_priority_over_derived_image(self):
         roi = np.random.default_rng(41).integers(0, 256, (36, 36, 3), dtype=np.uint8)
