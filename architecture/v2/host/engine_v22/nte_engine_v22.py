@@ -67,6 +67,7 @@ from venue_box_catalog import (  # noqa: E402
     catalog_selection,
     load_catalog as load_venue_box_catalog,
     normalize_vision_venue,
+    normalize_venue_from_box,
 )
 from vision_pipeline import NTEVisionPipeline  # noqa: E402
 
@@ -1199,6 +1200,10 @@ class RealEngine:
                     "ownerMatchId": self.current_match.id,
                     "intel": copy.deepcopy(_safe(readings)),
                 }
+        if isinstance(patch.get("auctionEvidence"), dict):
+            box_venue = (self.current_match.facts.get("auctionEvidence") or {}).get("venueFromBox")
+            if box_venue:
+                patch["auctionEvidence"]["venueFromBox"] = copy.deepcopy(box_venue)
         if patch:
             self.current_match.apply_facts(patch, source="vision", intent="observe", observed_at=observed_at)
         if lobby_handoff:
@@ -1232,7 +1237,64 @@ class RealEngine:
                     auctionVenueId=current_venue_id,
                     observationSessionId=lobby_handoff.get("observationSessionId"),
                 )
+        self._apply_box_venue_observation(context, observed_at)
         self.current_match.updated_at = _utc_now()
+
+    def _apply_box_venue_observation(self, context: dict, observed_at: str) -> None:
+        observation = context.get("boxObservation")
+        if (not observed_at or context.get("scene") != "IN_AUCTION" or not context.get("inAuction")
+                or not isinstance(observation, dict)
+                or observation.get("capturedAt") != observed_at
+                or float(observation.get("confidence") or 0) < 0.85):
+            return
+        resolved = normalize_venue_from_box(self.venue_catalog, observation.get("text"))
+        if resolved.get("status") != "NORMALIZED":
+            self._box_venue_streak = None
+            return
+        scope = (self.session_id, self.current_match.id, context.get("round"),
+                 resolved["venueId"], resolved["boxId"])
+        previous = getattr(self, "_box_venue_streak", None)
+        if not previous or previous[0] != scope:
+            self._box_venue_streak = (scope, observed_at)
+            return
+        if previous[1] == observed_at:
+            return
+        self._box_venue_streak = (scope, observed_at)
+        selection = dict(catalog_selection(self.venue_catalog, resolved["venueId"], resolved["boxId"]))
+        facts = self.current_match.facts
+        current_id = facts.get("venueId")
+        if not current_id and facts.get("venue"):
+            current_id = normalize_vision_venue(self.venue_catalog, facts["venue"]).get("venueId")
+        conflict = bool(current_id and current_id != selection["venueId"])
+        # Keep the entire protected environment bundle together, including cost.
+        for key in ("entryCost", "boxId", "box"):
+            state = self.current_match.field_states.get(key)
+            if key == "box" and state and state.protected:
+                protected_box = normalize_venue_from_box(self.venue_catalog, facts.get(key))
+                if protected_box.get("boxId") == selection["boxId"]:
+                    continue
+            if state and state.protected and facts.get(key) != selection.get(key):
+                conflict = True
+        evidence = copy.deepcopy(facts.get("auctionEvidence") or {})
+        evidence["venueFromBox"] = {
+            "status": "CONFLICT" if conflict else "RESOLVED",
+            "sourceKind": "observed_box_catalog_membership",
+            "matchId": self.current_match.id, "observationSessionId": self.session_id,
+            "targetIdentity": copy.deepcopy(getattr(self, "observation_target_identity", None)),
+            "observedAt": observed_at, "rawBoxText": observation["text"],
+            "venueId": selection["venueId"], "boxId": selection["boxId"],
+            "membershipEvidenceClass": selection["boxEvidenceClass"],
+        }
+        patch = {"auctionEvidence": evidence}
+        if not conflict:
+            patch.update({k: selection[k] for k in (
+                "venueId", "venue", "entryCost", "boxId", "box",
+                "venueEvidenceClass", "boxEvidenceClass")})
+            patch.update({k: v for k, v in self.venue_catalog_provenance.items() if k in FACT_KEYS})
+        self.current_match.apply_facts(
+            patch, source="vision", intent="observe", observed_at=observed_at,
+            evidence_refs=evidence["venueFromBox"],
+        )
 
     def _lobby_venue_handoff_facts(self, context: dict) -> dict:
         return self._catalog_venue_facts(context, from_lobby=True)

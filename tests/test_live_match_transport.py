@@ -18,6 +18,60 @@ from live_match_transport import LiveMatchPublisher, LiveMatchReceiver, LiveMatc
 
 
 class LiveMatchTransportTests(unittest.TestCase):
+    def test_box_name_supplies_scoped_venue_and_keeps_conflicts_blocked(self):
+        import importlib.util
+        from venue_box_catalog import load_catalog, canonical_catalog_provenance, normalize_venue_from_box
+        spec = importlib.util.spec_from_file_location(
+            "box_venue_engine", ROOT / "architecture/v2/host/engine_v22/nte_engine_v22.py")
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        engine = module.RealEngine.__new__(module.RealEngine)
+        engine.current_match = CurrentMatch()
+        engine.session_id = "box-test-session"
+        engine.venue_catalog = load_catalog()
+        engine.venue_catalog_provenance = canonical_catalog_provenance(engine.venue_catalog)
+        self.assertEqual(normalize_venue_from_box(engine.venue_catalog, "完整的包裹")["venueId"], "venue-haibei")
+        self.assertEqual(normalize_venue_from_box(engine.venue_catalog, "完整的保险箱")["venueId"], "venue-zhenzhu")
+        self.assertIsNone(normalize_venue_from_box(engine.venue_catalog, "宝箱")["venueId"])
+        ambiguous = copy.deepcopy(engine.venue_catalog)
+        ambiguous["venues"][0]["boxes"].append(copy.deepcopy(ambiguous["venues"][1]["boxes"][0]))
+        self.assertIsNone(normalize_venue_from_box(ambiguous, "机械宝箱")["venueId"])
+
+        def observe(second, scene="IN_AUCTION", raw="机械宝箱"):
+            stamp = f"2026-09-26T12:00:{second:02d}+00:00"
+            ctx = {"scene": scene, "inAuction": scene == "IN_AUCTION", "round": 1,
+                   "boxObservation": {"text": raw, "confidence": 0.99, "capturedAt": stamp}}
+            engine._apply_pipeline_context(ctx, stamp)
+
+        observe(1, "AUCTION_LOADING")
+        observe(2)
+        observe(2)  # Re-reading the same OCR evidence cannot confirm it.
+        self.assertIsNone(engine.current_match.facts["venueId"])
+        observe(3)
+        facts = engine.current_match.facts
+        self.assertEqual(facts["venueId"], "venue-shanhu")
+        self.assertEqual(facts["entryCost"], 5000)
+        self.assertEqual(facts["boxId"], "box-shanhu-mechanical")
+        self.assertIsNone(facts["fieldCondition"])
+        self.assertEqual(engine.current_match.field_states["venueId"].evidence_refs["sourceKind"], "observed_box_catalog_membership")
+        engine.current_match.apply_facts({"q": 17, "goldAvg": 55444}, source="vision", intent="observe")
+        self.assertEqual(main._native_solver_admission(engine.current_match.facts)[1], "缺失场地规则")
+        engine.current_match.apply_facts({"box": "机械宝箱 · 科技类概率提升"}, source="manual", intent="confirm")
+        observe(4)
+        self.assertEqual(engine.current_match.facts["auctionEvidence"]["venueFromBox"]["status"], "RESOLVED")
+        engine.current_match.apply_facts({"venueId": "venue-haibei", "venue": "海贝场", "entryCost": 0}, source="manual", intent="confirm")
+        observe(5)
+        facts = engine.current_match.facts
+        self.assertEqual(facts["venueId"], "venue-haibei")
+        self.assertEqual(facts["entryCost"], 0)
+        self.assertIn("冲突", main._native_solver_admission(facts)[1])
+        engine.current_match = CurrentMatch()
+        observe(6)
+        self.assertIsNone(engine.current_match.facts["venueId"])
+        engine.session_id = "another-session"
+        observe(7)
+        self.assertIsNone(engine.current_match.facts["venueId"])
+
     def test_native_match_summary_explains_gate_and_never_defaults_unknown_rule(self):
         current = CurrentMatch()
         current.apply_facts({"q": 17, "goldAvg": 55444, "purpleCount": 9}, source="vision", intent="observe")

@@ -591,6 +591,20 @@ def normalize_vision_box(catalog: Mapping[str, Any], *, venue_id: Optional[str],
     return immutable_snapshot({"status": "NORMALIZED", "boxId": matches[0], "provenance": "VISION_OBSERVATION"})
 
 
+def normalize_venue_from_box(catalog: Mapping[str, Any], observation: Optional[str]) -> Mapping[str, Any]:
+    """Resolve a complete observed box name across the approved catalog."""
+    _require_approved(catalog)
+    matches = []
+    for venue in catalog.get("venues") or []:
+        result = normalize_vision_box(catalog, venue_id=venue["venueId"], observation=observation)
+        if result.get("status") == "NORMALIZED":
+            matches.append((venue["venueId"], result["boxId"]))
+    if len(matches) != 1:
+        return immutable_snapshot({"status": "UNKNOWN", "venueId": None, "boxId": None})
+    venue_id, box_id = matches[0]
+    return immutable_snapshot({"status": "NORMALIZED", "venueId": venue_id, "boxId": box_id})
+
+
 def load_solver_compatibility(path: Optional[Path] = None) -> Mapping[str, Any]:
     resolved = Path(path) if path is not None else (
         _application_asset_root()

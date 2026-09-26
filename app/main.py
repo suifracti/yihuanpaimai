@@ -2084,6 +2084,10 @@ def _native_solver_admission_details(
     ]
     blocking_reasons: list[str] = []
     action_keys: list[str] = []
+    box_venue_evidence = (facts.get("auctionEvidence") or {}).get("venueFromBox") or {}
+    if box_venue_evidence.get("status") == "CONFLICT":
+        blocking_reasons.append("会场或费用与已识别箱名冲突，请确认会场或宝箱")
+        action_keys.extend(("venueId", "boxId"))
     for key, reason in (
         ("venueId", "缺失会场"),
         ("q", "缺失总高阶件数 Q"),

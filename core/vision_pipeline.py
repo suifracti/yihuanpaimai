@@ -1008,6 +1008,8 @@ class NTEVisionPipeline:
         self._acquisition_frame = getattr(self, "_acquisition_frame", 0) + 1
         self._frame_ocr_rows = []
 
+        self.current_context.pop("boxObservation", None)
+
         # A prepared warehouse observation is valid only for the exact frame
         # that was already inspected by the early-publish path.
         if self._prepared_warehouse_frame_id not in (None, id(frame)):
@@ -1776,6 +1778,11 @@ class NTEVisionPipeline:
                     if stable_box and not spinning:
                         self.current_context["box"] = hit["box"]
                         self.current_context["boxType"] = None
+                        if score >= 0.85 and self.current_context.get("round", 0) > 0:
+                            self.current_context["boxObservation"] = {
+                                "text": text.strip(), "confidence": float(score),
+                                "capturedAt": captured_at,
+                            }
                         detected_feature = True
 
             self.current_context["inAuction"] = detected_feature or (self.current_context["round"] > 0)
