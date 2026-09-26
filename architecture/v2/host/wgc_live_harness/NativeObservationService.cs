@@ -19,6 +19,8 @@ namespace WgcLiveHarness;
 /// one real Python business Engine. The process exits on a safety pause; the
 /// UI must explicitly start a new observation session before frames can flow
 /// again. That makes a focus/identity/scene boundary a session boundary too.
+/// The auction lobby remains in the same session; Main's in-auction gate keeps
+/// solver advice disabled until an accepted auction frame arrives.
 /// </summary>
 internal static class NativeObservationService
 {
@@ -96,6 +98,15 @@ internal static class NativeObservationService
                     throw new InvalidOperationException("resume-target-identity-mismatch: start a new match explicitly");
                 File.WriteAllText(Path.Combine(workDir, "engine_state.json"), resume.ToJsonString());
             }
+            File.WriteAllText(Path.Combine(workDir, "observation-target.json"),
+                JsonSerializer.Serialize(new
+                {
+                    observationSessionId = sessionId,
+                    targetHwnd = target.TargetHwnd,
+                    targetPid = target.TargetPid,
+                    targetGeneration = target.Generation,
+                    processInstanceToken = target.TargetIdentity!.ProcessInstanceToken,
+                }, JsonLineOptions));
             using var capture = new WgcWindowCapture(new IntPtr(target.TargetHwnd));
             using var trace = new TraceLog(tracePath, sessionId, "bootstrap");
             using var session = new SupervisorSession(new SupervisorSession.Options
@@ -137,6 +148,7 @@ internal static class NativeObservationService
 
             var acceptedFrames = 0;
             var firstFrameWritten = false;
+            var firstLobbyFrameWritten = false;
             while (maxFrames <= 0 || acceptedFrames < maxFrames)
             {
                 if (DrainControls(controlQueue, session, sessionId, monitor, target))
@@ -228,7 +240,30 @@ internal static class NativeObservationService
                 var scene = (string?)perception?["scene"] ?? "UNKNOWN";
                 var frameSequence = Convert.ToInt64(transfer.GetValueOrDefault("sequence") ?? 0);
 
-                if (scene is "SETTLEMENT" or "AUCTION_LOBBY" or "CITY_TYCOON_HUB"
+                if (scene == "AUCTION_LOBBY" && !firstLobbyFrameWritten)
+                {
+                    // One bounded source sample; continue this same target and
+                    // session through loading into the corresponding match.
+                    if (firstFrameWritten)
+                    {
+                        var lobbyRawPath = Path.Combine(workDir, "lobby-frame.bmp");
+                        var lobbyStatePath = Path.Combine(workDir, "lobby-frame-state.json");
+                        WriteBmp(lobbyRawPath, frame.Width, frame.Height, frame.Pixels);
+                        File.WriteAllText(lobbyStatePath,
+                            JsonSerializer.Serialize(new
+                            {
+                                frameSequence,
+                                frame.CaptureTimestampNs,
+                                frame.CapturedAtUtc,
+                                target = TargetEvidence(afterEngine),
+                                state,
+                                perception,
+                            }, JsonLineOptions));
+                    }
+                    firstLobbyFrameWritten = true;
+                }
+
+                if (scene is "SETTLEMENT" or "CITY_TYCOON_HUB"
                     or "CITY_LEISURE_MENU" or "OPEN_WORLD" or "UNKNOWN")
                 {
                     // Preserve the exact frame that caused the boundary.  A

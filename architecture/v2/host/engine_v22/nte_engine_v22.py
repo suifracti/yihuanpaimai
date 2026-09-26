@@ -300,6 +300,7 @@ class RealEngine:
         self.log_path = Path(args.log).resolve() if args.log else self.work_dir / "engine_trace.jsonl"
         self.fault = args.fault or ""
         self.data_origin = args.data_origin or "replay"
+        self.observation_target_identity = self._load_observation_target_identity()
 
         self.pipe: Optional[PipeClient] = None
         self.reader: Optional[FrameMapReader] = None
@@ -332,6 +333,8 @@ class RealEngine:
         self.control_revision = 0
         self.manual_overrides: dict[str, Any] = {}
         self.awaiting_exit = False
+        self._active_pipeline_match_generation: Optional[int] = None
+        self._pending_lobby_venue: Optional[dict] = None
         # The frozen frame header carries QPC nanoseconds, while the existing
         # vision pipeline accepts an aware ISO timestamp.  Associate the two
         # clock domains once at process start; never substitute OCR completion
@@ -350,6 +353,28 @@ class RealEngine:
         self.preload()
 
     # -- logging and durable state -----------------------------------------
+    def _load_observation_target_identity(self) -> Optional[dict]:
+        path = self.work_dir / "observation-target.json"
+        try:
+            payload = json.loads(path.read_text(encoding="utf-8"))
+            if not isinstance(payload, dict) or payload.get("observationSessionId") != self.session_id:
+                return None
+            values = {
+                "targetHwnd": payload.get("targetHwnd"),
+                "targetPid": payload.get("targetPid"),
+                "targetGeneration": payload.get("targetGeneration"),
+                "processInstanceToken": payload.get("processInstanceToken"),
+            }
+            if any(type(value) is not int for value in values.values()):
+                return None
+            if any(values[key] <= 0 for key in ("targetHwnd", "targetPid", "processInstanceToken")):
+                return None
+            if values["targetGeneration"] < 0:
+                return None
+            return values
+        except (OSError, ValueError, TypeError):
+            return None
+
     def log(self, event: str, **details: Any) -> None:
         record = {
             "tsNs": qpc_ns(),
@@ -437,8 +462,64 @@ class RealEngine:
                     self.manual_overrides[key] = copy.deepcopy(self.current_match.facts.get(key))
             prior_context = state.get("pipelineContext")
             if isinstance(prior_context, dict):
-                self.pipeline.current_context.update(copy.deepcopy(prior_context))
-                self.last_context = copy.deepcopy(prior_context)
+                restored_context = copy.deepcopy(prior_context)
+                state_session_matches = state.get("sessionId") == self.session_id
+                state_target = state.get("observationTargetIdentity")
+                target_matches = (
+                    isinstance(state_target, dict)
+                    and self.observation_target_identity is not None
+                    and state_target == self.observation_target_identity
+                )
+                if not state_session_matches:
+                    # A new observation session must freshly recognize its own
+                    # lobby. Do not promote a venue source cached by an older
+                    # connection into this target/session.
+                    for key in (
+                        "lobbyVenueKey", "lobbyVenue", "lobbyVenueLabel",
+                        "lobbyEntryCost", "lobbyVenueSource", "lobbyVenueScore",
+                        "lobbyVenueObservedAt",
+                    ):
+                        restored_context.pop(key, None)
+                    self.pipeline._last_loadout_ts = 0.0
+                self.pipeline.current_context.update(restored_context)
+                prior_scene = str(restored_context.get("scene") or "UNKNOWN")
+                prior_generation = restored_context.get("matchGeneration")
+                try:
+                    prior_generation = int(prior_generation)
+                except (TypeError, ValueError):
+                    prior_generation = None
+                if prior_generation is not None:
+                    # The vision pipeline's internal match generation is
+                    # session-local state too; restoring only its context made
+                    # a same-match worker restart look like a new match.
+                    self.pipeline._match_gen = prior_generation
+                    self.pipeline.current_context["matchGeneration"] = prior_generation
+                self.pipeline._match_active = prior_scene == "IN_AUCTION"
+                if self.pipeline._match_active:
+                    self._active_pipeline_match_generation = prior_generation
+                else:
+                    try:
+                        saved_active_generation = state.get("activePipelineMatchGeneration")
+                        self._active_pipeline_match_generation = (
+                            int(saved_active_generation)
+                            if saved_active_generation is not None and state_session_matches and target_matches
+                            else None
+                        )
+                    except (TypeError, ValueError):
+                        self._active_pipeline_match_generation = None
+                self.last_context = copy.deepcopy(restored_context)
+                pending = state.get("pendingLobbyVenue")
+                if (
+                    state_session_matches
+                    and target_matches
+                    and isinstance(pending, dict)
+                    and pending.get("observationSessionId") == self.session_id
+                    and pending.get("targetIdentity") == self.observation_target_identity
+                    and pending.get("matchId") == self.current_match.id
+                    and pending.get("pipelineMatchGeneration") == prior_generation
+                    and prior_scene in {"AUCTION_LOBBY", "AUCTION_LOADING"}
+                ):
+                    self._pending_lobby_venue = copy.deepcopy(pending)
             self.log("state.restored", statePath=str(self.state_path), matchId=self.current_match.id)
         except Exception as exc:
             # A corrupt local sidecar cannot silently become business truth.
@@ -463,6 +544,9 @@ class RealEngine:
             "controlRevision": self.control_revision,
             "manualOverrides": copy.deepcopy(self.manual_overrides),
             "pipelineContext": copy.deepcopy(self.last_context or self.pipeline.current_context),
+            "observationTargetIdentity": copy.deepcopy(self.observation_target_identity),
+            "activePipelineMatchGeneration": self._active_pipeline_match_generation,
+            "pendingLobbyVenue": copy.deepcopy(self._pending_lobby_venue),
             "lastFrame": frame_record or self.last_frame,
         }
         _atomic_json(self.state_path, state)
@@ -845,6 +929,8 @@ class RealEngine:
         self.control_revision = revision
         if reset:
             self.pipeline.reset_session_state()
+            self._pending_lobby_venue = None
+            self._active_pipeline_match_generation = None
             self.awaiting_exit = True
         self._persist_state(reason="manual_control")
         return "ACK", None, {
@@ -988,9 +1074,10 @@ class RealEngine:
                 payload["warehouseSummary"] = summary
         return payload
 
-    def _catalog_venue_facts(self, context: dict) -> dict:
-        """Promote an observed lobby venue through the approved current catalog."""
-        if context.get("scene") != "IN_AUCTION":
+    def _catalog_venue_facts(self, context: dict, *, from_lobby: bool = False) -> dict:
+        """Resolve only a sourced lobby observation or an explicit venue id."""
+        expected_scene = "AUCTION_LOBBY" if from_lobby else "IN_AUCTION"
+        if context.get("scene") != expected_scene:
             return {}
         catalog = self.venue_catalog
         provenance = self.venue_catalog_provenance
@@ -998,10 +1085,18 @@ class RealEngine:
             return {}
         venue_id = context.get("venueId")
         if not venue_id:
+            # Lobby recognition is only staged here.  An IN_AUCTION context
+            # may still carry cached lobby keys after a scene transition, so
+            # it must consume the lifecycle's already validated handoff
+            # instead of normalizing those fields a second time.
+            if not from_lobby:
+                return {}
+            if context.get("lobbyVenueSource") not in {"template", "ocr_fallback"}:
+                return {}
             observation = (
                 context.get("lobbyVenueKey")
+                or context.get("lobbyVenueLabel")
                 or context.get("lobbyVenue")
-                or context.get("venue")
             )
             normalized = normalize_vision_venue(catalog, observation)
             if normalized.get("status") != "NORMALIZED":
@@ -1029,16 +1124,37 @@ class RealEngine:
             },
         }
 
-    def _apply_pipeline_context(self, context: dict, observed_at: str) -> None:
+    def _apply_pipeline_context(
+        self,
+        context: dict,
+        observed_at: str,
+        *,
+        lobby_handoff: Optional[dict] = None,
+    ) -> None:
+        scene = str(context.get("scene") or "UNKNOWN")
+        if scene in {"AUCTION_LOBBY", "AUCTION_LOADING"}:
+            # Lobby and loading observations must not mutate the last match.
+            # The lobby venue remains a scoped candidate until a corresponding
+            # fresh in-auction frame proves the entry boundary.
+            self.current_match.updated_at = _utc_now()
+            return
+
+        catalog_venue_keys = {
+            "venueId", "venueTier", "venue", "entryCost", "venueEvidenceClass",
+            "catalogVersion", "catalogApprovalStatus", "catalogSha256", "gameEvidenceCohort",
+        }
+        venue_facts = self._catalog_venue_facts(context)
         patch = {}
         for key in FACT_KEYS:
+            if key in catalog_venue_keys and scene in {"AUCTION_LOBBY", "AUCTION_LOADING", "IN_AUCTION"}:
+                continue
             if key not in context:
                 continue
             value = context.get(key)
             if is_missing_observation(key, value):
                 continue
             patch[key] = copy.deepcopy(_safe(value))
-        patch.update(self._catalog_venue_facts(context))
+        patch.update(venue_facts)
         round_no = context.get("round")
         if round_no is not None and context.get("scene") == "IN_AUCTION":
             patch["roundNo"] = int(round_no)
@@ -1085,7 +1201,174 @@ class RealEngine:
                 }
         if patch:
             self.current_match.apply_facts(patch, source="vision", intent="observe", observed_at=observed_at)
+        if lobby_handoff:
+            current_venue_id = self.current_match.facts.get("venueId")
+            handoff_venue_id = (lobby_handoff.get("facts") or {}).get("venueId")
+            if current_venue_id is None:
+                self.current_match.apply_facts(
+                    copy.deepcopy(lobby_handoff["facts"]),
+                    source="vision",
+                    intent="observe",
+                    observed_at=str(lobby_handoff.get("observedAt") or observed_at),
+                    evidence_refs={
+                        "sourceKind": "lobby_venue_observation",
+                        "observationSessionId": lobby_handoff.get("observationSessionId"),
+                        "targetIdentity": copy.deepcopy(lobby_handoff.get("targetIdentity")),
+                        "matchId": lobby_handoff.get("matchId"),
+                        "lobbyFrameSequence": lobby_handoff.get("frameSequence"),
+                        "lobbyPipelineMatchGeneration": lobby_handoff.get("pipelineMatchGeneration"),
+                        "lobbyObservedAt": lobby_handoff.get("observedAt"),
+                        "venueSource": lobby_handoff.get("venueSource"),
+                        "venueScore": lobby_handoff.get("venueScore"),
+                        "entryFrameSequence": lobby_handoff.get("entryFrameSequence"),
+                        "entryPipelineMatchGeneration": lobby_handoff.get("entryPipelineMatchGeneration"),
+                    },
+                )
+            elif current_venue_id != handoff_venue_id:
+                self.log(
+                    "lobby.venue_handoff_conflict",
+                    matchId=self.current_match.id,
+                    lobbyVenueId=handoff_venue_id,
+                    auctionVenueId=current_venue_id,
+                    observationSessionId=lobby_handoff.get("observationSessionId"),
+                )
         self.current_match.updated_at = _utc_now()
+
+    def _lobby_venue_handoff_facts(self, context: dict) -> dict:
+        return self._catalog_venue_facts(context, from_lobby=True)
+
+    @staticmethod
+    def _valid_pipeline_generation(context: dict) -> Optional[int]:
+        value = context.get("matchGeneration")
+        try:
+            return int(value) if value is not None and not isinstance(value, bool) else None
+        except (TypeError, ValueError):
+            return None
+
+    def _retire_match_for_lobby(self, reason: str) -> None:
+        had_match = (
+            self._active_pipeline_match_generation is not None
+            or self.current_match.has_any_fact()
+            or bool(self.manual_overrides)
+        )
+        if not had_match:
+            return
+        if self.current_match.has_any_fact():
+            self._persist_history()
+        self._invalidate_deferred_identity(reason)
+        self.current_match.begin_next_match()
+        self.current_match.source = "vision_v22"
+        self.current_match.data_origin = self.data_origin
+        self.manual_overrides = {}
+        self._warehouse_activity_sources.clear()
+        self._warehouse_review_vision = {}
+        self._warehouse_review_scope = {}
+        self._active_pipeline_match_generation = None
+
+    def _advance_match_lifecycle(
+        self,
+        context: dict,
+        *,
+        frame_sequence: int,
+        captured_at: str,
+    ) -> Optional[dict]:
+        """Bind sourced lobby facts to one clean match only after live entry."""
+        scene = str(context.get("scene") or "UNKNOWN")
+        generation = self._valid_pipeline_generation(context)
+        if scene == "AUCTION_LOBBY":
+            pending = self._pending_lobby_venue
+            same_lobby = bool(
+                isinstance(pending, dict)
+                and pending.get("observationSessionId") == self.session_id
+                and pending.get("targetIdentity") == self.observation_target_identity
+                and pending.get("matchId") == self.current_match.id
+                and pending.get("pipelineMatchGeneration") == generation
+            )
+            if not same_lobby:
+                self._retire_match_for_lobby("lobby_match_boundary")
+                self._pending_lobby_venue = None
+
+            venue_facts = self._lobby_venue_handoff_facts(context)
+            source_time = context.get("lobbyVenueObservedAt") or captured_at
+            target_identity = self.observation_target_identity
+            if (
+                venue_facts
+                and generation is not None
+                and isinstance(source_time, str)
+                and source_time
+                and isinstance(target_identity, dict)
+            ):
+                prior_facts = (pending or {}).get("facts") or {}
+                if not same_lobby or prior_facts.get("venueId") != venue_facts.get("venueId"):
+                    self._pending_lobby_venue = {
+                        "observationSessionId": self.session_id,
+                        "targetIdentity": copy.deepcopy(target_identity),
+                        "matchId": self.current_match.id,
+                        "pipelineMatchGeneration": generation,
+                        "expectedEntryMatchGeneration": generation + 1,
+                        "frameSequence": int(frame_sequence),
+                        "observedAt": source_time,
+                        "venueSource": context.get("lobbyVenueSource"),
+                        "venueScore": context.get("lobbyVenueScore"),
+                        "facts": copy.deepcopy(venue_facts),
+                    }
+            else:
+                # Unrecognized, unapproved, un-timestamped, or unbound lobby
+                # data cannot keep an earlier venue alive for a later match.
+                self._pending_lobby_venue = None
+            return None
+
+        if scene == "AUCTION_LOADING":
+            pending = self._pending_lobby_venue
+            if (
+                context.get("loadingDirection") != "to_auction"
+                or not isinstance(pending, dict)
+                or pending.get("observationSessionId") != self.session_id
+                or pending.get("targetIdentity") != self.observation_target_identity
+                or pending.get("matchId") != self.current_match.id
+            ):
+                self._pending_lobby_venue = None
+            return None
+
+        if scene != "IN_AUCTION":
+            self._pending_lobby_venue = None
+            return None
+
+        previous_scene = str((self.last_context or {}).get("scene") or "UNKNOWN")
+        if previous_scene in {"AUCTION_LOBBY", "AUCTION_LOADING"} and (
+            self.current_match.has_any_fact() or self.manual_overrides
+        ):
+            # Older sidecars may still hold the previous match while their last
+            # saved observation was a lobby/loading scene.
+            self._retire_match_for_lobby("restored_lobby_match_boundary")
+
+        pending = self._pending_lobby_venue
+        self._pending_lobby_venue = None
+        if self._valid_pipeline_generation(context) is not None:
+            self._active_pipeline_match_generation = generation
+        if not isinstance(pending, dict):
+            return None
+        if (
+            pending.get("observationSessionId") != self.session_id
+            or pending.get("targetIdentity") != self.observation_target_identity
+            or pending.get("matchId") != self.current_match.id
+            or generation != pending.get("expectedEntryMatchGeneration")
+        ):
+            self.log(
+                "lobby.venue_handoff_rejected",
+                reason="SESSION_TARGET_MATCH_OR_ENTRY_GENERATION_MISMATCH",
+                pendingSessionId=pending.get("observationSessionId"),
+                currentSessionId=self.session_id,
+                pendingMatchId=pending.get("matchId"),
+                currentMatchId=self.current_match.id,
+                lobbyMatchGeneration=pending.get("pipelineMatchGeneration"),
+                entryMatchGeneration=generation,
+            )
+            return None
+        handoff = copy.deepcopy(pending)
+        handoff["entryFrameSequence"] = int(frame_sequence)
+        handoff["entryPipelineMatchGeneration"] = generation
+        return handoff
 
     def _identity_scope_kind(self, context: dict) -> Optional[str]:
         scene = str(context.get("scene") or "UNKNOWN")
@@ -1117,7 +1400,7 @@ class RealEngine:
             self._identity_last_committed_sequence.clear()
             self._warehouse_review_vision = {}
             self._warehouse_review_scope = {}
-            if previous is not None and previous[0] != key[0]:
+            if previous is not None and (key is None or previous[0] != key[0]):
                 self._warehouse_activity_sources.clear()
             if previous is not None:
                 self._invalidate_deferred_identity("observation_scope_changed")
@@ -2061,7 +2344,7 @@ class RealEngine:
         for result in self._identity_analyzer.poll():
             self._commit_deferred_identity(result)
 
-    def _apply_manual_overrides(self, context: dict) -> dict:
+    def _apply_manual_overrides(self, context: dict, *, overlay: bool = True) -> dict:
         """Project accepted GUI overrides into the next business frame."""
         if self.awaiting_exit:
             scene = str(context.get("scene") or "")
@@ -2075,11 +2358,29 @@ class RealEngine:
                     "controlPendingExit": True,
                 })
                 return context
+        scene = str(context.get("scene") or "")
+        if not overlay or scene in {"AUCTION_LOBBY", "AUCTION_LOADING"}:
+            return context
         for key, value in self.manual_overrides.items():
             if value is None:
                 context.pop(key, None)
             else:
                 context[key] = copy.deepcopy(value)
+        return context
+
+    def _apply_observation_context(self, context: dict, item: dict, captured_at: str) -> dict:
+        """Apply one worker-owned frame with its lifecycle boundary first."""
+        context = self._apply_manual_overrides(context, overlay=False)
+        header = item.get("header") or {}
+        lobby_handoff = self._advance_match_lifecycle(
+            context,
+            frame_sequence=int(header.get("sequence") or 0),
+            captured_at=captured_at,
+        )
+        context = self._apply_manual_overrides(context)
+        self._identity_scope_kind(context)
+        self.last_context = copy.deepcopy(context)
+        self._apply_pipeline_context(context, captured_at, lobby_handoff=lobby_handoff)
         return context
 
     def _process_frame(self, item: dict) -> None:
@@ -2101,10 +2402,7 @@ class RealEngine:
             context = _safe(context)
             context["capturedAt"] = captured_at
             context["captureTimestampNs"] = int(header["captureTimestampNs"])
-            context = self._apply_manual_overrides(context)
-            self._identity_scope_kind(context)
-            self.last_context = copy.deepcopy(context)
-            self._apply_pipeline_context(context, captured_at)
+            context = self._apply_observation_context(context, item, captured_at)
             history_status = self._persist_history()
             processing_ms = (qpc_ns() - started) / 1_000_000.0
             self.last_frame = {

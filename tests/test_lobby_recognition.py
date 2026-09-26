@@ -146,6 +146,36 @@ class TestLobbyRecognition(unittest.TestCase):
         self.assertIsNone(self.pipeline.current_context["lobbyCharacter"])
         self.assertEqual(self.pipeline.current_context["lobbyCharacterSource"], "unrecognized")
 
+    def test_fresh_lobby_refresh_retires_unrecognized_prior_venue(self):
+        context = self.pipeline.current_context
+        context.update({
+            "scene": SCENE_AUCTION_LOBBY,
+            "inLobby": True,
+            "lobbyVenue": "中级场 · 珊瑚场",
+            "lobbyVenueKey": "shanhu",
+            "lobbyVenueLabel": "珊瑚场",
+            "lobbyEntryCost": 5000,
+            "lobbyVenueSource": "template",
+            "lobbyVenueObservedAt": "2026-09-24T11:40:22+00:00",
+            "lobbyToolGroup": "基础品鉴仪器组",
+        })
+        self.pipeline._last_loadout_ts = 0.0
+        self.pipeline._identify_lobby_character = lambda *args, **kwargs: {"source": "unrecognized"}
+        self.pipeline._identify_lobby_venue = lambda *args, **kwargs: {"source": "unrecognized"}
+        self.pipeline._identify_lobby_tool = lambda *args, **kwargs: {"toolGroup": "基础品鉴仪器组"}
+
+        self.pipeline._refresh_lobby_loadout(
+            np.zeros((8, 8, 3), dtype=np.uint8),
+            force=False,
+            observed_at="2026-09-24T11:40:23+00:00",
+        )
+
+        self.assertIsNone(context["lobbyVenue"])
+        self.assertIsNone(context["lobbyVenueKey"])
+        self.assertIsNone(context["lobbyEntryCost"])
+        self.assertEqual(context["lobbyVenueSource"], "unrecognized")
+        self.assertIsNone(context["lobbyVenueObservedAt"])
+
     def test_ocr_typo_xiaoai_does_not_guess_xiaozhi(self):
         mock_ocr = [
             (_box(1200, 400), "当前：珊瑚场", 0.98),

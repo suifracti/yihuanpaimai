@@ -193,6 +193,9 @@ class NTEVisionPipeline:
             "lobbyVenue": None,
             "lobbyVenueKey": None,
             "lobbyVenueLabel": None,
+            "lobbyVenueSource": None,
+            "lobbyVenueScore": None,
+            "lobbyVenueObservedAt": None,
             "lobbyToolGroup": None,
             "lobbyCharacter": None,
             "lobbyCharacterScore": None,
@@ -1053,7 +1056,11 @@ class NTEVisionPipeline:
             if fast["scene"] in (SCENE_CITY_TYCOON_HUB, SCENE_CITY_LEISURE_MENU, SCENE_AUCTION_LOBBY):
                 self._warm_ocr_async()
             if fast["scene"] == SCENE_AUCTION_LOBBY:
-                self._refresh_lobby_loadout(frame, force=force_refresh)
+                self._refresh_lobby_loadout(
+                    frame,
+                    force=force_refresh or prev != SCENE_AUCTION_LOBBY,
+                    observed_at=captured_at,
+                )
             return self.current_context
         # 颜色快检漏掉的大厅/选场：先出大厅态，OCR 只扫小胶囊，禁止同步加载整引擎堵 6~20 秒
         elif (fast.get("venueOrange", 0) >= 0.03 or fast.get("lobbySuspect")) and prev not in LOCKED_MATCH_SCENES:
@@ -1061,7 +1068,11 @@ class NTEVisionPipeline:
             self._match_exit_hold = 0
             self._apply_pre_auction_scene({"scene": SCENE_AUCTION_LOBBY, "auctionEntryVisible": True})
             self._warm_ocr_async()
-            self._refresh_lobby_loadout(frame, force=force_refresh)
+            self._refresh_lobby_loadout(
+                frame,
+                force=force_refresh or prev != SCENE_AUCTION_LOBBY,
+                observed_at=captured_at,
+            )
             return self.current_context
         # 闲趣/大厅等菜单已离开白城时，不要把上一屏都市大亨粘住
         if prev not in LOCKED_MATCH_SCENES:
@@ -1493,7 +1504,7 @@ class NTEVisionPipeline:
                 and self._has_live_auction_evidence(mapped_res, w, h)
             )
             if lobby_info["inLobby"] and not live_round_evidence:
-                self._apply_lobby_loadout(lobby_info)
+                self._apply_lobby_loadout(lobby_info, observed_at=captured_at)
                 self._end_match_on_lobby_or_egress()
                 return self.current_context
 
@@ -3621,7 +3632,12 @@ class NTEVisionPipeline:
             }
         return {"source": "unrecognized", "score": hit.get("score"), "secondScore": hit.get("secondScore")}
 
-    def _refresh_lobby_loadout(self, frame: np.ndarray, force: bool = False) -> None:
+    def _refresh_lobby_loadout(
+        self,
+        frame: np.ndarray,
+        force: bool = False,
+        observed_at: Optional[str] = None,
+    ) -> None:
         """大厅已确认：角色/会场/仪器优先闭集模板，缺样本才 OCR。"""
         now = time.monotonic()
         have_all = (
@@ -3650,7 +3666,11 @@ class NTEVisionPipeline:
             parsed.update({k: venue_hit[k] for k in ("venue", "venueKey", "venueLabel", "entryCost") if venue_hit.get(k) is not None})
             parsed["venueSource"] = venue_hit.get("source")
             parsed["venueScore"] = venue_hit.get("score")
-        elif force:
+            parsed["venueObservedAt"] = observed_at
+        else:
+            # A fresh lobby pass with no accepted venue must retire the prior
+            # selection; otherwise a changed/unsupported venue could reuse a
+            # stale label and fee through the next entry.
             parsed["clearVenue"] = True
             parsed["venueSource"] = venue_hit.get("source") or "unrecognized"
 
@@ -3668,9 +3688,14 @@ class NTEVisionPipeline:
         ):
             return
         self._last_loadout_ts = now
-        self._apply_lobby_loadout(parsed)
+        self._apply_lobby_loadout(parsed, observed_at=observed_at)
 
-    def _apply_lobby_loadout(self, lobby_info: Dict[str, Any]) -> None:
+    def _apply_lobby_loadout(
+        self,
+        lobby_info: Dict[str, Any],
+        *,
+        observed_at: Optional[str] = None,
+    ) -> None:
         self._match_exit_hold = 0
         self.current_context["scene"] = SCENE_AUCTION_LOBBY
         self.current_context["sceneLabel"] = SCENE_LABELS[SCENE_AUCTION_LOBBY]
@@ -3689,6 +3714,7 @@ class NTEVisionPipeline:
             self.current_context["lobbyVenueLabel"] = None
             self.current_context["lobbyEntryCost"] = None
             self.current_context["lobbyVenueSource"] = lobby_info.get("venueSource") or "unrecognized"
+            self.current_context["lobbyVenueObservedAt"] = None
         elif lobby_info.get("venue"):
             from business_sot import canonicalize_venue, venue_entry_cost
             canonical_venue = canonicalize_venue(lobby_info.get("venue") or lobby_info.get("venueLabel") or lobby_info.get("venueKey"))
@@ -3697,6 +3723,9 @@ class NTEVisionPipeline:
             self.current_context["lobbyVenueKey"] = lobby_info.get("venueKey")
             self.current_context["lobbyVenueLabel"] = lobby_info.get("venueLabel") or canonical_venue
             self.current_context["lobbyEntryCost"] = venue_entry_cost(canonical_venue)
+            self.current_context["lobbyVenueObservedAt"] = (
+                lobby_info.get("venueObservedAt") or observed_at
+            )
             if lobby_info.get("venueSource"):
                 self.current_context["lobbyVenueSource"] = lobby_info.get("venueSource")
             if lobby_info.get("venueScore") is not None:

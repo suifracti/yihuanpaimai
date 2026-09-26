@@ -138,8 +138,9 @@ class LiveMatchTransportTests(unittest.TestCase):
             self.assertEqual(engine._apply_manual_overrides({"q": 3})["q"], 19)
             self.assertEqual(engine.control_revision, 4)
 
-    def test_native_worker_promotes_observed_lobby_venue_to_solver_facts(self):
+    def test_native_worker_hands_off_sourced_lobby_venue_only_to_clean_entered_match(self):
         import importlib.util
+        from types import SimpleNamespace
         from venue_box_catalog import canonical_catalog_provenance, load_catalog
 
         spec = importlib.util.spec_from_file_location(
@@ -161,49 +162,226 @@ class LiveMatchTransportTests(unittest.TestCase):
 
         engine = module.RealEngine.__new__(module.RealEngine)
         engine.current_match = CurrentMatch()
+        engine.current_match.source = "vision_v22"
+        engine.current_match.apply_facts(
+            {
+                "q": 17, "goldAvg": 55444, "purpleCount": 9,
+                "venueId": "venue-shanhu", "venue": "珊瑚场", "entryCost": 5000,
+                "box": "旧局箱型", "fieldCondition": "standard", "knownGold": "旧局藏品",
+            },
+            source="manual", intent="confirm",
+        )
+        old_match_id = engine.current_match.id
         engine.venue_catalog = load_catalog()
         engine.venue_catalog_provenance = canonical_catalog_provenance(engine.venue_catalog)
-        context = {
-            "scene": "IN_AUCTION",
-            "lobbyVenueKey": "shanhu",
-            "lobbyVenue": "珊瑚场",
-            "lobbyEntryCost": 5000,
-            "fieldCondition": "standard",
-            "q": 17,
-            "goldAvg": 55444,
-            "purpleCount": 9,
+        engine.session_id = "native-live-lobby-session"
+        engine.data_origin = "live-trial"
+        engine.observation_target_identity = {
+            "targetHwnd": 101, "targetPid": 202, "targetGeneration": 0,
+            "processInstanceToken": 303,
         }
-        engine._apply_pipeline_context(context, "2026-09-23T12:00:00+00:00")
+        engine.manual_overrides = {"q": 17, "box": "旧局箱型"}
+        engine.awaiting_exit = False
+        engine._active_pipeline_match_generation = 1
+        engine._pending_lobby_venue = None
+        engine._identity_scope_key = (old_match_id, 1, 1, 0, "warehouse", 5, "auto")
+        engine._identity_last_committed_sequence = {}
+        engine._identity_generation_lock = __import__("threading").Lock()
+        engine._identity_invalidation_generation = 0
+        engine._identity_analyzer = None
+        engine._warehouse_activity_sources = {("old",): {"matchId": old_match_id}}
+        engine._warehouse_review_vision = {"old": True}
+        engine._warehouse_review_scope = {"old": True}
+        engine.pipeline = SimpleNamespace(
+            _match_gen=1, _session_generation=0, current_context={}
+        )
+        engine.last_context = {"scene": "IN_AUCTION", "matchGeneration": 1}
+        engine._persist_history = lambda: "PERSISTED_DRAFT"
+        invalidations = []
+        engine._invalidate_deferred_identity = lambda reason: invalidations.append(reason) or 1
+        engine.log = lambda *args, **kwargs: None
 
+        lobby_time = "2026-09-24T11:40:22.140000+00:00"
+        engine.pipeline._match_gen = 2
+        engine._apply_observation_context(
+            {
+                "scene": "AUCTION_LOBBY", "inAuction": False, "inLobby": True,
+                "round": 0, "matchGeneration": 2,
+                "lobbyVenueKey": "shanhu", "lobbyVenue": "珊瑚场",
+                "lobbyVenueLabel": "中级场 · 珊瑚场", "lobbyEntryCost": 5000,
+                "lobbyVenueSource": "template", "lobbyVenueScore": 0.99760913848877,
+                "lobbyVenueObservedAt": lobby_time,
+                # A lobby output must not project stale/unsupported business fields.
+                "q": 17, "goldAvg": 55444, "purpleCount": 9,
+                "box": "旧局箱型", "fieldCondition": "standard", "knownGold": "旧局藏品",
+            },
+            {"header": {"sequence": 6}},
+            lobby_time,
+        )
+        self.assertNotEqual(engine.current_match.id, old_match_id)
+        self.assertIsNone(engine.current_match.facts["q"])
+        self.assertIsNone(engine.current_match.facts["goldAvg"])
+        self.assertIsNone(engine.current_match.facts["purpleCount"])
+        self.assertIsNone(engine.current_match.facts["box"])
+        self.assertIsNone(engine.current_match.facts["fieldCondition"])
+        self.assertEqual(engine.current_match.facts["knownGold"], "")
+        self.assertEqual(engine.manual_overrides, {})
+        self.assertEqual(engine._pending_lobby_venue["facts"]["venueId"], "venue-shanhu")
+        self.assertEqual(engine._pending_lobby_venue["facts"]["entryCost"], 5000)
+        self.assertEqual(engine._pending_lobby_venue["frameSequence"], 6)
+        self.assertEqual(engine._pending_lobby_venue["observationSessionId"], engine.session_id)
+        self.assertEqual(engine._pending_lobby_venue["targetIdentity"], engine.observation_target_identity)
+        self.assertTrue(invalidations)
+        self.assertIsNone(main._native_accept_observation_locked({
+            "scene": "AUCTION_LOBBY", "inAuction": False, "freshnessMs": 0,
+            "target": {"targetHwnd": 101, "targetPid": 202},
+        }))
+
+        # A failed fresh recognition must retire a previously staged venue;
+        # another accepted lobby recognition may stage it again.
+        engine._apply_observation_context(
+            {
+                "scene": "AUCTION_LOBBY", "inAuction": False, "inLobby": True,
+                "round": 0, "matchGeneration": 2,
+                "lobbyVenueKey": None, "lobbyVenue": None,
+                "lobbyVenueSource": "unrecognized", "lobbyVenueObservedAt": None,
+            },
+            {"header": {"sequence": 7}},
+            "2026-09-24T11:40:23.000000+00:00",
+        )
+        self.assertIsNone(engine._pending_lobby_venue)
+        lobby_time = "2026-09-24T11:40:24.000000+00:00"
+        engine._apply_observation_context(
+            {
+                "scene": "AUCTION_LOBBY", "inAuction": False, "inLobby": True,
+                "round": 0, "matchGeneration": 2,
+                "lobbyVenueKey": "shanhu", "lobbyVenue": "珊瑚场",
+                "lobbyVenueLabel": "中级场 · 珊瑚场", "lobbyEntryCost": 5000,
+                "lobbyVenueSource": "template", "lobbyVenueScore": 0.99760913848877,
+                "lobbyVenueObservedAt": lobby_time,
+            },
+            {"header": {"sequence": 8}},
+            lobby_time,
+        )
+        pending_lobby_venue = copy.deepcopy(engine._pending_lobby_venue)
+        self.assertEqual(pending_lobby_venue["frameSequence"], 8)
+
+        engine.pipeline._match_gen = 2
+        engine._apply_observation_context(
+            {
+                "scene": "AUCTION_LOADING", "inAuction": False, "isLoading": True,
+                "loadingDirection": "to_auction", "matchGeneration": 2,
+            },
+            {"header": {"sequence": 9}},
+            "2026-09-24T11:40:25.000000+00:00",
+        )
+        self.assertIsNotNone(engine._pending_lobby_venue)
+
+        # The box value is from a saved active-frame result; rule is explicitly
+        # unknown in that source and must remain absent. Lobby values survive
+        # only when session, target, match id, and pipeline entry generation link.
+        active_time = "2026-09-24T11:40:30.000000+00:00"
+        engine.pipeline._match_gen = 3
+        engine._apply_observation_context(
+            {
+                "scene": "IN_AUCTION", "inAuction": True, "round": 5,
+                "matchGeneration": 3, "q": 22, "goldAvg": 85410,
+                "purpleCount": None, "box": "螺钿宝箱 · 古董类概率提升",
+                "fieldCondition": "unknown", "entryCost": 0,
+            },
+            {"header": {"sequence": 10}},
+            active_time,
+        )
         facts = engine.current_match.facts
         self.assertEqual(facts["venueId"], "venue-shanhu")
         self.assertEqual(facts["venue"], "珊瑚场")
         self.assertEqual(facts["entryCost"], 5000)
-        self.assertEqual(facts["q"], 17)
-        self.assertEqual(facts["goldAvg"], 55444)
-        self.assertEqual(facts["purpleCount"], 9)
-        without_rule = dict(facts, fieldCondition=None)
-        self.assertEqual(main._native_solver_admission(without_rule)[1], "缺失场地规则")
-        _, _, rule_explanation = main._native_solver_admission_details(without_rule)
-        self.assertEqual(rule_explanation["blockingReasons"], ["缺失场地规则"])
-        self.assertTrue(rule_explanation["eligible"] is False)
-        mapped, reason = main._native_solver_admission(facts)
-        self.assertIsNone(reason)
-        self.assertEqual(mapped["status"], "COMPATIBILITY_TRANSLATION")
-        _, _, admitted_explanation = main._native_solver_admission_details(facts)
-        self.assertTrue(admitted_explanation["eligible"])
-        self.assertEqual(admitted_explanation["blockingReasons"], [])
+        self.assertEqual(facts["q"], 22)
+        self.assertEqual(facts["goldAvg"], 85410)
+        self.assertEqual(facts["box"], "螺钿宝箱 · 古董类概率提升")
+        self.assertIsNone(facts["fieldCondition"])
+        self.assertIsNone(facts["purpleCount"])
+        self.assertEqual(facts["knownGold"], "")
+        self.assertIsNone(engine._pending_lobby_venue)
+        venue_state = engine.current_match.field_states["venueId"]
+        self.assertEqual(venue_state.source, "vision")
+        self.assertEqual(venue_state.evidence_refs["sourceKind"], "lobby_venue_observation")
+        self.assertEqual(venue_state.evidence_refs["lobbyFrameSequence"], 8)
+        self.assertEqual(venue_state.evidence_refs["entryFrameSequence"], 10)
+        self.assertEqual(venue_state.evidence_refs["matchId"], engine.current_match.id)
+        self.assertEqual(venue_state.observed_at, lobby_time)
+        self.assertEqual(main._native_solver_admission(facts)[1], "缺失场地规则")
+
+        stale_session = module.RealEngine.__new__(module.RealEngine)
+        stale_session.current_match = CurrentMatch()
+        stale_session.current_match.id = pending_lobby_venue["matchId"]
+        stale_session.session_id = "a-reconnected-observation-session"
+        stale_session.observation_target_identity = copy.deepcopy(engine.observation_target_identity)
+        stale_session._pending_lobby_venue = copy.deepcopy(pending_lobby_venue)
+        stale_session._active_pipeline_match_generation = None
+        stale_session.manual_overrides = {}
+        stale_session.last_context = {"scene": "AUCTION_LOADING"}
+        stale_session.log = lambda *args, **kwargs: None
+        self.assertIsNone(stale_session._advance_match_lifecycle(
+            {"scene": "IN_AUCTION", "matchGeneration": 3},
+            frame_sequence=11,
+            captured_at=active_time,
+        ))
+        self.assertIsNone(stale_session.current_match.facts["venueId"])
+
+        stale_entry = module.RealEngine.__new__(module.RealEngine)
+        stale_entry.current_match = CurrentMatch()
+        stale_entry.current_match.id = pending_lobby_venue["matchId"]
+        stale_entry.session_id = pending_lobby_venue["observationSessionId"]
+        stale_entry.observation_target_identity = copy.deepcopy(pending_lobby_venue["targetIdentity"])
+        stale_entry._pending_lobby_venue = copy.deepcopy(pending_lobby_venue)
+        stale_entry._active_pipeline_match_generation = None
+        stale_entry.manual_overrides = {}
+        stale_entry.last_context = {"scene": "AUCTION_LOADING"}
+        stale_entry.log = lambda *args, **kwargs: None
+        self.assertIsNone(stale_entry._advance_match_lifecycle(
+            {
+                "scene": "IN_AUCTION",
+                "matchGeneration": pending_lobby_venue["expectedEntryMatchGeneration"] + 1,
+            },
+            frame_sequence=12,
+            captured_at=active_time,
+        ))
+        self.assertIsNone(stale_entry.current_match.facts["venueId"])
 
         unknown_engine = module.RealEngine.__new__(module.RealEngine)
         unknown_engine.current_match = CurrentMatch()
         unknown_engine.venue_catalog = engine.venue_catalog
         unknown_engine.venue_catalog_provenance = engine.venue_catalog_provenance
+        self.assertEqual(
+            unknown_engine._lobby_venue_handoff_facts({
+                "scene": "AUCTION_LOBBY", "lobbyVenueKey": "shanhu",
+                "lobbyVenueSource": "unrecognized",
+            }),
+            {},
+        )
         unknown_engine._apply_pipeline_context(
-            {"scene": "IN_AUCTION", "lobbyVenueKey": "unrecognized", "venue": "未知场地"},
-            "2026-09-23T12:00:01+00:00",
+            {
+                "scene": "IN_AUCTION", "lobbyVenueKey": "shanhu",
+                "lobbyVenue": "中级场 · 珊瑚场", "lobbyVenueLabel": "珊瑚场",
+                "lobbyEntryCost": 5000, "lobbyVenueSource": "template",
+                # A cached lobby recognition is not itself proof that this
+                # active frame entered the corresponding match.
+                "venue": "珊瑚场",
+            },
+            active_time,
         )
         self.assertIsNone(unknown_engine.current_match.facts["venueId"])
         self.assertIsNone(unknown_engine.current_match.facts["entryCost"])
+
+        valid_instance = {
+            "q": 12, "goldAvg": 74379, "purpleCount": 7,
+            "venueId": "venue-shanhu", "venue": "珊瑚场", "entryCost": 5000,
+            "fieldCondition": "standard",
+        }
+        mapped, reason = main._native_solver_admission(valid_instance)
+        self.assertIsNone(reason)
+        self.assertEqual(mapped["status"], "COMPATIBILITY_TRANSLATION")
 
     def test_native_pause_preserves_facts_and_rejects_late_session(self):
         current = CurrentMatch()
