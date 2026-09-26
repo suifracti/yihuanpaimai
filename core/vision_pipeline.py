@@ -1028,6 +1028,17 @@ class NTEVisionPipeline:
         mode_provider = getattr(self, 'recognition_mode_provider', None)
         mode = mode_provider() if mode_provider else 'auto'
         self.current_context['recognitionMode'] = mode
+        # A cold/restarted observer has no locked match yet. Color-only menu
+        # heuristics can match a bright live auction screen; an exact round
+        # title must get the existing live preflight a chance to run below.
+        nav_live_round = None
+        if (
+            mode != 'manual'
+            and prioritize_live_facts
+            and fast["scene"] in PRE_AUCTION_NAV_SCENES
+            and not self.current_context.get("isSettlement")
+        ):
+            nav_live_round = self._read_df_auction_round_title(frame)
         if mode == 'manual' and not force_refresh and fast['scene'] != SCENE_SETTLEMENT and prev != SCENE_SETTLEMENT:
             # No auction OCR in manual mode; settlement capture is independent.
             self.current_context['isSettlement'] = False
@@ -1054,7 +1065,7 @@ class NTEVisionPipeline:
         ):
             # loading / 抽箱暗厅会被快检打成大世界；先走 OCR，禁止提前清掉本局
             pass
-        elif fast["scene"] in PRE_AUCTION_NAV_SCENES:
+        elif fast["scene"] in PRE_AUCTION_NAV_SCENES and nav_live_round is None:
             self._nav_hold_frames = 0
             self._match_exit_hold = 0
             self._apply_pre_auction_scene(fast)
@@ -1109,7 +1120,7 @@ class NTEVisionPipeline:
         prev_timer = self.current_context.get("timer")
         is_auction_scene = (self.current_context.get("scene") == SCENE_IN_AUCTION or self.current_context.get("inAuction"))
         round_title_confirmed = False
-        preflight_round = None
+        preflight_round = nav_live_round
         if (
             prioritize_live_facts
             and not is_auction_scene
@@ -1120,7 +1131,7 @@ class NTEVisionPipeline:
             # The exact, high-confidence round title is sufficient evidence to
             # enter the existing live path. This avoids a blocking canvas scan
             # on the first auction frame while keeping settlement fail-closed.
-            observed_round = self._read_df_auction_round_title(frame)
+            observed_round = preflight_round if preflight_round is not None else self._read_df_auction_round_title(frame)
             previous_round = int(self.current_context.get("round") or 0)
             round_is_current = (
                 observed_round is not None
