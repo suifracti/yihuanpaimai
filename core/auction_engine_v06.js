@@ -860,6 +860,26 @@
     });
     if ([...remainingMandatory.values()].some(n => n > 0)) return { states: [], solverStatus: "no-match", candidateGs: [], candidatePs: [] };
     const seedSum = seed.reduce((sum, price) => sum + price, 0);
+    // Exact suffix reachability for the observed gold area. This only prunes
+    // branches that cannot fill the already-known area with remaining item
+    // capacities; it does not infer a missing total grid or alter valuation.
+    let reachableGoldAreas = null;
+    if (goldGrid !== null) {
+      const maxNeed = Math.max(0, q - seed.length);
+      reachableGoldAreas = Array.from({ length: goldPrices.length + 1 }, () =>
+        Array.from({ length: maxNeed + 1 }, () => new Set()));
+      reachableGoldAreas[goldPrices.length][0].add(0);
+      for (let index = goldPrices.length - 1; index >= 0; index--) {
+        for (let need = 0; need <= maxNeed; need++) {
+          for (let take = 0; take <= Math.min(capacities[index], need); take++) {
+            for (const area of reachableGoldAreas[index + 1][need - take]) {
+              const nextArea = area + take * goldGrids[index];
+              if (nextArea <= goldGrid) reachableGoldAreas[index][need].add(nextArea);
+            }
+          }
+        }
+      }
+    }
 
     for (const P of pCandidates) {
       if ((purpleGrid !== null || purpleAvg !== null) &&
@@ -876,6 +896,7 @@
         const b = bounds(avg, G, rounding);
         const remainingG = G - seed.length;
         if (remainingG < 0) continue;
+        if (reachableGoldAreas && !reachableGoldAreas[0][remainingG].has(goldGrid - seedGrid)) continue;
         const [mn, mx] = tables(goldPrices, remainingG, capacities);
 
         if (seedSum + mn[0][remainingG] > b[1] || seedSum + mx[0][remainingG] < b[0]) continue;
@@ -926,11 +947,13 @@
           if (idx >= goldPrices.length) return;
           for (let take = Math.min(capacities[idx], G - count); take >= 0; take--) {
             const nextSum = sum + take * goldPrices[idx];
+            const nextGrid = grid + take * goldGrids[idx];
             const remNeed = G - count - take;
+            if (reachableGoldAreas && !reachableGoldAreas[idx + 1][remNeed].has(goldGrid - nextGrid)) continue;
             if (nextSum + mn[idx + 1][remNeed] <= b[1] && nextSum + mx[idx + 1][remNeed] >= b[0]) {
               const nextCombo = [...combo];
               for (let k = 0; k < take; k++) nextCombo.push(goldPrices[idx]);
-              dfs(idx + 1, count + take, nextSum, nextCombo, grid + take * goldGrids[idx]);
+              dfs(idx + 1, count + take, nextSum, nextCombo, nextGrid);
             }
           }
         }
