@@ -682,6 +682,7 @@ _NATIVE_OBSERVATION_LAST_FRAME_NS: Optional[int] = None
 _NATIVE_CONTROL_BINDINGS: Dict[int, Dict[str, Any]] = {}
 _NATIVE_TRIAL_FRAME_MATCH_ID: Optional[str] = None
 _NATIVE_TRIAL_SOURCE_FRAMES: List[Dict[str, Any]] = []
+_NATIVE_TRIAL_INTEL_SOURCE_FRAMES: List[Dict[str, Any]] = []
 _NATIVE_TRIAL_WAREHOUSE_MATCH_ID: Optional[str] = None
 _NATIVE_TRIAL_WAREHOUSE_SOURCES: Dict[str, Dict[str, Any]] = {}
 _NATIVE_TRIAL_WAREHOUSE_DECISIONS: Dict[str, Dict[str, Any]] = {}
@@ -835,6 +836,19 @@ def _current_match_solver_sidecar(match_id: str) -> tuple[Optional[Dict[str, Any
             ACTIVE_SNAPSHOT_HOLDER.get_snapshot_for_match(match_id),
             ACTIVE_SNAPSHOT_HOLDER.get_frozen_for_match(match_id) or {},
         )
+
+
+def _native_unverified_cost_summary(facts: Dict[str, Any]) -> str:
+    entry = f"{facts['entryCost']:,.0f}" if facts.get("entryCost") is not None else "未观察"
+    return f"已配置入场费 {entry}（非实际支付凭据） · 情报/工具实际付费未核验 · 已付合计未知"
+
+
+def _native_unverified_accounting(facts: Dict[str, Any]) -> Dict[str, Any]:
+    display = accounting_from_facts(facts)
+    return {
+        **display, "paidCosts": None, "sessionNet": None, "complete": False,
+        "missingFacts": list(dict.fromkeys(display["missingFacts"] + ["实际已付费用凭据"])),
+    }
 
 
 def get_current_match_presentation_summary() -> dict:
@@ -1056,8 +1070,10 @@ def get_current_match_presentation_summary() -> dict:
         # Lobby / Session Loadout (Distinct from match trunk)
         lobby_summary = {
             "character": facts.get("character") or "未识别/默认",
-            "lobbyToolGroup": "标准仪器",
-            "entryCost": facts.get("entryCost") or 0,
+            "lobbyToolGroup": None,
+            "toolStatus": "UNOBSERVED",
+            "entryCost": facts.get("entryCost"),
+            "entryCostStatus": "CONFIGURED_NOT_PAID" if facts.get("entryCost") is not None else "UNOBSERVED",
         }
 
         # 6-Rarity Observed Facts Matrix (Honest nulls for unparsed qualities)
@@ -1107,6 +1123,7 @@ def get_current_match_presentation_summary() -> dict:
             solver_missing_reason = (
                 native_payload.get("solverMissingReason") if native_profile else None
             ) or _admission_reason
+        accounting_display = _native_unverified_accounting(facts) if native_profile else accounting_from_facts(facts)
         return {
             "matchId": CURRENT_MATCH.id,
             "factsRevision": CURRENT_MATCH.facts_revision,
@@ -1198,10 +1215,10 @@ def get_current_match_presentation_summary() -> dict:
             "prediction": prediction_summary,
             "decisionLines": decision_lines,
             "explainability": explainability,
-            "costSummary": describe_costs(costs_from_facts(facts)),
+            "costSummary": _native_unverified_cost_summary(facts) if native_profile else describe_costs(costs_from_facts(facts)),
             "bidding": bidding_summary,
             "freeIntelStatus": free_intel_status(facts),
-            "sessionAccounting": accounting_from_facts(facts),
+            "sessionAccounting": accounting_display,
             "settlement": settlement_summary,
             "warehouse": warehouse_summary,
             "nextMatchPreparation": _next_match_preparation_presentation(),
@@ -1985,12 +2002,15 @@ def _native_frame_watchdog_loop() -> None:
 
 def _native_capture_trial_frame_locked(path: Any, metadata: Dict[str, Any], *, boundary: bool = False) -> None:
     """Copy only the first accepted frame and one scene-boundary frame into the isolated trial root."""
-    global _NATIVE_TRIAL_FRAME_MATCH_ID, _NATIVE_TRIAL_SOURCE_FRAMES
-    if not path or not CURRENT_MATCH.id:
+    global _NATIVE_TRIAL_FRAME_MATCH_ID, _NATIVE_TRIAL_SOURCE_FRAMES, _NATIVE_TRIAL_INTEL_SOURCE_FRAMES
+    if not CURRENT_MATCH.id:
         return
     if _NATIVE_TRIAL_FRAME_MATCH_ID != CURRENT_MATCH.id:
         _NATIVE_TRIAL_FRAME_MATCH_ID = CURRENT_MATCH.id
         _NATIVE_TRIAL_SOURCE_FRAMES = []
+        _NATIVE_TRIAL_INTEL_SOURCE_FRAMES = []
+    if not path:
+        return
     if boundary and len(_NATIVE_TRIAL_SOURCE_FRAMES) >= 2:
         return
     if not boundary and _NATIVE_TRIAL_SOURCE_FRAMES:
@@ -2013,6 +2033,47 @@ def _native_capture_trial_frame_locked(path: Any, metadata: Dict[str, Any], *, b
         return
     _NATIVE_TRIAL_SOURCE_FRAMES.append(descriptor)
     _NATIVE_TRIAL_SOURCE_FRAMES = _NATIVE_TRIAL_SOURCE_FRAMES[:1] + _NATIVE_TRIAL_SOURCE_FRAMES[-1:]
+
+
+def _native_capture_intel_source_locked(frame: Dict[str, Any], event: Dict[str, Any], context: Dict[str, Any]) -> bool:
+    """Retain only a physical reading's own frame; never substitute a later frame."""
+    if len(_NATIVE_TRIAL_INTEL_SOURCE_FRAMES) >= 24 or not CURRENT_MATCH.id:
+        return False
+    captured_at = frame.get("capturedAtUtc")
+    readings = context.get("intelCardReadings") or []
+    if not any(isinstance(row, dict) and row.get("is_physical_ocr") is True
+               and str(row.get("rawText") or "").strip() and row.get("frameId") == captured_at
+               for row in readings):
+        return False
+    last = event.get("lastFrame") or {}
+    if (last.get("frameSequence") != frame.get("sequence")
+            or last.get("capturedAt") != captured_at or not last.get("pixelSha256")):
+        return False
+    with _NATIVE_OBSERVATION_LOCK:
+        bridge = NATIVE_OBSERVATION_BRIDGE
+        session_dir = getattr(bridge, "session_dir", None) if bridge is not None else None
+    if not session_dir or not frame.get("rawFramePath"):
+        return False
+    try:
+        session_root = os.path.realpath(str(session_dir))
+        source_path = os.path.realpath(str(frame["rawFramePath"]))
+        if os.path.commonpath([session_root, source_path]) != session_root:
+            return False
+        descriptor = NATIVE_TRIAL_DRAFT_STORE.capture_frame(source_path, {
+            "width": frame.get("width"), "height": frame.get("height"),
+            "capturedAtUtc": captured_at, "frameSequence": frame.get("sequence"),
+            "observationSessionId": event.get("observationSessionId"),
+            "targetInstance": _native_target_instance(event.get("target")),
+        }, expected_pixel_sha256=last["pixelSha256"])
+    except (OSError, ValueError, RuntimeError) as exc:
+        log_stage("DRAFT:NATIVE", f"intel source not linked: {type(exc).__name__}: {exc}")
+        return False
+    if any(row.get("observationSessionId") == descriptor.get("observationSessionId")
+           and row.get("frameSequence") == descriptor.get("frameSequence")
+           for row in _NATIVE_TRIAL_INTEL_SOURCE_FRAMES):
+        return False
+    _NATIVE_TRIAL_INTEL_SOURCE_FRAMES.append(descriptor)
+    return True
 
 
 def _native_publish_health(event: Dict[str, Any], *, force_main: bool = False) -> Dict[str, Any]:
@@ -2744,10 +2805,10 @@ def _native_observation_event(event: Dict[str, Any]) -> None:
                     **costs_from_facts(facts),
                     **data["costs"],
                 }
-            data["costSummary"] = describe_costs(data.get("costs"))
+            data["costSummary"] = _native_unverified_cost_summary(facts)
             data["hiddenBids"] = bids_hidden_now(facts)
             data["freeIntelStatus"] = free_intel_status(facts)
-            data["sessionAccounting"] = accounting_from_facts(facts)
+            data["sessionAccounting"] = _native_unverified_accounting(facts)
             _sync_payload_with_canonical_facts(data, CURRENT_MATCH)
             # Project accepted CurrentMatch seats, not raw OCR over a protected
             # manual correction. Null current seats cannot revive an old round.
@@ -2843,7 +2904,7 @@ def _native_observation_event(event: Dict[str, Any]) -> None:
             LATEST_PAYLOAD.update(data)
             PRESENTATION_RUNTIME.observe_transport(data)
             _NATIVE_OBSERVATION_LAST_FRAME_NS = capture_ns
-            if sequence == 1 or not _NATIVE_TRIAL_SOURCE_FRAMES:
+            if sequence == 1 or not _NATIVE_TRIAL_SOURCE_FRAMES or _NATIVE_TRIAL_FRAME_MATCH_ID != CURRENT_MATCH.id:
                 _native_capture_trial_frame_locked(frame.get("rawFramePath"), {
                     "width": frame.get("width"),
                     "height": frame.get("height"),
@@ -2852,12 +2913,13 @@ def _native_observation_event(event: Dict[str, Any]) -> None:
                     "observationSessionId": session_id,
                     "targetInstance": _native_target_instance(data.get("target")),
                 })
+            intel_source_captured = _native_capture_intel_source_locked(frame, event, context)
             should_save_trial_draft = bool(
                 native_observation_enabled()
                 and CURRENT_MATCH.has_any_fact()
                 and (
                     _LAST_DRAFT_WRITE != (CURRENT_MATCH.id, CURRENT_MATCH.facts_revision)
-                    or source_captured
+                    or source_captured or intel_source_captured
                 )
             )
 
@@ -4271,6 +4333,7 @@ def _persist_current_draft_now() -> Optional[Dict[str, Any]]:
                 written = NATIVE_TRIAL_DRAFT_STORE.save_draft(
                     _manual_draft_record(),
                     source_frames=copy.deepcopy(_NATIVE_TRIAL_SOURCE_FRAMES),
+                    intel_source_frames=copy.deepcopy(_NATIVE_TRIAL_INTEL_SOURCE_FRAMES),
                     warehouse_slot_sources=[
                         copy.deepcopy(item) for item in _NATIVE_TRIAL_WAREHOUSE_SOURCES.values()
                         if str(item.get("matchId") or "") == str(CURRENT_MATCH.id)

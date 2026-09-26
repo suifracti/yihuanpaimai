@@ -39,8 +39,8 @@ class NativeTrialDraftStore:
     """A narrow repository wrapper around CanonicalHistoryStore.
 
     Only live-trial DRAFT records are admitted. Source frames are content-addressed
-    and immutable; the store retains at most the first and latest supplied frame
-    for each match rather than recording every observation frame.
+    and immutable; ordinary frames retain first/latest, with bounded exact-source
+    intel frames kept separately rather than recording every observation frame.
     """
 
     def __init__(self, history_path: os.PathLike[str] | str):
@@ -74,13 +74,19 @@ class NativeTrialDraftStore:
         matches.sort(key=lambda row: str(row.get("updatedAt") or row.get("playedAt") or ""), reverse=True)
         return matches[: max(0, int(limit))]
 
-    def capture_frame(self, source_path: os.PathLike[str] | str, metadata: Mapping[str, Any]) -> dict[str, Any]:
+    def capture_frame(self, source_path: os.PathLike[str] | str, metadata: Mapping[str, Any], *, expected_pixel_sha256: Optional[str] = None) -> dict[str, Any]:
         source = Path(source_path).resolve(strict=True)
         if not source.is_file():
             raise NativeTrialDraftError("原始观察帧不存在，草稿尚未保存")
         raw = source.read_bytes()
         if not raw:
             raise NativeTrialDraftError("原始观察帧为空，草稿尚未保存")
+        if expected_pixel_sha256:
+            # Host's 32-bit top-down BMP writes the exact worker BGRA buffer after
+            # its 54-byte header. A mutable latest-frame path is not provenance.
+            if (len(raw) < 54 or raw[:2] != b"BM" or raw[28:30] != b"\x20\x00"
+                    or hashlib.sha256(raw[54:]).hexdigest() != expected_pixel_sha256):
+                raise NativeTrialDraftError("情报来源帧已被后续采集覆盖；不关联原图")
         digest = hashlib.sha256(raw).hexdigest()
         suffix = source.suffix.lower() if source.suffix.lower() in {".bmp", ".png", ".jpg", ".jpeg"} else ".bin"
         self.source_frame_root.mkdir(parents=True, exist_ok=True)
@@ -201,6 +207,7 @@ class NativeTrialDraftStore:
         record: Mapping[str, Any],
         *,
         source_frames: Iterable[Mapping[str, Any]] = (),
+        intel_source_frames: Iterable[Mapping[str, Any]] = (),
         warehouse_slot_sources: Iterable[Mapping[str, Any]] = (),
         warehouse_instance_decisions: Iterable[Mapping[str, Any]] = (),
         observation_scope: Optional[Mapping[str, Any]] = None,
@@ -246,6 +253,19 @@ class NativeTrialDraftStore:
                 "mainFactsRevision", "round", "frameSequence", "capturedAtUtc",
             ) if key in scope})
             current_native["sourceFrames"] = frames
+            intel_frames: list[dict[str, Any]] = []
+            for candidate in list(prior_native.get("intelSourceFrames") or []) + list(current_native.get("intelSourceFrames") or []) + list(intel_source_frames or []):
+                if not isinstance(candidate, Mapping):
+                    continue
+                item = dict(candidate)
+                if not item.get("sha256") or not item.get("relativePath"):
+                    continue
+                if not self._verified_source_path(item):
+                    raise NativeTrialDraftError("已关联的情报原图缺失或校验失败，草稿未覆盖")
+                if not any(row.get("observationSessionId") == item.get("observationSessionId")
+                           and row.get("frameSequence") == item.get("frameSequence") for row in intel_frames):
+                    intel_frames.append(item)
+            current_native["intelSourceFrames"] = intel_frames[:24]
             slot_sources_by_instance: dict[str, dict[str, Any]] = {}
             for candidate in list(prior_native.get("warehouseSlotSources") or []) + list(current_native.get("warehouseSlotSources") or []) + list(warehouse_slot_sources or []):
                 if not isinstance(candidate, Mapping):
@@ -326,9 +346,16 @@ class NativeTrialDraftStore:
             return []
         native = ((record.get("auctionEvidence") or {}).get("nativeObservation") or {})
         images = []
-        for descriptor in native.get("sourceFrames") or []:
+        descriptors = list(native.get("sourceFrames") or []) + list(native.get("intelSourceFrames") or [])
+        seen = set()
+        for descriptor in descriptors:
             if not isinstance(descriptor, dict):
                 continue
+            key = (descriptor.get("observationSessionId"), descriptor.get("frameSequence"),
+                   descriptor.get("capturedAt"), descriptor.get("sha256"))
+            if key in seen:
+                continue
+            seen.add(key)
             image = dict(descriptor)
             try:
                 path = self._source_path(image)

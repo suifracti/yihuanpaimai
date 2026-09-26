@@ -51,6 +51,28 @@ def _trial_draft(match_id, q=15):
 
 
 class IsolatedTrialTests(unittest.TestCase):
+    def test_intel_keyframe_requires_the_worker_frame_and_is_retrievable_from_trial_review(self):
+        session = PROJECT_ROOT / "build/native-observation/session-3eeae548d5e3446bb310d8e91ca1b645"
+        frame = session / "latest-business-frame.bmp"
+        state = json.loads((session / "latest-business-state.json").read_text(encoding="utf-8"))["state"]
+        worker_hash = state["lastFrame"]["pixelSha256"]
+        captured_at = state["lastFrame"]["capturedAt"]
+        with tempfile.TemporaryDirectory(dir=str(PROJECT_ROOT / "build")) as folder:
+            store = NativeTrialDraftStore(Path(folder) / "trial-drafts/canonical-history.json")
+            metadata = {"frameSequence": state["lastFrame"]["frameSequence"],
+                        "capturedAtUtc": captured_at, "observationSessionId": "saved-session"}
+            with self.assertRaises(NativeTrialDraftError):
+                store.capture_frame(frame, metadata, expected_pixel_sha256="0" * 64)
+            self.assertFalse(store.source_frame_root.exists())
+            descriptor = store.capture_frame(frame, metadata, expected_pixel_sha256=worker_hash)
+            record = _trial_draft("intel-keyframe")
+            record["intelCardEvidence"] = {"cardReadings": [{"frameId": captured_at,
+                "rawText": "原文情报", "is_physical_ocr": True}]}
+            store.save_draft(record, intel_source_frames=[descriptor])
+            saved = store.lookup("intel-keyframe")
+            self.assertEqual(saved["auctionEvidence"]["nativeObservation"]["intelSourceFrames"][0]["frameSequence"], metadata["frameSequence"])
+            self.assertEqual(store.source_images("intel-keyframe")[0]["data"], frame.read_bytes())
+
     def test_warehouse_activity_crop_and_instance_decision_remain_linked_to_one_trial_draft(self):
         source_png = PROJECT_ROOT / "assets/items/video_development_references_v1/paper-v4-reveal-4.20.png"
         self.assertTrue(source_png.is_file())

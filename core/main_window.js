@@ -1475,12 +1475,11 @@ function guidebookObservationValue(field, value) {
 }
 
 function guidebookObservationSourceFrame(item, record) {
-  const frames = record?.auctionEvidence?.nativeObservation?.sourceFrames;
-  if (!Array.isArray(frames)) return null;
   const native = record?.auctionEvidence?.nativeObservation || {};
+  const frames = [...(native.sourceFrames || []), ...(native.intelSourceFrames || [])];
   const wantedSequence = item?.frameSequence ?? item?.sourceFrameSequence;
   const wantedSession = item?.observationSessionId || item?.sourceObservationSessionId || item?.sessionId
-    || native.observationSessionId;
+    || (item?.frameId == null ? native.observationSessionId : null);
   if (wantedSequence != null) {
     return frames.find(frame => Number(frame?.frameSequence) === Number(wantedSequence)
       && (!wantedSession || !frame?.observationSessionId || frame.observationSessionId === wantedSession)) || null;
@@ -1513,8 +1512,9 @@ function renderGuidebookRecords() {
   const records = guidebookDrafts();
   const signature = records.map(record => {
     const observations = record.intelCardEvidence?.observations || [];
-    const frames = record.auctionEvidence?.nativeObservation?.sourceFrames || [];
-    return `${record.id}:${record.updatedAt || ""}:${record.factsRevision ?? ""}:${observations.length}:${frames.length}`;
+    const native = record.auctionEvidence?.nativeObservation || {};
+    const frames = [...(native.sourceFrames || []), ...(native.intelSourceFrames || [])];
+    return `${record.id}:${record.updatedAt || ""}:${record.factsRevision ?? ""}:${observations.length}:${(record.intelCardEvidence?.cardReadings || []).length}:${frames.length}`;
   }).join("|");
   if (signature === dashboard.guidebookRecordsSignature && list.dataset.rendered === "true") return;
   dashboard.guidebookRecordsSignature = signature;
@@ -1525,13 +1525,16 @@ function renderGuidebookRecords() {
     const facts = record.intelCardEvidence || {};
     const observations = Array.isArray(facts.observations) ? facts.observations : [];
     const usable = observations.filter(item => item && item.value != null).slice(0, 10);
+    const readings = (Array.isArray(facts.cardReadings) ? facts.cardReadings : [])
+      .filter(item => item && String(item.rawText || "").trim());
     const storedFields = ["q", "goldAvg", "purpleCount", "purpleAvg", "goldCount", "redCount", "totalItems", "totalGrid"];
     const observedFields = new Set(usable.map(item => item.field));
     for (const field of storedFields) {
       const value = record[field] ?? (field === "purpleCount" ? record.purple : null);
       if (value != null && !observedFields.has(field)) usable.push({ field, value, status: "STORED_FACT" });
     }
-    const frames = record.auctionEvidence?.nativeObservation?.sourceFrames || [];
+    const native = record.auctionEvidence?.nativeObservation || {};
+    const frames = [...(native.sourceFrames || []), ...(native.intelSourceFrames || [])];
     const environment = record.environment || {};
     const title = [environment.venueName || environment.venue || record.venue, environment.box || record.box].filter(Boolean).join(" · ") || "会场/宝箱未记录";
     const knownNames = GUIDEBOOK_RARITIES.map(rarity => ({ rarity, value: record[`known${rarity[0].toUpperCase()}${rarity.slice(1)}`] }))
@@ -1542,7 +1545,8 @@ function renderGuidebookRecords() {
       const label = GUIDEBOOK_FACT_LABELS[item.field] || item.field || "局内事实";
       const state = item.status === "OBSERVED" ? "原图观察" : item.status === "CONFIRMED" ? "已确认" : item.status === "STORED_FACT" ? "草稿事实" : "待核对";
       return `<div class="guidebook-observation"><strong>${escapeHtml(label)} · ${escapeHtml(state)}${item.round != null ? ` · 第 ${escapeHtml(item.round)} 回合` : ""}</strong><p>${escapeHtml(guidebookObservationValue(item.field, item.value))}${item.rawText ? `　｜　${escapeHtml(item.rawText)}` : ""}</p><small class="guidebook-frame-provenance">${escapeHtml(guidebookObservationSourceLabel(item, record))}</small></div>`;
-    }).join("") : `<p class="guidebook-identity-note">本草稿没有单件身份事实；不会从品质、轮廓或置信度推定藏品名称。</p>`;
+    }).join("") : "";
+    const readingMarkup = readings.map(item => `<div class="guidebook-observation"><strong>情报原文${item.round != null ? ` · 第 ${escapeHtml(item.round)} 回合` : ""}</strong><p>${escapeHtml(item.rawText)}</p><small class="guidebook-frame-provenance">${escapeHtml(guidebookObservationSourceLabel(item, record))}</small></div>`).join("");
     const identityMarkup = confirmedItems.length
       ? confirmedItems.map(item => {
         const catalogMatches = guidebookCatalogRows().filter(row => !row.sourceOnly && row.name === item.identifiedName
@@ -1556,7 +1560,7 @@ function renderGuidebookRecords() {
     const namesMarkup = knownNames.length
       ? `<p class="guidebook-identity-note">局内名称字段（未附图鉴身份确认）：${knownNames.map(item => `${GUIDEBOOK_RARITY_LABELS[item.rarity]}色 ${escapeHtml(item.value)}`).join("；")}</p>`
       : "";
-    return `<article class="guidebook-record-card"><div class="guidebook-record-top"><div><h3>${escapeHtml(title)}</h3><p class="guidebook-record-meta">${escapeHtml(record.playedAt || record.updatedAt || "时间未记录")} · ${escapeHtml(record.id || "未知局")}</p></div><span class="tag">live-trial DRAFT</span></div><div class="guidebook-observation-list">${observationMarkup}</div><div class="guidebook-identity-note">藏品身份：${identityMarkup}</div>${unresolvedMarkup}${instanceReviewMarkup}${namesMarkup}<p class="guidebook-record-meta">保存原图：${frames.length} 张 · 隔离草稿，不进入正式 History</p><button type="button" class="btn-review-action" data-guidebook-original="${index}" data-record-id="${escapeHtml(record.id || "")}">查看本局保存原图</button><div class="guidebook-evidence" id="guidebook-source-${index}" data-record-id="" data-source="live-trial"></div></article>`;
+    return `<article class="guidebook-record-card"><div class="guidebook-record-top"><div><h3>${escapeHtml(title)}</h3><p class="guidebook-record-meta">${escapeHtml(record.playedAt || record.updatedAt || "时间未记录")} · ${escapeHtml(record.id || "未知局")}</p></div><span class="tag">live-trial DRAFT</span></div><div class="guidebook-observation-list">${observationMarkup}${readingMarkup}</div><div class="guidebook-identity-note">藏品身份：${identityMarkup}</div>${unresolvedMarkup}${instanceReviewMarkup}${namesMarkup}<p class="guidebook-record-meta">保存原图：${frames.length} 张 · 隔离草稿，不进入正式 History</p><button type="button" class="btn-review-action" data-guidebook-original="${index}" data-record-id="${escapeHtml(record.id || "")}">查看本局保存原图</button><div class="guidebook-evidence" id="guidebook-source-${index}" data-record-id="" data-source="live-trial"></div></article>`;
   }).join("");
   list.querySelectorAll("[data-guidebook-original]").forEach(button => {
     button.addEventListener("click", () => {
@@ -3266,11 +3270,15 @@ function renderMatch(currentMatch, overlayVisible) {
   syncField("match-input-red-count", facts.redCount, "redCount");
   syncField("match-input-total-items", facts.totalItems, "totalItems");
   syncField("match-input-total-grid", facts.totalGrid, "totalGrid");
-  const displayCostField = (id, val) => {
+  const displayCostField = (id, val, field) => {
     const el = document.getElementById(id);
     if (el) {
-      if (val !== null && val !== undefined && Number(val) > 0) {
-        el.textContent = `系统计算 ${formatCurrency(val)}`;
+      const state = currentMatch.fieldStates?.[field];
+      const recordedZero = Number(val) === 0 && state && !["empty", "cleared"].includes(state.status);
+      if (val !== null && val !== undefined && (Number(val) > 0 || recordedZero)) {
+        el.textContent = field === "futureIncrementalCost"
+          ? `预计 ${formatCurrency(val)}（非已付）`
+          : `已记录 ${formatCurrency(val)}（支付未核验）`;
         el.style.color = "#38bdf8";
       } else {
         el.textContent = "未知 / 暂无自动数据";
@@ -3278,9 +3286,9 @@ function renderMatch(currentMatch, overlayVisible) {
       }
     }
   };
-  displayCostField("match-display-intel-cost", facts.intelCost);
-  displayCostField("match-display-other-cost", facts.otherCost);
-  displayCostField("match-display-future-cost", facts.futureIncrementalCost);
+  displayCostField("match-display-intel-cost", facts.intelCost, "intelCost");
+  displayCostField("match-display-other-cost", facts.otherCost, "otherCost");
+  displayCostField("match-display-future-cost", facts.futureIncrementalCost, "futureIncrementalCost");
 
   syncField("match-input-gold-grid", facts.goldGrid, "goldGrid");
   syncField("match-input-purple-grid", facts.purpleGrid, "purpleGrid");
@@ -3304,8 +3312,8 @@ function renderMatch(currentMatch, overlayVisible) {
   const lobbyToolEl = document.getElementById("match-lobby-tool");
   const lobbyEntryEl = document.getElementById("match-lobby-entry");
   if (lobbyCharEl) lobbyCharEl.textContent = lobby.character || "未识别/默认";
-  if (lobbyToolEl) lobbyToolEl.textContent = lobby.lobbyToolGroup || "标准仪器";
-  if (lobbyEntryEl) lobbyEntryEl.textContent = formatCurrency(lobby.entryCost);
+  if (lobbyToolEl) lobbyToolEl.textContent = lobby.lobbyToolGroup ? `${lobby.lobbyToolGroup}（配置；使用未确认）` : "工具未观察使用";
+  if (lobbyEntryEl) lobbyEntryEl.textContent = lobby.entryCost == null ? "未观察" : `${formatCurrency(lobby.entryCost)}（已配置；支付未确认）`;
 
   // Missing Facts Guidance
   const missingValList = currentMatch.missingValueFacts || [];
@@ -4909,13 +4917,16 @@ function renderOriginalScreenshots(payload) {
     }
     if (!images.length) continue;
 
-    const sources = record?.intelCardEvidence?.observations || [];
+    const sources = [...(record?.intelCardEvidence?.observations || []), ...(record?.intelCardEvidence?.cardReadings || [])];
     const sourceSequences = sources.map(item => item?.frameSequence ?? item?.sourceFrameSequence)
       .filter(value => value != null).map(Number).filter(Number.isFinite);
+    const sourceFrameIds = new Set(sources.map(item => item?.frameId).filter(Boolean).map(String));
     const nativeSession = record?.auctionEvidence?.nativeObservation?.observationSessionId || null;
     const matchingSourceIndex = images.reduce((found, shot, index) => {
-      if (shot.frameSequence == null || !sourceSequences.includes(Number(shot.frameSequence))) return found;
-      if (nativeSession && shot.observationSessionId && shot.observationSessionId !== nativeSession) return found;
+      const byFrameId = shot.capturedAt && sourceFrameIds.has(String(shot.capturedAt));
+      const bySequence = shot.frameSequence != null && sourceSequences.includes(Number(shot.frameSequence));
+      if (!byFrameId && !bySequence) return found;
+      if (!byFrameId && nativeSession && shot.observationSessionId && shot.observationSessionId !== nativeSession) return found;
       return index;
     }, -1);
     const selected = { index: matchingSourceIndex >= 0 ? matchingSourceIndex : images.length - 1 };

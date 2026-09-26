@@ -11,7 +11,8 @@ sys.path.insert(0, os.path.join(PROJECT_ROOT, "app"))
 sys.path.insert(0, os.path.join(PROJECT_ROOT, "core"))
 
 from business_sot import venue_entry_cost
-from main import build_in_auction_hud_payload, build_nav_hud_payload
+from main import (build_in_auction_hud_payload, build_nav_hud_payload,
+                  _native_unverified_cost_summary, _native_unverified_accounting)
 
 
 def run_js(script: str):
@@ -29,6 +30,16 @@ def run_js(script: str):
 
 
 class TestLiveCostsContract(unittest.TestCase):
+    def test_native_catalog_fee_and_default_zero_are_not_payment_receipts(self):
+        facts = {"entryCost": 5000, "intelCost": 0, "otherCost": 0}
+        self.assertIn("已配置入场费 5,000", _native_unverified_cost_summary(facts))
+        self.assertIn("已付合计未知", _native_unverified_cost_summary(facts))
+        accounting = _native_unverified_accounting(facts)
+        self.assertIsNone(accounting["paidCosts"])
+        self.assertIsNone(accounting["sessionNet"])
+        self.assertFalse(accounting["complete"])
+        self.assertIn("入场费 未观察", _native_unverified_cost_summary({"entryCost": None}))
+
     def test_sot_entry_costs(self):
         self.assertEqual(venue_entry_cost("初级场 · 海贝场"), 0)
         self.assertEqual(venue_entry_cost("海贝场"), 0)

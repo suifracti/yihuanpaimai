@@ -34,6 +34,28 @@ class SeatIdentityFallbackTests(unittest.TestCase):
         self.assertEqual(self.pipe.current_context['myBid'], 7897)
         self.assertFalse(self.pipe.current_context['isMyLead'])
 
+    def test_history_badges_amounts_zero_and_missing_from_saved_layout(self):
+        # Pixel bands from the supplied R5 image: yellow 1/2 are above the
+        # black amount pills; the third and fourth rows visibly show 0, 1, 2.
+        def box(x1, y1, x2, y2):
+            return [[x1, y1], [x2, y1], [x2, y2], [x1, y2]]
+
+        items, origin = self.pipe._extract_seat_panel_items([
+            (box(202, 229, 214, 248), '1', .99),
+            (box(170, 303, 222, 322), '400K', .99),
+            (box(202, 549, 214, 568), '1', .99),
+            (box(173, 624, 190, 643), '0', .99),
+            (box(202, 709, 214, 728), '1', .99),
+            (box(279, 709, 291, 728), '2', .99),
+            (box(173, 785, 187, 804), '1', .99),
+            (box(250, 785, 264, 804), '2', .99),
+        ], 1920, 1080)
+        self.pipe._update_seat_names_and_finals_from_ocr(items, 5, origin)
+        self.assertEqual(self.pipe._slot_finals[1], {'1': 400000})
+        self.assertEqual(self.pipe._slot_finals[3], {'1': 0})
+        self.assertEqual(self.pipe._slot_finals[4], {'1': 1, '2': 2})
+        self.assertNotIn('2', self.pipe._slot_finals[3])
+
     def test_fallback_does_not_invent_unknown_self(self):
         self.pipe.current_context['seats'] = self.pipe._empty_seats()
         self.pipe.current_context['myName'] = None

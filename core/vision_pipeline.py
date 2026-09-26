@@ -2922,13 +2922,17 @@ class NTEVisionPipeline:
 
     def _accept_hist_repair(self, existing: Optional[int], incoming: int) -> Optional[int]:
         incoming = int(incoming or 0)
-        if incoming <= 0:
+        if incoming < 0:
             return existing
-        if not existing:
+        if existing is None:
             return incoming
         existing = int(existing)
         if incoming == existing:
             return existing
+        if incoming == 0:
+            return existing
+        if existing == 0:
+            return incoming
         if existing == 999999 and incoming == 1000000:
             return 999999
         if existing == 666666 and incoming == 1000000:
@@ -2956,11 +2960,11 @@ class NTEVisionPipeline:
     def _commit_slot_finals(self, round_no: int, slot_bids: Dict[int, int]) -> None:
         key = str(int(round_no))
         for slot_id, bid in slot_bids.items():
-            if slot_id not in (1, 2, 3, 4) or int(bid or 0) <= 0:
+            if slot_id not in (1, 2, 3, 4) or bid is None or int(bid) < 0:
                 continue
             entry = dict(self._slot_finals.get(slot_id) or {})
             accepted = self._accept_hist_repair(entry.get(key), int(bid))
-            if accepted:
+            if accepted is not None:
                 entry[key] = int(accepted)
                 self._slot_finals[slot_id] = entry
 
@@ -2977,6 +2981,13 @@ class NTEVisionPipeline:
             (0.44, 0.58),
             (0.58, 0.74),
         )
+        # Black historical amount pills sit below yellow round-number badges.
+        history_amount_bands = (
+            (0.265, 0.315),
+            (0.415, 0.465),
+            (0.565, 0.615),
+            (0.715, 0.765),
+        )
         hist_xs: List[float] = []
         slot_items: List[Tuple[int, float, float, float, float, str]] = []
 
@@ -2992,16 +3003,22 @@ class NTEVisionPipeline:
             nw = (max(xs) - min(xs)) / max(1, screen_w)
 
             leftover = re.sub(r"[\d,\uff0c.\uff0e\u3001KkWwMm\u4e07\u5343%'\"\`\u2019]", "", raw)
-            if not leftover:
-                tokens = self._split_hist_tokens(raw)
-                if tokens:
-                    compact_up = raw.upper().replace("万", "W")
-                    if re.search(r"[KWM]", compact_up) or nh <= 0.028:
-                        hist_xs.append(nx)
+            tokens = self._split_hist_tokens(raw) if not leftover else []
+            history_slot = next((i + 1 for i, (lo, hi) in enumerate(history_amount_bands)
+                                 if lo <= ny < hi), None)
+            compact_up = raw.upper().replace("万", "W")
+            small_numeric = bool(tokens) and (re.search(r"[KWM]", compact_up) or nh <= 0.028)
+            if small_numeric and history_slot is not None:
+                hist_xs.append(nx)
+            elif small_numeric and nh <= 0.028:
+                # An isolated small number above the amount band is a round
+                # marker, not a price. Do not infer by numeric magnitude.
+                continue
 
             if nx < 0.02 or nx > 0.30 or ny < 0.12 or ny > 0.78:
                 continue
-            idx = next((i for i, (lo, hi) in enumerate(bands) if lo <= ny < hi), None)
+            idx = (history_slot - 1 if small_numeric and history_slot is not None else
+                   next((i for i, (lo, hi) in enumerate(bands) if lo <= ny < hi), None))
             if idx is None:
                 continue
             slot_id = idx + 1
@@ -3043,12 +3060,12 @@ class NTEVisionPipeline:
                         usable = tokens[:ended] if ended else []
                         for slot_i, tok in enumerate(usable):
                             bid_val = self._parse_seat_amount(tok)
-                            if bid_val > 0:
+                            if bid_val > 0 or re.fullmatch(r"0+(?:[,.，．]0+)?", tok):
                                 pending_hist.append((slot_id, slot_i + 1, bid_val))
                     else:
                         bid_val = self._parse_seat_amount(tokens[0])
                         hist_round = self._hist_round_from_x(nx, cur_round, origin_x=hist_origin)
-                        if bid_val > 0 and hist_round:
+                        if hist_round and (bid_val > 0 or re.fullmatch(r"0+(?:[,.，．]0+)?", tokens[0])):
                             pending_hist.append((slot_id, hist_round, bid_val))
                 continue
 
