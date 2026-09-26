@@ -1,6 +1,7 @@
 import unittest
 import sys
 import os
+import numpy as np
 
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "core")))
 
@@ -10,6 +11,24 @@ from vision_pipeline import NTEVisionPipeline, SCENE_AUCTION_LOADING, SCENE_IN_A
 class TestVisionSceneLoading(unittest.TestCase):
     def setUp(self):
         self.pipe = NTEVisionPipeline()
+
+    def test_black_entry_transition_waits_without_becoming_live_or_waiting_forever(self):
+        frame = np.zeros((1080, 1920, 3), dtype=np.uint8)
+        ctx = self.pipe.current_context
+        ctx.update(scene=SCENE_AUCTION_LOADING, loadingDirection="to_auction",
+                   inAuction=False, isSettlement=False, loadingPercent=100)
+        self.assertTrue(self.pipe._handle_loading_black_frame(frame, 100.0))
+        self.assertTrue(self.pipe._handle_loading_black_frame(frame, 109.9))
+        self.assertEqual(ctx["scene"], SCENE_AUCTION_LOADING)
+        self.assertFalse(ctx["inAuction"])
+        self.assertIsNone(ctx["loadingPercent"])
+        self.assertTrue(self.pipe._handle_loading_black_frame(frame, 110.0))
+        self.assertEqual(ctx["scene"], "UNKNOWN")
+        self.assertFalse(self.pipe._handle_loading_black_frame(frame, 110.1))
+        ctx.update(scene=SCENE_AUCTION_LOADING, loadingDirection="to_lobby")
+        self.assertFalse(self.pipe._handle_loading_black_frame(frame, 120.0))
+        ctx.update(scene=SCENE_AUCTION_LOADING, loadingDirection="to_auction")
+        self.assertFalse(self.pipe._handle_loading_black_frame(np.full_like(frame, 100), 120.0))
 
     def test_teardrop_item_does_not_trigger_loading(self):
         """「泪滴」 is an item name, never a valid loading venue."""

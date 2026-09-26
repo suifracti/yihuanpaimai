@@ -469,6 +469,7 @@ class NTEVisionPipeline:
         self.clear_match_trunk()
 
     def reset_session_state(self) -> None:
+        self._loading_black_started_at = None
         self._pending_heavy_identity = None
         if hasattr(self, "_acquisition_names"):
             self._acquisition_names.reset(None)
@@ -1015,6 +1016,9 @@ class NTEVisionPipeline:
         self._pending_heavy_identity = None
 
         h, w, _ = frame.shape
+
+        if self._handle_loading_black_frame(frame, time.monotonic()):
+            return self.current_context
 
         # 0. 对局前：OpenCV 小图快检，毫秒级。禁止为了认大世界/都市大亨去跑 RapidOCR。
         fast = self._classify_scene_fast(frame)
@@ -2572,6 +2576,36 @@ class NTEVisionPipeline:
         except Exception as exc:
             result["error"] = f"{type(exc).__name__}: {exc}"
         return result
+
+    def _handle_loading_black_frame(self, frame: np.ndarray, now: float) -> bool:
+        """Wait briefly through a black transition after observed entry loading.
+
+        A black image supplies no auction facts. Preserve only the existing
+        loading state for at most ten seconds; never start/renew that window
+        from an arbitrary unknown scene or a return-to-lobby transition.
+        """
+        ctx = self.current_context
+        eligible = (
+            ctx.get("scene") == SCENE_AUCTION_LOADING
+            and ctx.get("loadingDirection") == "to_auction"
+            and not ctx.get("inAuction")
+            and not ctx.get("isSettlement")
+        )
+        pixels = frame[::16, ::16, :3]
+        black = pixels.size > 0 and float(np.mean(np.max(pixels, axis=2) <= 8)) >= 0.995
+        if not eligible or not black:
+            self._loading_black_started_at = None
+            return False
+        started = getattr(self, "_loading_black_started_at", None)
+        if started is None:
+            started = self._loading_black_started_at = now
+        if now - started >= 10.0:
+            self._clear_nav_scene()
+            return True
+        ctx["isLoading"] = True
+        ctx["loadingPercent"] = None
+        ctx["inAuction"] = False
+        return True
 
     def _classify_scene_fast(self, frame: np.ndarray) -> Dict[str, Any]:
         """
