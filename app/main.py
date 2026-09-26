@@ -2170,7 +2170,7 @@ def _native_project_current_quote(data: Dict[str, Any], match: Any) -> None:
     if my_bid_state and my_bid_state.protected:
         data["myBid"] = facts.get("myBid")
     else:
-        my_seat = next((row for row in accepted_seats if row.get("slot") == 4), None)
+        my_seat = next((row for row in accepted_seats if row.get("isMe") is True), None)
         data["myBid"] = my_seat.get("currentBid") if my_seat else None
 
 

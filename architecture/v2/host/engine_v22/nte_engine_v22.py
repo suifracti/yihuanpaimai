@@ -1183,7 +1183,7 @@ class RealEngine:
                 patch.pop("seats", None)
         if live_seats:
             patch["leaderBid"] = max(int(seat["currentBid"]) for seat in live_seats)
-            my_seat = next((seat for seat in live_seats if seat.get("slot") == 4), None)
+            my_seat = next((seat for seat in live_seats if seat.get("isMe") is True), None)
             if my_seat is not None:
                 patch["myBid"] = int(my_seat["currentBid"])
             else:

@@ -54,6 +54,17 @@ class TestP2SeatsIntelProjection(unittest.TestCase):
         self.assertIn("随机展示5件藏品。", intel["observations"][0]["text"])
         self.assertEqual(intel["structured"][0]["participation"], "valuation")
 
+    def test_transient_card_text_survives_blank_followup_into_draft(self):
+        first = {"round": 4, "frameId": "capture-1", "rawText": "本局内所有蓝色品质藏品的总数量为2件。", "is_physical_ocr": True}
+        blank = {"round": 4, "frameId": "capture-2", "rawText": "", "is_physical_ocr": True}
+        prior_cost = self.match.facts["intelCost"]
+        self.match.apply_facts({"intelCardReadings": [first]}, source="vision")
+        self.match.apply_facts({"intelCardReadings": [blank]}, source="vision")
+        evidence = self.match.to_canonical()["intelCardEvidence"]
+        self.assertEqual(evidence["cardReadings"], [first])
+        self.assertIsNone(self.match.facts["blueCount"])
+        self.assertEqual(self.match.facts["intelCost"], prior_cost)
+
     def test_current_match_stores_seats_and_intel(self):
         seats = [
             {"slot": 1, "name": "甲", "currentBid": 1000, "bid": 1000},
@@ -93,6 +104,23 @@ class TestP2SeatsIntelProjection(unittest.TestCase):
         self.assertEqual(shown[0]["name"], "甲")
         self.assertNotEqual(shown[0]["name"], "玩家本人")
         self.assertNotEqual(shown[1]["name"], "席位 2")
+
+    def test_self_bid_follows_confirmed_seat_not_fourth_position(self):
+        # Saved R4 image: PLAYER_LOCAL is the orange third seat (7,897),
+        # while the fourth seat 幽零 bids 510,000.
+        seats = [
+            {"slot": 1, "name": "or", "currentBid": 450000, "isMe": False},
+            {"slot": 2, "name": "SIGUNA", "currentBid": 456789, "isMe": False},
+            {"slot": 3, "name": "PLAYER_LOCAL", "currentBid": 7897, "isMe": True},
+            {"slot": 4, "name": "幽零", "currentBid": 510000, "isMe": False},
+        ]
+        self.match.apply_facts({"roundNo": 4, "seats": [{**s, "isMe": s["slot"] == 4} for s in seats]}, source="vision")
+        self.match.apply_facts({"roundNo": 4, "seats": seats}, source="vision")
+        self.assertEqual([s["slot"] for s in self.match.facts["seats"] if s.get("isMe")], [3])
+        data = {"seats": self.match.facts["seats"]}
+        main._native_project_current_quote(data, self.match)
+        self.assertEqual(data["myBid"], 7897)
+        self.assertEqual(data["leaderBid"], 510000)
 
     def test_hud_payload_keeps_zero_bid(self):
         payload = main.build_in_auction_hud_payload({

@@ -3146,7 +3146,14 @@ class NTEVisionPipeline:
                 leader_ties = [self._slot_names.get(s) for s in tied_slots if self._slot_names.get(s)]
 
         # Context packaging (strictly matching existing schema)
-        my_name = self._slot_names.get(4)
+        from player_identity import get_player_name
+        configured_name = get_player_name()
+        matching_slots = [
+            slot for slot, name in self._slot_names.items()
+            if name and configured_name and name.strip() == configured_name
+        ]
+        my_slot = matching_slots[0] if len(matching_slots) == 1 else None
+        my_name = self._slot_names.get(my_slot) if my_slot is not None else None
         seats = [
             {
                 "slot": s,
@@ -3154,7 +3161,7 @@ class NTEVisionPipeline:
                 "bid": int(cur_bids.get(s)) if cur_bids.get(s) is not None else None,
                 "currentBid": cur_bids.get(s),
                 "observationStatus": "VISIBLE" if cur_bids.get(s) is not None else "UNOBSERVED",
-                "isMe": bool(my_name and s == 4),
+                "isMe": s == my_slot,
                 **(self._slot_bid_evidence.get(s, {}) if cur_bids.get(s) is not None else {}),
             }
             for s in (1, 2, 3, 4)
@@ -3178,8 +3185,8 @@ class NTEVisionPipeline:
         self.current_context["leaderName"] = leader_name
         self.current_context["leaderTies"] = leader_ties
         self.current_context["myName"] = my_name
-        self.current_context["myBid"] = int(cur_bids.get(4) or 0)
-        self.current_context["isMyLead"] = bool(self._leader_slot == 4)
+        self.current_context["myBid"] = int(cur_bids[my_slot]) if my_slot is not None and cur_bids.get(my_slot) is not None else None
+        self.current_context["isMyLead"] = self._leader_slot == my_slot if my_slot is not None else None
         self.current_context["opponents"] = [
             {"slot": s["slot"], "name": s["name"], "bid": s["bid"], "currentBid": s["currentBid"]}
             for s in seats if s["name"]

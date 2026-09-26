@@ -772,6 +772,24 @@ class CurrentMatch:
                 from public_intel_ledger import admit_public_card_events
                 incoming = raw if isinstance(raw, list) else []
                 new_value = admit_public_card_events(incoming, existing=old_value)
+            if key == "intelCardReadings" and source == "vision" and isinstance(new_value, list):
+                # This field is the DRAFT's read-only OCR evidence, not a
+                # current-frame fact. Keep transient text when later OCR is
+                # blank; no reading here grants solver or cost authority.
+                readings = {}
+                for reading in list(old_value or []) + new_value:
+                    if not isinstance(reading, dict):
+                        continue
+                    raw_text = reading.get("rawText")
+                    if not isinstance(raw_text, str) or not raw_text.strip():
+                        continue
+                    round_no = reading.get("round") if type(reading.get("round")) is int else None
+                    identity = (round_no, "".join(raw_text.split()))
+                    prior = readings.get(identity)
+                    if prior is None or (reading.get("is_physical_ocr") is True
+                                         and prior.get("is_physical_ocr") is not True):
+                        readings[identity] = deepcopy(reading)
+                new_value = list(readings.values())[-64:]
 
             if key == "seats" and isinstance(new_value, list):
                 inc_round_raw = (
@@ -831,7 +849,7 @@ class CurrentMatch:
                         ms = dict(ns)
                         if not ms.get("name") and os.get("name"):
                             ms["name"] = os.get("name")
-                        if not ms.get("isMe") and os.get("isMe"):
+                        if "isMe" not in ms and os.get("isMe"):
                             ms["isMe"] = os.get("isMe")
                         incoming_observed = (
                             ms.get("observationStatus") == "VISIBLE"

@@ -1,10 +1,14 @@
 import unittest
+from unittest.mock import patch
 
 from vision_pipeline import NTEVisionPipeline
 
 
 class SeatIdentityFallbackTests(unittest.TestCase):
     def setUp(self):
+        self.player_name = patch('player_identity.get_player_name', return_value='本人昵称')
+        self.player_name.start()
+        self.addCleanup(self.player_name.stop)
         self.pipe = NTEVisionPipeline()
         self.pipe.current_context['round'] = 2
         self.pipe._slot_names = {1: '甲玩家', 2: '乙玩家', 3: '丙玩家', 4: '本人昵称'}
@@ -15,10 +19,20 @@ class SeatIdentityFallbackTests(unittest.TestCase):
         self.assertEqual(self.pipe.current_context['myName'], '本人昵称')
         self.assertEqual([s['slot'] for s in self.pipe.current_context['seats'] if s['isMe']], [4])
 
-    def test_same_name_does_not_make_opponent_self(self):
+    def test_duplicate_name_does_not_guess_self_slot(self):
         self.pipe._slot_names[1] = '本人昵称'
         self.pipe._derive_seat_leader_and_context(2, {})
-        self.assertEqual([s['slot'] for s in self.pipe.current_context['seats'] if s['isMe']], [4])
+        self.assertEqual([s['slot'] for s in self.pipe.current_context['seats'] if s['isMe']], [])
+        self.assertIsNone(self.pipe.current_context['myBid'])
+
+    def test_actual_self_can_be_third_seat(self):
+        self.pipe._slot_names = {1: 'or', 2: 'SIGUNA', 3: '本人昵称', 4: '幽零'}
+        self.pipe._slot_cur_bids = {1: 450000, 2: 456789, 3: 7897, 4: 510000}
+        self.pipe._derive_seat_leader_and_context(4, self.pipe._slot_cur_bids)
+        self.assertEqual([s['slot'] for s in self.pipe.current_context['seats'] if s['isMe']], [3])
+        self.assertEqual(self.pipe.current_context['myName'], '本人昵称')
+        self.assertEqual(self.pipe.current_context['myBid'], 7897)
+        self.assertFalse(self.pipe.current_context['isMyLead'])
 
     def test_fallback_does_not_invent_unknown_self(self):
         self.pipe.current_context['seats'] = self.pipe._empty_seats()
@@ -41,7 +55,7 @@ class SeatIdentityFallbackTests(unittest.TestCase):
         self.assertIsNone(self.pipe.current_context['winner'])
         self.pipe._derive_seat_leader_and_context(1, self.pipe._slot_cur_bids)
         self.assertIsNone(self.pipe.current_context['myName'])
-        self.assertEqual(self.pipe.current_context['myBid'], 0)
+        self.assertIsNone(self.pipe.current_context['myBid'])
         self.assertFalse(self.pipe.current_context['finalBids'])
         self.assertEqual(self.pipe._slot_bid_candidates[4], {'val': None, 'count': 0})
 

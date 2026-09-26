@@ -993,6 +993,10 @@ class TestLiveVisionWorkerLivenessV1(unittest.TestCase):
           _update_seat_current_bids_from_ocr, and _derive_seat_leader_and_context function correctly
         - Coordinating wrapper _bind_seats_slot_authoritative produces identical context state
         """
+        from unittest.mock import patch
+        player_name = patch("player_identity.get_player_name", return_value="David")
+        player_name.start()
+        self.addCleanup(player_name.stop)
         self.pipe.reset_session_state()
         self.pipe.current_context["round"] = 2
 
@@ -1058,6 +1062,10 @@ class TestLiveVisionWorkerLivenessV1(unittest.TestCase):
         if img_test is None:
             self.skipTest("sec_120.jpg missing")
 
+        from unittest.mock import patch
+        player_name = patch("player_identity.get_player_name", return_value="Player4")
+        player_name.start()
+        self.addCleanup(player_name.stop)
         self.pipe.reset_session_state()
         self.pipe._ensure_ocr()
 
