@@ -3047,11 +3047,15 @@ function renderMatch(currentMatch, overlayVisible) {
       restoreButton.hidden = nativeProfile ? !needsNativeAction : visionHealthStatus.hidden || health.stage !== 'process';
       const sameMatchRecovery = nativeProfile
         && health.stage === 'native-paused'
-        && ['focus-lost', 'capture-failed', 'observation-frame-timeout'].includes(String(health.reason || ''));
+        && ['focus-lost', 'capture-failed', 'observation-frame-timeout'].includes(String(health.reason || ''))
+        && Boolean(health.pausedMatchId)
+        && health.pausedMatchId === currentMatch.matchId;
       restoreButton.dataset.resumeSameMatch = sameMatchRecovery ? 'true' : 'false';
       restoreButton.textContent = nativeProfile
         ? (sameMatchRecovery ? '恢复同局观察' : '开始新局观察')
         : '恢复识别';
+      const startNewButton = document.getElementById('start-new-vision-btn');
+      if (startNewButton) startNewButton.hidden = !sameMatchRecovery;
     }
   }
   const previousMatchId = dashboard.matchState.matchId;

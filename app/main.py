@@ -2021,6 +2021,8 @@ def _native_publish_health(event: Dict[str, Any], *, force_main: bool = False) -
     raw_status = str(event.get("status") or "").upper()
     invalidating = raw_status in {"STARTING", "READY", "PAUSED", "ERROR", "STOPPED"}
     with _MANUAL_STATE_LOCK:
+        if raw_status == "PAUSED":
+            health["pausedMatchId"] = CURRENT_MATCH.id
         if invalidating:
             _native_invalidate_solver_locked(str(event.get("reason") or f"native-{raw_status.lower()}"))
             _native_reject_pending_instance_decisions_locked(
@@ -7129,7 +7131,7 @@ def _start_native_observation_locked(*, resume_same_match: bool = False):
             return NATIVE_OBSERVATION_BRIDGE.process
         resume_state = None
         health = LATEST_PAYLOAD.get("visionHealth") or {}
-        if resume_same_match and health.get("reason") in {
+        if resume_same_match and health.get("pausedMatchId") == CURRENT_MATCH.id and health.get("reason") in {
             "focus-lost", "capture-failed", "observation-frame-timeout"
         }:
             target = LATEST_PAYLOAD.get("target")

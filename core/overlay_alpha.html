@@ -2294,7 +2294,9 @@ function sparkleBoundsText(b) {
         restore.hidden = nativeProfile ? !needsNativeAction : el.hidden || d.visionHealth.stage !== 'process';
         const sameMatchRecovery = nativeProfile
           && d.visionHealth.stage === 'native-paused'
-          && ['focus-lost', 'capture-failed', 'observation-frame-timeout'].includes(String(d.visionHealth.reason || ''));
+          && ['focus-lost', 'capture-failed', 'observation-frame-timeout'].includes(String(d.visionHealth.reason || ''))
+          && Boolean(d.visionHealth.pausedMatchId)
+          && d.visionHealth.pausedMatchId === d.matchId;
         restore.dataset.resumeSameMatch = sameMatchRecovery ? 'true' : 'false';
         restore.textContent = nativeProfile
           ? (sameMatchRecovery ? '恢复同局观察' : '开始新局观察')

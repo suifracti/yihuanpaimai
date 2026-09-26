@@ -145,7 +145,7 @@ class LiveMatchTransportTests(unittest.TestCase):
                  patch.object(main, "NATIVE_OBSERVATION_BRIDGE", None), \
                  patch.object(main, "NativeObservationBridge", return_value=bridge), \
                  patch.object(main, "_native_publish_health"), \
-                 patch.object(main, "LATEST_PAYLOAD", {"visionHealth": {"reason": reason}, "target": target}), \
+                 patch.object(main, "LATEST_PAYLOAD", {"visionHealth": {"reason": reason, "pausedMatchId": current.id}, "target": target}), \
                  patch.dict(os.environ, {"NTE_DISABLE_VISION": "0"}):
                 main._start_native_observation_locked(resume_same_match=should_resume)
                 seed = bridge.start.call_args.kwargs["resume_state"]
@@ -162,9 +162,19 @@ class LiveMatchTransportTests(unittest.TestCase):
              patch.object(main, "NATIVE_OBSERVATION_BRIDGE", None), \
              patch.object(main, "NativeObservationBridge", return_value=bridge), \
              patch.object(main, "_native_publish_health"), \
-             patch.object(main, "LATEST_PAYLOAD", {"visionHealth": {"reason": "focus-lost"}, "target": target}), \
+             patch.object(main, "LATEST_PAYLOAD", {"visionHealth": {"reason": "focus-lost", "pausedMatchId": current.id}, "target": target}), \
              patch.dict(os.environ, {"NTE_DISABLE_VISION": "0"}):
             main._start_native_observation_locked()
+            self.assertIsNone(bridge.start.call_args.kwargs["resume_state"])
+
+        bridge = Mock()
+        with patch.object(main, "CURRENT_MATCH", current), \
+             patch.object(main, "NATIVE_OBSERVATION_BRIDGE", None), \
+             patch.object(main, "NativeObservationBridge", return_value=bridge), \
+             patch.object(main, "_native_publish_health"), \
+             patch.object(main, "LATEST_PAYLOAD", {"visionHealth": {"reason": "focus-lost", "pausedMatchId": "previous-match"}, "target": target}), \
+             patch.dict(os.environ, {"NTE_DISABLE_VISION": "0"}):
+            main._start_native_observation_locked(resume_same_match=True)
             self.assertIsNone(bridge.start.call_args.kwargs["resume_state"])
 
     def test_native_resume_seed_restores_manual_protection_in_engine(self):

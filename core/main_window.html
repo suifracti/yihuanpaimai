@@ -169,6 +169,7 @@
               <span id="vision-health-status" role="status" hidden></span>
               <span id="manual-command-status" role="status" aria-live="polite" hidden></span>
               <button class="btn-wb-action" id="restore-vision-btn" type="button" hidden onclick="postNative('start_live_vision', {resumeSameMatch: this.dataset.resumeSameMatch === 'true'})">恢复识别</button>
+              <button class="btn-wb-action" id="start-new-vision-btn" type="button" hidden onclick="postNative('start_live_vision', {resumeSameMatch: false})">开始新局观察</button>
               <input class="form-control" id="player-display-name" type="text" maxlength="64" placeholder="游戏内昵称（非数字UID）" style="width:180px" autocomplete="off">
               <button class="btn-wb-action" id="save-player-display-name" type="button">保存昵称</button>
               <span id="player-display-name-status" role="status">未设置，使用画面姓名；清空后保存可恢复</span>
