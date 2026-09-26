@@ -1666,6 +1666,10 @@ function renderSolverAdmissionStatus(currentMatch) {
     title = "当前局建议可用";
     state = "本局有效结果";
     summary = "金额对应当前局事实与版本；回合变化后会重新评估。";
+  } else if (status === "valid" && currentMatch.prediction?.mode === "partial_shadow") {
+    title = "当前局有部分历史覆盖结果";
+    state = "计算已完成";
+    summary = "结构估值和条件参考可查看；不构成整仓 P50 或正式出价上限。";
   } else if (status === "no-match") {
     title = "当前事实约束冲突";
     state = "暂不建议";
@@ -3445,16 +3449,16 @@ function renderMatch(currentMatch, overlayVisible) {
     const supportBadge = document.getElementById("match-live-support-badge");
 
     if (isP80Null && hasStructuralCenter) {
-      if (estimateLabel) estimateLabel.textContent = "非概率结构估值中枢";
+      if (estimateLabel) estimateLabel.textContent = pred.mode === "partial_shadow" ? "结构估值中枢（部分历史覆盖，非整仓 P50）" : "非概率结构估值中枢";
       if (p20LabelEl) p20LabelEl.textContent = "可行下界";
       if (p50SubLabelEl) p50SubLabelEl.textContent = "估值中枢";
       if (p80LabelEl) p80LabelEl.textContent = "市场P80";
-      if (recLabelEl) recLabelEl.textContent = "结构建议上限 (非正式)";
+      if (recLabelEl) recLabelEl.textContent = "结构参考价（非正式上限）";
 
       if (p20El) p20El.textContent = structMin != null ? formatCurrency(structMin) : "--";
       if (p50El) p50El.textContent = formatCurrency(structCenter);
       if (p50SubEl) p50SubEl.textContent = formatCurrency(structCenter);
-      if (p80El) p80El.textContent = "暂无(0个可比历史样本)";
+      if (p80El) p80El.textContent = "整仓 P80 不可用";
       if (recEl) recEl.textContent = structRefBid != null ? formatCurrency(structRefBid) : (pred.recommendedMax != null ? formatCurrency(pred.recommendedMax) : "--");
     } else {
       if (estimateLabel) estimateLabel.textContent = pred.estimateLabel || "整仓预测中位 (P50)";

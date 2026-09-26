@@ -958,7 +958,11 @@ def get_current_match_presentation_summary() -> dict:
                 "actionReason": reason,
                 "entryGrade": dec.get("entryGrade"),
                 "mode": mode_obj.get("informationMode") or prediction.get("mode") or "structural_only",
-                "supportStatus": prediction.get("supportStatus") or "STRUCTURAL_ONLY",
+                "supportStatus": prediction.get("supportStatus") or (
+                    "PARTIAL_HISTORICAL_SUPPORT" if mode_obj.get("informationMode") == "partial_shadow"
+                    else "HISTORICAL_SUPPORTED" if mode_obj.get("informationMode") == "full_shadow"
+                    else "STRUCTURAL_ONLY"
+                ),
                 "coverageRatio": mode_obj.get("coverageRatio") or dec.get("coverageRatio") or 0.0,
                 "supportedStateCount": mode_obj.get("supportedStateCount") or dec.get("supportedStateCount") or 0,
                 "totalStateCount": mode_obj.get("totalStateCount") or dec.get("totalStateCount") or 0,
@@ -3421,6 +3425,10 @@ def _publish_live_shadow_event(event: Dict[str, Any]) -> None:
             ACTIVE_SNAPSHOT_HOLDER.update(match_id, snapshot=snapshot, frozen_prediction=event.get("frozenPrediction"))
             merged["solverStatus"] = (snapshot.get("status") or {}).get("solverStatus") or "incomplete"
             merged["solverMissingReason"] = None
+        # The CurrentMatch projection reads LATEST_PAYLOAD for native lease and
+        # solver status. Publish the accepted sidecar first so it cannot project
+        # the previous pending state alongside a completed prediction.
+        LATEST_PAYLOAD.update(merged)
         if merged.get("observationProfile") == "native-readonly-v1":
             merged["currentMatch"] = get_current_match_presentation_summary()
         LATEST_PAYLOAD.update(merged)

@@ -622,7 +622,7 @@
       <div class="decision-hero-block" id="topDecisionBlock">
         <div class="decision-action-badge" id="topActionBadge">等待情报</div>
         <div class="decision-cap-wrap">
-          <span class="decision-cap-label">建议上限</span>
+          <span class="decision-cap-label" id="topCapLabel">建议上限</span>
           <strong class="decision-cap-val" id="topRecommendedMax">—</strong>
         </div>
       </div>
@@ -1021,7 +1021,7 @@
           <div class="advice-reason" id="actionReason">正式出价建议只在输入与历史支持满足时显示</div>
         </div>
         <div class="advice-cap">
-          <span>建议最高价</span>
+          <span id="adviceCapLabel">建议最高价</span>
           <strong id="recommendedMax">—</strong>
         </div>
       </div>
@@ -2068,10 +2068,17 @@ function sparkleBoundsText(b) {
       const isP80Null = p80 == null;
       const hasStructuralCenter = sCenter != null;
 
-      const displayMode = pending ? pendingLabel : (isP80Null && hasStructuralCenter ? "非概率结构估值" : (modeLabels[mode] || "结构推断"));
+      const isPartial = mode === "partial_shadow" || mode === "PARTIAL_SHADOW";
+      const displayMode = pending ? pendingLabel : (isPartial ? "部分历史覆盖" : (isP80Null && hasStructuralCenter ? "非概率结构估值" : (modeLabels[mode] || "结构推断")));
       const recommendation = !pending && (mode === "full_shadow" || mode === "FULL_SHADOW")
         ? (decision.recommendedMax ?? frozen.globalLine ?? null)
         : null;
+      const structuralReferenceOnly = !pending && recommendation == null && sRefBid != null && isP80Null;
+      const valuationCaption = document.getElementById("valuationCaption");
+      if (valuationCaption && !d?.nativeInvalidated) {
+        valuationCaption.textContent = !pending && p50 == null && hasStructuralCenter
+          ? "结构估值（非整仓P50）" : "估值 (P50)";
+      }
       const solverStatus = (snapshot && snapshot.status && snapshot.status.solverStatus)
         || frozen.solverStatus
         || "pending";
@@ -2097,7 +2104,7 @@ function sparkleBoundsText(b) {
       if (!pending && p20 != null && p80 != null) {
         pRangeEl.textContent = `P20 ${fmtWan(p20)} · P80 ${fmtWan(p80)}`;
       } else if (!pending && isP80Null && sMin != null && sMax != null) {
-        pRangeEl.textContent = `可行区间 ${fmtWan(sMin)}～${fmtWan(sMax)} · P80 暂无(0样本)`;
+        pRangeEl.textContent = `可行区间 ${fmtWan(sMin)}～${fmtWan(sMax)} · 整仓 P80 不可用`;
       } else {
         const partialReference = decision.partialShadowP50 ?? frozen.formalValue?.p50;
         if (!pending && p50 == null && Number.isFinite(partialReference)) {
@@ -2130,7 +2137,9 @@ function sparkleBoundsText(b) {
           adviceReason = decision.actionReason || "部分组合尚无可靠估值，请补充红货等已知情报";
         }
       } else if (mode !== "full_shadow" && mode !== "FULL_SHADOW") {
-        adviceText = "整仓估值待补全 · 暂无正式出价建议";
+        adviceText = sCenter != null
+          ? `结构估值中枢 ${fmtWan(sCenter)} · 暂无正式出价建议`
+          : "整仓估值待补全 · 暂无正式出价建议";
         adviceReason = decision.actionReason || "部分组合尚无可靠估值，请补充红货等已知情报";
       }
 
@@ -2153,11 +2162,18 @@ function sparkleBoundsText(b) {
       }
 
       const topRecMax = document.getElementById("topRecommendedMax");
+      const topCapLabel = document.getElementById("topCapLabel");
+      const adviceCapLabel = document.getElementById("adviceCapLabel");
+      if (topCapLabel) {
+        topCapLabel.textContent = structuralReferenceOnly ? "结构参考" : "建议上限";
+        topCapLabel.title = structuralReferenceOnly ? "非正式出价上限" : "";
+      }
+      if (adviceCapLabel) adviceCapLabel.textContent = structuralReferenceOnly ? "结构参考（非正式出价上限）" : "建议最高价";
       if (topRecMax) {
         if (recommendation != null) {
           topRecMax.textContent = fmtWan(recommendation);
           topRecMax.classList.add("has-value");
-        } else if (sRefBid != null && isP80Null) {
+        } else if (structuralReferenceOnly) {
           topRecMax.textContent = fmtWan(sRefBid);
           topRecMax.classList.add("has-value");
         } else {
@@ -2167,13 +2183,14 @@ function sparkleBoundsText(b) {
         topRecMax.title = topRecMax.textContent;
       }
       document.getElementById("supportMode").textContent = displayMode;
-      document.getElementById("recommendedMax").textContent = recommendation != null ? fmtWan(recommendation) : (sRefBid != null && isP80Null ? `${fmtWan(sRefBid)} (结构上限)` : "—");
+      document.getElementById("recommendedMax").textContent = recommendation != null ? fmtWan(recommendation) : (structuralReferenceOnly ? `${fmtWan(sRefBid)}（结构参考，非正式上限）` : "—");
       document.getElementById("actionText").textContent = adviceText;
       document.getElementById("actionReason").textContent = adviceReason;
       document.getElementById("expectedProfit").textContent = "预期盈亏（当前叫价，P50扣整局成本）：" + formatExpectedProfit(recommendation == null ? null : decision.expectedProfit);
       document.getElementById("statusHint").textContent = pending
         ? adviceReason
-        : (p50 == null && sCenter == null ? "当前结果不足以估计整仓价值" : statusCopy(solverStatus, false));
+        : (isPartial ? "仅部分历史覆盖，非整仓 P50 或正式出价上限"
+          : (p50 == null && sCenter == null ? "当前结果不足以估计整仓价值" : statusCopy(solverStatus, false)));
       paintDraftSaveState(d);
       paintManualCommandResult(d?.manualCommandResult || d?.nativeControlResult);
       paintLeadFact(d);
