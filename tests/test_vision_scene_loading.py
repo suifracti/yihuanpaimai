@@ -30,6 +30,16 @@ class TestVisionSceneLoading(unittest.TestCase):
         ctx.update(scene=SCENE_AUCTION_LOADING, loadingDirection="to_auction")
         self.assertFalse(self.pipe._handle_loading_black_frame(np.full_like(frame, 100), 120.0))
 
+    def test_lot_draw_caption_is_loading_but_live_round_vetoes_it(self):
+        caption = ([[850, 955], [1100, 955], [1100, 990], [850, 990]], "随机拍品抽选中..", 0.883)
+        result = self.pipe._parse_loading([caption])
+        self.assertTrue(result["isLoading"])
+        self.assertIsNone(result["percent"])
+        live = ([[800, 50], [940, 50], [940, 90], [800, 90]], "第1回合", 0.99)
+        self.assertFalse(self.pipe._parse_loading([caption, live])["isLoading"])
+        wrong_position = ([[850, 300], [1100, 300], [1100, 335], [850, 335]], caption[1], caption[2])
+        self.assertFalse(self.pipe._parse_loading([wrong_position])["isLoading"])
+
     def test_teardrop_item_does_not_trigger_loading(self):
         """「泪滴」 is an item name, never a valid loading venue."""
         ocr_results = [

@@ -1437,6 +1437,10 @@ class NTEVisionPipeline:
             )
             canvas_roi_key = "focused_opening_canvas" if use_focused_opening else "auction_main_canvas"
             rx1, ry1, rx2, ry2 = ROIScaler.scale_roi(canvas_roi_key, w, h)
+            if use_focused_opening:
+                # The lot-draw transition is identified by its bottom caption,
+                # below the focused auction ROI. Keep it until a round is seen.
+                ry2 = int(h * 0.98)
             # The center carries auction facts; seats have their own reader.
             # Keep full-frame scene discovery until auction is established.
             if getattr(self, 'fast_live_intel', False) and (is_auction_scene or fast['scene'] == SCENE_IN_AUCTION) and fast['scene'] != SCENE_SETTLEMENT:
@@ -1586,7 +1590,7 @@ class NTEVisionPipeline:
                 self.current_context["inAuction"] = False
                 self.current_context["isSettlement"] = False
                 self.current_context["round"] = 0
-                self.current_context["loadingPercent"] = loading_info["percent"] if loading_info["percent"] is not None else 100
+                self.current_context["loadingPercent"] = loading_info["percent"]
                 self.current_context["loadingVenue"] = loading_info.get("venue")
                 direction = "to_lobby" if self._had_settlement else "to_auction"
                 self.current_context["loadingDirection"] = direction
@@ -4096,6 +4100,11 @@ class NTEVisionPipeline:
             # 排除右上角 HUD 区域 (X >= 0.70, Y <= 0.45)
             if nx >= 0.70 and ny <= 0.45:
                 continue
+
+            # Auction entry animation, not an item identity or a live round.
+            if (score >= 0.85 and 0.25 <= nx <= 0.65 and 0.82 <= ny <= 0.97
+                    and "随机拍品抽选中" in re.sub(r"\s+", "", t)):
+                has_loading_layout_evidence = True
 
             # 1. 识别右下角 0%~100% 载入进度 (X >= 0.75, Y >= 0.70)
             m_pct = re.search(r"(\d{1,3})%", t)
