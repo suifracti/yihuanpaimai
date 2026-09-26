@@ -2754,14 +2754,15 @@ def _native_observation_event(event: Dict[str, Any]) -> None:
                 LATEST_PAYLOAD.get("observationSessionId"),
                 _native_target_instance(LATEST_PAYLOAD.get("target")),
                 LATEST_PAYLOAD.get("matchId"), LATEST_PAYLOAD.get("round"),
-                LATEST_PAYLOAD.get("factsRevision"), LATEST_PAYLOAD.get("engineFactsRevision"),
                 LATEST_PAYLOAD.get("matchGeneration"),
             )
             current_identity = (
                 session_id, _native_target_instance(data.get("target")),
-                CURRENT_MATCH.id, round_no, data.get("factsRevision"),
-                snapshot.get("factsRevision"), CURRENT_MATCH._seq,
+                CURRENT_MATCH.id, round_no, CURRENT_MATCH._seq,
             )
+            # A new frame/revision updates the exact result lease below, but
+            # must not cancel an equivalent in-flight solve on every OCR tick.
+            # Completed old-revision callbacks still fail the lease check.
             if any(previous_identity) and previous_identity != current_identity:
                 _native_invalidate_solver_locked("observation-scope-changed")
             lease = _native_accept_observation_locked(data)

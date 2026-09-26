@@ -3,6 +3,14 @@ from pathlib import Path
 sys.path.insert(0,str(Path(__file__).resolve().parents[1]/'core'))
 from live_shadow import _profile_cache_key,_solver_ctx,_PROFILE_DETAIL_FIELDS
 class LiveDetailTransportTests(unittest.TestCase):
+ def test_revision_only_does_not_restart_same_solver_input(self):
+  base={'matchId':'same-match','observationSessionId':'same-session','round':2,
+        'factsRevision':101,'q':14,'goldAvg':32171,'goldGrid':16,
+        'venue':'珊瑚场','box':'琉璃宝箱','fieldCondition':'standard'}
+  key=_profile_cache_key(base,1)
+  self.assertEqual(key,_profile_cache_key({**base,'factsRevision':138},1))
+  self.assertNotEqual(key,_profile_cache_key({**base,'goldAvg':32172},1))
+  self.assertNotEqual(key,_profile_cache_key({**base,'round':3},1))
  def test_every_supported_detail_reaches_runtime_and_invalidates_cache(self):
   base={'q':12,'goldAvg':74379}
   baseline=_profile_cache_key(base,1)

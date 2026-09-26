@@ -18,6 +18,7 @@ for(const [payload,label] of [
   [{scene:'IN_AUCTION',shadowUpdating:false},'情报不足'],
   [{scene:'IN_AUCTION',shadowUpdating:false,solverMissingReason:'缺失会场'},'缺失会场'],
   [{scene:'IN_AUCTION',shadowUpdating:true},'正在计算'],
+  [{scene:'UNKNOWN',nativeInvalidated:true,shadowUpdating:false},'观察已暂停'],
   [{scene:'SETTLEMENT',shadowUpdating:false},'本局已结算'],
 ]) {
   sandbox.payload=payload;

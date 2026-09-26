@@ -344,7 +344,9 @@ def _profile_cache_key(ctx: Dict[str, Any], history_gen: int) -> str:
         "targetHwnd": (ctx.get("target") or {}).get("targetHwnd") if isinstance(ctx.get("target"), dict) else None,
         "targetPid": (ctx.get("target") or {}).get("targetPid") if isinstance(ctx.get("target"), dict) else None,
         "round": ctx.get("round") if ctx.get("round") is not None else ctx.get("roundNo"),
-        "factsRevision": ctx.get("factsRevision"),
+        # Revision is a publication lease, not a solver input. CurrentMatch
+        # can advance it for bids/OCR provenance while valuation inputs stay
+        # identical; keep one in-flight computation for that exact input.
         "venue": ctx.get("lobbyVenue") or ctx.get("venue"),
         "box": ctx.get("box"),
         "fieldCondition": ctx.get("fieldCondition") or "unknown",

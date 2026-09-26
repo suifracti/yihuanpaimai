@@ -2045,8 +2045,9 @@ function sparkleBoundsText(b) {
       const pending = !snapshot || !(snapshot.status && snapshot.status.solverStatus === "valid");
       const calculating = pending && d?.shadowUpdating === true;
       const settling = d?.scene === "SETTLEMENT" || d?.isSettlement === true;
+      const paused = d?.nativeInvalidated === true || d?.visionHealth?.stage === "native-paused";
       const waitingScene = d?.scene !== "IN_AUCTION" && !settling;
-      const pendingLabel = settling ? "本局已结算" : waitingScene ? "等待进入拍卖" : calculating ? "计算中" : infeasible ? "约束冲突" : (d?.solverMissingReason || "情报不足");
+      const pendingLabel = settling ? "本局已结算" : paused ? "观察已暂停" : waitingScene ? "等待进入拍卖" : calculating ? "计算中" : infeasible ? "约束冲突" : (d?.solverMissingReason || "情报不足");
       const modeLabels = {
         "full_shadow": "先验支持",
         "FULL_SHADOW": "先验支持",
@@ -2119,7 +2120,7 @@ function sparkleBoundsText(b) {
       if (pending) {
         badgeText = calculating && !waitingScene && !settling ? "⏳ 正在计算" : pendingLabel;
         adviceText = pendingLabel;
-        adviceReason = settling ? "查看对局历史核对结算与原图" : waitingScene ? "进入拍卖后自动采集情报" : calculating ? "正在根据已识别情报计算" : infeasible ? "当前数量、均价、占格或已知藏品互相矛盾，请核对或清空相关条件" : d?.solverMissingReason ? `暂不生成出价建议：${d.solverMissingReason}` : "现有情报不足以估计整仓价值，请补充均价、数量或已知藏品";
+        adviceReason = settling ? "查看对局历史核对结算与原图" : paused ? "恢复观察后等待新的有效局内帧" : waitingScene ? "进入拍卖后自动采集情报" : calculating ? "正在根据已识别情报计算" : infeasible ? "当前数量、均价、占格或已知藏品互相矛盾，请核对或清空相关条件" : d?.solverMissingReason ? `暂不生成出价建议：${d.solverMissingReason}` : "现有情报不足以估计整仓价值，请补充均价、数量或已知藏品";
       } else if (mode === "structural_only") {
         if (sCenter != null) {
           adviceText = `结构估值中枢 ${fmtWan(sCenter)} · 暂无正式出价建议`;
