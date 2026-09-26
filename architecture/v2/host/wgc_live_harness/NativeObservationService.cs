@@ -150,6 +150,7 @@ internal static class NativeObservationService
             var firstFrameWritten = false;
             var firstLobbyFrameWritten = false;
             long? unknownSinceMs = null;
+            long? settlementSinceMs = null;
             while (maxFrames <= 0 || acceptedFrames < maxFrames)
             {
                 if (DrainControls(controlQueue, session, sessionId, monitor, target))
@@ -245,6 +246,16 @@ internal static class NativeObservationService
                     unknownSinceMs = null;
                 var unknownExpired = unknownSinceMs.HasValue
                     && Environment.TickCount64 - unknownSinceMs.Value >= 10000;
+                if (scene == "SETTLEMENT")
+                    settlementSinceMs ??= Environment.TickCount64;
+                var settlementReady = (bool?)state?["pipelineContext"]?["settlementReady"] == true;
+                // Revoke advice on the first settlement observation, while
+                // allowing the existing reader to see the completed animation.
+                // No input is sent and focus/target guards remain in force.
+                var settlementFinished = settlementSinceMs.HasValue && (
+                    settlementReady
+                    || Environment.TickCount64 - settlementSinceMs.Value >= 45000
+                    || scene is "AUCTION_LOBBY" or "AUCTION_LOADING" or "IN_AUCTION");
                 var frameSequence = Convert.ToInt64(transfer.GetValueOrDefault("sequence") ?? 0);
 
                 if (scene == "AUCTION_LOBBY" && !firstLobbyFrameWritten)
@@ -273,8 +284,8 @@ internal static class NativeObservationService
                 // Unknown revokes Main's lease through EmitObservation below,
                 // but a brief transition must not destroy the capture session.
                 // Focus/target/capture checks still fail closed on every frame.
-                if (scene is "SETTLEMENT" or "CITY_TYCOON_HUB"
-                    or "CITY_LEISURE_MENU" or "OPEN_WORLD" || unknownExpired)
+                if (scene is "CITY_TYCOON_HUB"
+                    or "CITY_LEISURE_MENU" or "OPEN_WORLD" || unknownExpired || settlementFinished)
                 {
                     // Preserve the exact frame that caused the boundary.  A
                     // hash in frame_records is not enough to distinguish a
@@ -299,6 +310,11 @@ internal static class NativeObservationService
                     catch (Exception evidenceEx)
                     {
                         boundaryEvidenceError = $"{evidenceEx.GetType().Name}: {evidenceEx.Message}";
+                    }
+                    if (scene == "SETTLEMENT" && boundaryEvidenceError is null)
+                    {
+                        EmitObservation(sessionId, afterEngine, frame, transfer, state,
+                            ++acceptedFrames, boundaryRawPath, capture);
                     }
                     EmitStatus(sessionId, "PAUSED", $"scene-boundary:{scene}", new
                     {

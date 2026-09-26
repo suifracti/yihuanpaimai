@@ -584,7 +584,12 @@ def normalize_vision_box(catalog: Mapping[str, Any], *, venue_id: Optional[str],
     matches = []
     for box in venue.get("boxes") or []:
         aliases = [box.get("displayName"), *(box.get("observationAliases") or [])]
-        if needle in {str(alias).strip().casefold() for alias in aliases if alias}:
+        # Live footers render the approved subtitle in parentheses instead
+        # of the catalog's middle dot. Compare the complete text, not a fuzzy
+        # substring that could accept an unknown box sharing a name fragment.
+        def footer_key(value):
+            return "".join(str(value).casefold().split()).replace("（", "·").replace("(", "·").replace("）", "").replace(")", "")
+        if footer_key(needle) in {footer_key(alias) for alias in aliases if alias}:
             matches.append(box["boxId"])
     if len(matches) != 1:
         return immutable_snapshot({"status": "UNKNOWN", "boxId": None, "provenance": "VISION_OBSERVATION"})

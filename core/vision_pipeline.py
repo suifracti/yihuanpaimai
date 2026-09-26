@@ -1217,9 +1217,13 @@ class NTEVisionPipeline:
                 if compact is not None:
                     priority_crops[index] = compact
 
+            # The broad canvas is deliberately skipped on confirmed live
+            # rounds. Read the stable box footer in the same numeric batch.
+            priority_crops.append(frame[int(h * .917):int(h * .963), int(w * .38):int(w * .66)])
+
             valid_crop_indices = [i for i, crop in enumerate(priority_crops) if getattr(crop, "size", 0) > 0]
             valid_crops = [priority_crops[i] for i in valid_crop_indices]
-            aligned_results = [None, None, None, None, None]
+            aligned_results = [None] * len(priority_crops)
             if valid_crops:
                 external_results = []
                 iso_id = captured_at or time.strftime("%Y-%m-%dT%H:%M:%S", time.localtime())
@@ -1247,6 +1251,18 @@ class NTEVisionPipeline:
                         external_results = []
                 for crop_index, result in zip(valid_crop_indices, external_results):
                     aligned_results[crop_index] = result
+
+            footer = aligned_results[5]
+            if round_title_confirmed and footer and float(footer[1] or 0) >= .85:
+                from venue_box_catalog import load_catalog, normalize_venue_from_box
+                footer_text = str(footer[0] or "").strip()
+                if not hasattr(self, "_box_footer_catalog"):
+                    self._box_footer_catalog = load_catalog()
+                resolved_box = normalize_venue_from_box(self._box_footer_catalog, footer_text)
+                if resolved_box.get("status") == "NORMALIZED":
+                    self.current_context["boxObservation"] = {
+                        "text": footer_text, "confidence": float(footer[1]), "capturedAt": captured_at,
+                    }
 
             try:
                 df_est, df_timer = self._read_df_numeric_batch(

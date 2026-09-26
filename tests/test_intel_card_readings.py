@@ -8,6 +8,22 @@ from intel_evidence_presentation import intel_evidence_text
 
 
 class IntelCardReadingsTests(unittest.TestCase):
+    def test_pending_verification_rereads_card_instead_of_replacing_with_empty_text(self):
+        text = '拍卖师公开情报 本局内所有蓝色品质藏品的总数量为2件。'
+        class Recognizer:
+            def text_rec(self, crops):
+                return [(text, .99) for _ in crops], 0
+        extractor = IntelCardEvidenceExtractor(ocr_engine=Recognizer())
+        frame = np.zeros((1080, 1920, 3), dtype=np.uint8)
+        with patch('intel_card_evidence.detect_card_boxes', return_value=[[0, 0, 100, 80]]), \
+             patch.object(extractor, '_extract_text_lines_projected', return_value=[frame[:20, :100]]):
+            extractor.extract_cards_fast(frame, frame_id='first', known_round=4, allow_detector_fallback=False)
+            second = extractor.extract_cards_fast(frame, frame_id='second', known_round=4,
+                pending_verify_fields=['blueCount'], allow_detector_fallback=False)
+        self.assertEqual(second.cardReadings[0]['rawText'], text)
+        self.assertTrue(second.cardReadings[0]['is_physical_ocr'])
+        self.assertEqual([(o.field, o.value) for o in second.observations], [('blueCount', 2)])
+
     def test_non_numeric_full_card_survives_standard_extractor_and_history(self):
         text = '拍卖师公开情报 随机展示2件藏品'
         extractor = IntelCardEvidenceExtractor()

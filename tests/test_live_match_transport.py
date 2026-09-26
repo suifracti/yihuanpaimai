@@ -33,6 +33,10 @@ class LiveMatchTransportTests(unittest.TestCase):
         self.assertEqual(normalize_venue_from_box(engine.venue_catalog, "完整的包裹")["venueId"], "venue-haibei")
         self.assertEqual(normalize_venue_from_box(engine.venue_catalog, "完整的保险箱")["venueId"], "venue-zhenzhu")
         self.assertIsNone(normalize_venue_from_box(engine.venue_catalog, "宝箱")["venueId"])
+        self.assertEqual(normalize_venue_from_box(engine.venue_catalog,
+            "实木宝箱 (中级藏品概率提升)")["venueId"], "venue-shanhu")
+        self.assertIsNone(normalize_venue_from_box(engine.venue_catalog,
+            "实木宝箱（未知效果）")["venueId"])
         ambiguous = copy.deepcopy(engine.venue_catalog)
         ambiguous["venues"][0]["boxes"].append(copy.deepcopy(ambiguous["venues"][1]["boxes"][0]))
         self.assertIsNone(normalize_venue_from_box(ambiguous, "机械宝箱")["venueId"])

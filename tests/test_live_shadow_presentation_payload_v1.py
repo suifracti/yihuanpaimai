@@ -447,6 +447,21 @@ class TestLiveShadowPresentationPayloadV1(unittest.TestCase):
                 app_main._publish_live_shadow_event(second_result)
                 self.assertEqual(app_main.LATEST_PAYLOAD["predictionSnapshot"]["predictionId"], "after-resume")
 
+                # Settlement frames may continue while the reveal animation
+                # finishes, but they must revoke the live suggestion at once.
+                for sequence in (2, 3):
+                    settlement_frame = self._native_frame(
+                        match, session="session-b", sequence=sequence, match_id="p3-match-a",
+                        facts_revision=12, round_no=3, target=target)
+                    for key in ("perception", "pipelineContext"):
+                        settlement_frame[key].update(scene="SETTLEMENT", isSettlement=True)
+                    app_main._native_observation_event(settlement_frame)
+                    self.assertIsNone(app_main._NATIVE_SOLVER_LEASE)
+                    self.assertIsNone(app_main.ACTIVE_SNAPSHOT_HOLDER.get_snapshot_for_match("p3-match-a"))
+                    app_main._publish_live_shadow_event(second_result)
+                    self.assertIsNone(app_main.LATEST_PAYLOAD.get("predictionSnapshot"))
+                self.assertEqual(len(requests), 2)
+
                 app_main._native_observation_event({
                     "type": "native_observation", "schemaVersion": "native-observation-v1",
                     "status": "PAUSED", "observationSessionId": "session-b",

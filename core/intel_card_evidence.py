@@ -705,6 +705,9 @@ class IntelCardEvidenceExtractor:
                     to_unmatch.append(cur_idx)
             for cur_idx in to_unmatch:
                 del reused_matches[cur_idx]
+                # Verification must physically read the card again. Removing
+                # cache reuse alone otherwise produces an empty replacement.
+                unmatched_indices.append(cur_idx)
 
         projected_groups: Dict[int, List[np.ndarray]] = {}
         projected_text: Dict[int, str] = {}
