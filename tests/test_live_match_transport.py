@@ -331,6 +331,26 @@ class LiveMatchTransportTests(unittest.TestCase):
         )
         self.assertIsNotNone(engine._pending_lobby_venue)
 
+        # An ambiguous entry frame withdraws eligibility without turning cached
+        # data into new facts or losing a still-scoped lobby candidate.
+        with patch.object(module.time, "monotonic", return_value=100.0):
+            engine._apply_observation_context(
+                {"scene": "UNKNOWN", "inAuction": False, "q": 999, "matchGeneration": 2},
+                {"header": {"sequence": 10}}, "2026-09-24T11:40:26+00:00")
+        self.assertIsNotNone(engine._pending_lobby_venue)
+        self.assertIsNone(engine.current_match.facts["q"])
+        self.assertIsNone(main._native_accept_observation_locked({
+            "scene": "UNKNOWN", "inAuction": False, "freshnessMs": 0,
+            "target": {"targetHwnd": 101, "targetPid": 202}}))
+        expired = copy.copy(engine)
+        expired._pending_lobby_venue = copy.deepcopy(engine._pending_lobby_venue)
+        with patch.object(module.time, "monotonic", return_value=110.0):
+            expired._advance_match_lifecycle({"scene": "UNKNOWN"}, frame_sequence=11,
+                                            captured_at="2026-09-24T11:40:36+00:00")
+        self.assertIsNone(expired._pending_lobby_venue)
+        # Finish the existing real-entry handoff checks inside the grace window.
+        engine._entry_unknown_since = module.time.monotonic()
+
         # The box value is from a saved active-frame result; rule is explicitly
         # unknown in that source and must remain absent. Lobby values survive
         # only when session, target, match id, and pipeline entry generation link.

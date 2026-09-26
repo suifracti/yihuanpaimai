@@ -149,6 +149,7 @@ internal static class NativeObservationService
             var acceptedFrames = 0;
             var firstFrameWritten = false;
             var firstLobbyFrameWritten = false;
+            long? unknownSinceMs = null;
             while (maxFrames <= 0 || acceptedFrames < maxFrames)
             {
                 if (DrainControls(controlQueue, session, sessionId, monitor, target))
@@ -238,6 +239,12 @@ internal static class NativeObservationService
                     ? payload as JsonObject
                     : null;
                 var scene = (string?)perception?["scene"] ?? "UNKNOWN";
+                if (scene == "UNKNOWN")
+                    unknownSinceMs ??= Environment.TickCount64;
+                else
+                    unknownSinceMs = null;
+                var unknownExpired = unknownSinceMs.HasValue
+                    && Environment.TickCount64 - unknownSinceMs.Value >= 10000;
                 var frameSequence = Convert.ToInt64(transfer.GetValueOrDefault("sequence") ?? 0);
 
                 if (scene == "AUCTION_LOBBY" && !firstLobbyFrameWritten)
@@ -263,8 +270,11 @@ internal static class NativeObservationService
                     firstLobbyFrameWritten = true;
                 }
 
+                // Unknown revokes Main's lease through EmitObservation below,
+                // but a brief transition must not destroy the capture session.
+                // Focus/target/capture checks still fail closed on every frame.
                 if (scene is "SETTLEMENT" or "CITY_TYCOON_HUB"
-                    or "CITY_LEISURE_MENU" or "OPEN_WORLD" or "UNKNOWN")
+                    or "CITY_LEISURE_MENU" or "OPEN_WORLD" || unknownExpired)
                 {
                     // Preserve the exact frame that caused the boundary.  A
                     // hash in frame_records is not enough to distinguish a

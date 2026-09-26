@@ -1786,6 +1786,9 @@ class NTEVisionPipeline:
                         detected_feature = True
 
             self.current_context["inAuction"] = detected_feature or (self.current_context["round"] > 0)
+            if prioritize_live_facts and not self.current_context.get("round"):
+                # A rule or box revealed during entry is not a live round.
+                self.current_context["inAuction"] = False
             if self.current_context["inAuction"]:
                 self._match_exit_hold = 0
                 self.current_context["inLobby"] = False

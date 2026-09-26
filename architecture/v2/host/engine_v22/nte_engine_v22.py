@@ -1133,7 +1133,7 @@ class RealEngine:
         lobby_handoff: Optional[dict] = None,
     ) -> None:
         scene = str(context.get("scene") or "UNKNOWN")
-        if scene in {"AUCTION_LOBBY", "AUCTION_LOADING"}:
+        if scene in {"AUCTION_LOBBY", "AUCTION_LOADING", "UNKNOWN"}:
             # Lobby and loading observations must not mutate the last match.
             # The lobby venue remains a scoped candidate until a corresponding
             # fresh in-auction frame proves the entry boundary.
@@ -1336,6 +1336,26 @@ class RealEngine:
     ) -> Optional[dict]:
         """Bind sourced lobby facts to one clean match only after live entry."""
         scene = str(context.get("scene") or "UNKNOWN")
+        now = time.monotonic()
+        unknown_since = getattr(self, "_entry_unknown_since", None)
+        if scene == "UNKNOWN":
+            self._box_venue_streak = None
+            pending = self._pending_lobby_venue
+            previous_scene = str((self.last_context or {}).get("scene") or "UNKNOWN")
+            if (isinstance(pending, dict)
+                    and pending.get("observationSessionId") == self.session_id
+                    and pending.get("targetIdentity") == self.observation_target_identity
+                    and pending.get("matchId") == self.current_match.id
+                    and (previous_scene in {"AUCTION_LOBBY", "AUCTION_LOADING"} or unknown_since is not None)):
+                if unknown_since is None:
+                    unknown_since = self._entry_unknown_since = now
+                if now - unknown_since < 10.0:
+                    return None  # Candidate only; UNKNOWN cannot publish facts.
+            self._pending_lobby_venue = None
+            return None
+        if unknown_since is not None and now - unknown_since >= 10.0:
+            self._pending_lobby_venue = None
+        self._entry_unknown_since = None
         generation = self._valid_pipeline_generation(context)
         if scene == "AUCTION_LOBBY":
             pending = self._pending_lobby_venue
