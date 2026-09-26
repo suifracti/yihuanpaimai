@@ -3817,6 +3817,25 @@ class NTEVisionPipeline:
         full_text = self._ocr_full_text(filtered)
         compact = re.sub(r"\s+", "", full_text)
 
+        # The entry-fee confirmation overlays (and blurs) the known lobby.
+        # Keep its sourced venue without treating the quoted fee as payment,
+        # or allowing an arbitrary UNKNOWN screen to retain lobby ownership.
+        if self.current_context.get("scene") == SCENE_AUCTION_LOBBY:
+            dialog_rows = [
+                re.sub(r"\s+", "", text)
+                for box, text, score in filtered
+                if score >= 0.85
+                and 0.35 <= min(p[1] for p in box) / max(1, screen_h) <= 0.72
+            ]
+            dialog_text = "".join(dialog_rows)
+            if (
+                "匹配成功后将扣除入场费" in dialog_text
+                and "是否继续" in dialog_text
+                and "取消" in dialog_rows
+                and "提示" in compact
+            ):
+                return {"scene": SCENE_AUCTION_LOBBY, "auctionEntryVisible": False}
+
         # Loadout dialogs contain the same skill names as live intel cards.
         # Their explicit menu title is navigation evidence, not a live round.
         if "竞拍帮手列表" in compact and ("技能描述" in compact or "确认" in compact):

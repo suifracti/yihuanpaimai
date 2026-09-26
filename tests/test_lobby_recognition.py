@@ -28,6 +28,21 @@ class TestLobbyRecognition(unittest.TestCase):
     def setUp(self):
         self.pipeline = NTEVisionPipeline()
 
+    def test_entry_fee_dialog_preserves_only_an_observed_lobby(self):
+        # Captured 2026-09-26: the cursor obscures Confirm, but the fee
+        # sentence, title and Cancel remain readable. No click is inferred.
+        rows = [
+            (_box(920, 355), "提示", 0.999),
+            (_box(640, 529, 630), "匹配成功后将扣除入场费5，000，是否继续？", 0.98),
+            (_box(720, 700), "取消", 0.999),
+            (_box(1120, 700), "广商认", 0.601),
+        ]
+        self.pipeline.current_context["scene"] = SCENE_AUCTION_LOBBY
+        self.assertEqual(self.pipeline._classify_pre_auction_scene(rows)["scene"], SCENE_AUCTION_LOBBY)
+        self.assertEqual(self.pipeline._classify_pre_auction_scene(rows[0:1] + rows[2:])["scene"], SCENE_UNKNOWN)
+        self.pipeline.current_context["scene"] = SCENE_UNKNOWN
+        self.assertEqual(self.pipeline._classify_pre_auction_scene(rows)["scene"], SCENE_UNKNOWN)
+
     def test_parse_lobby_shanhu(self):
         mock_ocr = [
             (_box(50, 50), "即刻落槌", 0.99),
