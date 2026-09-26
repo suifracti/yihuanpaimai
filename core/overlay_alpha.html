@@ -72,7 +72,7 @@
     /* Decision Hero Block (行动建议与出价上限) */
     .decision-hero-block {
       display: flex; flex-direction: column; justify-content: center;
-      gap: 2px; min-width: 120px; flex: 0 0 auto;
+      gap: 2px; min-width: 0; max-width: 154px; flex: 0 1 154px;
     }
     .decision-action-badge {
       display: inline-flex; align-items: center; gap: 4px;
@@ -102,7 +102,8 @@
       color: var(--muted); font-size: 10.5px; font-weight: 500;
     }
     .decision-cap-val {
-      font-size: 15px; font-weight: 700; color: var(--muted-dark);
+      min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+      font-size: 13px; font-weight: 700; color: var(--muted-dark);
       font-family: ui-monospace, SFMono-Regular, monospace;
       font-feature-settings: "tnum"; font-variant-numeric: tabular-nums;
       line-height: 1.1;
@@ -138,7 +139,8 @@
       background: rgba(239, 68, 68, 0.12); color: #f87171; border-color: rgba(239, 68, 68, 0.25);
     }
     .center .v {
-      font-size: 18px; font-weight: 700; color: var(--muted-dark);
+      max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+      font-size: 15px; font-weight: 700; color: var(--muted-dark);
       line-height: 1.1;
       font-family: ui-monospace, SFMono-Regular, monospace;
       font-feature-settings: "tnum"; font-variant-numeric: tabular-nums;
@@ -152,13 +154,14 @@
     }
     .center .band {
       color: var(--muted-dark); font-size: 10.5px; font-weight: 500;
+      max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
       margin-top: 1px; line-height: 1.1;
       font-feature-settings: "tnum"; font-variant-numeric: tabular-nums;
     }
 
     /* Left Fact Block (金均) */
     .fact-block {
-      min-width: 44px; flex: 0 0 auto;
+      min-width: 0; max-width: 70px; flex: 0 1 70px;
       display: flex; flex-direction: column; justify-content: center;
     }
     .fact-block .k {
@@ -166,7 +169,8 @@
       margin-bottom: 1px;
     }
     .fact-block .v {
-      font-size: 13px; font-weight: 700; color: var(--text);
+      overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+      font-size: 12px; font-weight: 700; color: var(--text);
       font-feature-settings: "tnum"; font-variant-numeric: tabular-nums;
       line-height: 1.15;
     }
@@ -391,10 +395,12 @@
     }
     .live-board { display: flex; flex-direction: column; gap: 4px; }
     .live-board-title { color: var(--muted); font-size: 11px; font-weight: 600; }
-    .live-seats { display: grid; grid-template-columns: 1fr 1fr; gap: 4px; }
-    .live-seat { display: flex; justify-content: space-between; gap: 8px; background: var(--surface); border: 1px solid var(--border-subtle); border-radius: var(--radius-sm); padding: 4px 8px; font-size: 11px; color: var(--muted); }
+    .live-seats { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 4px; min-width: 0; }
+    .live-seat { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 4px; min-width: 0; background: var(--surface); border: 1px solid var(--border-subtle); border-radius: var(--radius-sm); padding: 4px 6px; font-size: 11px; color: var(--muted); }
+    .live-seat span { min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
     .live-seat.is-me { color: var(--text); border-color: var(--border-focus); }
-    .live-seat strong { color: var(--text); font-size: 12px; }
+    .live-seat strong { max-width: 112px; overflow: hidden; text-overflow: ellipsis; color: var(--text); font-size: 11px; white-space: nowrap; font-variant-numeric: tabular-nums; }
+    .live-seat.is-stale strong { color: var(--muted-dark); font-size: 10px; }
     .live-intel { font-size: 11px; color: var(--muted); line-height: 1.4; max-height: 72px; overflow: auto; }
     .live-intel p { margin: 0 0 4px 0; }
     .fact-card {
@@ -2082,6 +2088,7 @@ function sparkleBoundsText(b) {
       }
       const p50El = document.getElementById("p50Label");
       p50El.textContent = p50Val;
+      p50El.title = p50Val;
       p50El.classList.toggle("has-value", (p50 != null || sCenter != null) && !pending);
       p50El.classList.remove("is-infeasible");
 
@@ -2098,6 +2105,7 @@ function sparkleBoundsText(b) {
           pRangeEl.textContent = pending ? "P20 — · P80 —" : "P20 — · P80 —";
         }
       }
+      pRangeEl.title = pRangeEl.textContent;
 
       const topSupportTag = document.getElementById("topSupportTag");
       if (topSupportTag) {
@@ -2155,6 +2163,7 @@ function sparkleBoundsText(b) {
           topRecMax.textContent = "—";
           topRecMax.classList.remove("has-value");
         }
+        topRecMax.title = topRecMax.textContent;
       }
       document.getElementById("supportMode").textContent = displayMode;
       document.getElementById("recommendedMax").textContent = recommendation != null ? fmtWan(recommendation) : (sRefBid != null && isP80Null ? `${fmtWan(sRefBid)} (结构上限)` : "—");
@@ -2189,14 +2198,33 @@ function sparkleBoundsText(b) {
       const seatsEl = document.getElementById("liveSeats");
       const intelEl = document.getElementById("liveIntel");
       if (!seatsEl || !intelEl) return;
+      if (d?.nativeInvalidated || (d?.scene && d.scene !== "IN_AUCTION")) {
+        paintLiveSeatsAndIntel.lastSeen = null;
+        seatsEl.textContent = "当前无有效出价";
+        intelEl.textContent = "暂无有效情报";
+        return;
+      }
       const seats = Array.isArray(d && d.seats) ? d.seats : [];
+      const round = d?.round ?? d?.roundNo ?? seats.find((s) => s?.round != null)?.round ?? "";
+      const scope = `${d?.observationSessionId || ""}|${d?.matchId || d?.visionState?.snapshot?.id || ""}|${round}`;
+      if (!paintLiveSeatsAndIntel.lastSeen || paintLiveSeatsAndIntel.lastSeen.scope !== scope) {
+        paintLiveSeatsAndIntel.lastSeen = { scope, bySlot: {} };
+      }
+      const lastSeen = paintLiveSeatsAndIntel.lastSeen.bySlot;
+      const frameTime = Date.parse(d?.frame?.capturedAtUtc || d?.capturedAt || "") || Date.now();
       const projected = [1, 2, 3, 4].map((slot) => {
         const raw = seats.find((s) => Number(s && (s.slot ?? s.seat)) === slot) || {};
-        const bid = raw.currentBid != null ? raw.currentBid : raw.bid;
+        const bid = raw.currentBid;
+        const hasCurrentBid = bid != null && Number.isFinite(Number(bid)) && Number(bid) >= 0;
+        if (d.hiddenBids) lastSeen[slot] = null;
+        else if (hasCurrentBid) lastSeen[slot] = { amount: String(bid), at: frameTime };
+        const previous = lastSeen[slot];
+        const recentPrevious = !hasCurrentBid && previous && frameTime >= previous.at && frameTime - previous.at <= 3000;
         const name = raw.name || (`座位 ${slot}`);
         const me = raw.isMe ? " is-me" : "";
-        const bidText = d.hiddenBids ? "金额隐藏" : bid == null ? "未识别" : String(bid);
-        return `<div class="live-seat${me}"><span>${escapeHtml(name)}</span><strong>${escapeHtml(bidText)}</strong></div>`;
+        const stale = recentPrevious && !d.hiddenBids ? " is-stale" : "";
+        const bidText = d.hiddenBids ? "金额隐藏" : hasCurrentBid ? String(bid) : recentPrevious ? `上次 ${previous.amount}` : "未识别";
+        return `<div class="live-seat${me}${stale}"><span title="${escapeHtml(name)}">${escapeHtml(name)}</span><strong title="${escapeHtml(bidText)}">${escapeHtml(bidText)}</strong></div>`;
       });
       seatsEl.innerHTML = projected.join("");
       const evidence = (d && d.auctionEvidence) || {};

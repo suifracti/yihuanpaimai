@@ -43,4 +43,20 @@ for(const amount of ['999999','1088888','1000000']) {
   assert(elements.get('liveSeats').innerHTML.includes(amount));
 }
 assert(elements.get('liveIntel').innerHTML.includes('85，410'));
+sandbox.auctionPayload.observationSessionId = 'session-a';
+sandbox.auctionPayload.matchId = 'match-a';
+sandbox.auctionPayload.round = 5;
+sandbox.auctionPayload.frame = {capturedAtUtc:'2026-09-26T11:50:20Z'};
+vm.runInContext('paintLiveSeatsAndIntel(auctionPayload)', sandbox);
+sandbox.auctionPayload.frame = {capturedAtUtc:'2026-09-26T11:50:21Z'};
+sandbox.auctionPayload.seats = [{slot:2, currentBid:null, bid:123, name:'可可'}];
+vm.runInContext('paintLiveSeatsAndIntel(auctionPayload)', sandbox);
+assert(elements.get('liveSeats').innerHTML.includes('上次 1088888'));
+assert(!elements.get('liveSeats').innerHTML.includes('>123<'));
+sandbox.auctionPayload.round = 4;
+vm.runInContext('paintLiveSeatsAndIntel(auctionPayload)', sandbox);
+assert(!elements.get('liveSeats').innerHTML.includes('1088888'));
+sandbox.auctionPayload.nativeInvalidated = true;
+vm.runInContext('paintLiveSeatsAndIntel(auctionPayload)', sandbox);
+assert.equal(elements.get('liveSeats').textContent, '当前无有效出价');
 console.log('overlay distinguishes navigation, missing facts, active calculation and settlement: passed');
