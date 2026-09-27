@@ -70,6 +70,7 @@ from venue_box_catalog import (  # noqa: E402
     normalize_venue_from_box,
 )
 from vision_pipeline import NTEVisionPipeline  # noqa: E402
+from scene_anchors import settlement_title_visible  # noqa: E402
 
 # PipeClient's reference reader is intentionally blocking for V2-1 tests.  The
 # real Engine keeps the control loop schedulable while the vision worker runs by
@@ -334,6 +335,8 @@ class RealEngine:
         self.control_revision = 0
         self.manual_overrides: dict[str, Any] = {}
         self.awaiting_exit = False
+        self._settlement_observed_since: Optional[float] = None
+        self._settlement_collection_closed = False
         self._active_pipeline_match_generation: Optional[int] = None
         self._pending_lobby_venue: Optional[dict] = None
         # The frozen frame header carries QPC nanoseconds, while the existing
@@ -1401,6 +1404,12 @@ class RealEngine:
             return None
 
         if scene == "AUCTION_LOADING":
+            if context.get("loadingDirection") == "to_lobby":
+                # Worker-observed return loading is an explicit post-match
+                # boundary even if the next lobby screen is briefly missed.
+                self._retire_match_for_lobby("post_settlement_return_loading")
+                self._pending_lobby_venue = None
+                return None
             pending = self._pending_lobby_venue
             if (
                 context.get("loadingDirection") != "to_auction"
@@ -2465,27 +2474,51 @@ class RealEngine:
         self._apply_pipeline_context(context, captured_at, lobby_handoff=lobby_handoff)
         return context
 
+    def _observe_frame_context(self, frame: np.ndarray, captured_at: str) -> tuple[dict, bool]:
+        closed_settlement_frame = bool(
+            self._settlement_collection_closed
+            and self.pipeline.current_context.get("scene") == "SETTLEMENT"
+            and settlement_title_visible(frame)
+        )
+        if closed_settlement_frame:
+            # Keep settled facts while the same title remains. Changed screens
+            # take the normal scene path to detect loading/lobby/new matches.
+            return dict(self.pipeline.current_context), True
+        return self.pipeline.process_frame(
+            frame,
+            captured_at=captured_at,
+            record_stable_key=self.current_match.id,
+            include_heavy_identity=False,
+            prioritize_live_facts=True,
+        ), False
+
     def _process_frame(self, item: dict) -> None:
         started = qpc_ns()
         header = item["header"]
         try:
             captured_at = self._capture_iso(int(header["captureTimestampNs"]))
-            context = self.pipeline.process_frame(
-                item["bgr"],
-                captured_at=captured_at,
-                record_stable_key=self.current_match.id,
-                # G3's minimum projection uses the existing scene/OCR/state
-                # path. Heavy catalog identity remains an explicit follow-up
-                # operation and must not block the transport ACK or the first
-                # authoritative CurrentMatch projection.
-                include_heavy_identity=False,
-                prioritize_live_facts=True,
-            )
+            context, closed_settlement_frame = self._observe_frame_context(item["bgr"], captured_at)
             context = _safe(context)
             context["capturedAt"] = captured_at
             context["captureTimestampNs"] = int(header["captureTimestampNs"])
-            context = self._apply_observation_context(context, item, captured_at)
-            history_status = self._persist_history()
+            if not closed_settlement_frame:
+                context = self._apply_observation_context(context, item, captured_at)
+            scene = str(context.get("scene") or "UNKNOWN")
+            if scene == "SETTLEMENT":
+                self._settlement_observed_since = self._settlement_observed_since or time.monotonic()
+                if (context.get("settlementReady") is True
+                        or time.monotonic() - self._settlement_observed_since >= 45.0):
+                    self._settlement_collection_closed = True
+            elif scene != "UNKNOWN":
+                self._settlement_observed_since = None
+                self._settlement_collection_closed = False
+            history_status = "UNCHANGED" if closed_settlement_frame else self._persist_history()
+            if scene == "SETTLEMENT" and history_status == "PERSISTED_DRAFT":
+                # A recoverable isolated DRAFT lets the existing pipeline
+                # clear this match on real egress; it is not FINALIZED truth.
+                self.pipeline.mark_settlement_saved()
+                context["_clearTrunkAfterLeave"] = True
+                self.last_context["_clearTrunkAfterLeave"] = True
             processing_ms = (qpc_ns() - started) / 1_000_000.0
             self.last_frame = {
                 "frameSequence": int(header["sequence"]),
@@ -2528,11 +2561,12 @@ class RealEngine:
                 )
             # Publish current bids/intel first. Only after the fast result has
             # crossed the existing pipe do we copy pixels for optional identity.
-            try:
-                self._submit_deferred_identity(item, context)
-            except Exception as exc:
-                self.log("identity.deferred_dispatch_failed", frameSequence=header.get("sequence"),
-                         error=f"{type(exc).__name__}: {exc}")
+            if not closed_settlement_frame:
+                try:
+                    self._submit_deferred_identity(item, context)
+                except Exception as exc:
+                    self.log("identity.deferred_dispatch_failed", frameSequence=header.get("sequence"),
+                             error=f"{type(exc).__name__}: {exc}")
             self.log(
                 "frame.processed",
                 frameSequence=header["sequence"],

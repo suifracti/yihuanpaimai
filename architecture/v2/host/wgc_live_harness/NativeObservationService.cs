@@ -16,11 +16,9 @@ namespace WgcLiveHarness;
 /// <summary>
 /// The opt-in Native observation profile used by the existing Python Main/HUD
 /// entry. It owns one target monitor, one WGC capture, one Host supervisor and
-/// one real Python business Engine. The process exits on a safety pause; the
-/// UI must explicitly start a new observation session before frames can flow
-/// again. That makes a focus/identity/scene boundary a session boundary too.
-/// The auction lobby remains in the same session; Main's in-auction gate keeps
-/// solver advice disabled until an accepted auction frame arrives.
+/// one real Python business Engine. Target/capture safety pauses still end
+/// the session, but scene boundaries keep the same read-only observer alive.
+/// Main's in-auction gate disables advice until a fresh accepted auction frame.
 /// </summary>
 internal static class NativeObservationService
 {
@@ -151,6 +149,8 @@ internal static class NativeObservationService
             var firstLobbyFrameWritten = false;
             long? unknownSinceMs = null;
             long? settlementSinceMs = null;
+            var settlementCollectionClosed = false;
+            string? settlementMatchId = null;
             while (maxFrames <= 0 || acceptedFrames < maxFrames)
             {
                 if (DrainControls(controlQueue, session, sessionId, monitor, target))
@@ -247,7 +247,10 @@ internal static class NativeObservationService
                 var unknownExpired = unknownSinceMs.HasValue
                     && Environment.TickCount64 - unknownSinceMs.Value >= 10000;
                 if (scene == "SETTLEMENT")
+                {
                     settlementSinceMs ??= Environment.TickCount64;
+                    settlementMatchId ??= (string?)state?["currentMatch"]?["id"];
+                }
                 var settlementReady = (bool?)state?["pipelineContext"]?["settlementReady"] == true;
                 // Revoke advice on the first settlement observation, while
                 // allowing the existing reader to see the completed animation.
@@ -255,7 +258,11 @@ internal static class NativeObservationService
                 var settlementFinished = settlementSinceMs.HasValue && (
                     settlementReady
                     || Environment.TickCount64 - settlementSinceMs.Value >= 45000
-                    || scene is "AUCTION_LOBBY" or "AUCTION_LOADING" or "IN_AUCTION");
+                    || scene is "AUCTION_LOBBY" or "AUCTION_LOADING" or "CITY_TYCOON_HUB"
+                        or "CITY_LEISURE_MENU" or "OPEN_WORLD" or "IN_AUCTION");
+                var justClosedSettlement = settlementFinished && !settlementCollectionClosed;
+                if (justClosedSettlement)
+                    settlementCollectionClosed = true;
                 var frameSequence = Convert.ToInt64(transfer.GetValueOrDefault("sequence") ?? 0);
 
                 if (scene == "AUCTION_LOBBY" && !firstLobbyFrameWritten)
@@ -284,8 +291,7 @@ internal static class NativeObservationService
                 // Unknown revokes Main's lease through EmitObservation below,
                 // but a brief transition must not destroy the capture session.
                 // Focus/target/capture checks still fail closed on every frame.
-                if (scene is "CITY_TYCOON_HUB"
-                    or "CITY_LEISURE_MENU" or "OPEN_WORLD" || unknownExpired || settlementFinished)
+                if (unknownExpired)
                 {
                     // Preserve the exact frame that caused the boundary.  A
                     // hash in frame_records is not enough to distinguish a
@@ -311,11 +317,6 @@ internal static class NativeObservationService
                     {
                         boundaryEvidenceError = $"{evidenceEx.GetType().Name}: {evidenceEx.Message}";
                     }
-                    if (scene == "SETTLEMENT" && boundaryEvidenceError is null)
-                    {
-                        EmitObservation(sessionId, afterEngine, frame, transfer, state,
-                            ++acceptedFrames, boundaryRawPath, capture);
-                    }
                     EmitStatus(sessionId, "PAUSED", $"scene-boundary:{scene}", new
                     {
                         scene,
@@ -331,6 +332,30 @@ internal static class NativeObservationService
                     return 7;
                 }
 
+                if (settlementCollectionClosed && scene == "IN_AUCTION")
+                {
+                    var incomingMatchId = (string?)state?["currentMatch"]?["id"];
+                    if (string.IsNullOrEmpty(settlementMatchId)
+                        || string.IsNullOrEmpty(incomingMatchId)
+                        || string.Equals(incomingMatchId, settlementMatchId, StringComparison.Ordinal))
+                    {
+                        // A scene label alone cannot resurrect the settled
+                        // match. Wait for the worker-owned new-match boundary.
+                        Thread.Sleep(Math.Max(intervalMs, 600));
+                        continue;
+                    }
+                    settlementCollectionClosed = false;
+                    settlementSinceMs = null;
+                    settlementMatchId = null;
+                }
+                if (settlementCollectionClosed && scene == "SETTLEMENT" && !justClosedSettlement)
+                {
+                    // Keep watching target/focus and the exit scene, without
+                    // repeatedly publishing an already closed bill.
+                    Thread.Sleep(Math.Max(intervalMs, 600));
+                    continue;
+                }
+
                 if (!firstFrameWritten)
                 {
                     WriteBmp(Path.Combine(workDir, "first-frame.bmp"), frame.Width, frame.Height, frame.Pixels);
@@ -341,9 +366,14 @@ internal static class NativeObservationService
 
                 // Bounded paired evidence: first and latest accepted business
                 // frame, not a recording of every game frame.
-                var latestRawPath = Path.Combine(workDir, "latest-business-frame.bmp");
+                var latestRawPath = Path.Combine(workDir, scene == "SETTLEMENT"
+                    ? (justClosedSettlement ? "settlement-final-frame.bmp" : "latest-settlement-frame.bmp")
+                    : "latest-business-frame.bmp");
+                var latestStatePath = Path.Combine(workDir, scene == "SETTLEMENT"
+                    ? (justClosedSettlement ? "settlement-final-state.json" : "latest-settlement-state.json")
+                    : "latest-business-state.json");
                 WriteBmp(latestRawPath, frame.Width, frame.Height, frame.Pixels);
-                File.WriteAllText(Path.Combine(workDir, "latest-business-state.json"),
+                File.WriteAllText(latestStatePath,
                     JsonSerializer.Serialize(new { frameSequence, frame.CaptureTimestampNs, state }, JsonLineOptions));
 
                 acceptedFrames++;
@@ -356,7 +386,7 @@ internal static class NativeObservationService
                 acceptedFrames,
                     latestRawPath,
                     capture);
-                Thread.Sleep(intervalMs);
+                Thread.Sleep(settlementCollectionClosed ? Math.Max(intervalMs, 600) : intervalMs);
             }
 
             session.ControlledShutdown();

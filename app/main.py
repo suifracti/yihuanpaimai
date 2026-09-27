@@ -2005,7 +2005,7 @@ def _native_frame_watchdog_loop() -> None:
 
 
 def _native_capture_trial_frame_locked(path: Any, metadata: Dict[str, Any], *, boundary: bool = False) -> None:
-    """Copy only the first accepted frame and one scene-boundary frame into the isolated trial root."""
+    """Copy the first accepted and one final/boundary frame into the isolated trial root."""
     global _NATIVE_TRIAL_FRAME_MATCH_ID, _NATIVE_TRIAL_SOURCE_FRAMES, _NATIVE_TRIAL_INTEL_SOURCE_FRAMES
     if not CURRENT_MATCH.id:
         return
@@ -2917,6 +2917,17 @@ def _native_observation_event(event: Dict[str, Any]) -> None:
                     "observationSessionId": session_id,
                     "targetInstance": _native_target_instance(data.get("target")),
                 })
+            if data["isSettlement"] and os.path.basename(str(frame.get("rawFramePath") or "")) == "settlement-final-frame.bmp":
+                prior_source_count = len(_NATIVE_TRIAL_SOURCE_FRAMES)
+                _native_capture_trial_frame_locked(frame.get("rawFramePath"), {
+                    "width": frame.get("width"),
+                    "height": frame.get("height"),
+                    "capturedAtUtc": frame.get("capturedAtUtc"),
+                    "frameSequence": sequence,
+                    "observationSessionId": session_id,
+                    "targetInstance": _native_target_instance(data.get("target")),
+                }, boundary=True)
+                source_captured = source_captured or len(_NATIVE_TRIAL_SOURCE_FRAMES) > prior_source_count
             intel_source_captured = _native_capture_intel_source_locked(frame, event, context)
             should_save_trial_draft = bool(
                 native_observation_enabled()
