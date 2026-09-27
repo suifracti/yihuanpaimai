@@ -58,6 +58,7 @@ const dashboard = {
   selectedRecordId: null,
   selectedLegacyKey: null,
   legacyRecords: null,
+  legacyLoadError: null,
   legacyLoadRequested: false,
   selectedHistoryRecords: new Map(),
   pendingDeleteSelection: null,
@@ -374,6 +375,22 @@ function renderOverview(mainViewState) {
 
 function renderAnalysis(mainViewState) {
   const analysis = mainViewState && mainViewState.analysis;
+  const history = mainViewState?.history || {};
+  const formalCount = document.getElementById("analysis-formal-count");
+  const formalDetail = document.getElementById("analysis-formal-detail");
+  const draftCount = document.getElementById("analysis-draft-count");
+  const legacyCount = document.getElementById("analysis-legacy-count");
+  const legacyDetail = document.getElementById("analysis-legacy-detail");
+  if (formalCount) formalCount.textContent = ["AVAILABLE", "EMPTY"].includes(history.availability) && Number.isInteger(history.totalCount) ? String(history.totalCount) : "不可用";
+  if (formalDetail) formalDetail.textContent = Number.isInteger(history.admittedCount)
+    ? `${history.admittedCount} 条通过历史准入；不等于评估资格` : "准入资格未知";
+  if (draftCount) draftCount.textContent = Array.isArray(history.liveTrialDrafts)
+    ? String(history.liveTrialDrafts.length) : "未加载";
+  if (legacyCount) legacyCount.textContent = Array.isArray(dashboard.legacyRecords)
+    ? String(dashboard.legacyRecords.length) : dashboard.legacyLoadError ? "不可用" : "读取中";
+  if (legacyDetail) legacyDetail.textContent = Array.isArray(dashboard.legacyRecords)
+    ? `${dashboard.legacyRecords.filter(row => row.screenshotAvailable).length} 条含截图字段 · ${dashboard.legacyRecords.filter(row => row.actualTotal != null).length} 条含实际价值；未核标签资格`
+    : dashboard.legacyLoadError || "旧来源只读，未转正式资格";
   const statusBadge = document.getElementById("analysis-status-badge");
   const statusHint = document.getElementById("analysis-status-hint");
   const titleEl = document.getElementById("analysis-title");
@@ -1806,8 +1823,28 @@ function showView(viewName) {
   } else if (viewName === "history" && dashboard.lastMainViewState) {
     renderHistory(dashboard.lastMainViewState);
   } else if (viewName === "analysis" && dashboard.lastMainViewState) {
+    if (dashboard.legacyRecords === null) ensureLegacyLoaded();
     renderAnalysis(dashboard.lastMainViewState);
+  } else if (viewName === "settings") {
+    renderSettings();
   }
+}
+
+function renderSettings() {
+  const match = dashboard.lastCurrentMatch || {};
+  const name = document.getElementById("settings-player-name");
+  const profile = document.getElementById("settings-observation-profile");
+  const diagnostic = document.getElementById("settings-diagnostic");
+  const pin = document.getElementById("settings-pin-toggle");
+  const overlay = document.getElementById("settings-overlay-toggle");
+  if (name) name.textContent = match.configuredPlayerName || "未设置 · 按画面姓名识别";
+  if (profile) profile.textContent = match.observationProfile === "native-readonly-v1"
+    ? "Native 只读观察 · 游戏输入关闭" : "观察档案待读取";
+  if (diagnostic) diagnostic.textContent = match.visionHealth
+    ? `场景 ${match.scene || "UNKNOWN"} · ${match.visionHealth.status || "状态未知"} · ${match.visionHealth.reason || "无额外原因"} · 草稿 ${match.draftSaveStatus || "未知"}`
+    : "尚无观察诊断；不据此推断游戏状态";
+  if (pin) pin.textContent = dashboard.mainPinned == null ? "读取中" : dashboard.mainPinned ? "关闭置顶" : "开启置顶";
+  if (overlay) overlay.textContent = dashboard.overlayVisible == null ? "读取中" : dashboard.overlayVisible ? "隐藏悬浮窗" : "显示悬浮窗";
 }
 
 function isBridgeReady() {
@@ -3146,6 +3183,7 @@ function renderMatch(currentMatch, overlayVisible) {
   }
   renderManualCommandReceipt(currentMatch.manualCommandResult || currentMatch.nativeControlResult);
   dashboard.lastCurrentMatch = currentMatch;
+  if (dashboard.currentView === "settings") renderSettings();
   syncWarehouseInstanceReviewFromMatch(currentMatch);
   dashboard.matchState.factsRevision = Number(currentMatch.factsRevision || 0);
   dashboard.matchState.observationFactsRevision = currentMatch.observationFactsRevision ?? null;
@@ -3982,6 +4020,7 @@ function renderPinState(pinned) {
     button.textContent = dashboard.mainPinned ? "取消置顶" : "开启置顶";
     button.disabled = false;
   }
+  if (dashboard.currentView === "settings") renderSettings();
 }
 
 function renderOverlayState(visible) {
@@ -3995,6 +4034,7 @@ function renderOverlayState(visible) {
     button.textContent = dashboard.overlayVisible ? "隐藏" : "显示";
     button.disabled = false;
   }
+  if (dashboard.currentView === "settings") renderSettings();
 }
 
 function setBridgeState(kind, label) {
@@ -4128,6 +4168,8 @@ function renderLegacyArchive(response) {
   if (loading) loading.hidden = true;
   const empty = document.getElementById("legacy-empty");
   if (!response || response.ok !== true) {
+    dashboard.legacyLoadError = response?.message || "旧版归档不可用";
+    if (dashboard.lastMainViewState) renderAnalysis(dashboard.lastMainViewState);
     if (empty) {
       empty.hidden = false;
       empty.textContent = (response && response.message) || "旧版归档不可用";
@@ -4141,8 +4183,10 @@ function renderLegacyArchive(response) {
   const list = document.getElementById("legacy-list");
   const info = document.getElementById("legacy-source-info");
   const records = response.records || [];
+  dashboard.legacyLoadError = null;
   dashboard.legacyRecords = records;
   applyHistoryFilters();
+  if (dashboard.lastMainViewState) renderAnalysis(dashboard.lastMainViewState);
   if (info) {
     const src = response.source || {};
     info.textContent = src.available ? `${src.recordCount} 条 · ${src.fileSha256 ? src.fileSha256.slice(0, 8) : ""}` : "文件缺失";
@@ -5649,6 +5693,12 @@ document.addEventListener("DOMContentLoaded", () => {
   overlayButton.addEventListener("click", () => {
     postNative("toggle_overlay");
   });
+  document.getElementById("settings-edit-name")?.addEventListener("click", () => {
+    showView("match");
+    document.getElementById("player-display-name")?.focus();
+  });
+  document.getElementById("settings-pin-toggle")?.addEventListener("click", () => postNative("toggle_main_pin"));
+  document.getElementById("settings-overlay-toggle")?.addEventListener("click", () => postNative("toggle_overlay"));
   const wirPrev = document.getElementById("wir-prev");
   const wirNext = document.getElementById("wir-next");
   if (wirPrev) wirPrev.addEventListener("click", () => {

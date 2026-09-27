@@ -24,6 +24,7 @@
         <button class="nav-item" type="button" data-view-target="history">记录</button>
         <button class="nav-item" type="button" data-view-target="guidebook">图鉴</button>
         <button class="nav-item" type="button" data-view-target="analysis">分析</button>
+        <button class="nav-item" type="button" data-view-target="settings">设置</button>
       </nav>
 
       <div class="header-actions">
@@ -1344,6 +1345,16 @@
             <p id="analysis-desc">当前尚未积累足够符合正式评估条件的实战对局样本。异环拍卖助手坚持<strong>真实性与严谨性</strong>，绝不展示任何预设或虚构的准确率指标。完成更多完整对局后，系统将自动发布正式估值误差分布与分位数区间校准分析。</p>
           </div>
 
+          <section class="analysis-source-panel" aria-label="数据来源与资格">
+            <h2>当前数据来源</h2>
+            <p>计数来自已加载的本地记录投影；字段存在不代表预测可评价，隔离草稿与旧记录不进入正式训练。</p>
+            <div class="analysis-source-grid">
+              <article><span>正式 History</span><strong id="analysis-formal-count">读取中</strong><small id="analysis-formal-detail">准入资格待读取</small></article>
+              <article><span>隔离试用草稿</span><strong id="analysis-draft-count">读取中</strong><small>仅本地回看，不计正式样本</small></article>
+              <article><span>旧版归档</span><strong id="analysis-legacy-count">读取中</strong><small id="analysis-legacy-detail">旧来源只读，未转正式资格</small></article>
+            </div>
+          </section>
+
           <!-- 第二视觉层级：正式模型评估指标预览 (正式可用时展示数值，不可用时显示待积累状态) -->
           <div class="analysis-metrics-section">
             <div class="analysis-section-header">
@@ -1406,6 +1417,21 @@
               </div>
             </details>
           </div>
+        </div>
+      </section>
+      <section class="view-page settings-page" data-view-page="settings" aria-label="设置" hidden>
+        <div class="settings-container">
+          <header><span class="settings-kicker">PREFERENCES / 设置</span><h1>让助手适合你的使用方式</h1><p>这里使用现有窗口、昵称和只读观察接口；显示状态不改写已观察事实。</p></header>
+          <section class="settings-card"><h2>观察与身份</h2>
+            <div class="settings-row"><div><strong>本人昵称</strong><p>按既有唯一匹配规则识别本人席位；不是游戏 UID。</p></div><div><span id="settings-player-name">未设置</span><button type="button" id="settings-edit-name" class="btn-wb-action">在对局页修改</button></div></div>
+            <div class="settings-row"><div><strong>观察与游戏输入</strong><p>当前观察档案与运行状态来自 Main；设置页不会发送任何游戏操作。</p></div><span id="settings-observation-profile">状态待读取</span></div>
+            <div class="settings-row"><div><strong>失焦与目标变化保护</strong><p>失效立即撤销当前建议；恢复须新鲜有效帧。</p></div><span>始终启用</span></div>
+          </section>
+          <section class="settings-card"><h2>窗口与悬浮窗</h2>
+            <div class="settings-row"><div><strong>主窗口置顶</strong><p>通过现有窗口控制接口切换。</p></div><button type="button" id="settings-pin-toggle" class="btn-wb-action">读取中</button></div>
+            <div class="settings-row"><div><strong>悬浮窗</strong><p>局内当前结果与失效状态；详细纠错请在对局页完成。</p></div><button type="button" id="settings-overlay-toggle" class="btn-wb-action">读取中</button></div>
+          </section>
+          <section class="settings-card"><h2>数据与诊断</h2><p id="settings-diagnostic">等待运行状态</p><p>正式 History 与隔离草稿分开。结算原图和实例决定请在对应记录查看。</p></section>
         </div>
       </section>
     </main>

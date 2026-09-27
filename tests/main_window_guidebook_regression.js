@@ -81,10 +81,10 @@ const get = id => {
   if (!ids.has(id)) ids.set(id, new FakeElement(id));
   return ids.get(id);
 };
-const pages = ["overview", "match", "history", "guidebook", "analysis"].map(name => {
+const pages = ["overview", "match", "history", "guidebook", "analysis", "settings"].map(name => {
   const el = get(`page-${name}`); el.dataset.viewPage = name; return el;
 });
-const navs = ["overview", "match", "history", "guidebook", "analysis"].map(name => {
+const navs = ["overview", "match", "history", "guidebook", "analysis", "settings"].map(name => {
   const el = get(`nav-${name}`); el.dataset.viewTarget = name; return el;
 });
 const tabs = ["catalog", "records"].map(name => {
@@ -526,5 +526,24 @@ sandbox.renderNextMatchPreparation(preparationMatch);
 assert.match(get("next-match-preparation-status").textContent, /worker 观察与准备值冲突/);
 assert.equal(get("next-match-preparation-apply").hidden, false);
 assert.equal(get("next-match-preparation-observed").hidden, false);
+
+vm.runInContext(`dashboard.lastMainViewState = {
+  history: { availability: "AVAILABLE", totalCount: 3, admittedCount: 1, liveTrialDrafts: [{id:"trial-a"}] },
+  analysis: { availability: "INSUFFICIENT_SAMPLES", title: "尚无正式评估" }
+}; dashboard.legacyRecords = [{screenshotAvailable:true, actualTotal:1646593}, {screenshotAvailable:false, actualTotal:null}];
+dashboard.lastCurrentMatch = {configuredPlayerName:"PLAYER_LOCAL", observationProfile:"native-readonly-v1", scene:"AUCTION_LOBBY", draftSaveStatus:"SAVED", visionHealth:{status:"READY"}};`, sandbox);
+sandbox.showView("analysis");
+assert.equal(get("analysis-formal-count").textContent, "3");
+assert.equal(get("analysis-draft-count").textContent, "1");
+assert.equal(get("analysis-legacy-count").textContent, "2");
+assert.match(get("analysis-legacy-detail").textContent, /1 条含截图字段/);
+assert.equal(get("eval-mae-value").textContent, "样本积累中");
+sandbox.renderPinState(true);
+sandbox.renderOverlayState(false);
+sandbox.showView("settings");
+assert.equal(get("settings-player-name").textContent, "PLAYER_LOCAL");
+assert.match(get("settings-observation-profile").textContent, /只读观察/);
+assert.equal(get("settings-pin-toggle").textContent, "关闭置顶");
+assert.equal(get("settings-overlay-toggle").textContent, "显示悬浮窗");
 
 console.log("guidebook categories and dimensions, source-only pricing, role provenance, isolated records and selectable frame provenance: passed");
