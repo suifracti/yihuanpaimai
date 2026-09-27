@@ -1196,13 +1196,34 @@ class RealEngine:
                 patch.pop(key, None)
             if patch.get("roundNo") != self.current_match.facts.get("roundNo") and patch.get("roundNo"):
                 patch.update(leaderBid=None, myBid=None, leaderName=None, leaderTies=[], isMyLead=None)
-        if "auctionEvidence" not in patch:
-            readings = context.get("intelCardReadings")
-            if isinstance(readings, list) and readings:
-                patch["auctionEvidence"] = {
-                    "ownerMatchId": self.current_match.id,
-                    "intel": copy.deepcopy(_safe(readings)),
-                }
+        # A frame's card stack is not the match's entire intel history. In
+        # particular settlement OCR must not replace auction cards with bill
+        # labels. Keep only observations made in this match's auction scene.
+        previous_evidence = self.current_match.facts.get("auctionEvidence") or {}
+        incoming_evidence = patch.get("auctionEvidence") or {}
+        if not isinstance(incoming_evidence, dict):
+            incoming_evidence = {}
+        if incoming_evidence.get("ownerMatchId") not in (None, self.current_match.id):
+            incoming_evidence = {}
+        if isinstance(previous_evidence, dict) and previous_evidence.get("ownerMatchId") == self.current_match.id:
+            merged_intel = copy.deepcopy(previous_evidence.get("intel") or [])
+        else:
+            merged_intel = []
+        if scene == "IN_AUCTION":
+            incoming_rows = incoming_evidence.get("intel") or context.get("intelCardReadings") or []
+            seen = {(row.get("frameId"), tuple(row.get("cardBox") or ()), row.get("rawText"))
+                    for row in merged_intel if isinstance(row, dict)}
+            for row in incoming_rows:
+                if not isinstance(row, dict) or not str(row.get("rawText") or "").strip():
+                    continue
+                key = (row.get("frameId"), tuple(row.get("cardBox") or ()), row.get("rawText"))
+                if key not in seen:
+                    merged_intel.append(copy.deepcopy(_safe(row)))
+                    seen.add(key)
+        if merged_intel or incoming_evidence:
+            incoming_evidence["ownerMatchId"] = self.current_match.id
+            incoming_evidence["intel"] = merged_intel[-128:]
+            patch["auctionEvidence"] = incoming_evidence
         if isinstance(patch.get("auctionEvidence"), dict):
             box_venue = (self.current_match.facts.get("auctionEvidence") or {}).get("venueFromBox")
             if box_venue:

@@ -18,6 +18,29 @@ from live_match_transport import LiveMatchPublisher, LiveMatchReceiver, LiveMatc
 
 
 class LiveMatchTransportTests(unittest.TestCase):
+    def test_native_auction_intel_survives_settlement_without_bill_text(self):
+        import importlib.util
+        spec = importlib.util.spec_from_file_location(
+            "intel_history_engine", ROOT / "architecture/v2/host/engine_v22/nte_engine_v22.py")
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        engine = module.RealEngine.__new__(module.RealEngine)
+        engine.current_match = CurrentMatch()
+        from venue_box_catalog import load_catalog, canonical_catalog_provenance
+        engine.venue_catalog = load_catalog()
+        engine.venue_catalog_provenance = canonical_catalog_provenance(engine.venue_catalog)
+        row = {"frameId": "auction-frame", "round": 2, "cardBox": [1, 2, 3, 4],
+               "rawText": "本局所有金色藏品平均价值为37,521", "is_physical_ocr": True}
+        engine._apply_pipeline_context({"scene": "IN_AUCTION", "intelCardReadings": [row]}, "2026-09-27T15:00:00+00:00")
+        engine._apply_pipeline_context({"scene": "IN_AUCTION", "intelCardReadings": [row]}, "2026-09-27T15:00:01+00:00")
+        engine._apply_pipeline_context({"scene": "SETTLEMENT", "intelCardReadings": [
+            {"frameId": "settlement-frame", "rawText": "最终成交价 666,666"}
+        ]}, "2026-09-27T15:00:02+00:00")
+        self.assertEqual(engine.current_match.facts["auctionEvidence"]["intel"], [row])
+        engine.current_match = CurrentMatch()
+        engine._apply_pipeline_context({"scene": "SETTLEMENT"}, "2026-09-27T15:00:03+00:00")
+        self.assertFalse((engine.current_match.facts.get("auctionEvidence") or {}).get("intel"))
+
     def test_box_name_supplies_scoped_venue_and_keeps_conflicts_blocked(self):
         import importlib.util
         from venue_box_catalog import load_catalog, canonical_catalog_provenance, normalize_venue_from_box

@@ -1984,6 +1984,9 @@ input, select { font: inherit; color: var(--text); }
 
 /* Current match: decision and observed facts before the correction forms. */
 .match-focus { display: grid; gap: 16px; padding: 20px; background: #0e1219; }
+.match-lifecycle { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 18px; padding: 10px 14px; border: 1px solid #354250; border-radius: 10px; color: #bccbd4; font-size: 13px; }
+.match-lifecycle strong { color: #9fe4d1; }
+.match-lifecycle span:last-child { margin-left: auto; color: #e5bd6d; }
 .match-focus-top { display: grid; grid-template-columns: minmax(0, 1.25fr) minmax(280px, .75fr); gap: 16px; }
 .match-focus-result, .match-focus-facts, .match-focus-lower > section {
   min-width: 0; border: 1px solid #2b3847; border-radius: 12px; background: #171f2a; padding: 18px;

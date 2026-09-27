@@ -1163,6 +1163,7 @@ def get_current_match_presentation_summary() -> dict:
             ),
             "warehouseDecisionEligible": _native_instance_decision_scope_key(native_payload) is not None,
             "isolatedTrial": is_isolated_trial(),
+            "draftSaveStatus": draft_write_status(),
             "lifecycleStatus": snap.get("lifecycleStatus", "DRAFT"),
             "hasAnyFact": CURRENT_MATCH.has_any_fact(),
             "isComplete": is_complete,

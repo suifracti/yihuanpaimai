@@ -151,6 +151,24 @@ vm.runInContext(`dashboard.lastMainViewState = { history: { liveTrialDrafts: [
   { id: "formal-b", lifecycleStatus: "FINALIZED", dataOrigin: "history" }
 ] } }; dashboard.matchState = { matchId: "live-now", factsRevision: 9, q: 6, venueId: "venue-other" };`, sandbox);
 
+const draftProjection = sandbox.projectLiveTrialDraft({
+  id: "same-match", dataOrigin: "live-trial", settlement: {
+    clearingPrice: 666666, actualTotal: 1646593, realizedProfit: 2769616,
+    acquired: false, winner: "黎雪"
+  },
+  bidding: {historicalBids: [{"黎雪": {"1": 450000, "2": 450000}}], finalBids: {"黎雪": {"3": 666666}}},
+  warehouse: {slots: [{row: 0, col: 4, identityStatus: "CANDIDATE"}]},
+  auctionEvidence: {intel: [{round: 2, frameId: "auction-frame", rawText: "金色均价37,521"}], bids: []}
+});
+assert.equal(draftProjection.settlement.isSettled, true);
+assert.equal(draftProjection.warehouse.slots.length, 1);
+assert.equal(draftProjection.bidding.finalBids["黎雪"]["3"], 666666);
+sandbox.renderAuctionEvidence(draftProjection, get("history-detail-card"));
+const evidenceGroups = get("history-auction-evidence").children;
+assert.match(evidenceGroups[0].children[2].textContent, /金色均价37,521/);
+assert.match(evidenceGroups[1].children[0].textContent, /3 回合/);
+assert.match(evidenceGroups[2].children[0].textContent, /1 个草稿槽位/);
+
 sandbox.showView("guidebook");
 assert.equal(vm.runInContext("dashboard.currentView", sandbox), "guidebook");
 assert.equal(get("page-guidebook").hidden, false);

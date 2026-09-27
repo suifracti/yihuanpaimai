@@ -467,10 +467,15 @@ function projectLiveTrialDraft(record) {
     playedAt: record?.playedAt, localPlayedAt: record?.playedAt,
     lifecycle: "DRAFT", admitted: false, exclusionReason: "隔离试用草稿",
     environment: record?.environment || {}, observedFacts: facts,
-    prediction: { hasSnapshot: false }, settlement: record?.settlement || { isSettled: false },
+    prediction: { hasSnapshot: false },
+    settlement: {
+      ...(record?.settlement || {}),
+      isSettled: Boolean(record?.settlement?.clearingPrice != null || record?.settlement?.actualTotal != null),
+    },
     settlementEvidenceAvailable: Boolean(record?.settlement?.truthEvidence?.evidenceReferences?.length),
     settlementReviewed: Boolean(record?.settlement?.reviewedItems?.length),
-    auctionEvidence: record?.auctionEvidence,
+    auctionEvidence: record?.auctionEvidence, bidding: record?.bidding,
+    warehouse: record?.warehouse,
     matchSummary: "隔离试用草稿 · 未进入正式 History", dataOrigin: "live-trial"
   };
 }
@@ -789,7 +794,8 @@ function renderHistory(mainViewState) {
   const placeholder = document.getElementById("history-detail-placeholder");
   const detailCard = document.getElementById("history-detail-card");
 
-  if (!["AVAILABLE", "EMPTY"].includes(availability)) {
+  const hasTrialDrafts = Array.isArray(history?.liveTrialDrafts) && history.liveTrialDrafts.length > 0;
+  if (!["AVAILABLE", "EMPTY"].includes(availability) && !hasTrialDrafts) {
     if (emptyState) emptyState.hidden = true;
     if (errorState) errorState.hidden = false;
     if (listContainer) listContainer.innerHTML = "";
@@ -954,11 +960,13 @@ function renderHistoryDetail(record) {
   const warehouse = record.warehouse;
   const reviewUnits = (record.settlement && record.settlement.reviewUnits) || record.reviewUnits || [];
   let warehouseText = "未记录";
-  if (warehouse && typeof warehouse === "object" && typeof warehouse.itemCount === "number" && warehouse.itemCount > 0) {
-    const total = warehouse.itemCount;
-    const unknown = warehouse.unknownCount || 0;
+  if (warehouse && typeof warehouse === "object" && (warehouse.itemCount > 0 || warehouse.slots?.length > 0)) {
+    const total = warehouse.itemCount || warehouse.slots.length;
+    const unknown = Array.isArray(warehouse.slots)
+      ? warehouse.slots.filter(slot => slot.identityStatus !== "EXACT").length
+      : (warehouse.unknownCount || 0);
     if (unknown > 0) {
-      warehouseText = `${total} 件（其中 ${unknown} 件未具名）`;
+      warehouseText = `${total} 个可见候选槽位（${unknown} 个身份未确证；非完整仓库）`;
     } else {
       warehouseText = `${total} 件`;
     }
@@ -986,7 +994,12 @@ function renderHistoryDetail(record) {
   if (settlementAbsent) settlementAbsent.hidden = isSettled;
   setText("detail-clearing-price", isSettled ? formatCurrency(settlement.clearingPrice) : "未记录");
   setText("detail-actual-total", isSettled ? formatCurrency(settlement.actualTotal) : "未记录");
-  setText("detail-profit", isSettled ? formatSettlementProfit(settlement) : "未记录");
+  const gameProfit = Number(settlement.realizedProfit);
+  const profitConflict = recordSource === "live-trial" && settlement.realizedProfit != null
+    && settlement.actualTotal != null && gameProfit > Number(settlement.actualTotal);
+  setText("detail-profit", !isSettled ? "未记录" : profitConflict
+    ? "金额异常 · 请核原图（旧草稿未改）"
+    : settlement.realizedProfit == null ? "未观察" : formatProfit(gameProfit));
   let acquiredText = "归属未知";
   if (settlement.acquired === true) acquiredText = "本人拍下";
   else if (settlement.acquired === false) acquiredText = "他人拍下";
@@ -1053,8 +1066,14 @@ function renderAuctionEvidence(record, parent) {
   };
   group(`情报原文（${(evidence.intel || []).length} 条变化记录）`);
   for (const observation of evidence.intel || []) {
-    add('p',`第 ${observation.round ?? '?'} 回合 · ${observation.capturedAt || ''}`);
-    add('p',(observation.lines || []).map(line=>line.text).join('；'));
+    const text = (observation.lines || []).map(line => line.text).filter(Boolean).join('；')
+      || observation.rawText || '原文未保存';
+    const classification = observation.cardSource?.kind === 'UNKNOWN' ? ' · 未分类 OCR（不代表有效情报）' : '';
+    add('p',`第 ${observation.round ?? '?'} 回合 · ${observation.capturedAt || observation.frameId || '采集时间未知'}${classification}`);
+    add('p', text);
+  }
+  if (record.recordSource === 'live-trial' && !(evidence.nativeObservation?.intelSourceFrames || []).length) {
+    add('p', '本草稿未保存同帧情报原图关联；上方原图不等于这些读数的来源。');
   }
   const rawBids = evidence.bids || [];
   const roundMap = new Map();
@@ -1086,8 +1105,28 @@ function renderAuctionEvidence(record, parent) {
       }
     }
   }
-  const consolidatedBids = Array.from(roundMap.values()).sort((a, b) => (Number(a.round) || 0) - (Number(b.round) || 0));
-  group(`四人出价（共 ${consolidatedBids.length} 回合）`);
+  let consolidatedBids = Array.from(roundMap.values()).sort((a, b) => (Number(a.round) || 0) - (Number(b.round) || 0));
+  const fromCanonicalHistory = consolidatedBids.length === 0 && record.recordSource === 'live-trial';
+  if (fromCanonicalHistory) {
+    const historical = record.bidding?.historicalBids || [];
+    const finalBids = record.bidding?.finalBids || {};
+    const byRound = new Map();
+    for (const bids of [...historical, finalBids]) {
+      if (!bids || typeof bids !== 'object') continue;
+      for (const [name, rounds] of Object.entries(bids)) {
+        if (!rounds || typeof rounds !== 'object') continue;
+        for (const [key, amount] of Object.entries(rounds)) {
+          const round = Number(key);
+          if (!Number.isInteger(round) || round < 1 || amount == null || !Number.isFinite(Number(amount))) continue;
+          if (!byRound.has(round)) byRound.set(round, {round, seats: []});
+          const seats = byRound.get(round).seats;
+          if (!seats.some(seat => seat.name === name)) seats.push({name, bid: Number(amount)});
+        }
+      }
+    }
+    consolidatedBids = [...byRound.values()].sort((a, b) => a.round - b.round);
+  }
+  group(`四人出价（${fromCanonicalHistory ? '草稿历史金额' : '原始观察'} · ${consolidatedBids.length} 回合）`);
   for (const observation of consolidatedBids) {
     add('p',`第 ${observation.round ?? '?'} 回合 · ` + (observation.seats || []).map(seat=>
       `${seat.name || `座位 ${seat.slot}`}：${seat.currentBid != null ? seat.currentBid : (seat.bid != null && seat.bid >= 0 ? seat.bid : '未识别')}`).join(' / '));
@@ -1104,11 +1143,14 @@ function renderAuctionEvidence(record, parent) {
       add('p', `${name} · ${statusText}${confText}`);
     }
   } else {
-    group(`仓库观察（${(evidence.warehouse || []).length} 个画面）`);
-    for (const observation of evidence.warehouse || []) {
+    const warehouseFrames = Array.isArray(evidence.warehouse) ? evidence.warehouse : [];
+    const draftSlots = record.recordSource === 'live-trial' && Array.isArray(record.warehouse?.slots) ? record.warehouse.slots : [];
+    group(`仓库观察（${warehouseFrames.length} 个原始画面；${draftSlots.length} 个草稿槽位）`);
+    for (const observation of warehouseFrames) {
       add('p',`${observation.scene === 'SETTLEMENT' ? '结算仓库' : `第 ${observation.round ?? '?'} 回合`} · ${observation.capturedAt || ''} · ${(observation.slots || []).length} 个可见槽位`);
       add('p',(observation.slots || []).map(slot=>(slot.identityStatus === 'EXACT' && slot.identifiedName) || `${slot.w || '?'}×${slot.h || '?'} 轮廓（未确认名称）`).join('；'));
     }
+    if (draftSlots.length) add('p', `${draftSlots.length} 个结构化槽位来自本草稿；${draftSlots.filter(slot => slot.identityStatus === 'EXACT').length} 个身份确证，其余只是候选或未知，不代表已采完整仓库。`);
   }
   group('流程与补货');
   const names={AUCTION_LOBBY:'大厅',IN_AUCTION:'局内',SETTLEMENT:'结算',AUCTION_LOADING:'加载',TOOL_REPLENISH:'补货',TOOL_REPLENISH_CONFIRM:'补货确认',MATCHING_SUCCESS:'匹配成功',LOAD_ABORTED:'加载中断，返回大世界',OPEN_WORLD:'大世界'};
@@ -2715,6 +2757,24 @@ function renderCurrentAuctionDetails(currentMatch) {
 }
 
 function renderMatchFocus(currentMatch) {
+  const scene = currentMatch.scene || "UNKNOWN";
+  const stages = {
+    AUCTION_LOBBY: ["大厅", "继续只读观察；等待同目标新局界"],
+    AUCTION_LOADING: ["入局加载", "等待新鲜竞拍帧；不沿用旧局报价"],
+    IN_AUCTION: ["竞拍", "当前事实与建议仅在有效帧期间可用"],
+    SETTLEMENT: ["结算采集中", "本局报价已结束；等待终值与隔离草稿保存"],
+    TOOL_REPLENISH: ["补货画面", "仅显示观察事实；成功与费用需独立证据"],
+    TOOL_REPLENISH_CONFIRM: ["补货确认", "看到确认页不代表已补货或已扣费"],
+    OPEN_WORLD: ["返回等待", "观察服务等待下一局；旧建议无资格"],
+  };
+  const health = currentMatch.visionHealth || {};
+  const stage = health.status === "PAUSED" || health.stage === "native-paused"
+    ? ["观察暂停", `${health.reason || "目标或焦点失效"}；同局恢复须新鲜有效帧`]
+    : stages[scene] || ["等待识别场景", "未知画面不建立竞拍事实或建议"];
+  document.getElementById("match-lifecycle-stage").textContent = stage[0];
+  document.getElementById("match-lifecycle-next").textContent = stage[1];
+  const saveLabels = { SAVED: "隔离草稿已保存", PENDING: "隔离草稿保存中", FAILED: "隔离草稿保存失败 · 请看错误提示", UNAVAILABLE: "尚无可保存事实" };
+  document.getElementById("match-lifecycle-save").textContent = saveLabels[currentMatch.draftSaveStatus] || "草稿状态待确认";
   const native = currentMatch.observationProfile === "native-readonly-v1";
   const live = !native || (currentMatch.scene === "IN_AUCTION"
     && currentMatch.observationStatus === "FRAME"
