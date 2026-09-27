@@ -4505,14 +4505,17 @@ class NTEVisionPipeline:
             data["winnerAmbiguous"] = len({item[2] for item in winner_candidates if item[0] >= .85}) > 1
         labeled = {"clearingPrice": None, "actualTotal": None, "profit": None}
         band_nums = []
-        for box, text, _ in ocr_results:
+        for box, text, score in ocr_results:
             raw = (text or "").strip()
             if not raw:
                 continue
             y_center = (box[0][1] + box[2][1]) / 2.0
             x_center = (box[0][0] + box[2][0]) / 2.0
             ny = y_center / max(1, screen_h)
-            amount = parse_money_amount(raw)
+            # A low-confidence digit string on the animated settlement card
+            # is not a confirmed financial fact. It may be reread from the
+            # bounded card ROI below, but cannot enter the full-frame ledger.
+            amount = parse_money_amount(raw) if score >= 0.70 else 0
 
             # 先按标签就近绑定：成交价 / 实际价值 / 收益
             if "成交价" in raw:
@@ -4525,6 +4528,22 @@ class NTEVisionPipeline:
             # 结算三列大数字在同一水平带（归一化，兼容 540p / 1080p / 1440p）
             if amount >= 1000 and 0.38 <= ny <= 0.58:
                 band_nums.append((x_center, amount))
+
+        if labeled["profit"] is None and frame is not None and getattr(frame, "size", 0) > 0:
+            # The green profit digits are often misread on the full canvas.
+            # Re-read only that card at 2x; never synthesize a value from the
+            # other two amounts or use a later, merely similar frame.
+            x1, x2 = int(.43 * screen_w), int(.64 * screen_w)
+            y1, y2 = int(.42 * screen_h), int(.56 * screen_h)
+            crop = frame[y1:y2, x1:x2]
+            if crop.size and min(crop.shape[:2]) >= 10:
+                enlarged = cv2.resize(crop, None, fx=2, fy=2, interpolation=cv2.INTER_CUBIC)
+                profit_rows, _ = self.ocr(enlarged)
+                candidates = [(float(score), parse_money_amount(text))
+                              for _, text, score in (profit_rows or []) if score >= .70]
+                candidates = [(score, amount) for score, amount in candidates if amount >= 1000]
+                if candidates:
+                    labeled["profit"] = max(candidates)[1]
 
         # 标签行本身可能不含数字，回看同一水平带里离标签最近的数
         if any(v is None for v in labeled.values()) and band_nums:

@@ -714,6 +714,28 @@ class DerivedWarehouseIdentityBoundaryTests(unittest.TestCase):
         self.assertEqual(current.facts["settlementItems"][0]["exactItemId"], "revealed-after-auction")
         self.assertEqual(current.facts["knownGold"], "")
 
+    def test_settlement_deferred_pixels_do_not_enter_durable_ledger(self):
+        current = CurrentMatch()
+        current.id = "match-current"
+        current.apply_facts({"roundNo": 1}, source="vision", intent="observe")
+        engine = _engine(current, [])
+        engine.last_context = {"scene": "SETTLEMENT", "isSettlement": True, "round": 1,
+                               "settlementData": {"clearingPrice": 666666}}
+        result = self._result(engine, {})
+        result.update({
+            "kind": "settlement", "scene": "SETTLEMENT",
+            "settlementItems": [{"status": "unknown", "price": None}],
+            "settlementLedgerStatus": "partial",
+            "sourceFrameBgr": np.zeros((2, 2, 3), dtype=np.uint8),
+        })
+        result.pop("warehouseVision")
+
+        self.assertTrue(engine._commit_deferred_identity(result))
+        ledger = engine.last_context["settlementData"]["ledger"]
+        self.assertEqual(ledger["settlementItems"][0]["status"], "unknown")
+        self.assertNotIn("sourceFrameBgr", ledger)
+        json.dumps(engine.last_context)
+
     def test_result_from_old_session_or_invalidation_generation_is_rejected(self):
         result = {
             "sessionId": "session-current", "generationId": 9, "matchId": "match-current",

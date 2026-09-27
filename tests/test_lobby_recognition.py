@@ -589,6 +589,24 @@ class TestMoneyAndSettlementParsing(unittest.TestCase):
         self.assertEqual(res["actualTotal"], 972970)
         self.assertEqual(res["profit"], 518526)
 
+    def test_settlement_low_confidence_profit_is_reread_from_same_frame(self):
+        # Saved 2026-09-27 settlement: full-canvas OCR reported 2,769,616
+        # at 0.54; the same frame's enlarged profit card reads 979,927.
+        rows = [
+            (_box(80, 145), "竞拍结束", .99),
+            (_box(120, 470), "最终成交价", .99),
+            (_box(120, 530), "666,666", .99),
+            (_box(500, 470), "实际价值", .99),
+            (_box(500, 530), "1,646,593", .99),
+            (_box(870, 470), "收益", .99),
+            (_box(870, 530), "2769616", .54),
+        ]
+        self.pipeline._ocr_engine = lambda _crop: ([(_box(20, 40), "979,927", 1.0)], None)
+        frame = np.zeros((1080, 1920, 3), dtype=np.uint8)
+        res = self.pipeline._parse_settlement(rows, 1920, 1080, frame=frame)
+        self.assertEqual((res["clearingPrice"], res["actualTotal"], res["profit"]),
+                         (666666, 1646593, 979927))
+
     def test_parse_settlement_still_works_on_540p_band(self):
         # 旧关键帧约 540p，三列数字大约在 y=250
         mock_ocr = [

@@ -2387,8 +2387,20 @@ class RealEngine:
             settlement_data = context.get("settlementData")
             if isinstance(settlement_data, dict):
                 settlement_data["items"] = copy.deepcopy(settlement_items)
-                settlement_data["ledger"] = copy.deepcopy({k: v for k, v in result.items()
-                                                             if k not in {"frame", "warehouseVision"}})
+                # The deferred result also owns a private sourceFrameBgr array.
+                # Only the recognizer's ledger facts may enter durable state;
+                # source pixels remain in the bounded worker result for crops.
+                ledger_keys = (
+                    "settlementItems", "settlementItemCount", "settlementExactItemCount",
+                    "settlementUnknownItemCount", "settlementExactValueSum",
+                    "settlementLedgerVerified", "settlementLedgerStatus",
+                    "settlementLedgerDelta", "physicalGroupingHypotheses",
+                    "qualitySellSelection", "qualitySellSelectionSource",
+                    "qualitySellSelectionSources",
+                )
+                settlement_data["ledger"] = copy.deepcopy({
+                    key: result[key] for key in ledger_keys if key in result
+                })
                 context["settlementData"] = settlement_data
             for key in ("settlementItems", "settlementLedgerVerified", "settlementLedgerStatus",
                         "settlementLedgerDelta"):
@@ -2433,7 +2445,14 @@ class RealEngine:
         if self._identity_analyzer is None:
             return
         for result in self._identity_analyzer.poll():
-            self._commit_deferred_identity(result)
+            try:
+                self._commit_deferred_identity(result)
+            except Exception as exc:
+                # A side computation must not kill the sole frame consumer:
+                # otherwise subsequent frames receive ACK but no perception.
+                self.log("identity.deferred_commit_failed", kind=result.get("kind"),
+                         frameSequence=result.get("frameSequence"),
+                         error=f"{type(exc).__name__}: {exc}")
 
     def _apply_manual_overrides(self, context: dict, *, overlay: bool = True) -> dict:
         """Project accepted GUI overrides into the next business frame."""
