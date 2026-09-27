@@ -55,9 +55,9 @@
                   <span class="tag is-warning">正在进行中的对局</span>
                   <span class="badge badge-lifecycle" id="overview-match-lifecycle">进行中</span>
                 </div>
-                <div class="overview-hero-rule" id="overview-match-rule">标准规则</div>
+                <div class="overview-hero-rule" id="overview-match-rule">规则待确认</div>
               </div>
-              <h1 class="overview-hero-title" id="overview-match-title">珊瑚场 · 琉璃宝箱</h1>
+              <h1 class="overview-hero-title" id="overview-match-title">会场与宝箱待观察</h1>
               <div class="overview-hero-meta">
                 <span id="overview-match-intel-count">已获取 4/7 项情报</span>
               </div>
@@ -157,8 +157,8 @@
           <!-- 顶栏：当前对局信息与操作 -->
           <div class="workbench-header">
             <div class="workbench-title-area">
-              <span class="workbench-venue-title" id="match-live-heading">珊瑚场 · 琉璃宝箱</span>
-              <span class="badge badge-rule" id="match-live-rule-tag">标准规则</span>
+              <span class="workbench-venue-title" id="match-live-heading">会场与宝箱待观察</span>
+              <span class="badge badge-rule" id="match-live-rule-tag">规则待确认</span>
               <span class="badge badge-lifecycle" id="match-live-status-badge">正在收集情报</span>
               <span class="workbench-meta-sub"><code id="match-live-id" hidden>--</code><span id="match-live-completeness-text">输入待完善</span></span>
             </div>
@@ -215,6 +215,24 @@
               </div>
             </div>
           </div>
+
+          <section class="match-focus" aria-label="当前竞拍关键信息">
+            <div class="match-focus-top">
+              <div class="match-focus-result">
+                <div class="match-focus-kicker"><span id="match-focus-stage">等待观察</span><span id="match-focus-updated">采集时间未知</span></div>
+                <span class="match-focus-label" id="match-focus-result-type">等待有效结果</span>
+                <strong class="match-focus-amount" id="match-focus-amount">—</strong>
+                <span class="match-focus-secondary" id="match-focus-secondary">估值尚未就绪</span>
+                <p id="match-focus-reason">进入竞拍后自动读取事实；缺项保持缺失。</p>
+              </div>
+              <div class="match-focus-facts" id="match-focus-facts" aria-label="本局已知事实"></div>
+            </div>
+            <div class="match-focus-lower">
+              <section><h2>四席当前出价 <small id="match-focus-bid-round">回合待观察</small></h2><div id="match-focus-seats" class="match-focus-seats">等待当前回合出价</div></section>
+              <section><h2>情报原文 <small id="match-focus-intel-count">0 条</small></h2><div id="match-focus-intel" class="match-focus-intel">等待游戏情报</div></section>
+              <section><h2>局内仓库 <small id="match-focus-warehouse-count">未观察</small></h2><div id="match-focus-warehouse">未观察到结构化仓库槽位；不代表空仓。</div><button type="button" class="btn-wb-action" onclick="document.getElementById('match-btn-open-drawer').click()">查看藏品与实例核对</button></section>
+            </div>
+          </section>
 
           <details class="wir-panel">
             <summary>本局截图原图（不等待藏品识别）</summary>

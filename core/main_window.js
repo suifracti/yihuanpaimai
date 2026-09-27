@@ -2714,6 +2714,68 @@ function renderCurrentAuctionDetails(currentMatch) {
   }
 }
 
+function renderMatchFocus(currentMatch) {
+  const native = currentMatch.observationProfile === "native-readonly-v1";
+  const live = !native || (currentMatch.scene === "IN_AUCTION"
+    && currentMatch.observationStatus === "FRAME"
+    && currentMatch.visionHealth?.status === "READY"
+    && currentMatch.nativeInvalidated !== true);
+  const settled = currentMatch.scene === "SETTLEMENT" || currentMatch.lifecycleStatus === "FINALIZED";
+  const pred = currentMatch.prediction || {};
+  const valid = live && !settled && currentMatch.solverStatus === "valid" && pred.hasSnapshot;
+  const formal = valid && pred.mode === "full_shadow" && pred.recommendedMax != null;
+  const structural = valid && !formal && pred.structuralReferenceBid != null;
+  const type = settled ? "本局报价已结束" : !live ? "观察暂停或等待新帧"
+    : formal ? "正式建议上限" : structural ? "结构参考价 · 非正式上限"
+    : currentMatch.shadowUpdating ? "正在计算" : "等待合格输入";
+  const amount = formal ? pred.recommendedMax : structural ? pred.structuralReferenceBid : null;
+  const center = valid ? (pred.p50 ?? pred.structuralCenter ?? pred.ev) : null;
+  document.getElementById("match-focus-stage").textContent = settled ? "结算" : currentMatch.scene === "IN_AUCTION" ? "竞拍中" : currentMatch.scene === "AUCTION_LOBBY" ? "大厅" : "等待竞拍";
+  document.getElementById("match-focus-result-type").textContent = type;
+  document.getElementById("match-focus-amount").textContent = amount == null ? "—" : formatCurrency(amount);
+  document.getElementById("match-focus-secondary").textContent = center == null ? "整仓估值未就绪"
+    : `${pred.p50 != null ? "整仓 P50" : "结构估值（非整仓 P50）"} ${formatCurrency(center)}`;
+  document.getElementById("match-focus-reason").textContent = settled ? "本局结果只用于结算复核，不继续报价。"
+    : !live ? "当前结果已撤销资格；等待新鲜有效竞拍帧。"
+    : formal ? (pred.actionReason || "结果受当前事实与版本约束。")
+    : structural ? `${pred.actionReason || "历史支持不足。"} 整仓 P50 与正式上限仍不可用。`
+    : currentMatch.solverMissingReason || "缺少必要事实；不会填入默认值或旧金额。";
+  const captured = currentMatch.observationCapturedAtUtc;
+  document.getElementById("match-focus-updated").textContent = captured && Number.isFinite(Date.parse(captured))
+    ? `${new Date(captured).toLocaleTimeString("zh-CN", { hour12: false })}采集` : "采集时间未知";
+
+  const facts = currentMatch.facts || {};
+  const ruleMissing = currentMatch.solverAdmission?.requirements?.some(item =>
+    item.key === "fieldCondition" && item.status === "missing");
+  const factRows = [
+    ["Q", currentMatch.publicIntel?.q ?? facts.q],
+    ["金均", facts.goldAvg], ["金占格", facts.goldGrid],
+    ["规则", ruleMissing ? null : currentMatch.environment?.fieldConditionName],
+    ["入场费", currentMatch.environment?.entryCost == null ? null : `${formatCurrency(currentMatch.environment.entryCost)} · 配置，实付未核`],
+  ];
+  document.getElementById("match-focus-facts").innerHTML = factRows.map(([label, value]) =>
+    `<div><span>${escapeHtml(label)}</span><strong>${value == null || value === "" ? "— · 未观察" : escapeHtml(value)}</strong></div>`
+  ).join("");
+
+  const round = currentMatch.bidding?.roundNo ?? currentMatch.observationRound;
+  document.getElementById("match-focus-bid-round").textContent = !live || round == null ? "当前回合待观察" : `第 ${round} 回合`;
+  const seats = currentMatch.bidding?.seats || [];
+  document.getElementById("match-focus-seats").innerHTML = !live ? "当前出价已失效，历史出价保留在本局记录"
+    : !seats.length ? "本回合尚无可见出价" : seats.map(seat => {
+      const bid = seat.currentBid ?? seat.bid;
+      return `<div class="match-focus-seat"><span>${escapeHtml(seat.name || `座位 ${seat.slot ?? seat.seat ?? "?"}`)}${seat.isMe ? " · 本人" : ""}</span><strong>${currentMatch.bidding?.hiddenBids ? "金额隐藏" : bid == null ? "— · 未观察" : formatCurrency(bid)}</strong></div>`;
+    }).join("");
+  const intel = currentMatch.publicIntel?.timeline?.observations || [];
+  document.getElementById("match-focus-intel-count").textContent = `${intel.length} 条读数`;
+  document.getElementById("match-focus-intel").innerHTML = !intel.length ? "尚无情报原文"
+    : intel.slice(-3).map(row => `<p><small>${row.round == null ? "回合未定" : `第 ${row.round} 回合`} · ${row.participation === "valuation" ? "参与估值" : row.participation === "pending" ? "待解析" : "仅记录"}</small><span>${escapeHtml(row.text || row.rawText || "原文未解析")}</span></p>`).join("");
+  const slots = currentMatch.warehouse?.slots || [];
+  document.getElementById("match-focus-warehouse-count").textContent = slots.length ? `${slots.length} 个结构化槽位` : "未观察";
+  document.getElementById("match-focus-warehouse").textContent = slots.length
+    ? `${slots.filter(slot => slot.identityStatus === "EXACT").length} 个确证身份，其余保持候选或未知；按物理实例核对。`
+    : "未观察到结构化仓库槽位；不代表空仓。";
+}
+
 function openGuidebookWarehouseCandidate(catalogId, name, rarity) {
   const candidate = {
     catalogId: String(catalogId || "").trim(),
@@ -2991,6 +3053,7 @@ function syncWarehouseInstanceReviewFromMatch(currentMatch) {
 
 function renderMatch(currentMatch, overlayVisible) {
   if (!currentMatch) return;
+  renderMatchFocus(currentMatch);
   // Keep live auction facts visible even if an unrelated details widget fails
   // later in this large renderer. Native values are hidden until a fresh FRAME.
   renderCurrentAuctionDetails(currentMatch);

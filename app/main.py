@@ -1143,6 +1143,7 @@ def get_current_match_presentation_summary() -> dict:
             "target": copy.deepcopy(native_payload.get("target")) if native_payload.get("observationProfile") == "native-readonly-v1" else None,
             "observationSource": native_payload.get("sourceKind") or vision_health.get("sourceKind"),
             "observationFreshnessMs": native_payload.get("freshnessMs") or vision_health.get("freshnessMs"),
+            "observationCapturedAtUtc": (native_payload.get("frame") or {}).get("capturedAtUtc") or native_payload.get("capturedAt"),
             "observationFrameSequence": native_payload.get("frameSequence") or vision_health.get("frameSequence"),
             "scene": native_payload.get("scene") or "UNKNOWN",
             "inAuction": bool(native_payload.get("inAuction")) if native_profile else True,
@@ -6899,8 +6900,9 @@ class HudJsApi:
             return False
         try:
             from System.Drawing import Size
-            width = int(w or self.form.Width)
-            height = int(h or self.form.Height)
+            scale = max(1.0, float(getattr(self.form, "DeviceDpi", 96)) / 96.0)
+            width = int(round(float(w) * scale)) if w is not None else int(self.form.Width)
+            height = int(round(float(h) * scale)) if h is not None else int(self.form.Height)
             self.form.Size = Size(max(320, width), max(64, height))
             return True
         except Exception as e:
