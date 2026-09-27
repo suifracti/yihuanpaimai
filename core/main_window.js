@@ -491,7 +491,8 @@ function projectLiveTrialDraft(record) {
     },
     settlementEvidenceAvailable: Boolean(record?.settlement?.truthEvidence?.evidenceReferences?.length),
     settlementReviewed: Boolean(record?.settlement?.reviewedItems?.length),
-    auctionEvidence: record?.auctionEvidence, bidding: record?.bidding,
+    auctionEvidence: record?.auctionEvidence, intelCardEvidence: record?.intelCardEvidence,
+    predictionSnapshot: record?.predictionSnapshot, bidding: record?.bidding,
     warehouse: record?.warehouse,
     matchSummary: "隔离试用草稿 · 未进入正式 History", dataOrigin: "live-trial"
   };
@@ -1081,13 +1082,24 @@ function renderAuctionEvidence(record, parent) {
     const summary=document.createElement('summary');summary.textContent=text;
     details.appendChild(summary);section.appendChild(details);container=details;
   };
-  group(`情报原文（${(evidence.intel || []).length} 条变化记录）`);
-  for (const observation of evidence.intel || []) {
+  const ledgerReadings = record.recordSource === 'live-trial' && Array.isArray(record.intelCardEvidence?.cardReadings)
+    ? record.intelCardEvidence.cardReadings : [];
+  const intelRows = ledgerReadings.length ? ledgerReadings : (evidence.intel || []);
+  group(`情报原文（${intelRows.length} 条 OCR 读数，可能含重复）`);
+  for (const observation of intelRows) {
     const text = (observation.lines || []).map(line => line.text).filter(Boolean).join('；')
       || observation.rawText || '原文未保存';
-    const classification = observation.cardSource?.kind === 'UNKNOWN' ? ' · 未分类 OCR（不代表有效情报）' : '';
+    const classification = observation.cardSource?.kind === 'UNKNOWN' ? ' · 未分类 OCR' : '';
     add('p',`第 ${observation.round ?? '?'} 回合 · ${observation.capturedAt || observation.frameId || '采集时间未知'}${classification}`);
     add('p', text);
+  }
+  const parsedIntel = record.intelCardEvidence?.observations || [];
+  if (parsedIntel.length) {
+    group(`结构化情报（${parsedIntel.length} 条字段观察；不等于 ${intelRows.length} 种情报）`);
+    for (const row of parsedIntel) {
+      add('p', `第 ${row.round ?? '?'} 回合 · ${row.field || '字段未知'}：${row.value ?? '未解析'} · ${row.status || '资格未知'}`);
+      add('p', row.rawText || '原文未保存');
+    }
   }
   if (record.recordSource === 'live-trial' && !(evidence.nativeObservation?.intelSourceFrames || []).length) {
     add('p', '本草稿未保存同帧情报原图关联；上方原图不等于这些读数的来源。');
@@ -1175,6 +1187,18 @@ function renderAuctionEvidence(record, parent) {
   if ((evidence.priorMatchActivity || []).length) add('p','开局前补货属于前局遗留，不计入本局道具消耗。');
   const restock={UNOBSERVED:'尚未观察到补货',NEEDS_REPLENISHMENT:'道具已消耗，待补货',CONFIRMATION_SEEN:'已看到补货确认页，补充结果待核对',COMPLETED:'已确认补货完成'};
   add('p',restock[evidence.replenishment] || '补货结果待核对');
+  if (record.recordSource === 'live-trial') {
+    const snapshot = record.predictionSnapshot;
+    const decisions = evidence.nativeObservation?.warehouseInstanceDecisions || [];
+    group(`当时预测与实例决定（${decisions.length} 项决定）`);
+    add('p', snapshot
+      ? `已保存预测快照 · ${snapshot.snapshotRole || '角色未知'} · ${snapshot.mode?.informationMode || '模式未知'} · ${snapshot.producer?.solverVersion || '版本未知'}；没有完整预测数值时不补算。`
+      : '未保存可追溯预测快照');
+    for (const decision of decisions) {
+      const anchor = decision.instanceAnchor || {};
+      add('p', `第 ${anchor.row == null ? '?' : anchor.row + 1} 行 / 第 ${anchor.col == null ? '?' : anchor.col + 1} 列 · ${decision.action || '决定未知'} · ${decision.catalogId || '无目录身份'} · ${decision.source || '来源未知'}`);
+    }
+  }
 }
 
 function showLegacyReviewDetail(legacyKey) {

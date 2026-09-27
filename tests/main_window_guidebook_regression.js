@@ -158,7 +158,10 @@ const draftProjection = sandbox.projectLiveTrialDraft({
   },
   bidding: {historicalBids: [{"黎雪": {"1": 450000, "2": 450000}}], finalBids: {"黎雪": {"3": 666666}}},
   warehouse: {slots: [{row: 0, col: 4, identityStatus: "CANDIDATE"}]},
-  auctionEvidence: {intel: [{round: 2, frameId: "auction-frame", rawText: "金色均价37,521"}], bids: []}
+  intelCardEvidence: {cardReadings: [{round: 2, frameId: "auction-frame", rawText: "金色均价37,521"}],
+    observations: [{round: 2, field: "goldAvg", value: 37521, status: "OBSERVED", rawText: "金色均价37,521"}]},
+  predictionSnapshot: {snapshotRole: "latest_valid_pre_settlement", mode: {informationMode: "partial_shadow"}},
+  auctionEvidence: {intel: [{round: 3, frameId: "settlement-frame", rawText: "最终成交价666,666"}], bids: []}
 });
 assert.equal(draftProjection.settlement.isSettled, true);
 assert.equal(draftProjection.warehouse.slots.length, 1);
@@ -166,8 +169,10 @@ assert.equal(draftProjection.bidding.finalBids["黎雪"]["3"], 666666);
 sandbox.renderAuctionEvidence(draftProjection, get("history-detail-card"));
 const evidenceGroups = get("history-auction-evidence").children;
 assert.match(evidenceGroups[0].children[2].textContent, /金色均价37,521/);
-assert.match(evidenceGroups[1].children[0].textContent, /3 回合/);
-assert.match(evidenceGroups[2].children[0].textContent, /1 个草稿槽位/);
+assert.doesNotMatch(evidenceGroups[0].children[2].textContent, /最终成交价/);
+assert.match(evidenceGroups[1].children[1].textContent, /goldAvg：37521/);
+assert.match(evidenceGroups[2].children[0].textContent, /3 回合/);
+assert.match(evidenceGroups[3].children[0].textContent, /1 个草稿槽位/);
 
 sandbox.showView("guidebook");
 assert.equal(vm.runInContext("dashboard.currentView", sandbox), "guidebook");
