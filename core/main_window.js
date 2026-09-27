@@ -36,7 +36,7 @@ const dashboard = {
   overlayVisible: null,
   requestSequence: 0,
   bridgeReady: Boolean(window.chrome && window.chrome.webview),
-  currentView: "overview",
+  currentView: "match",
   mascotPresentation: null,
   mascotState: null,
   lastAutomaticMascotState: null,
@@ -573,10 +573,11 @@ function getRecordShanghaiParts(isoStr) {
 
 function matchesFilter(it, f) {
   // 1. Primary Tab: all | pending | verified
+  const trialDraft = it.recordSource === "live-trial";
   const isReviewed = Boolean(
     it.settlementReviewed === true ||
     it.reviewed === true ||
-    (it.settlement && (it.settlement.verified === true || it.settlement.settlementReviewed === true))
+    (it.settlement && (it.settlement.settlementReviewed === true || (!trialDraft && it.settlement.verified === true)))
   );
   if (f.primaryTab === "verified" && !isReviewed) return false;
   if (f.primaryTab === "pending" && isReviewed) return false;
@@ -693,7 +694,7 @@ function renderHistoryList(items) {
       const isReviewed = Boolean(
         it.settlementReviewed === true ||
         it.reviewed === true ||
-        (it.settlement && (it.settlement.verified === true || it.settlement.settlementReviewed === true))
+        (it.settlement && (it.settlement.settlementReviewed === true || (it.recordSource !== "live-trial" && it.settlement.verified === true)))
       );
       const reviewedBadge = isReviewed ? `<span class="item-badge badge-admitted">已核对</span>` : "";
 
@@ -832,7 +833,7 @@ function renderHistory(mainViewState) {
   }
   if (errorState) errorState.hidden = true;
   applyHistoryFilters();
-  if (availability === "EMPTY" && (dashboard.legacyRecords === null || dashboard.legacyRecords.length === 0)) {
+  if (availability === "EMPTY" && !hasTrialDrafts && (dashboard.legacyRecords === null || dashboard.legacyRecords.length === 0)) {
     if (emptyState) emptyState.hidden = false;
   }
 }
@@ -1015,6 +1016,7 @@ function renderHistoryDetail(record) {
   const gameProfit = Number(settlement.realizedProfit);
   const profitConflict = recordSource === "live-trial" && settlement.realizedProfit != null
     && settlement.actualTotal != null && gameProfit > Number(settlement.actualTotal);
+  document.getElementById("detail-profit")?.classList.toggle("is-conflict", profitConflict);
   setText("detail-profit", !isSettled ? "未记录" : profitConflict
     ? "金额异常 · 请核原图（旧草稿未改）"
     : settlement.realizedProfit == null ? "未观察" : formatProfit(gameProfit));
@@ -1137,7 +1139,9 @@ function renderAuctionEvidence(record, parent) {
   let consolidatedBids = Array.from(roundMap.values()).sort((a, b) => (Number(a.round) || 0) - (Number(b.round) || 0));
   const fromCanonicalHistory = consolidatedBids.length === 0 && record.recordSource === 'live-trial';
   if (fromCanonicalHistory) {
-    const historical = record.bidding?.historicalBids || [];
+    const historicalSource = record.bidding?.historicalBids;
+    const historical = Array.isArray(historicalSource) ? historicalSource
+      : historicalSource && typeof historicalSource === 'object' ? [historicalSource] : [];
     const finalBids = record.bidding?.finalBids || {};
     const byRound = new Map();
     for (const bids of [...historical, finalBids]) {
@@ -6330,10 +6334,7 @@ document.addEventListener("DOMContentLoaded", () => {
   initBridge();
 
   const urlParams = new URLSearchParams(window.location.search);
-  const initialView = urlParams.get("view");
-  if (initialView) {
-    showView(initialView);
-  }
+  showView(urlParams.get("view") || "match");
   if (urlParams.get("drawer") === "open") {
     openValuationDrawer();
   }

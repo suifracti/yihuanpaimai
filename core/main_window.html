@@ -19,8 +19,8 @@
       </div>
 
       <nav class="primary-nav" aria-label="主导航">
-        <button class="nav-item is-active" type="button" data-view-target="overview" aria-current="page">首页</button>
-        <button class="nav-item" type="button" data-view-target="match">对局</button>
+        <button class="nav-item" type="button" data-view-target="overview">首页</button>
+        <button class="nav-item is-active" type="button" data-view-target="match" aria-current="page">对局</button>
         <button class="nav-item" type="button" data-view-target="history">记录</button>
         <button class="nav-item" type="button" data-view-target="guidebook">图鉴</button>
         <button class="nav-item" type="button" data-view-target="analysis">分析</button>
@@ -45,7 +45,7 @@
       <!-- ======================================================= -->
       <!-- 1. 首页 (Overview - 极简任务状态中心)                    -->
       <!-- ======================================================= -->
-      <section class="view-page is-active overview-page" data-view-page="overview" aria-label="首页">
+      <section class="view-page overview-page" data-view-page="overview" aria-label="首页" hidden>
         <div class="overview-container">
           <!-- 上半区：当前任务/行动卡片与看板娘 -->
           <div class="overview-main-grid">
@@ -153,7 +153,7 @@
       <!-- ======================================================= -->
       <!-- 2. 对局页 (Match - 连续两栏单板工作台)                  -->
       <!-- ======================================================= -->
-      <section class="view-page match-page" data-view-page="match" aria-label="对局工作台" hidden>
+      <section class="view-page is-active match-page" data-view-page="match" aria-label="对局工作台">
         <div class="workbench-canvas">
           <!-- 顶栏：当前对局信息与操作 -->
           <div class="workbench-header">
@@ -163,14 +163,16 @@
               <span class="badge badge-lifecycle" id="match-live-status-badge">正在收集情报</span>
               <span class="workbench-meta-sub"><code id="match-live-id" hidden>--</code><span id="match-live-completeness-text">输入待完善</span></span>
             </div>
-            <div class="workbench-actions">
-              <button class="btn-wb-action" id="recognition-mode-toggle" type="button" data-mode="manual" onclick="postNative('manual_facts', {facts:{recognitionMode:this.dataset.mode === 'auto' ? 'manual' : 'auto'}})">手动识别</button>
-              <label for="player-display-name">本人昵称</label>
+            <div class="workbench-primary-actions">
               <span id="isolated-trial-label" role="status" hidden>隔离试用 · 数据单独保存</span>
               <span id="vision-health-status" role="status" hidden></span>
-              <span id="manual-command-status" role="status" aria-live="polite" hidden></span>
               <button class="btn-wb-action" id="restore-vision-btn" type="button" hidden onclick="postNative('start_live_vision', {resumeSameMatch: this.dataset.resumeSameMatch === 'true'})">恢复识别</button>
               <button class="btn-wb-action" id="start-new-vision-btn" type="button" hidden onclick="postNative('start_live_vision', {resumeSameMatch: false})">开始新局观察</button>
+            </div>
+            <details class="match-tools"><summary>昵称、观察与采集工具</summary><div class="workbench-actions">
+              <button class="btn-wb-action" id="recognition-mode-toggle" type="button" data-mode="manual" onclick="postNative('manual_facts', {facts:{recognitionMode:this.dataset.mode === 'auto' ? 'manual' : 'auto'}})">手动识别</button>
+              <label for="player-display-name">本人昵称</label>
+              <span id="manual-command-status" role="status" aria-live="polite" hidden></span>
               <input class="form-control" id="player-display-name" type="text" maxlength="64" placeholder="游戏内昵称（非数字UID）" style="width:180px" autocomplete="off">
               <button class="btn-wb-action" id="save-player-display-name" type="button">保存昵称</button>
               <span id="player-display-name-status" role="status">未设置，使用画面姓名；清空后保存可恢复</span>
@@ -214,7 +216,7 @@
                   </div>
                 </div>
               </div>
-            </div>
+            </div></details>
           </div>
 
           <section class="match-focus" aria-label="当前竞拍关键信息">
@@ -321,7 +323,7 @@
           </section>
 
           <!-- 主体两栏连续工作面 -->
-          <div class="workbench-columns">
+          <details class="match-advanced"><summary>细项纠错与旧工作面</summary><div class="workbench-columns">
             <!-- 左栏：情报录入与约束 (Facts Input) -->
             <div class="workbench-col-facts">
               
@@ -770,9 +772,7 @@
                         <span class="badge badge-admission" id="match-live-support-badge">基础结构推断</span>
                       </div>
                     </div>
-                    <div class="decision-reason-text" id="match-live-action-reason">
-                      当前估值高于成本，出价在安全边际内。
-                    </div>
+                    <div class="decision-reason-text" id="match-live-action-reason">等待本局有效结果。</div>
                   </div>
                 </div>
               </div>
@@ -787,6 +787,7 @@
 
             </div>
           </div>
+          </details>
         </div>
       </section>
 

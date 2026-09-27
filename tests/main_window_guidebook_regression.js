@@ -156,7 +156,7 @@ const draftProjection = sandbox.projectLiveTrialDraft({
     clearingPrice: 666666, actualTotal: 1646593, realizedProfit: 2769616,
     acquired: false, winner: "黎雪"
   },
-  bidding: {historicalBids: [{"黎雪": {"1": 450000, "2": 450000}}], finalBids: {"黎雪": {"3": 666666}}},
+  bidding: {historicalBids: {"黎雪": {"1": 450000, "2": 450000}}, finalBids: {"黎雪": {"3": 666666}}},
   warehouse: {slots: [{row: 0, col: 4, identityStatus: "CANDIDATE"}]},
   intelCardEvidence: {cardReadings: [{round: 2, frameId: "auction-frame", rawText: "金色均价37,521"}],
     observations: [{round: 2, field: "goldAvg", value: 37521, status: "OBSERVED", rawText: "金色均价37,521"}]},

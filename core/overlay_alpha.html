@@ -614,22 +614,22 @@
     .hud-identity { grid-area: identity; font-size: 12px; font-weight: 700; color: var(--text); white-space: nowrap; }
     .bar .brand-mark, .bar .v-divider, .bar .fact-block { display: none; }
     .bar .decision-hero-block { grid-area: decision; min-width: 0; max-width: none; gap: 6px; }
-    .bar .decision-action-badge { max-width: 100%; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-size: 12px; }
+    .bar .decision-action-badge { max-width: 100%; white-space: normal; overflow-wrap: anywhere; font-size: 12px; }
     .bar .decision-cap-wrap { display: block; }
     .bar .decision-cap-label { display: block; font-size: 12px; white-space: nowrap; }
-    .bar .decision-cap-val { display: block; font-size: 36px; line-height: 1.1; color: #96e2ce; }
+    .bar .decision-cap-val { display: block; font-size: clamp(28px, 8vw, 36px); line-height: 1.1; color: #96e2ce; }
     .bar .center { grid-area: value; align-self: end; flex: none; padding: 0; min-width: 0; width: 132px; overflow: hidden; text-align: right; }
     .bar .center-row { justify-content: flex-end; }
     .bar .center .k { min-width: 0; max-width: 100%; overflow: hidden; text-overflow: ellipsis; font-size: 12px; white-space: nowrap; }
     .bar .center .v { font-size: 16px; color: var(--text); }
     .bar .center .band, .bar .center .support-tag { display: none; }
-    .bar .actions { grid-area: actions; justify-content: flex-end; }
+    .bar .actions { grid-area: actions; justify-content: flex-end; min-width: 0; }
     .shell:not(.expanded) .actions > :not(#toggleBtn) { display: none; }
-    .hud-foot { display: flex; justify-content: space-between; gap: 8px; min-height: 26px;
+    .hud-foot { display: grid; grid-template-columns: minmax(0, 1fr) max-content; gap: 8px; min-height: 26px;
       padding: 5px 16px; border-top: 1px solid var(--border); font-size: 12px;
-      color: var(--gold); white-space: nowrap; }
-    .hud-foot span { overflow: hidden; text-overflow: ellipsis; }
-    .hud-foot span:last-child { color: var(--muted); flex: 0 0 auto; }
+      color: var(--gold); }
+    .hud-foot span:first-child { overflow-wrap: anywhere; }
+    .hud-foot span:last-child { color: var(--muted); white-space: nowrap; }
     .shell.expanded .bar { grid-template-columns: minmax(0, 1fr) 200px; }
     .shell.expanded .bar .center { width: 200px; }
     .shell.expanded .bar .fact-block { display: flex; grid-column: 1 / -1; }
@@ -756,9 +756,9 @@
           <label for="leaderBidInput">当前叫价</label>
           <input id="leaderBidInput" inputmode="numeric" placeholder="未填写">
         </div>
-        <div class="fact-card"><label for="intelCostInput">情报费用</label><input id="intelCostInput" inputmode="numeric" placeholder="0"></div>
-        <div class="fact-card"><label for="otherCostInput">其他已付费用</label><input id="otherCostInput" inputmode="numeric" placeholder="0"></div>
-        <div class="fact-card"><label for="futureIncrementalCostInput">预计后续费用</label><input id="futureIncrementalCostInput" inputmode="numeric" placeholder="0"></div>
+        <div class="fact-card"><label for="intelCostInput">情报费用</label><input id="intelCostInput" inputmode="numeric" placeholder="未观察"></div>
+        <div class="fact-card"><label for="otherCostInput">其他已付费用</label><input id="otherCostInput" inputmode="numeric" placeholder="未观察"></div>
+        <div class="fact-card"><label for="futureIncrementalCostInput">预计后续费用</label><input id="futureIncrementalCostInput" inputmode="numeric" placeholder="未确认"></div>
       </div>
 
       <p id="freeIntelStatus" role="status" hidden></p><details id="darkControls" hidden><summary>私人上限与可见次数</summary><p>记录自己的计划上限及画面可见次数，不代表对手金额。</p><label>私人出价上限<input id="privateBidCapInput" class="known-input" type="text" inputmode="numeric" placeholder="未知留空，明确没有填0" aria-describedby="privateBidCapError"></label><p id="privateBidCapError" role="alert" style="color:#ff9d8e"></p><label>可见出价次数<input id="bidActionCountInput" class="known-input" type="text" inputmode="numeric" placeholder="未知留空，明确没有填0" aria-describedby="bidActionCountError"></label><p id="bidActionCountError" role="alert" style="color:#ff9d8e"></p></details><p id="hiddenBidNotice" hidden>本词条出价金额隐藏；参考保本线决定自己的出价，不用旧叫价判断追价盈亏。</p>
@@ -1104,6 +1104,8 @@
     const collapsedWidth = 420;
     const expandedWidth = 640;
     let hudCaptureTime = null;
+    let lastHudSize = null;
+    let hudResizeFrame = 0;
 
     const FIELD_CONDITIONS = [
       { id: "standard", name: "标准对局" },
@@ -1209,7 +1211,8 @@
       const foot = document.querySelector(".hud-foot");
       const contentHeight = Math.ceil((bar?.getBoundingClientRect().height || 120)
         + (foot?.getBoundingClientRect().height || 26) + naturalHeight + 2);
-      const available = Math.max(340, ((window.screen?.availHeight || 900) - 80) / (window.devicePixelRatio || 1));
+      // screen.availHeight and DOM geometry are both CSS pixels already.
+      const available = Math.max(340, (window.screen?.availHeight || 900) - 80);
       const terminalMinimum = document.getElementById("terminalLayer")?.classList.contains("open") ? 430 : 340;
       return Math.min(available, Math.max(terminalMinimum, contentHeight));
     }
@@ -1284,8 +1287,19 @@
       const compactHeight = Math.ceil((bar?.getBoundingClientRect().height || 120)
         + (foot?.getBoundingClientRect().height || 26) + 2);
       const h = expanded ? getExpandedHeight() : compactHeight;
+      const sizeKey = `${expanded ? expandedWidth : collapsedWidth}x${h}`;
+      if (sizeKey === lastHudSize) return;
+      lastHudSize = sizeKey;
       sendHost({ action: "resize_hud", w: expanded ? expandedWidth : collapsedWidth, h,
         cssPixelRatio: window.devicePixelRatio || 1 });
+    }
+
+    function scheduleHudResize() {
+      if (hudResizeFrame) return;
+      hudResizeFrame = requestAnimationFrame(() => {
+        hudResizeFrame = 0;
+        resizeHud(document.getElementById("shell").classList.contains("expanded"));
+      });
     }
 
     function paintHudAge() {
@@ -1307,13 +1321,15 @@
       if (limit) {
         const scene = d.scene;
         const paused = d.nativeInvalidated === true || d.visionHealth?.stage === "native-paused";
-        const mode = d.visionState?.snapshot?.mode?.informationMode || d.prediction?.mode;
+        const mode = d.predictionSnapshot?.mode?.informationMode
+          || d.visionState?.snapshot?.mode?.informationMode || d.prediction?.mode;
         limit.textContent = scene === "SETTLEMENT" ? "本局建议已结束 · 查看结算"
           : paused ? "观察暂停 · 旧结果无当前资格"
           : mode === "partial_shadow" ? "部分历史覆盖 · 非整仓P50 / 正式上限"
           : mode === "structural_only" ? "结构参考 · 非正式出价上限"
           : "仅显示当前有效结果";
       }
+      scheduleHudResize();
     }
 
     function formatExpectedProfit(value) {
@@ -1370,7 +1386,7 @@
       if (d?.draftSaveStatus === "PENDING") return { text: "等待保存草稿", ok: false };
       if (d && d.draftSaved === false) return { text: "尚未保存", ok: false };
       if (d && d.draftSaved) return { text: "已保存草稿", ok: true };
-      return { text: "自动保存中", ok: true };
+      return { text: "保存状态未报告", ok: false };
     }
 
     function paintDraftSaveState(d) {
@@ -2194,7 +2210,8 @@ function sparkleBoundsText(b) {
         topSupportTag.className = `support-tag ${String(mode).toLowerCase()}`;
       }
 
-      let badgeText = decision.actionDirective || frozen.actionDirective || "等待估值";
+      let badgeText = decision.actionDirective || frozen.actionDirective
+        || (structuralReferenceOnly ? "结构参考" : recommendation != null ? "建议上限已就绪" : "等待估值");
       let adviceText = decision.actionDirective || frozen.actionDirective || "正在生成估值";
       let adviceReason = decision.actionReason || frozen.actionReason || "等待生产 Shadow 结果";
       if (pending) {
@@ -2981,6 +2998,11 @@ function sparkleBoundsText(b) {
 
       sendHost({ action: "manual_bootstrap", type: "manual_bootstrap" });
       resizeHud(false);
+      if (typeof ResizeObserver !== "undefined") {
+        const sizing = new ResizeObserver(scheduleHudResize);
+        [document.querySelector(".bar"), document.querySelector(".hud-foot"), document.getElementById("expandPane")]
+          .filter(Boolean).forEach(el => sizing.observe(el));
+      }
       setInterval(paintHudAge, 1000);
       updateChips();
     }
