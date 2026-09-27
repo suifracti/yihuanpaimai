@@ -140,7 +140,8 @@ class TrackedSlotBlob:
 # 3. 模板匹配与图鉴引擎
 # ==============================================================================
 class WarehouseTemplateMatcher:
-    def __init__(self, catalog_path: Optional[str] = None, tpl_root: Optional[str] = None):
+    def __init__(self, catalog_path: Optional[str] = None, tpl_root: Optional[str] = None,
+                 trusted_gameplay_only: bool = False):
         self.catalog: List[Dict[str, Any]] = []
         self.catalog_by_shape_rarity: Dict[Tuple[str, str], List[Dict[str, Any]]] = {}
         self.templates: Dict[str, np.ndarray] = {}
@@ -159,12 +160,13 @@ class WarehouseTemplateMatcher:
         self.tpl_root = tpl_root
 
         self._load_catalog()
-        self._load_templates()
-        try:
-            from visual_catalog import load_derived_warehouse_templates
-            self.derived_templates_by_id = load_derived_warehouse_templates()
-        except Exception:
-            self.derived_templates_by_id = {}
+        if not trusted_gameplay_only:
+            self._load_templates()
+            try:
+                from visual_catalog import load_derived_warehouse_templates
+                self.derived_templates_by_id = load_derived_warehouse_templates()
+            except Exception:
+                self.derived_templates_by_id = {}
         try:
             from visual_catalog import load_verified_warehouse_gameplay_templates
             self.gameplay_templates_by_id = load_verified_warehouse_gameplay_templates()

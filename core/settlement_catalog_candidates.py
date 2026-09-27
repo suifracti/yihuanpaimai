@@ -310,7 +310,10 @@ class SettlementCatalogCandidateResolver:
             tpl_reference = top1["templateReference"]
         else:
             # Multi candidates (>1): must satisfy BOTH thresholds for EXACT_IDENTIFIED
-            if top1_score >= top1_threshold and margin >= margin_threshold:
+            # Catalog-card crops and development pictures rank candidates but
+            # are not independently labelled gameplay evidence for this item.
+            derived_reference = str(top1.get("templateReference") or "").startswith(("visual/", "video-dev/"))
+            if top1_score >= top1_threshold and margin >= margin_threshold and not derived_reference:
                 status = STATUS_EXACT_IDENTIFIED
                 candidate_catalog_id = top1["catalogId"]
                 ev_source = top1["evidenceSource"]
@@ -318,7 +321,7 @@ class SettlementCatalogCandidateResolver:
             else:
                 status = STATUS_AMBIGUOUS_CANDIDATES
                 candidate_catalog_id = None
-                ev_source = "PIXEL_TEMPLATE_AMBIGUOUS" if top1_score > 0 else "NO_TEMPLATE"
+                ev_source = "DERIVED_REFERENCE_CANDIDATE_ONLY" if derived_reference else "PIXEL_TEMPLATE_AMBIGUOUS" if top1_score > 0 else "NO_TEMPLATE"
                 tpl_reference = top1["templateReference"] if top1_score > 0 else None
 
         if status == STATUS_EXACT_IDENTIFIED and (

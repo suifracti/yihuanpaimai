@@ -985,7 +985,7 @@ function renderHistoryDetail(record) {
       ? warehouse.slots.filter(slot => slot.identityStatus !== "EXACT").length
       : (warehouse.unknownCount || 0);
     if (unknown > 0) {
-      warehouseText = `${total} 个可见候选槽位（${unknown} 个身份未确证；非完整仓库）`;
+      warehouseText = `${recordSource === "live-trial" ? "竞拍期：" : ""}${total} 个可见候选槽位（${unknown} 个身份未确证；非完整仓库）`;
     } else {
       warehouseText = `${total} 件`;
     }
@@ -993,6 +993,12 @@ function renderHistoryDetail(record) {
     const confirmedCount = reviewUnits.filter(u => u.status === 'CONFIRMED' || u.confirmed || u.exactMatch).length;
     const unconfirmedCount = reviewUnits.length - confirmedCount;
     warehouseText = unconfirmedCount > 0 ? `${reviewUnits.length} 件（其中 ${unconfirmedCount} 件待确认）` : `${reviewUnits.length} 件`;
+  }
+  const settlementInventory = recordSource === "live-trial" ? record.settlement?.visibleInventory : null;
+  if (settlementInventory?.coverageStatus === "PARTIAL_VIEWPORT_ONLY") {
+    const regionCount = Array.isArray(record.settlement?.settlementItems)
+      ? record.settlement.settlementItems.length : 0;
+    warehouseText += `；结算终帧：${regionCount} 个可见候选区域（${Number(settlementInventory.trustedReferenceMatchCount) || 0} 处真实参考自动匹配；未覆盖区域未知）`;
   }
   setText("detail-warehouse", warehouseText);
 
@@ -1002,6 +1008,19 @@ function renderHistoryDetail(record) {
   setText("detail-p50", hasPrediction ? formatCurrency(prediction.p50) : "未记录");
   setText("detail-p80", hasPrediction ? formatCurrency(prediction.p80) : "未记录");
   setText("detail-rec-max", hasPrediction ? formatCurrency(prediction.recommendedMax) : "未记录");
+  const priorSnapshot = recordSource === "live-trial" ? record.predictionSnapshot : null;
+  const settlementObservedAt = settlement.visibleInventory?.sourceCapturedAt
+    || settlement.truthEvidence?.settlementObservedAt;
+  const sameMatchPrediction = priorSnapshot?.matchId === record.id
+    && priorSnapshot?.snapshotRole === "latest_valid_pre_settlement"
+    && priorSnapshot?.predictionId
+    && Number.isFinite(Date.parse(priorSnapshot.solvedAt || ""))
+    && Number.isFinite(Date.parse(settlementObservedAt || ""))
+    && Date.parse(priorSnapshot.solvedAt) < Date.parse(settlementObservedAt);
+  setText("detail-prediction-link", recordSource !== "live-trial" ? ""
+    : sameMatchPrediction
+      ? `同局事前预测已关联：${priorSnapshot.predictionId} · ${priorSnapshot.mode?.informationMode || "模式未记录"}；结算揭示仅供事后核对，不回填原输入。`
+      : "未找到时间与局归属均合格的事前预测；不可做误差对照。");
 
   setText("detail-cost-summary", record.costSummary || "费用未记录");
 
@@ -4467,10 +4486,13 @@ function renderReviewSection(review) {
     const statsBar = document.createElement("div");
     statsBar.className = "review-stats-banner";
     const reviewedCount = (review.reviewedItems || []).length;
+    const visibleInventory = review.visibleInventory || {};
+    const isPartialViewport = visibleInventory.coverageStatus === "PARTIAL_VIEWPORT_ONLY";
     statsBar.innerHTML = `
-      <div class="stat-pill"><span class="stat-num">${identityEvidences.length}</span><span class="stat-label">可见藏品</span></div>
+      <div class="stat-pill"><span class="stat-num">${identityEvidences.length}</span><span class="stat-label">可见候选区域</span></div>
       <div class="stat-pill stat-confirmed"><span class="stat-num">${reviewedCount}</span><span class="stat-label">已确认事实</span></div>
       <div class="stat-pill stat-pending"><span class="stat-num">${identityEvidences.length - reviewedCount}</span><span class="stat-label">待审核</span></div>
+      ${isPartialViewport ? `<div class="stat-pill">仅当前结算截图可见区域；未覆盖区域未知。${Number(visibleInventory.trustedReferenceMatchCount) || 0} 处真实参考自动匹配，不等于人工核对或全仓完成。</div>` : ""}
     `;
     container.appendChild(statsBar);
 
@@ -4540,7 +4562,7 @@ function renderReviewSection(review) {
         <div class="card-top-row">
           <div class="card-title-group" style="display:flex; align-items:center; flex-wrap:wrap; gap:6px;">
             ${thumbHtml}
-            <strong class="card-region-title">物品 #${idx + 1}</strong>
+            <strong class="card-region-title">候选区域 #${idx + 1}</strong>
             <span class="card-meta-pill pill-rarity-${ev.rarity || 'white'}">${rarityText}</span>
             <span class="card-meta-pill pill-shape">${shapeLabel}</span>
             <span class="card-meta-pill pill-status">${statusLabel}</span>

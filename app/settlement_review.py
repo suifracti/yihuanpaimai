@@ -41,6 +41,7 @@ from settlement_evidence_store_v2 import (
     COVERAGE_UNPROVEN,
     KIND_MAIN,
     KIND_MANUAL_GAME,
+    KIND_WAREHOUSE_SEGMENT,
     SettlementEvidenceStoreV2,
 )
 from settlement_human_review import (
@@ -172,6 +173,7 @@ class SettlementReviewService:
         review_units = copy.deepcopy(st.get("reviewUnits") or record.get("reviewUnits") or [])
         return {
             "recordId": record_id,
+            "visibleInventory": copy.deepcopy(st.get("visibleInventory") or {}),
             "identityEditable": record.get("lifecycleStatus") == "DRAFT",
             "settlement": {
                 "clearingPrice": st.get("clearingPrice"),
@@ -476,41 +478,71 @@ class SettlementReviewService:
                     "parentSha256": parent_sha,
                 })
         else:
-            proposals = self._run_recognizer(image_path) if image_path is not None else []
-            img = v2_img
-            if img is None and image_path is not None:
-                img = cv2.imdecode(np.fromfile(str(image_path), dtype=np.uint8), cv2.IMREAD_COLOR)
+            visible = st.get("visibleInventory") or {}
+            saved_items = st.get("settlementItems") or []
+            use_saved = (source == "live-trial" and parent_sha
+                         and visible.get("parentSha256") == parent_sha
+                         and isinstance(saved_items, list) and bool(saved_items))
+            if use_saved:
+                # Review the exact saved viewport, not a fresh recognition of
+                # a later/earlier visually similar screenshot.
+                proposals = [_whitelist_proposal(item) for item in saved_items]
+                crop_descriptors = {d.get("sha256"): d for d in descriptors
+                                    if d.get("kind") == KIND_WAREHOUSE_SEGMENT}
+                for item in saved_items:
+                    ev = copy.deepcopy(item.get("identityEvidence") or {})
+                    ev["groupingHypothesisId"] = ev.get("groupingHypothesisId") or f"saved_{item['slotIndex']}"
+                    desc = crop_descriptors.get(item.get("cropSha256"))
+                    if desc and desc.get("evidenceId") == item.get("cropEvidenceId"):
+                        try:
+                            raw_crop = v2_store.load_original(desc)
+                            ev["cropDataUrl"] = "data:image/png;base64," + base64.b64encode(raw_crop).decode("ascii")
+                        except Exception:
+                            pass
+                    identity_evidences.append(ev)
+                    grouping_hypotheses.append({
+                        "groupingHypothesisId": ev.get("groupingHypothesisId") or f"saved_{item['slotIndex']}",
+                        "recordStableKey": record_id, "parentEvidenceId": parent_ev_id,
+                        "parentSha256": parent_sha, "cells": item.get("cells") or [],
+                        "bbox": item.get("bbox"), "gridShape": item.get("shape"),
+                        "rarity": item.get("rarity"), "status": "BOUNDARY_OBSERVED"
+                        if not item.get("groupingAmbiguous") else "AMBIGUOUS_GROUPING",
+                        "identityEvidence": ev,
+                    })
+            else:
+                proposals = self._run_recognizer(image_path) if image_path is not None else []
+                img = v2_img
+                if img is None and image_path is not None:
+                    img = cv2.imdecode(np.fromfile(str(image_path), dtype=np.uint8), cv2.IMREAD_COLOR)
 
-            if img is not None:
-                rec = SettlementItemRecognizer()
-                ledger = rec.parse_settlement_ledger(img)
-                grouping_hypotheses = ledger.get("physicalGroupingHypotheses") or []
+                if img is not None:
+                    rec = SettlementItemRecognizer()
+                    ledger = rec.parse_settlement_ledger(img)
+                    grouping_hypotheses = ledger.get("physicalGroupingHypotheses") or []
 
-                h, w = img.shape[:2]
-                gx1, gy1, gx2, gy2 = settlement_grid_bounds(img)
-                crop = img[gy1:gy2, gx1:gx2] if gx2 > gx1 and gy2 > gy1 else img
+                    h, w = img.shape[:2]
+                    gx1, gy1, gx2, gy2 = settlement_grid_bounds(img)
+                    crop = img[gy1:gy2, gx1:gx2] if gx2 > gx1 and gy2 > gy1 else img
 
-                resolver = get_global_catalog_candidate_resolver()
-                identity_evidences = resolver.resolve_identity_evidence_for_hypotheses(
-                    grouping_hypotheses,
-                    crop_image=crop,
-                    templates=rec.templates,
-                )
+                    resolver = get_global_catalog_candidate_resolver()
+                    identity_evidences = resolver.resolve_identity_evidence_for_hypotheses(
+                        grouping_hypotheses, crop_image=crop, templates=rec.templates,
+                    )
 
-                for ev, hyp in zip(identity_evidences, grouping_hypotheses):
-                    ev["recordStableKey"] = record_id
-                    ev["parentEvidenceId"] = parent_ev_id
-                    ev["parentSha256"] = parent_sha
-                    hyp["recordStableKey"] = record_key if (record_key := record_id) else None
-                    hyp["parentEvidenceId"] = parent_ev_id
-                    hyp["parentSha256"] = parent_sha
-                    bbox = hyp.get("bbox")
-                    if crop is not None and isinstance(bbox, (list, tuple)) and len(bbox) == 4:
-                        bx, by, bw, bh = bbox
-                        if by + bh <= crop.shape[0] and bx + bw <= crop.shape[1] and bw > 0 and bh > 0:
-                            item_roi = crop[by:by+bh, bx:bx+bw]
-                            _, buf = cv2.imencode(".png", item_roi)
-                            ev["cropDataUrl"] = "data:image/png;base64," + base64.b64encode(buf).decode("ascii")
+                    for ev, hyp in zip(identity_evidences, grouping_hypotheses):
+                        ev["recordStableKey"] = record_id
+                        ev["parentEvidenceId"] = parent_ev_id
+                        ev["parentSha256"] = parent_sha
+                        hyp["recordStableKey"] = record_id
+                        hyp["parentEvidenceId"] = parent_ev_id
+                        hyp["parentSha256"] = parent_sha
+                        bbox = hyp.get("bbox")
+                        if crop is not None and isinstance(bbox, (list, tuple)) and len(bbox) == 4:
+                            bx, by, bw, bh = bbox
+                            if by + bh <= crop.shape[0] and bx + bw <= crop.shape[1] and bw > 0 and bh > 0:
+                                item_roi = crop[by:by+bh, bx:bx+bw]
+                                _, buf = cv2.imencode(".png", item_roi)
+                                ev["cropDataUrl"] = "data:image/png;base64," + base64.b64encode(buf).decode("ascii")
 
         v2_reviewed = load_settlement_reviewed_truth(v2_store, sanitized_key)
         reviewed_items = v2_reviewed if v2_reviewed else (st.get("reviewedItems") or [])

@@ -67,6 +67,7 @@ class SettlementItemRecognizer:
             self.candidate_resolver = get_global_catalog_candidate_resolver()
         except Exception:
             self.candidate_resolver = None
+        self._trusted_gameplay_matcher = None
 
     def _load_catalog_from_js(self, js_path: str):
         try:
@@ -597,6 +598,34 @@ class SettlementItemRecognizer:
                 match = next(c for c in ranked if c["catalogId"] == evidence["candidateCatalogId"])
                 exact_id, name, price = match["catalogId"], match["name"], match["value"]
                 status = "exact"
+
+            # Production catalog-card pictures are derived references. Reuse
+            # the activity matcher's hash-checked real-gameplay references for
+            # settlement exact identity; the derived rank remains a candidate.
+            if not self.tpl_dir and not it.get("groupingAmbiguous") and ranked:
+                from warehouse_vision import WarehouseVisionConfig
+                if self._trusted_gameplay_matcher is None:
+                    from warehouse_vision import WarehouseTemplateMatcher
+                    self._trusted_gameplay_matcher = WarehouseTemplateMatcher(
+                        trusted_gameplay_only=True)
+                local_bbox = it["bbox"]
+                roi = crop[local_bbox[1] - gy1:local_bbox[1] - gy1 + local_bbox[3],
+                           local_bbox[0] - gx1:local_bbox[0] - gx1 + local_bbox[2]]
+                candidates = [{"catalogId": c["catalogId"]} for c in ranked]
+                direct, direct_score, direct_margin, direct_evidence = (
+                    self._trusted_gameplay_matcher.match_candidate_evidence(
+                        roi, candidates, WarehouseVisionConfig()))
+                if (direct is not None and direct_evidence.get("accepted")
+                        and direct_evidence.get("referenceKind") == "DIRECT"):
+                    match = next((c for c in ranked if c["catalogId"] == direct_evidence.get("catalogId")), None)
+                    if match is not None:
+                        exact_id, name, price = match["catalogId"], match["name"], match["value"]
+                        status = "exact"
+                        evidence = {**evidence, "status": "EXACT_IDENTIFIED",
+                                    "identityStatus": "EXACT_IDENTIFIED", "candidateCatalogId": exact_id,
+                                    "evidenceSource": direct_evidence.get("referenceSource"),
+                                    "directReference": direct_evidence,
+                                    "top1Score": direct_score, "margin": direct_margin}
 
             settlement_items.append({
                 "slotIndex": i + 1,
