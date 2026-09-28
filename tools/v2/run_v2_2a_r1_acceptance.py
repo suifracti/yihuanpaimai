@@ -10,7 +10,7 @@ import subprocess
 import sys
 from pathlib import Path
 
-REPO = Path(r"D:\yihuanpaimai-v2-2a")
+REPO = Path(__file__).resolve().parents[2]
 OUT = Path(__file__).resolve().parent / "evidence_raw"
 sys.path.insert(0, str(REPO / "tools" / "v2"))
 from dotnet_env import build_env  # noqa: E402

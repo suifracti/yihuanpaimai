@@ -1480,8 +1480,8 @@ internal static class Program
             ("realFocusManipulationExecuted", J.N(false)),
             ("productionReachable", J.N(false)),
             ("bridgeAdded", J.N(false)),
-            ("backupRoot", J.N("D:\\v2-2b-input-backup-20260919-01")),
-            ("backupHashManifest", J.N("D:\\v2-2b-input-backup-20260919-01\\input-files.sha256")));
+            ("backupRoot", J.N((string?)null)),
+            ("backupHashManifest", J.N((string?)null)));
         WriteJson(environmentPath, environment);
 
         var markdown = new StringBuilder();
@@ -1585,8 +1585,8 @@ internal static class Program
             ("missingArtifacts", new JsonArray(missing.Select(name => (JsonNode?)J.N(name)).ToArray())),
             ("unexpectedArtifacts", new JsonArray(unexpected.Select(name => (JsonNode?)J.N(name)).ToArray())),
             ("sourceInventory", sourceInventory),
-            ("backupRoot", J.N("D:\\v2-2b-input-backup-20260919-01")),
-            ("backupHashManifest", J.N("D:\\v2-2b-input-backup-20260919-01\\input-files.sha256")),
+            ("backupRoot", J.N((string?)null)),
+            ("backupHashManifest", J.N((string?)null)),
             ("manifestGeneratedLast", J.N(true)),
             ("rawExitCodes", J.Obj(("verifier", J.N(allPassed ? 0 : 1))))));
     }

@@ -1,5 +1,7 @@
 # 异环拍卖助手 (Neverness to Everness Auction Assistant)
 
+> **2026-09-20 工作区合并：唯一项目目录为 `D:\yihuanpaimai`。** 已纳入 recovery 最新代码及 V2-2 A/B/C、I1 离线集成；原始录像在 `data/videos/`，裁图在 `data/reference-crops/`。不再使用外部 recovery/V2 分支目录。下文旧阶段验收仍按原范围解读，详见 [目录合并说明](docs/reports/2026-09-20-workspace-consolidation.md)。
+
 当前产品版本为 **v0.68-alpha**，以 [core/version.py](core/version.py) 为准。
 
 **整体 PARTIAL：P1/P2 已有阶段验收，P3 完整识别与实机采集尚未验收。** 用户先把识图做好，再恢复日常打局。当前执行与证据范围见 [执行规划](docs/plans/2026-09-05-project-replan.md)；该文件是 Obsidian 项目 Handoff 的同步副本，沿用同一计划。

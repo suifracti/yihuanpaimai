@@ -19,6 +19,8 @@ htmlcov/
 Thumbs.db
 Desktop.ini
 /*.lnk
+**/*.lnk
+.workbuddy-ai/
 
 # PyInstaller and build outputs
 **/build*/
@@ -68,3 +70,11 @@ evidence/
 
 # 旧损坏 .git 的只读取证封存（属于证据，不进入 recovery 源码基线）
 _forensic/
+
+# All new local build artifacts stay inside this workspace.
+**/bin/
+**/obj/
+/data/videos/
+/data/reference-crops/
+/tools/*.dll
+/tools/runtimes/

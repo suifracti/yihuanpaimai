@@ -13,7 +13,7 @@ import sys
 import time
 from pathlib import Path
 
-REPO = Path(r"D:\yihuanpaimai-v2-2a")
+REPO = Path(__file__).resolve().parents[2]
 OUT = Path(os.environ.get("V2_2A_EVIDENCE_OUT", str(REPO / "build" / "v2-2a-r2" / "evidence")))
 HARNESS_EXE = REPO / "architecture" / "v2" / "host" / "window_monitor_harness" / "bin" / "Release" / "net8.0" / "WindowMonitorHarness.exe"
 TARGET_CLASS = "NteV22ControlledWindow"

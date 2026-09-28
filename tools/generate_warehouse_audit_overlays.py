@@ -33,7 +33,7 @@ def generate_overlays():
     gt_items = gt_data["items"]
     pred_units = audit_data.get("item_audit", {}).get("units_list", [])
 
-    video_path = "D:/video/2026-09-08 14-40-37.mkv"
+    video_path = "D:/yihuanpaimai/data/videos/2026-09-08 14-40-37.mkv"
     cap = cv2.VideoCapture(video_path)
     fps = cap.get(cv2.CAP_PROP_FPS) or 60.0
 

@@ -2,6 +2,8 @@
 
 ## 当前工作
 
+- [2026-09-20 Luna Max 长时间 Goal 执行规划](plans/2026-09-20-luna-max-goal.md)：已按单目录清理后的 `D:/yihuanpaimai` 和 `cb86697` V2-2 A/B/C、I1 集成整份重写。安排约 12–16 小时的真实观察桥、实际传帧、真实业务接入、恢复与长稳交付；含最多两个子代理的文件分工及第9节可直接使用的 Goal 指令。尚未启动实施。
+
 - [3c270c8 最小实际 EXE 运行](reports/2026-09-15-frozen-exe-runtime-verify.md)：冻结进程跑通；整窗结算 29/26 exact；日志不打印 v2 文件名；识别未归档故无逐件回看。
 - [运行时视觉图鉴真实加载与 v2 打包](reports/2026-09-14-runtime-visual-catalog-load.md)：3c270c8 隔离候选已选中 v2；源码/包 213+107 解码校验通过。旧 84e0207 包保留。
 - [运行时视觉图鉴差异审计](reports/2026-09-14-runtime-visual-catalog-diff.md)：84e0207 只读对照 AuctionPilot v0.12.7；catalog_065 200 项不是唯一层。

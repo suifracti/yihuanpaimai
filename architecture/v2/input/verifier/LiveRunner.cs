@@ -3957,8 +3957,8 @@ internal static class LiveRunner
             ("unexpectedArtifacts", new JsonArray(unexpected.Select(name => (JsonNode?)J.N(name)).ToArray())),
             ("manifestGeneratedLast", J.N(true)),
             ("rawExitCodes", J.Obj(("runner", J.N(exitCode)))),
-            ("backupRoot", J.N("D:\\v2-2b-input-backup-20260919-01")),
-            ("backupHashManifest", J.N("D:\\v2-2b-input-backup-20260919-01\\input-files.sha256")));
+            ("backupRoot", J.N((string?)null)),
+            ("backupHashManifest", J.N((string?)null)));
         foreach (var property in extra)
         {
             node[property.Key] = property.Value?.DeepClone();

@@ -13,7 +13,7 @@ import sys
 from datetime import datetime, timezone
 from pathlib import Path
 
-REPO = Path(r"D:\yihuanpaimai-v2-2a")
+REPO = Path(__file__).resolve().parents[2]
 OUT = REPO / "build" / "v2-2a-r2" / "evidence"
 RAW = REPO / "tools" / "v2" / "evidence_raw"
 HOST = REPO / "architecture" / "v2" / "host"

@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-"""Replay D:\\video\\2026-09-08 14-40-37.mkv through the production loop.
+"""Replay D:\\yihuanpaimai\\data\\videos\\2026-09-08 14-40-37.mkv through the production loop.
 
 Hardened multi-layer verification:
 1. Per-seat, per-round quotes audit (Round 1 & Round 2 for all 4 seats, including seat 2 real 0).
@@ -28,7 +28,7 @@ sys.path[:0] = [
     "C:/Program Files/Python310/Lib/site-packages",
 ]
 
-VIDEO = Path(r"D:\video\2026-09-08 14-40-37.mkv")
+VIDEO = Path(r"D:\yihuanpaimai\data\videos\2026-09-08 14-40-37.mkv")
 OUT = ROOT / "build" / "diagnosis_20260909" / "p2-video-recognition"
 
 REFERENCE = {

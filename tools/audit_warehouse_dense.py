@@ -664,7 +664,7 @@ def run_dense_audit(video_path: Path, out_dir: Path) -> dict:
 if __name__ == "__main__":
     import argparse
     parser = argparse.ArgumentParser(description="Run dense audit on warehouse scroll video.")
-    parser.add_argument("--video", type=str, default=r"D:\video\2026-09-08 14-40-37.mkv", help="Path to video file")
+    parser.add_argument("--video", type=str, default=r"D:\yihuanpaimai\data\videos\2026-09-08 14-40-37.mkv", help="Path to video file")
     parser.add_argument("--out-dir", type=str, default=r"build\diagnosis_20260911\p3-warehouse\video_audit_retest_v2", help="Path to output directory")
     args = parser.parse_args()
 

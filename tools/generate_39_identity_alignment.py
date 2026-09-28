@@ -253,7 +253,7 @@ def generate_alignment(packet_path: Optional[Path] = None, output_path: Optional
     alignment_data = {
         "metadata": {
             "title": "39件基准录像物品机器预测与独立看图真值对齐报告",
-            "videoPath": "D:\\video\\2026-09-08 14-40-37.mkv",
+            "videoPath": "D:\\yihuanpaimai\\data\\videos\\2026-09-08 14-40-37.mkv",
             "provenanceNote": (
                 "Machine predictions extracted from dense warehouse reconstruction (audit_review_packet.json) "
                 "aligned against independent visual inspection ground truth (video_ground_truth_reference_144037.json). "

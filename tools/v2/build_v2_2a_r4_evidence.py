@@ -6,7 +6,7 @@ import os
 import sys
 from pathlib import Path
 
-REPO = Path(r"D:\yihuanpaimai-v2-2a")
+REPO = Path(__file__).resolve().parents[2]
 EVIDENCE = Path(os.environ.get("V2_2A_R4_EVIDENCE_OUT",
                              str(REPO / "build" / "v2-2a-r4" / "evidence")))
 RAW = Path(os.environ.get("V2_2A_R4_RAW_OUT",

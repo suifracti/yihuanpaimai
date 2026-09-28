@@ -64,7 +64,7 @@ items = [
 
 ref_data = {
     'metadata': {
-        'videoPath': r'D:\video\2026-09-08 14-40-37.mkv',
+        'videoPath': r'D:\yihuanpaimai\data\videos\2026-09-08 14-40-37.mkv',
         'annotatedBy': 'independent_visual_inspection_with_stitched_cross_check',
         'provenanceNote': (
             'Items and boundaries established from raw video frames and stitched 10x25 canvas. '

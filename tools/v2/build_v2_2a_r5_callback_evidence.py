@@ -13,7 +13,7 @@ import shutil
 import subprocess
 from pathlib import Path
 
-REPO = Path(r"D:\yihuanpaimai-v2-2a")
+REPO = Path(__file__).resolve().parents[2]
 R4_EVIDENCE = REPO / "build" / "v2-2a-r4" / "evidence"
 R4_RAW = REPO / "build" / "v2-2a-r4" / "raw"
 EVIDENCE = Path(os.environ.get(

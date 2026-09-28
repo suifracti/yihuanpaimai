@@ -10,8 +10,9 @@ from __future__ import annotations
 import os
 import subprocess
 import sys
+from pathlib import Path
 
-REPO = r"D:\yihuanpaimai-v2-2a"
+REPO = str(Path(__file__).resolve().parents[2])
 
 DEFAULTS = {
     "APPDATA": r"C:\Users\Administrator\AppData\Roaming",

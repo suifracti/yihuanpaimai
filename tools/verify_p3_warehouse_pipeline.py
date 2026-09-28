@@ -15,7 +15,7 @@ Verification Tiers:
     10. 构件级双段切片合成重构 (Synthetic segment pair reconstruction component test)
 
 - Tier 2: 真实录像回放验证 (Real Continuous Video Replay into Production Pipeline)
-    Video: D:\\video\\2026-09-08 14-40-37.mkv (同一局比赛全部真实帧，无任何合成图替换)
+    Video: D:\\yihuanpaimai\\data\\videos\\2026-09-08 14-40-37.mkv (同一局比赛全部真实帧，无任何合成图替换)
     1. 真实录像覆盖账本如实判定 (COVERAGE_UNPROVEN / PARTIAL，绝不注入假 COMPLETE)
     2. 物理链接账本连续无断链与冲突异常
     3. 真实录像网格物品独立审计 (检测数、候选词、无坐标重叠冲突)
@@ -82,7 +82,7 @@ import subprocess
 import websockets
 from verify_p1_real_ui import WS, eval_main, start_source, stop_source
 
-VIDEO = Path(r"D:\video\2026-09-08 14-40-37.mkv")
+VIDEO = Path(r"D:\yihuanpaimai\data\videos\2026-09-08 14-40-37.mkv")
 OUT_ROOT = ROOT / "build" / "diagnosis_20260909" / "p3-warehouse"
 
 from canonical_history_store import CanonicalHistoryStore

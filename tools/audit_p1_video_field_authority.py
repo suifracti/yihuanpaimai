@@ -97,7 +97,7 @@ def main() -> int:
     first_box_index = None
 
     for name, times in CLIPS:
-        path = Path("D:/video") / name
+        path = Path("D:/yihuanpaimai/data/videos") / name
         cap = cv2.VideoCapture(str(path))
         if not cap.isOpened():
             raise RuntimeError(f"cannot open {path}")
