@@ -109,6 +109,7 @@ class SettlementReviewService:
         legacy_archive: Optional[LegacyArchive] = None,
         overlay_store: Optional[ReviewOverlayStore] = None,
         native_trial_store: Optional[NativeTrialDraftStore] = None,
+        inventory_archive: Optional[Any] = None,
     ):
         self._history_path_provider = history_path_provider or (lambda: str(resolve_runtime_history_path()))
         self._data_root_provider = data_root_provider or (lambda: str(get_canonical_data_dir()))
@@ -117,6 +118,13 @@ class SettlementReviewService:
         self._native_trial_store = native_trial_store or NativeTrialDraftStore(
             resolve_native_trial_history_path()
         )
+        self._inventory_archive = inventory_archive
+
+    def retry_inventory_archive(self, record_id: str, source: str = "current") -> Dict[str, Any]:
+        if source != "live-trial" or self._inventory_archive is None:
+            return {"ok": False, "status": "NOT_TRIAL", "message": "仅隔离草稿可重试结算清单"}
+        state = self._inventory_archive.retry(record_id)
+        return {"ok": state == "PENDING", "status": state, "recordId": record_id}
 
     # ------------------------------------------------------------------ store
     def _store(self, source: str = "current") -> CanonicalHistoryStore:

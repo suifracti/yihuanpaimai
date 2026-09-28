@@ -309,6 +309,7 @@ class MainWindowBridge:
             "request_legacy_archive",
             "select_legacy_archive_source",
             "request_settlement_review",
+            "retry_settlement_inventory_archive",
             "request_original_screenshots",
             "request_guidebook_sources",
             "request_warehouse_slot_evidence",
@@ -851,6 +852,7 @@ class MainWindowBridge:
 
         if action in (
             "request_settlement_review",
+            "retry_settlement_inventory_archive",
             "import_settlement_screenshot",
             "replace_settlement_screenshot",
             "delete_settlement_screenshot",
@@ -869,6 +871,10 @@ class MainWindowBridge:
                 try:
                     if action == "request_settlement_review":
                         result = service.create_review_session(
+                            str(payload.get("recordId") or "").strip(), source=source
+                        )
+                    elif action == "retry_settlement_inventory_archive":
+                        result = service.retry_inventory_archive(
                             str(payload.get("recordId") or "").strip(), source=source
                         )
                     elif action in ("import_settlement_screenshot", "replace_settlement_screenshot"):

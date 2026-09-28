@@ -74,6 +74,15 @@ class NativeTrialDraftStore:
         matches.sort(key=lambda row: str(row.get("updatedAt") or row.get("playedAt") or ""), reverse=True)
         return matches[: max(0, int(limit))]
 
+    def patch_inventory_archive(self, record_id: str, settlement_patch: Mapping[str, Any],
+                                expected_archive: Mapping[str, Any]) -> dict[str, Any]:
+        """Patch only the old trial's settlement branch with an atomic source lease."""
+        with self._lock:
+            return self._store().update_record_transactional(
+                record_id, {"settlement": dict(settlement_patch)},
+                expected_inventory_archive=expected_archive,
+            )
+
     def capture_frame(self, source_path: os.PathLike[str] | str, metadata: Mapping[str, Any], *, expected_pixel_sha256: Optional[str] = None) -> dict[str, Any]:
         source = Path(source_path).resolve(strict=True)
         if not source.is_file():

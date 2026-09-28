@@ -7,24 +7,17 @@ CurrentMatch. The session's saved frame/state pair must identify the draft.
 from __future__ import annotations
 
 import argparse
-import copy
 import hashlib
 import json
 import sys
 from pathlib import Path
 
-import cv2
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "core"))
 
 from native_trial_drafts import NativeTrialDraftStore  # noqa: E402
-from settlement_evidence_store_v2 import (  # noqa: E402
-    COVERAGE_UNPROVEN, KIND_MAIN, SettlementEvidenceStoreV2,
-)
-from settlement_item_proposals import extract_settlement_warehouse_proposals  # noqa: E402
-from settlement_item_recognizer import SettlementItemRecognizer  # noqa: E402
-from settlement_stable_frame_persist import encode_settlement_original  # noqa: E402
+from settlement_inventory_archive import _archive_key, recognize_saved_inventory  # noqa: E402
 
 
 def continue_saved_session(session_dir: Path) -> dict:
@@ -52,66 +45,23 @@ def continue_saved_session(session_dir: Path) -> dict:
     if existing.get("sourcePixelSha256") == frame_record["pixelSha256"]:
         return {"matchId": match_id, "status": "UNCHANGED", "visibleProposals": existing.get("visibleProposalCount")}
 
-    frame = cv2.imread(str(frame_path), cv2.IMREAD_COLOR)
-    if frame is None or frame.size == 0:
-        raise ValueError("saved settlement frame cannot be decoded")
-    recognizer = SettlementItemRecognizer()
-    ledger = recognizer.parse_settlement_ledger(frame, (draft.get("settlement") or {}).get("actualTotal"))
-    store = SettlementEvidenceStoreV2(history_path.parent)
-    parent = store.save_original(
-        record_stable_key=match_id, kind=KIND_MAIN,
-        image_bytes=encode_settlement_original(frame),
-        captured_at=frame_record["capturedAt"],
-        coverage_mode="viewport-segment", coverage_status=COVERAGE_UNPROVEN,
-    )
-    proposals = extract_settlement_warehouse_proposals(
-        store=store, parent_descriptor=parent, recognizer=recognizer, save_crops=True)
-    by_geometry = {}
-    for proposal in proposals:
-        cells = proposal.get("gridCells") or []
-        if cells:
-            key = (min(cell[0] for cell in cells), min(cell[1] for cell in cells),
-                   proposal["widthCells"], proposal["heightCells"])
-            by_geometry[key] = proposal
-    items = []
-    for item in ledger["settlementItems"]:
-        key = (item["row"], item["col"], item["widthCells"], item["heightCells"])
-        proposal = by_geometry.get(key)
-        if proposal is None:
-            raise ValueError(f"settlement source crop missing for geometry {key}")
-        linked = copy.deepcopy(item)
-        linked["sourcePhase"] = "SETTLEMENT"
-        linked["sourceCapturedAt"] = frame_record["capturedAt"]
-        linked["parentEvidenceId"] = parent["evidenceId"]
-        linked["parentSha256"] = parent["sha256"]
-        linked["cropEvidenceId"] = proposal["cropEvidenceId"]
-        linked["cropRelativePath"] = proposal["cropRelativePath"]
-        linked["cropSha256"] = proposal["cropSha256"]
-        linked["identityEvidence"].update({
-            "recordStableKey": match_id, "parentEvidenceId": parent["evidenceId"],
-            "parentSha256": parent["sha256"], "cropEvidenceId": proposal["cropEvidenceId"],
-            "cropRelativePath": proposal["cropRelativePath"], "cropSha256": proposal["cropSha256"],
-        })
-        items.append(linked)
-
-    updated = copy.deepcopy(draft)
-    settlement = updated.setdefault("settlement", {})
-    settlement["settlementItems"] = items
-    settlement["visibleInventory"] = {
-        "sourcePhase": "SETTLEMENT", "sourceFrameSequence": frame_record["frameSequence"],
-        "sourceCapturedAt": frame_record["capturedAt"],
-        "sourcePixelSha256": frame_record["pixelSha256"],
-        "parentEvidenceId": parent["evidenceId"], "parentSha256": parent["sha256"],
-        "visibleProposalCount": len(items),
-        "trustedReferenceMatchCount": sum(item["status"] == "exact" for item in items),
-        "coverageStatus": "PARTIAL_VIEWPORT_ONLY", "outsideViewport": "UNKNOWN",
-        "itemLedgerVerified": False,
-    }
-    # save_draft preserves the same record's prediction and activity inventory.
-    drafts.save_draft(updated)
-    return {"matchId": match_id, "status": "SAVED", "visibleProposals": len(items),
-            "trustedReferenceMatches": settlement["visibleInventory"]["trustedReferenceMatchCount"],
-            "parentEvidenceId": parent["evidenceId"]}
+    source = drafts.capture_frame(frame_path, {
+        "capturedAtUtc": frame_record["capturedAt"],
+        "frameSequence": frame_record["frameSequence"],
+        "observationSessionId": state["state"]["sessionId"],
+        "targetInstance": state["state"]["observationTargetIdentity"],
+    }, expected_pixel_sha256=frame_record["pixelSha256"])
+    source.update(settlementBoundary=True, pixelSha256=frame_record["pixelSha256"])
+    result = recognize_saved_inventory(drafts, match_id, source)
+    old_archive = (draft.get("settlement") or {}).get("inventoryArchive") or {}
+    archive = {"sourceKey": _archive_key(match_id, source), "status": "SAVED",
+               "source": source, "capturedAt": source["capturedAt"], "attempts": 1}
+    drafts.patch_inventory_archive(match_id, {**result, "inventoryArchive": archive},
+                                   {"sourceKey": old_archive.get("sourceKey")})
+    visible = result["visibleInventory"]
+    return {"matchId": match_id, "status": "SAVED", "visibleProposals": len(result["settlementItems"]),
+            "trustedReferenceMatches": visible["trustedReferenceMatchCount"],
+            "parentEvidenceId": visible["parentEvidenceId"]}
 
 
 if __name__ == "__main__":

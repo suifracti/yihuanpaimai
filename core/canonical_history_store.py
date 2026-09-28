@@ -877,8 +877,12 @@ class CanonicalHistoryStore:
                             "reviewedItems",
                             "reviewedAt",
                             "reviewProvenance",
+                            "inventoryArchive",
+                            "settlementItems",
+                            "visibleInventory",
                         ):
-                            if field in prior_settlement and field not in rec_dict.setdefault("settlement", {}):
+                            if field in prior_settlement and (field in ("inventoryArchive", "settlementItems", "visibleInventory")
+                                                              or field not in rec_dict.setdefault("settlement", {})):
                                 rec_dict.setdefault("settlement", {})[field] = copy.deepcopy(prior_settlement[field])
                         from quality_sell_selection import merge_quality_sell_sidecar_bundle
                         merge_quality_sell_sidecar_bundle(prior_settlement, rec_dict.setdefault("settlement", {}))
@@ -984,6 +988,7 @@ class CanonicalHistoryStore:
         *,
         identity_review: Optional[Mapping[str, Any]] = None,
         expected_warehouse_review_fingerprint: Optional[str] = None,
+        expected_inventory_archive: Optional[Mapping[str, Any]] = None,
     ) -> Dict[str, Any]:
         """Apply a targeted field patch to an existing record atomically.
 
@@ -1007,13 +1012,21 @@ class CanonicalHistoryStore:
             for i, r in enumerate(rows):
                 if isinstance(r, dict):
                     r_keys = _extract_match_keys(r)
-                    if str(r.get("id") or "").strip() == target_id or target_id in r_keys:
+                    if (str(r.get("id") or "").strip() == target_id
+                            or (expected_inventory_archive is None and target_id in r_keys)):
                         match_idx = i
                         break
             if match_idx is None:
                 raise HistoryStoreError("RECORD_NOT_FOUND")
 
             updated = dict(rows[match_idx])
+            if expected_inventory_archive is not None:
+                if (str(updated.get("lifecycleStatus") or "").upper() != "DRAFT"
+                        or str(updated.get("dataOrigin") or "").lower() != "live-trial"):
+                    raise HistoryStoreError("INVENTORY_ARCHIVE_NOT_TRIAL_DRAFT")
+                archive = (updated.get("settlement") or {}).get("inventoryArchive") or {}
+                if any(archive.get(key) != value for key, value in expected_inventory_archive.items()):
+                    raise HistoryStoreError("INVENTORY_ARCHIVE_CHANGED")
             if expected_warehouse_review_fingerprint is not None:
                 current_review = (updated.get("settlement") or {}).get("warehouseIdentityReview") or {}
                 if str(current_review.get("artifactFingerprint") or "") != expected_warehouse_review_fingerprint:

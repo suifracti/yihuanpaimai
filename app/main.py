@@ -418,9 +418,11 @@ from runtime_revision import get_code_revision
 from prediction_snapshot_holder import ACTIVE_SNAPSHOT_HOLDER
 from settlement_truth_holder import ACTIVE_SETTLEMENT_TRUTH_HOLDER
 from native_trial_drafts import NativeTrialDraftStore, resolve_native_trial_history_path
+from settlement_inventory_archive import SettlementInventoryArchive
 
 NATIVE_TRIAL_HISTORY_PATH = resolve_native_trial_history_path(PROJECT_ROOT)
 NATIVE_TRIAL_DRAFT_STORE = NativeTrialDraftStore(NATIVE_TRIAL_HISTORY_PATH)
+SETTLEMENT_INVENTORY_ARCHIVE = SettlementInventoryArchive(NATIVE_TRIAL_DRAFT_STORE)
 
 if "--print-code-revision" in sys.argv or "--version" in sys.argv:
     print(get_code_revision())
@@ -2031,14 +2033,26 @@ def _native_capture_trial_frame_locked(path: Any, metadata: Dict[str, Any], *, b
         source_path = os.path.realpath(str(path))
         if os.path.commonpath([session_root, source_path]) != session_root:
             return
-        descriptor = NATIVE_TRIAL_DRAFT_STORE.capture_frame(source_path, metadata)
+        descriptor = NATIVE_TRIAL_DRAFT_STORE.capture_frame(
+            source_path, metadata, expected_pixel_sha256=metadata.get("pixelSha256"))
+        if boundary:
+            descriptor["settlementBoundary"] = True
+            descriptor["pixelSha256"] = metadata.get("pixelSha256")
     except (OSError, ValueError, RuntimeError) as exc:
         log_stage("DRAFT:NATIVE", f"source frame copy failed: {type(exc).__name__}: {exc}")
         return
-    if any(item.get("sha256") == descriptor.get("sha256") for item in _NATIVE_TRIAL_SOURCE_FRAMES):
+    prior = next((item for item in _NATIVE_TRIAL_SOURCE_FRAMES
+                  if item.get("sha256") == descriptor.get("sha256")), None)
+    if prior is not None:
+        if boundary:
+            changed = prior.get("settlementBoundary") is not True or prior.get("pixelSha256") != descriptor.get("pixelSha256")
+            prior["settlementBoundary"] = True
+            prior["pixelSha256"] = descriptor.get("pixelSha256")
+            return changed
         return
     _NATIVE_TRIAL_SOURCE_FRAMES.append(descriptor)
     _NATIVE_TRIAL_SOURCE_FRAMES = _NATIVE_TRIAL_SOURCE_FRAMES[:1] + _NATIVE_TRIAL_SOURCE_FRAMES[-1:]
+    return True
 
 
 def _native_capture_intel_source_locked(frame: Dict[str, Any], event: Dict[str, Any], context: Dict[str, Any]) -> bool:
@@ -2919,17 +2933,22 @@ def _native_observation_event(event: Dict[str, Any]) -> None:
                     "observationSessionId": session_id,
                     "targetInstance": _native_target_instance(data.get("target")),
                 })
-            if data["isSettlement"] and os.path.basename(str(frame.get("rawFramePath") or "")) == "settlement-final-frame.bmp":
+            boundary_frame = event.get("lastFrame") or {}
+            if (data["isSettlement"] and boundary_frame.get("scene") == "SETTLEMENT"
+                    and boundary_frame.get("frameSequence") == sequence
+                    and boundary_frame.get("capturedAt") == frame.get("capturedAtUtc")
+                    and os.path.basename(str(frame.get("rawFramePath") or "")) == "settlement-final-frame.bmp"):
                 prior_source_count = len(_NATIVE_TRIAL_SOURCE_FRAMES)
-                _native_capture_trial_frame_locked(frame.get("rawFramePath"), {
+                boundary_recorded = _native_capture_trial_frame_locked(frame.get("rawFramePath"), {
                     "width": frame.get("width"),
                     "height": frame.get("height"),
                     "capturedAtUtc": frame.get("capturedAtUtc"),
                     "frameSequence": sequence,
                     "observationSessionId": session_id,
                     "targetInstance": _native_target_instance(data.get("target")),
+                    "pixelSha256": boundary_frame.get("pixelSha256"),
                 }, boundary=True)
-                source_captured = source_captured or len(_NATIVE_TRIAL_SOURCE_FRAMES) > prior_source_count
+                source_captured = source_captured or bool(boundary_recorded) or len(_NATIVE_TRIAL_SOURCE_FRAMES) > prior_source_count
             intel_source_captured = _native_capture_intel_source_locked(frame, event, context)
             should_save_trial_draft = bool(
                 native_observation_enabled()
@@ -4365,6 +4384,10 @@ def _persist_current_draft_now() -> Optional[Dict[str, Any]]:
                     ],
                     observation_scope=scope,
                 )
+                try:
+                    SETTLEMENT_INVENTORY_ARCHIVE.enqueue_saved_draft(written)
+                except Exception as archive_exc:
+                    log_stage("DRAFT:NATIVE", f"settlement archive enqueue failed match={CURRENT_MATCH.id}: {type(archive_exc).__name__}: {archive_exc}")
                 _LAST_DRAFT_WRITE = (CURRENT_MATCH.id, CURRENT_MATCH.facts_revision)
                 _NATIVE_DRAFT_SAVE_ERROR = None
                 _NATIVE_DRAFT_SAVE_ERROR_MATCH_ID = None
@@ -7699,6 +7722,7 @@ def run_hud_app():
         settlement_review_service = SettlementReviewService(
             legacy_archive=legacy_archive,
             native_trial_store=NATIVE_TRIAL_DRAFT_STORE,
+            inventory_archive=SETTLEMENT_INVENTORY_ARCHIVE,
         )
         main_window.bind_lifecycle(
             visibility_controller,
@@ -7763,6 +7787,13 @@ def main():
     data_root = str(resolve_runtime_data_root())
     log_stage("STARTUP:PROFILE", f"Runtime profile={profile} DATA_ROOT={data_root}")
     log_stage("STARTUP:MAIN", f"process started (PID={os.getpid()}, Frozen={getattr(sys, 'frozen', False)}, debug={DEBUG_MODE}, log={LOG_FILE_PATH})")
+    if native_observation_enabled():
+        try:
+            pending = SETTLEMENT_INVENTORY_ARCHIVE.resume_pending()
+            if pending:
+                log_stage("DRAFT:NATIVE", f"resumed {pending} settlement inventory archive task(s)")
+        except Exception as exc:
+            log_stage("DRAFT:NATIVE", f"settlement archive resume failed: {type(exc).__name__}: {exc}")
 
     # 0. 启动运行时看板娘图标注入线程
     if os.environ.get("NTE_DISABLE_ICON") != "1":

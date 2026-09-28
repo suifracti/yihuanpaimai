@@ -1001,6 +1001,19 @@ function renderHistoryDetail(record) {
     warehouseText += `；结算终帧：${regionCount} 个可见候选区域（${Number(settlementInventory.trustedReferenceMatchCount) || 0} 处真实参考自动匹配；未覆盖区域未知）`;
   }
   setText("detail-warehouse", warehouseText);
+  const archiveState = recordSource === "live-trial" ? settlement.inventoryArchive : null;
+  const archiveWrap = document.getElementById("detail-inventory-archive-wrap");
+  const archiveRetry = document.getElementById("detail-inventory-archive-retry");
+  if (archiveWrap) archiveWrap.hidden = recordSource !== "live-trial" || !archiveState;
+  if (archiveState) {
+    const labels = {PENDING: "待处理", PROCESSING: "处理中", SAVED: "已保存", FAILED: "失败，可重试"};
+    setText("detail-inventory-archive-status", `${labels[archiveState.status] || "状态未知"}${archiveState.status === "FAILED" && archiveState.error ? `：${archiveState.error}` : ""}`);
+  }
+  if (archiveRetry) {
+    archiveRetry.hidden = archiveState?.status !== "FAILED";
+    archiveRetry.onclick = archiveState?.status === "FAILED"
+      ? () => postNative("retry_settlement_inventory_archive", {recordId: record.id, source: "live-trial"}) : null;
+  }
 
   // Section 2: Persisted prediction snapshot; never recompute in Main.
   const hasPrediction = prediction.hasSnapshot === true;
@@ -5443,6 +5456,14 @@ function handleNativeMessage(event) {
       const section = document.getElementById("detail-review-section");
       if (section) section.hidden = true;
       renderWarehouseIdentitySummary(reviewResult.warehouseIdentitySummary || null);
+    }
+  }
+  if (payload.action === "retry_settlement_inventory_archive" && payload.settlementReview) {
+    const state = payload.settlementReview;
+    setText("detail-inventory-archive-status", state.ok ? "待处理" : (state.message || state.status || "重试失败"));
+    if (state.ok) {
+      const retry = document.getElementById("detail-inventory-archive-retry");
+      if (retry) retry.hidden = true;
     }
   }
   if ((payload.action === "import_settlement_screenshot" || payload.action === "replace_settlement_screenshot") && payload.settlementReview) {
