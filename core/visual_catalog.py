@@ -186,6 +186,17 @@ def load_verified_warehouse_gameplay_templates(root=None):
     except (OSError, ValueError, TypeError):
         return {}
     registry = {str(row.get("cardKey") or ""): row for row in registry_rows if row.get("cardKey")}
+    # The checked visual catalog contains real production identities absent
+    # from the older catalog_065 snapshot. Never alias by price or footprint:
+    # the source-card registry and its image hash below must still agree.
+    visual_models = {
+        row["catalogId"]: {
+            "Name": row["name"], "Width": row["width"],
+            "Height": row["height"], "Quality": row["rarity"],
+        }
+        for row in verified_references(root=base_root)
+        if row["catalogId"] not in official
+    }
 
     quality_alias = {
         "金": "gold", "gold": "gold",
@@ -229,7 +240,7 @@ def load_verified_warehouse_gameplay_templates(root=None):
 
         for row in payload.get("items") or []:
             catalog_id = str(row.get("catalogId") or "")
-            model = official.get(catalog_id)
+            model = official.get(catalog_id) or visual_models.get(catalog_id)
             geometry = row.get("gridBoundingBox") or {}
             width = int(geometry.get("width") or 0)
             height = int(geometry.get("height") or 0)

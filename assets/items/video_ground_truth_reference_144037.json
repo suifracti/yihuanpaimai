@@ -882,6 +882,7 @@
       "videoSourceFrameTimeSec": 160.0,
       "observationBasis": "Single cell 1x1 gold border",
       "localCropPath": "assets/items/ground_truth_reference_144037/ref_144037_21.png",
+      "cropSha256": "115572fe24a623bc3448eac340f32703a09bd077d10eb0efbf18cae08593d23a",
       "catalogId": "visual-9607b248bbf4",
       "sourceScreenshot": "assets/items/catalog_screenshots/1x1/{9138F8CF-782A-4086-937D-FAF3CD4E810B}.png",
       "cardBbox": [
@@ -965,6 +966,7 @@
       "videoSourceFrameTimeSec": 160.0,
       "observationBasis": "Large 4x4 green border occupying cols 0-3, rows 6-9",
       "localCropPath": "assets/items/ground_truth_reference_144037/ref_144037_23.png",
+      "cropSha256": "99b729fa04fe850ef6015aacb89671e730e05058cbe24349a2b9b6b74d9712b2",
       "catalogId": "image5-0-0",
       "sourceScreenshot": "assets/items/catalog_screenshots/4X4/{A56C0E29-265B-49E6-9060-91691585BA0A}.png",
       "cardBbox": [

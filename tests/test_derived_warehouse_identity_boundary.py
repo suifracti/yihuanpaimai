@@ -482,7 +482,9 @@ class DerivedWarehouseIdentityBoundaryTests(unittest.TestCase):
         self.assertEqual(settlement_reference["metadata"]["sourceFrameTimeSec"], 168.0)
         self.assertEqual(other_match["metadata"]["sourceSceneKind"], "SETTLEMENT")
         self.assertEqual(other_match["metadata"]["sourceFrameTimeSec"], 150)
-        self.assertFalse(any(
+        # The 4x4 catalog-card geometry and pinned 4x4 real crop now agree;
+        # this does not qualify a bottom-clipped 4x3 viewport observation.
+        self.assertTrue(any(
             item["metadata"]["referenceId"] == "ref_144037_23"
             for group in references.values() for item in group
         ))

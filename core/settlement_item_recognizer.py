@@ -383,10 +383,15 @@ class SettlementItemRecognizer:
                       for rar in ("gold", "purple", "blue", "green", "red", "white")}
             rarity = max(scores, key=scores.get)
             score = scores[rarity]
+            # At the viewport's lower edge there is no visible outside gutter
+            # proving that the card ends here. Keep its visible region, but do
+            # not treat its apparent height as a complete physical footprint.
+            viewport_clipped = row + height == rows
             result.append({"row": row, "col": col, "widthCells": width,
                 "heightCells": height, "shape": f"{width}x{height}", "cells": cells,
                 "rarity": rarity if score >= .12 else "unknown", "score": score,
-                "occupiedCount": len(cells), "groupingAmbiguous": False})
+                "occupiedCount": len(cells), "groupingAmbiguous": viewport_clipped,
+                "viewportClipped": viewport_clipped})
             assigned.update(cells)
         for row in range(rows):
             for col in range(cols):
@@ -660,6 +665,7 @@ class SettlementItemRecognizer:
                 "confidence": round(float(evidence.get("top1Score") or 0.0), 4),
                 "identityEvidence": evidence,
                 "groupingAmbiguous": bool(it.get("groupingAmbiguous")),
+                "viewportClipped": bool(it.get("viewportClipped")),
                 "partitionCandidates": list(it.get("partitionCandidates") or []),
                 "geometryMergeEvidence": it.get("geometryMergeEvidence"),
                 "score": it.get("score"),
