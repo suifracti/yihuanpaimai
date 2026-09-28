@@ -4531,6 +4531,13 @@ function renderReviewSection(review) {
         "UNKNOWN": "未定"
       };
       const statusLabel = statusMap[rawStatus] || rawStatus;
+      const qualificationLabels = {
+        PHYSICAL_BOUNDARY_UNRESOLVED: "物理边界未闭合",
+        NO_CATALOG_CANDIDATES: "无同尺寸品质候选",
+        NO_QUALIFIED_GAMEPLAY_REFERENCE: "当前候选缺合格实拍参考",
+        QUALIFIED_REFERENCE_NOT_ACCEPTED: "有部分实拍参考，但未通过独立匹配"
+      };
+      const qualificationLabel = qualificationLabels[ev.qualificationReason] || "";
 
       const reviewedItem = (review.reviewedItems || []).find(
         (r) => r.groupingHypothesisId === hypId || r.proposalId === hypId
@@ -4579,6 +4586,8 @@ function renderReviewSection(review) {
             <span class="card-meta-pill pill-rarity-${ev.rarity || 'white'}">${rarityText}</span>
             <span class="card-meta-pill pill-shape">${shapeLabel}</span>
             <span class="card-meta-pill pill-status">${statusLabel}</span>
+            ${qualificationLabel ? `<span class="card-meta-pill">${qualificationLabel}</span>` : ""}
+            ${ev.evidenceSource === "NO_USABLE_VISUAL_SCORE" ? `<span class="card-meta-pill">本裁图无可用视觉分数</span>` : ""}
             ${scoreDisplay}
           </div>
           <span class="proposal-status-badge ${statusBadgeClass}">${statusBadgeText}</span>

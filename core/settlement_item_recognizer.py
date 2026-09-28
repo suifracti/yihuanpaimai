@@ -602,12 +602,16 @@ class SettlementItemRecognizer:
             # Production catalog-card pictures are derived references. Reuse
             # the activity matcher's hash-checked real-gameplay references for
             # settlement exact identity; the derived rank remains a candidate.
-            if not self.tpl_dir and not it.get("groupingAmbiguous") and ranked:
-                from warehouse_vision import WarehouseVisionConfig
+            qualified_ids = []
+            if not self.tpl_dir and ranked:
                 if self._trusted_gameplay_matcher is None:
                     from warehouse_vision import WarehouseTemplateMatcher
                     self._trusted_gameplay_matcher = WarehouseTemplateMatcher(
                         trusted_gameplay_only=True)
+                qualified_ids = [c["catalogId"] for c in ranked
+                                 if self._trusted_gameplay_matcher.gameplay_templates_by_id.get(c["catalogId"])]
+            if not self.tpl_dir and not it.get("groupingAmbiguous") and qualified_ids:
+                from warehouse_vision import WarehouseVisionConfig
                 local_bbox = it["bbox"]
                 roi = crop[local_bbox[1] - gy1:local_bbox[1] - gy1 + local_bbox[3],
                            local_bbox[0] - gx1:local_bbox[0] - gx1 + local_bbox[2]]
@@ -626,6 +630,13 @@ class SettlementItemRecognizer:
                                     "evidenceSource": direct_evidence.get("referenceSource"),
                                     "directReference": direct_evidence,
                                     "top1Score": direct_score, "margin": direct_margin}
+
+            if status != "exact":
+                if not self.tpl_dir:
+                    from settlement_catalog_candidates import explain_unresolved_settlement_evidence
+                    evidence = explain_unresolved_settlement_evidence(
+                        evidence, grouping_ambiguous=bool(it.get("groupingAmbiguous")),
+                        qualified_catalog_ids=qualified_ids)
 
             settlement_items.append({
                 "slotIndex": i + 1,

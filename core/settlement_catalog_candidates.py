@@ -30,6 +30,29 @@ STATUS_UNKNOWN = "UNKNOWN"
 DEFAULT_TOP1_SCORE_THRESHOLD = 0.85
 DEFAULT_MARGIN_THRESHOLD = 0.08
 
+
+def explain_unresolved_settlement_evidence(evidence, *, grouping_ambiguous, qualified_catalog_ids):
+    """Describe a missing identity without promoting a catalog candidate."""
+    result = dict(evidence or {})
+    if result.get("status") == STATUS_EXACT_IDENTIFIED:
+        return result
+    qualified = list(qualified_catalog_ids or [])
+    ranked = result.get("rankedCandidates") or []
+    if float(result.get("top1Score") or 0) <= 0 and result.get("evidenceSource") == "DERIVED_REFERENCE_CANDIDATE_ONLY":
+        result["evidenceSource"] = "NO_USABLE_VISUAL_SCORE"
+        result["templateReference"] = None
+    if grouping_ambiguous:
+        reason = "PHYSICAL_BOUNDARY_UNRESOLVED"
+    elif not ranked:
+        reason = "NO_CATALOG_CANDIDATES"
+    elif not qualified:
+        reason = "NO_QUALIFIED_GAMEPLAY_REFERENCE"
+    else:
+        reason = "QUALIFIED_REFERENCE_NOT_ACCEPTED"
+    result["qualificationReason"] = reason
+    result["qualifiedReferenceCandidateCount"] = len(qualified)
+    return result
+
 CATALOG_RELATIVE_PATH = Path("assets") / "catalog_065.json"
 
 RARITY_CN_TO_CANONICAL = {
@@ -321,7 +344,9 @@ class SettlementCatalogCandidateResolver:
             else:
                 status = STATUS_AMBIGUOUS_CANDIDATES
                 candidate_catalog_id = None
-                ev_source = "DERIVED_REFERENCE_CANDIDATE_ONLY" if derived_reference else "PIXEL_TEMPLATE_AMBIGUOUS" if top1_score > 0 else "NO_TEMPLATE"
+                ev_source = ("NO_USABLE_VISUAL_SCORE" if top1_score <= 0 else
+                             "DERIVED_REFERENCE_CANDIDATE_ONLY" if derived_reference else
+                             "PIXEL_TEMPLATE_AMBIGUOUS")
                 tpl_reference = top1["templateReference"] if top1_score > 0 else None
 
         if status == STATUS_EXACT_IDENTIFIED and (

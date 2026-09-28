@@ -494,11 +494,20 @@ class SettlementReviewService:
             if use_saved:
                 # Review the exact saved viewport, not a fresh recognition of
                 # a later/earlier visually similar screenshot.
+                from settlement_catalog_candidates import explain_unresolved_settlement_evidence
+                from visual_catalog import load_verified_warehouse_gameplay_templates
+                verified_references = load_verified_warehouse_gameplay_templates()
                 proposals = [_whitelist_proposal(item) for item in saved_items]
                 crop_descriptors = {d.get("sha256"): d for d in descriptors
                                     if d.get("kind") == KIND_WAREHOUSE_SEGMENT}
                 for item in saved_items:
                     ev = copy.deepcopy(item.get("identityEvidence") or {})
+                    if item.get("status") != "exact":
+                        ev = explain_unresolved_settlement_evidence(
+                            ev, grouping_ambiguous=bool(item.get("groupingAmbiguous")),
+                            qualified_catalog_ids=[candidate_id for candidate_id in ev.get("candidateCatalogIds") or []
+                                                   if verified_references.get(candidate_id)],
+                        )
                     ev["groupingHypothesisId"] = ev.get("groupingHypothesisId") or f"saved_{item['slotIndex']}"
                     desc = crop_descriptors.get(item.get("cropSha256"))
                     if desc and desc.get("evidenceId") == item.get("cropEvidenceId"):
