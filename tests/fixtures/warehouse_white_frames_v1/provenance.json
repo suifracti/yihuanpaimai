@@ -1,0 +1,34 @@
+{
+  "source": "build/warehouse-recognition-20261002/bounded-wgc-qa/live-f357c8c232/candidate-01.bmp",
+  "sourceSha256": "54006174ca61acdffadc5bb6550ef8dcb3fa79de5d391b713a75b1781f011a4e",
+  "cropXYXY": [
+    1315,
+    211,
+    1878,
+    775
+  ],
+  "fixtureSha256": "69ec759f2ee10270b8b1abaa46030730c37030ea149da7dacbd512767dc4551f",
+  "scene": "SETTLEMENT",
+  "role": "KNOWN_REGRESSION_AFTER_DIAGNOSIS_ONE_REAL_SOURCE_SCENE",
+  "authority": "User-confirmed separate narrow white1x2 and upper-right white1x1; independently checked original closed borders. No machine output or catalog used as truth.",
+  "expectedVisibleFrames": [
+    {
+      "col": 5,
+      "row": 5,
+      "wCells": 1,
+      "hCells": 2,
+      "identity": null,
+      "quantity": null
+    },
+    {
+      "col": 6,
+      "row": 5,
+      "wCells": 1,
+      "hCells": 1,
+      "identity": null,
+      "quantity": null
+    }
+  ],
+  "underlyingPhysicalTruthForQualityBlocks": null,
+  "unseenValidationImages": 0
+}

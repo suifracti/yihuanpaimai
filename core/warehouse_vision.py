@@ -6,7 +6,7 @@ Neverness to Everness (异环) - Warehouse Vision v1
 1. 严格遵循 SlotKnowledge / Evidence 证据分层模型 (OUTLINE_ONLY -> RARITY_ONLY -> RARITY_AND_SHAPE -> CANDIDATE_SET -> UNIQUE_IN_CATALOG / EXACT_IDENTIFIED)
 2. 引入具备 trackId 的时序稳定追踪器 (Temporal Stability Filter)，杜绝单帧光效误判
 3. UNIQUE_IN_CATALOG 仅在 rarity+shape 达到连续稳定确认后才允许锁定
-4. 候选 > 1 时执行真像素级 Template Matching，严格杜绝 candidates[0] 盲选
+4. 所有稳定且完整的候选均执行像素级参考匹配；单候选也不能跳过独立证据门禁
 5. 无法高置信确认时忠实输出 candidate_set 与价格区间 [min_price, max_price]
 """
 
@@ -15,6 +15,7 @@ import cv2
 import json
 import numpy as np
 from enum import Enum
+from pathlib import Path
 from dataclasses import dataclass, field
 from typing import List, Dict, Any, Tuple, Optional
 
@@ -50,7 +51,7 @@ class EvidenceLevel(str, Enum):
     RARITY_AND_SHAPE = "RARITY_AND_SHAPE"       # 获得品质与尺寸，但尚未达到时序稳定
     CANDIDATE_SET = "CANDIDATE_SET"             # 稳定获取品质+尺寸后得到的候选集合 (CandidateCount > 1)
     UNIQUE_IN_CATALOG = "UNIQUE_IN_CATALOG"     # 稳定品质+尺寸在全图鉴中唯一 (CandidateCount == 1)
-    EXACT_IDENTIFIED = "EXACT_IDENTIFIED"       # 候选>1 经高置信模板匹配确认具体身份
+    EXACT_IDENTIFIED = "EXACT_IDENTIFIED"       # 经高置信直接参考匹配确认具体身份
 
 # ==============================================================================
 # 2. 槽位知识结构体 (Tracked Slot Knowledge)
@@ -178,6 +179,27 @@ class WarehouseTemplateMatcher:
             try:
                 with open(self.catalog_path, 'r', encoding='utf-8') as f:
                     self.catalog = json.load(f)
+                from item_identity_resolver import default_catalog_path
+                if Path(self.catalog_path).resolve() == default_catalog_path().resolve():
+                    # The legacy snapshot is incomplete. Reuse independently
+                    # validated source-card IDs for candidate lookup, without
+                    # rewriting the snapshot or admitting derived-image truth.
+                    from visual_catalog import verified_references
+                    known_ids = {str(item.get("Id") or "") for item in self.catalog}
+                    quality_map = {"gold": "金", "purple": "紫", "blue": "蓝",
+                                   "green": "绿", "red": "红", "white": "白"}
+                    for reference in verified_references():
+                        catalog_id = reference["catalogId"]
+                        if catalog_id in known_ids:
+                            continue
+                        self.catalog.append({
+                            "Id": catalog_id, "Name": reference["name"],
+                            "Width": reference["width"], "Height": reference["height"],
+                            "Cells": reference["width"] * reference["height"],
+                            "Quality": quality_map[reference["rarity"]],
+                            "Value": reference["value"],
+                        })
+                        known_ids.add(catalog_id)
                 for item in self.catalog:
                     q = item.get("Quality", "金")
                     # 映射中英文品质
@@ -481,7 +503,9 @@ class WarehouseVisionV1:
                 grid_roi_norm = (0.685, 0.20, 0.978, 0.755)
 
         gx1, gy1 = int(w * grid_roi_norm[0]), int(h * grid_roi_norm[1])
-        gx2, gy2 = int(w * grid_roi_norm[2]), int(h * grid_roi_norm[3])
+        # Preserve the normalized ROI's outermost visible pixels. Truncating
+        # its exclusive end can drop a nearly complete final grid column.
+        gx2, gy2 = int(np.ceil(w * grid_roi_norm[2])), int(np.ceil(h * grid_roi_norm[3]))
 
         crop = frame[gy1:gy2, gx1:gx2]
         if crop.size == 0:
@@ -519,6 +543,22 @@ class WarehouseVisionV1:
 
         cell_w, score_w = self._acf_period(col_edge, lo, hi, preferred=cw / 10.0)
         cell_h, score_h = self._acf_period(row_edge, lo, hi, preferred=ch / 10.0)
+        # Local artwork can shift the mean-edge peak without changing the
+        # lattice. Use a common robust period only when both axes and their
+        # repeated grid-line phases independently support it.
+        robust_col = np.median(np.abs(gx), axis=0)
+        robust_row = np.median(np.abs(gy), axis=1)
+        robust_w, robust_score_w = self._acf_period(robust_col, lo, hi)
+        robust_h, robust_score_h = self._acf_period(robust_row, lo, hi)
+        measurement = "MEAN_FALLBACK"
+        if (robust_score_w >= 0.18 and robust_score_h >= 0.18
+                and robust_w == robust_h
+                and self._grid_phase_supported(robust_col, robust_w)
+                and self._grid_phase_supported(robust_row, robust_h)):
+            cell_w, cell_h = robust_w, robust_h
+            score_w, score_h = robust_score_w, robust_score_h
+            col_edge, row_edge = robust_col, robust_row
+            measurement = "ROBUST_BOTH_AXES"
         if score_w < 0.18:
             cell_w = fallback_w
         if score_h < 0.18:
@@ -541,7 +581,10 @@ class WarehouseVisionV1:
             origin_y = max(0.0, origin_y - cell_h)
         # Only complete cells support a physical slot; rounding up samples scene
         # background beyond the board as an extra bottom row or right column.
-        cols = max(1, int((cw - origin_x) / cell_w))
+        # The measured grid line may sit one quantized pixel inside the ROI.
+        # Enumerate that near-complete edge cell; the later footprint gate
+        # still rejects any physical box extending outside the source crop.
+        cols = max(1, int((cw - origin_x + 1.0) / cell_w))
         rows = max(1, int((ch - origin_y) / cell_h))
         cols = min(12, max(1, cols))
         rows = min(20, max(1, rows))
@@ -556,7 +599,33 @@ class WarehouseVisionV1:
             "col_centers": col_centers,
             "row_centers": row_centers,
             "score": (round(float(score_w), 3), round(float(score_h), 3)),
+            "measurement": measurement,
         }
+
+    def _grid_phase_supported(self, profile: np.ndarray, period: float) -> bool:
+        """Check repeated local ridges, rather than one strong artwork edge."""
+        if period < 8:
+            return False
+        phase = self._grid_phase(profile, period)
+        radius = max(1, int(round(0.10 * period)))
+        tolerance = max(1.0, 0.06 * period)
+        supported = []
+        for position in np.arange(phase, len(profile), period):
+            center = int(round(position))
+            if center - radius < 0 or center + radius >= len(profile):
+                continue
+            band = profile[center - radius:center + radius + 1]
+            left = max(0, int(position - 0.4 * period))
+            right = min(len(profile), int(position + 0.4 * period) + 1)
+            background = float(np.median(profile[left:right]))
+            # A nearby artwork edge may be stronger than the actual lattice
+            # ridge. Require a local ridge at the predicted phase, rather
+            # than requiring it to win the whole search window.
+            ridges = np.flatnonzero((band[1:-1] >= band[:-2])
+                                    & (band[1:-1] >= band[2:])) + center-radius+1
+            supported.append(bool(np.any((np.abs(ridges-position) <= tolerance)
+                                          & (profile[ridges] > background+1e-3))))
+        return len(supported) >= 3 and float(np.mean(supported)) >= 0.85
 
     def _acf_period(self, profile: np.ndarray, lo: int, hi: int, preferred: Optional[float] = None) -> Tuple[float, float]:
         x = profile.astype(np.float32)
@@ -580,8 +649,10 @@ class WarehouseVisionV1:
             return float(lo + peak_i), float(window[peak_i])
         peaks.sort(reverse=True)
         best_score, best_p = peaks[0]
-        # 装满时 2x 谐波更强：若存在约一半周期的基频，用基频。
-        for score, period in sorted(peaks, key=lambda t: t[1]):
+        # 装满时 2x 谐波可能更强；比较所有合格基频，避免较短的弱峰
+        # 先命中整数倍容差后遮住真正的网格周期。
+        fundamentals = []
+        for score, period in peaks:
             if period >= best_p * 0.72:
                 continue
             if score < 0.18:
@@ -589,10 +660,15 @@ class WarehouseVisionV1:
             ratio = best_p / period
             nearest = round(ratio)
             if 2 <= nearest <= 4 and abs(ratio - nearest) <= 0.18:
-                best_score, best_p = score, period
-                break
+                fundamentals.append((score, -abs(ratio - nearest), period))
+        if fundamentals:
+            best_score, _ratio_error, best_p = max(fundamentals)
         if preferred and preferred > 0:
-            near = [(abs(period - preferred), score, period) for score, period in peaks if score >= 0.18]
+            # Crop width/height do not prove how many complete cells are visible.
+            # A size prior may break an equal-evidence tie, but must not replace
+            # a stronger observed period after the right side is cropped.
+            near = [(abs(period - preferred), score, period) for score, period in peaks
+                    if abs(score - best_score) <= 1e-6]
             if near:
                 near.sort()
                 _dist, score, period = near[0]
@@ -723,7 +799,10 @@ class WarehouseVisionV1:
         for side in (hsv[:t, :], hsv[-t:, :], hsv[:, :t], hsv[:, -t:]):
             sat = (side[:, :, 1] >= 55) & (side[:, :, 2] >= 55)
             hues = side[:, :, 0][sat]
-            if hues.size < 6:
+            # Sparse coloured artwork touching an inset band is not a quality
+            # frame. Reuse the frame-strength coverage gate before voting;
+            # otherwise three small gold patches can suppress a real white frame.
+            if hues.size < 6 or float(np.mean(sat)) < 0.35:
                 continue
             side_votes.append(self._hue_to_rarity(float(np.median(hues))))
         rarity = None
@@ -734,7 +813,27 @@ class WarehouseVisionV1:
             agree = side_votes.count(rarity)
             fill = agree / 4.0
         mean_v = float(hsv[:, :, 2].mean())
-        # 至少两边同色才算占用。单边是邻格漏框。
+        if rarity is None or agree < 3:
+            # White has no saturated hue. Read its actual outer frame rather
+            # than the inset dark item body; reuse the legacy white HSV gate.
+            fx1, fy1, fx2, fy2 = self._cell_rect(ox, oy, col, row, cell_w, cell_h, inset=0.0)
+            framed = crop[max(0, fy1 - offset_y):min(crop.shape[0], fy2 - offset_y),
+                          max(0, fx1 - offset_x):min(crop.shape[1], fx2 - offset_x)]
+            if framed.size:
+                white_hsv = cv2.cvtColor(framed, cv2.COLOR_BGR2HSV)
+                border = max(2, int(min(framed.shape[:2]) * 0.16))
+                white_sides = sum(
+                    np.count_nonzero((side[:, :, 1] <= 40) & (side[:, :, 2] >= 160)) >= 6
+                    # Exclude corners so one adjacent white edge cannot vote
+                    # again as the top and bottom frame.
+                    for side in (white_hsv[:border, border:-border],
+                                 white_hsv[-border:, border:-border],
+                                 white_hsv[border:-border, :border],
+                                 white_hsv[border:-border, -border:])
+                )
+                if white_sides >= 3:
+                    rarity, agree, fill = "white", white_sides, white_sides / 4.0
+        # Three agreeing sides reject a neighboring frame leaking through one side.
         if rarity is None or agree < 3:
             if core_v >= 50 and core_s <= 70:
                 return {"rarity": "unknown", "fill": 1.0, "has_glow": False, "mean_v": mean_v}
@@ -772,7 +871,18 @@ class WarehouseVisionV1:
         cols = len(occ[0]) if occ else 0
         self._absorb_interior_highlights(occ)
         seen = [[False] * cols for _ in range(rows)]
+        proven_separators = set()
         slots = []
+        # An independently closed outer frame bounds one physical item even
+        # when its artwork creates dark or differently coloured interior cells.
+        # Reserve these cells before the cell-by-cell fallback splits them.
+        for slot in self._complete_frame_slots(crop, offset_x, offset_y, ox, oy,
+                                               cell_w, cell_h, cols, rows, occ, proven_separators):
+            if any(seen[r][c] for r, c in slot["cells"]):
+                continue
+            slots.append(slot)
+            for r, c in slot["cells"]:
+                seen[r][c] = True
         for r0 in range(rows):
             for c0 in range(cols):
                 seed = occ[r0][c0]
@@ -780,7 +890,8 @@ class WarehouseVisionV1:
                     continue
                 rarity = seed["rarity"]
                 w_cells, h_cells = self._grow_solid_rect(
-                    occ, crop, offset_x, offset_y, ox, oy, cell_w, cell_h, c0, r0, rarity
+                    occ, crop, offset_x, offset_y, ox, oy, cell_w, cell_h, c0, r0, rarity, seen,
+                    proven_separators
                 )
                 cells = [(r0 + dr, c0 + dc) for dr in range(h_cells) for dc in range(w_cells)]
                 for r, c in cells:
@@ -831,6 +942,178 @@ class WarehouseVisionV1:
                 })
         return slots
 
+    def _complete_frame_slots(self, crop, offset_x, offset_y, ox, oy,
+                              cell_w, cell_h, cols, rows, occ, proven_separators=None):
+        """Recover complete multi-cell frames; never infer a missing outer side."""
+        hsv = cv2.cvtColor(crop, cv2.COLOR_BGR2HSV)
+        hue, saturation, value = cv2.split(hsv)
+        visible_colour = (saturation >= 55) & (value >= 55)
+        quality_masks = {
+            "red": (hue <= 10) | (hue >= 168),
+            "gold": (hue > 10) & (hue < 34),
+            "green": (hue >= 34) & (hue < 88),
+            "blue": (hue >= 88) & (hue < 125),
+            "purple": (hue >= 125) & (hue < 168),
+            # White has no saturated hue; use its existing frame HSV gate.
+            "white": (saturation <= 40) & (value >= 160),
+        }
+        recovered = []
+        for rarity, colour in quality_masks.items():
+            mask = (colour if rarity == "white" else visible_colour & colour).astype(np.uint8)
+            contours, _ = cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+            for contour in contours:
+                x, y, width, height = cv2.boundingRect(contour)
+                if cv2.contourArea(contour) < 1.25 * cell_w * cell_h:
+                    continue
+                if cv2.contourArea(contour) / (width * height) < 0.85:
+                    continue
+                col, row, wc, hc = self._map_box_to_cells(
+                    (x, y, width, height),
+                    {"origin": (ox, oy), "cell_w": cell_w, "cell_h": cell_h,
+                     "cols": cols, "rows": rows}, offset_x, offset_y)
+                if wc * hc < 2 or wc >= 6 or hc >= 6:
+                    continue
+                gx1, gy1 = int(round(ox + col * cell_w)), int(round(oy + row * cell_h))
+                gx2, gy2 = int(round(ox + (col + wc) * cell_w)), int(round(oy + (row + hc) * cell_h))
+                tolerance = max(2.0, 0.10 * min(cell_w, cell_h))
+                if max(abs(gx1 - offset_x - x), abs(gy1 - offset_y - y),
+                       abs(gx2 - offset_x - x - width), abs(gy2 - offset_y - y - height)) > tolerance:
+                    continue
+                if not (offset_x <= gx1 < gx2 <= offset_x + crop.shape[1]
+                        and offset_y <= gy1 < gy2 <= offset_y + crop.shape[0]):
+                    continue
+                # Require the actual colour contour on all four sides, rather
+                # than accepting a rectangular bounding box around artwork.
+                band = max(1, int(round(0.06 * min(cell_w, cell_h))))
+                sides = (mask[y:y + band, x + band:x + width - band],
+                         mask[y + height - band:y + height, x + band:x + width - band],
+                         mask[y + band:y + height - band, x:x + band],
+                         mask[y + band:y + height - band, x + width - band:x + width])
+                if any(not side.size or float(np.mean(np.any(side, axis=0 if index < 2 else 1))) < 0.85
+                       for index, side in enumerate(sides)):
+                    continue
+                # Saturated body fill at a cut edge is not an outer frame.
+                # Require all four visible strokes to be brighter than their
+                # immediately inward bands, using the existing 12-value glow
+                # criterion. This also retains a real edge quantized to pixel 0.
+                value_sides = (value[y:y + band, x + band:x + width - band],
+                               value[y + height - band:y + height, x + band:x + width - band],
+                               value[y + band:y + height - band, x:x + band],
+                               value[y + band:y + height - band, x + width - band:x + width])
+                inward = (value[y + band:y + 2 * band, x + band:x + width - band],
+                          value[y + height - 2 * band:y + height - band, x + band:x + width - band],
+                          value[y + band:y + height - band, x + band:x + 2 * band],
+                          value[y + band:y + height - band, x + width - 2 * band:x + width - band])
+                if any(not inner.size or float(np.mean(side.max(axis=0 if index < 2 else 1)))
+                       - float(inner.mean()) < 12.0
+                       for index, (side, inner) in enumerate(zip(value_sides, inward))):
+                    continue
+
+                def separator(c0, r0, c1, r1):
+                    # The fixed 5px fallback strip can be dominated by bright
+                    # opposing rims around a narrow real gap after scaling.
+                    # A proven outer frame uses the local dark valley + rims
+                    # directly; cell-growth fallback retains its old gutter rule.
+                    return self._has_closed_frame_separator(
+                        crop, offset_x, offset_y, ox, oy, cell_w, cell_h,
+                        c0, r0, c1, r1, rarity,
+                        (gx1+band, gx2-band) if c0 == c1 else (gy1+band, gy2-band))
+
+                # A full separator through the rectangle still distinguishes
+                # adjacent same-quality items. Partial dark artwork does not.
+                vertical_cuts = [c for c in range(col + 1, col + wc)
+                                 if separator(c - 1, row, c, row)]
+                horizontal_cuts = [r for r in range(row + 1, row + hc)
+                                   if separator(col, r - 1, col, r)]
+                if vertical_cuts or horizontal_cuts:
+                    if proven_separators is not None:
+                        proven_separators.update(((r, c-1), (r, c))
+                                                 for c in vertical_cuts for r in range(row, row+hc))
+                        proven_separators.update(((r-1, c), (r, c))
+                                                 for r in horizontal_cuts for c in range(col,col+wc))
+                    continue
+                cells = [(r, c) for r in range(row, row + hc) for c in range(col, col + wc)]
+                recovered.append({
+                    "local_box": (gx1 - offset_x, gy1 - offset_y, gx2 - gx1, gy2 - gy1),
+                    "global_box": (gx1, gy1, gx2 - gx1, gy2 - gy1),
+                    "rarity": rarity, "col": col, "row": row, "w_cells": wc, "h_cells": hc,
+                    "cell_count": wc * hc, "has_glow": any(
+                        bool(occ[r][c] and occ[r][c].get("has_glow")) for r, c in cells),
+                    "shape_locked": True, "surround_locked": False, "cells": cells,
+                })
+        return sorted(recovered, key=lambda slot: (-slot["cell_count"], slot["row"], slot["col"]))
+
+    def _has_closed_frame_separator(self, crop, offset_x, offset_y, ox, oy,
+                                    cell_w, cell_h, c0, r0, c1, r1, rarity, full_span=None):
+        """Within a proven outer frame, a separator needs a narrow dark valley
+        flanked by continuous opposing quality edges. Flat dark fill is not a gap.
+        The conservative cell-growth fallback keeps its original gutter rule.
+        """
+        horizontal = c0 == c1
+        period = cell_h if horizontal else cell_w
+        radius = max(3, int(round(0.16 * period)))
+        if horizontal:
+            center = int(round(oy + max(r0, r1) * cell_h)) - offset_y
+            a = int(round(ox + c0 * cell_w + .28 * cell_w)) - offset_x
+            b = int(round(ox + (c0 + 1) * cell_w - .28 * cell_w)) - offset_x
+            if full_span is not None:
+                a, b = int(round(full_span[0]))-offset_x, int(round(full_span[1]))-offset_x
+            if center-radius < 0 or center+radius >= crop.shape[0] or a < 0 or b > crop.shape[1]:
+                return False
+            band = crop[center-radius:center+radius+1, a:b].transpose(1, 0, 2)
+        else:
+            center = int(round(ox + max(c0, c1) * cell_w)) - offset_x
+            a = int(round(oy + r0 * cell_h + .28 * cell_h)) - offset_y
+            b = int(round(oy + (r0 + 1) * cell_h - .28 * cell_h)) - offset_y
+            if full_span is not None:
+                a, b = int(round(full_span[0]))-offset_y, int(round(full_span[1]))-offset_y
+            if center-radius < 0 or center+radius >= crop.shape[1] or a < 0 or b > crop.shape[0]:
+                return False
+            band = crop[a:b, center-radius:center+radius+1]
+        if not band.size:
+            return False
+        gray = cv2.cvtColor(band, cv2.COLOR_BGR2GRAY)
+        profile = np.median(gray, axis=0)
+        slack = max(1, int(round(.06 * period)))
+        middle = profile[radius-slack:radius+slack+1]
+        low = float(middle.min())
+        minima = np.flatnonzero(middle == low) + radius-slack
+        valley = int(minima[np.argmin(np.abs(minima-radius))])
+        if valley == 0 or valley >= len(profile)-1:
+            return False
+        left = int(np.argmax(profile[:valley]))
+        right = valley+1+int(np.argmax(profile[valley+1:]))
+        rim = min(float(profile[left]), float(profile[right]))
+        if rim-low < 12.0:
+            return False
+        l, r = valley, valley
+        while l > 0 and profile[l-1] < rim-12.0:
+            l -= 1
+        while r+1 < len(profile) and profile[r+1] < rim-12.0:
+            r += 1
+        if r-l+1 > max(3.0, .12 * period):
+            return False
+        # A divider must run through the frame, not appear at unrelated
+        # short artwork segments in each cell. Require the same valley and
+        # opposing rims along its full visible length.
+        line_contrast = np.minimum(gray[:,left], gray[:,right]).astype(np.float32) - gray[:,valley]
+        if float(np.mean(line_contrast >= 12.0)) < .85:
+            return False
+        hsv = cv2.cvtColor(band, cv2.COLOR_BGR2HSV)
+        stroke = max(1, int(round(.03 * period)))
+        for position in (left, right):
+            edge = hsv[:, max(0,position-stroke):min(hsv.shape[1],position+stroke+1)]
+            if rarity == "white":
+                frame_pixels = (edge[:, :, 1] <= 40) & (edge[:, :, 2] >= 160)
+            else:
+                visible = (edge[:, :, 1] >= 55) & (edge[:, :, 2] >= 55)
+                quality = np.array([self._hue_to_rarity(float(h)) == rarity
+                                    for h in edge[:, :, 0].flat]).reshape(visible.shape)
+                frame_pixels = visible & quality
+            if float(np.mean(np.any(frame_pixels, axis=1))) < .85:
+                return False
+        return True
+
     def _grow_solid_rect(
         self,
         occ: List[List[Optional[Dict[str, Any]]]],
@@ -844,6 +1127,8 @@ class WarehouseVisionV1:
         col: int,
         row: int,
         rarity: str,
+        seen=None,
+        proven_separators=None,
     ) -> Tuple[int, int]:
         """从左上格向右/向下扩张成实心矩形；遇到不同色或格缝就停。"""
         rows = len(occ)
@@ -851,7 +1136,12 @@ class WarehouseVisionV1:
 
         def same(c: int, r: int) -> bool:
             cell = occ[r][c] if 0 <= r < rows and 0 <= c < cols else None
-            return bool(cell) and cell["rarity"] == rarity and float(cell.get("fill") or 0) >= 0.70
+            return (bool(cell) and not (seen is not None and seen[r][c])
+                    and cell["rarity"] == rarity and float(cell.get("fill") or 0) >= 0.70)
+
+        def blocked(c0, r0, c1, r1):
+            return (proven_separators is not None
+                    and ((r0, c0), (r1, c1)) in proven_separators)
 
         def grow(first_right: bool) -> Tuple[int, int, float]:
             width, height = 1, 1
@@ -862,6 +1152,7 @@ class WarehouseVisionV1:
                 for do_right in order:
                     if do_right and col + width < cols and all(
                         same(col + width, row + rr)
+                        and not blocked(col + width - 1, row + rr, col + width, row + rr)
                         and self._shared_edge_is_interior(
                             crop, offset_x, offset_y, ox, oy, cell_w, cell_h,
                             col + width - 1, row + rr, col + width, row + rr,
@@ -876,6 +1167,7 @@ class WarehouseVisionV1:
                         changed = True
                     if (not do_right) and row + height < rows and all(
                         same(col + cc, row + height)
+                        and not blocked(col + cc, row + height - 1, col + cc, row + height)
                         and self._shared_edge_is_interior(
                             crop, offset_x, offset_y, ox, oy, cell_w, cell_h,
                             col + cc, row + height - 1, col + cc, row + height,
@@ -974,7 +1266,11 @@ class WarehouseVisionV1:
             # 边框色和内部图标/填色接近：这是大件内部，不是另一张卡。
             if abs(side_h - core_h) <= 14 or abs(side_h - core_h) >= 166:
                 return 0.15
-        return float(np.count_nonzero(sat)) / float(band[:, :, 0].size or 1)
+        # Saturated icon colours are not a continuous quality frame. Counting
+        # all of them can split one multicolour item into adjacent single cells.
+        hue_distance = np.abs(band[:, :, 0].astype(np.float32) - side_h)
+        frame_colour = sat & ((hue_distance <= 14) | (hue_distance >= 166))
+        return float(np.count_nonzero(frame_colour)) / float(band[:, :, 0].size or 1)
 
     def _shared_edge_is_interior(
         self,
@@ -1277,6 +1573,14 @@ class WarehouseVisionV1:
             track.identity_reference_kind = None
             track.match_score = 0.0
             track.margin_score = 0.0
+            # A cropped request can retain a high visual score while losing
+            # part of the physical object. Its full footprint is not observable.
+            x, y, width, height = track.box
+            if (width <= 0 or height <= 0 or x < offset_x or y < offset_y
+                    or x + width > offset_x + crop.shape[1]
+                    or y + height > offset_y + crop.shape[0]):
+                track.shape_locked = False
+                track.surround_locked = False
             # 没锁形状：只报品质，不按长宽检索图鉴（避免把未展示完的紫/红当成完整件）
             if not track.shape_locked:
                 track.candidates = []
@@ -1315,15 +1619,10 @@ class WarehouseVisionV1:
                 continue
 
             # 已达时序稳定确认 (Confirmed)
-            if len(candidates) == 1:
-                # [关键规则]: 仅在 rarity+shape 达到稳定确认后，才允许锁定 UNIQUE_IN_CATALOG
-                track.evidence_level = EvidenceLevel.UNIQUE_IN_CATALOG
-                # Phase 19: 即使唯一候选，严禁直接升级为 EXACT，必须保留 CANDIDATE 语义且 identifiedName 维持 None
-                track.identified_item = None
-                track.min_price = track.max_price = track.expected_price = candidates[0].get("Value", 0)
-                confirmed.append(track)
-            elif len(candidates) > 1:
-                # 候选 > 1: 提取局部 ROI 进行真像素级 Template Matching
+            if candidates:
+                # A singleton is still a candidate until its visible pixels
+                # independently pass the same direct-reference evidence gate.
+                # Do not skip matching merely because geometry leaves one ID.
                 lx = max(0, track.box[0] - offset_x)
                 ly = max(0, track.box[1] - offset_y)
                 lw = min(crop.shape[1] - lx, track.box[2])
@@ -1352,7 +1651,8 @@ class WarehouseVisionV1:
                     track.min_price = track.max_price = track.expected_price = best_item.get("Value", 0)
                 else:
                     # 无法可靠区分：严禁选 candidates[0]，忠实标记为 CANDIDATE_SET
-                    track.evidence_level = EvidenceLevel.CANDIDATE_SET
+                    track.evidence_level = (EvidenceLevel.UNIQUE_IN_CATALOG if len(candidates) == 1
+                                            else EvidenceLevel.CANDIDATE_SET)
                     track.identified_item = None
                     if reference_kind == "DERIVED_UNVERIFIED" and best_item is not None:
                         # Display the derived-reference rank as an unverified

@@ -1,0 +1,60 @@
+{
+  "schema": "warehouse-complete-frame-fixture-v1",
+  "source": "build/native-observation/session-3419fcb4abbc462fb7a09bdf9835b96d/boundary-frame.bmp",
+  "sourceFileSha256": "37022cf54dd3ec0e7fa6842837db69f5d41407a950ff156212b0fded23906f85",
+  "cropXYXY": [
+    1315,
+    211,
+    1878,
+    816
+  ],
+  "fixtureSha256": "ecad27b00ede9e074e5bbdced6d002814c0c35cd1a712d8b75d3f4ed0bc0ec0e",
+  "coordinateConvention": "crop XYXY; expected boxes are original full-frame XYWH",
+  "expectedVisiblePhysicalSlots": [
+    {
+      "sourceBoxXYWH": [
+        1316,
+        214,
+        112,
+        168
+      ],
+      "sizeCells": [
+        2,
+        3
+      ],
+      "rarity": "gold",
+      "identity": null
+    },
+    {
+      "sourceBoxXYWH": [
+        1710,
+        214,
+        56,
+        112
+      ],
+      "sizeCells": [
+        1,
+        2
+      ],
+      "rarity": "gold",
+      "identity": null
+    },
+    {
+      "sourceBoxXYWH": [
+        1316,
+        494,
+        168,
+        168
+      ],
+      "sizeCells": [
+        3,
+        3
+      ],
+      "rarity": "blue",
+      "identity": null
+    }
+  ],
+  "geometryAuthority": "Visible independent outer frames; existing source card for image11-1-1 shows blue 3x3. No candidate catalog changes adopted.",
+  "identityTruthUsedForRecognition": false,
+  "sampleRole": "Development regression from existing saved live frame; not unseen accuracy"
+}

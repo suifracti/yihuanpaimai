@@ -61,6 +61,25 @@ class WarehouseScrollbarObservationV1Tests(unittest.TestCase):
             self.assertEqual(obs["scrollState"], STATE_TOP)
             self.assertGreater(obs["thumbBox"][0], frame.shape[1] * .92)
 
+    def test_cursor_occluding_a_real_thumb_cannot_prove_an_endpoint(self):
+        cursor_fixtures = PROJECT_ROOT / "tests/fixtures/warehouse_scrollbar_cursor_v1"
+        for name in ("occluded_top.png", "occluded_bottom.png"):
+            with self.subTest(frame=name):
+                frame = cv2.imdecode(np.frombuffer((cursor_fixtures / name).read_bytes(), dtype=np.uint8),
+                                     cv2.IMREAD_COLOR)
+                self.assertIsNotNone(frame)
+                observation = observe_warehouse_scrollbar(frame, already_cropped=True)
+                self.assertEqual(observation["scrollState"], STATE_UNKNOWN)
+                self.assertIsNone(observation["thumbBox"])
+
+    def test_wide_bright_region_cannot_prove_a_narrow_scroll_thumb(self):
+        frame = np.zeros((630, 600, 3), dtype=np.uint8)
+        frame[20:600, 575:595] = 50
+        frame[40:180, 575:595] = 220
+        observation = observe_warehouse_scrollbar(frame, already_cropped=True)
+        self.assertEqual(observation["scrollState"], STATE_UNKNOWN)
+        self.assertIsNone(observation["thumbBox"])
+
     def test_real_top_middle_bottom_and_unknown(self):
         top = observe_warehouse_scrollbar(_load("top_warehouse.png"), already_cropped=True, source_id="top")
         mid = observe_warehouse_scrollbar(_load("middle_warehouse.png"), already_cropped=True, source_id="middle")

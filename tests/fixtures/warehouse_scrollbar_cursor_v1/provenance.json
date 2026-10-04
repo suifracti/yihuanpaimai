@@ -1,0 +1,35 @@
+{
+  "schema": "warehouse-scrollbar-cursor-fixture-v1",
+  "sourceVideo": "data/videos/2026-09-08 14-40-37.mkv",
+  "scope": "saved actual source pixel crops for fail-closed cursor regression; no identity labels or unseen accuracy",
+  "frames": [
+    {
+      "file": "occluded_top.png",
+      "seconds": 162,
+      "decodedFrameIndex": 9720,
+      "cropRect": [
+        1753,
+        282,
+        2554,
+        1130
+      ],
+      "sourceOriginalSha256": "acf853302d978594ec938c0eb5dd6b7c9dbccbab21cabfdd15ecf8f3b34c0422",
+      "fixtureSha256": "58d8e7c5d0effa8cc1906fdd25bafe178e335260ff83530770b82b009f0e130a",
+      "requiredBehavior": "UNKNOWN: cursor splits the thumb; complete narrow thumb is not proven"
+    },
+    {
+      "file": "occluded_bottom.png",
+      "seconds": 171,
+      "decodedFrameIndex": 10260,
+      "cropRect": [
+        1753,
+        282,
+        2554,
+        1130
+      ],
+      "sourceOriginalSha256": "db40862951db2dcc6811342df46aa402062577a2626bb3bbc6cbde8b85365e9d",
+      "fixtureSha256": "9c3a3c91e207fcf42ce2aeefae9369f64b489a0e01748b86c6807e3985d5e0a4",
+      "requiredBehavior": "UNKNOWN: cursor splits the thumb; complete narrow thumb is not proven"
+    }
+  ]
+}

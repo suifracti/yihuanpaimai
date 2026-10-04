@@ -25,6 +25,54 @@ class TestWarehouseVisionV1(unittest.TestCase):
         cat_path = os.path.join(PROJECT_ROOT, "assets", "catalog_065.json")
         self.vision = WarehouseVisionV1(config=self.config, catalog_path=cat_path)
 
+    def test_real_white_frame_is_not_overruled_by_sparse_gold_artwork(self):
+        import cv2
+        crop = cv2.imread(os.path.join(PROJECT_ROOT, "tests", "fixtures",
+                                      "warehouse_active_boundary_v1", "white-frame-gold-artwork.png"))
+        self.assertIsNotNone(crop)
+        # Existing source-card verified annotation identifies this white 1x1.
+        # Its gold bowl artwork touches inset bands without making a gold frame.
+        cell = self.vision._classify_grid_cell(crop, 0, 0, 0, 0, 0, 0, 56, 56)
+        self.assertEqual(cell["rarity"], "white")
+
+    def test_real_multicolour_icon_stays_one_horizontal_slot(self):
+        import cv2
+        frame = cv2.imread(os.path.join(PROJECT_ROOT, "tests", "fixtures",
+                                       "warehouse_active_boundary_v1", "development-split-2x1.png"))
+        self.assertIsNotNone(frame)
+        result = self.vision.process_frame(frame, grid_roi_norm=(0, 0, 1, 1))
+        target = [s for s in result["slots"] if s["row"] == 5 and s["col"] in (0, 1)]
+        self.assertEqual(len(target), 1)
+        self.assertEqual((target[0]["col"], target[0]["w"], target[0]["h"]), (0, 2, 1))
+        self.assertNotEqual(target[0]["identityStatus"], "EXACT")
+
+    def test_real_last_column_survives_one_pixel_grid_phase(self):
+        import cv2
+        frame = cv2.imread(os.path.join(PROJECT_ROOT, "tests", "fixtures",
+                                       "warehouse_active_boundary_v1", "quality-phase-1440.png"))
+        self.assertIsNotNone(frame)
+        result = self.vision.process_frame(frame, grid_roi_norm=(0, 0, 1, 1))
+        self.assertEqual(result["grid"]["cols"], 10)
+        self.vision.reset()
+        cropped = self.vision.process_frame(frame[:, :-25], grid_roi_norm=(0, 0, 1, 1))
+        self.assertEqual(cropped["grid"]["cols"], 9)
+
+    def test_dark_gutter_keeps_adjacent_same_quality_slots_separate(self):
+        frame = np.zeros((1080, 1920, 3), dtype=np.uint8)
+        ox, oy, cell = 1316, 216, 56
+        for row in range(10):
+            for col in range(10):
+                x, y = ox + col * cell + 3, oy + row * cell + 3
+                frame[y:y + cell - 6, x:x + cell - 6] = 18
+        for col in (0, 1):
+            x, y = ox + col * cell + 3, oy + 3
+            frame[y:y + cell - 6, x:x + cell - 6] = (240, 60, 220)
+            frame[y + 4:y + cell - 10, x + 4:x + cell - 10] = (190, 45, 170)
+        result = self.vision.process_frame(frame)
+        target = [s for s in result["slots"] if s["row"] == 0 and s["col"] in (0, 1)]
+        self.assertEqual(len(target), 2)
+        self.assertTrue(all((s["w"], s["h"]) == (1, 1) for s in target))
+
     def test_config_calibration_hyperparameters(self):
         """验证所有基准超参数已显式声明并可供真人实拍校准"""
         self.assertEqual(self.vision.config.MATCH_CONFIDENCE_THRESHOLD, 0.85)
@@ -71,7 +119,8 @@ class TestWarehouseVisionV1(unittest.TestCase):
         """验证 UNIQUE_IN_CATALOG 仅在 rarity+shape 达到稳定确认后才允许锁定"""
         # 手动注入一个全图鉴唯一的尺寸项 (例如金色 4x5)
         # 帧 1: 尚未确认时，即使候选数 == 1，也绝不允许升级为 UNIQUE_IN_CATALOG
-        mock_candidates = [{"Name": "金色大货4x5", "Value": 88000, "Quality": "金", "Width": 4, "Height": 5}]
+        item = next(row for row in self.vision.matcher.catalog if row["Id"] == "image26-0-1")
+        mock_candidates = [item]
         
         blob = TrackedSlotBlob(
             track_id=10,
@@ -79,7 +128,7 @@ class TestWarehouseVisionV1(unittest.TestCase):
             last_seen_frame=1,
             consecutive_stable_frames=1,
             is_confirmed=False, # 尚未时序确认
-            box=(1400, 300, 150, 150),
+            box=(100, 100, 150, 150),
             width_cells=4,
             height_cells=5,
             cell_count=20,
@@ -101,7 +150,7 @@ class TestWarehouseVisionV1(unittest.TestCase):
         confirmed_after, _ = self.vision._evaluate_all_tracks(np.zeros((600, 600, 3), dtype=np.uint8), 0, 0)
         self.assertIn(blob, confirmed_after)
         self.assertEqual(blob.evidence_level, EvidenceLevel.UNIQUE_IN_CATALOG)
-        self.assertEqual(blob.expected_price, 88000)
+        self.assertEqual(blob.expected_price, item["Value"])
 
     def test_no_blind_candidates_pick(self):
         """验证候选 > 1 时严禁盲选 candidates[0]，若无法高置信区分则忠实保留 CANDIDATE_SET 与区间"""
@@ -166,6 +215,24 @@ class TestWarehouseVisionV1(unittest.TestCase):
         self.assertEqual(no_glow.candidates, [])
         self.assertEqual(gray.evidence_level, EvidenceLevel.OUTLINE_ONLY)
         self.assertTrue(glow.shape_locked)
+
+    def test_white_frame_is_quality_evidence_but_grey_outline_is_not(self):
+        # The white-quality frame surrounds a low-saturation dark item body;
+        # the body alone must not be used to infer its quality.
+        crop = np.full((100, 100, 3), 84, dtype=np.uint8)
+        grey = self.vision._classify_grid_cell(crop, 0, 0, 0, 0, 0, 0, 100, 100)
+        self.assertEqual(grey["rarity"], "unknown")
+        crop[3:8, 3:97] = 220
+        crop[92:97, 3:97] = 220
+        crop[3:97, 3:8] = 220
+        crop[3:97, 92:97] = 220
+        white = self.vision._classify_grid_cell(crop, 0, 0, 0, 0, 0, 0, 100, 100)
+        self.assertEqual(white["rarity"], "white")
+        # A neighboring white frame leaking through a single side is not enough.
+        one_side = np.full((100, 100, 3), 84, dtype=np.uint8)
+        one_side[3:97, 3:8] = 220
+        self.assertEqual(self.vision._classify_grid_cell(
+            one_side, 0, 0, 0, 0, 0, 0, 100, 100)["rarity"], "unknown")
 
     def test_surrounded_one_cell_can_lock_without_glow(self):
         """被四周占满的 1 格有色块，即使无光也可锁 1x1。"""

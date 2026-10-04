@@ -19,7 +19,8 @@ from current_match import CurrentMatch
 from deferred_identity_analyzer import DeferredIdentityAnalyzer, deferred_identity_result_is_current
 from nte_engine_v22 import RealEngine
 from visual_catalog import load_derived_warehouse_templates, load_verified_warehouse_gameplay_templates
-from warehouse_vision import WarehouseTemplateMatcher, WarehouseVisionConfig
+from warehouse_vision import (WarehouseTemplateMatcher, WarehouseVisionConfig,
+                              WarehouseVisionV1, TrackedSlotBlob, EvidenceLevel)
 from vision_pipeline import NTEVisionPipeline
 
 
@@ -561,6 +562,77 @@ class DerivedWarehouseIdentityBoundaryTests(unittest.TestCase):
         best, _score, _margin = matcher.match_candidates(roi, candidates, WarehouseVisionConfig())
         self.assertEqual(best["Id"], "trusted")
         self.assertEqual(best, candidates[0])
+
+    def test_active_candidates_include_verified_source_ids_missing_from_legacy_catalog(self):
+        matcher = WarehouseTemplateMatcher(
+            catalog_path=str(ROOT / "assets/catalog_065.json"), trusted_gameplay_only=True)
+        for cid, name, quality, width, height in (
+            ("visual-9607b248bbf4", "猫丸秘制豚骨拉面", "gold", 1, 1),
+            ("visual-65250f2f6c5a", "锻刀石", "white", 2, 1),
+            ("visual-dc9ba21be2ec", "双颈玉瓶-白", "gold", 2, 2),
+        ):
+            with self.subTest(catalogId=cid):
+                candidates = matcher.get_candidates(quality, width, height)
+                selected = [row for row in candidates if row["Id"] == cid]
+                self.assertEqual(len(selected), 1)
+                self.assertEqual(selected[0]["Name"], name)
+                self.assertTrue(matcher.gameplay_templates_by_id[cid])
+                self.assertEqual(len([row for row in matcher.get_candidates(quality, height, width)
+                                      if row["Id"] == cid]), 1)
+        # An explicitly separate catalog must not silently gain production IDs.
+        separate = WarehouseTemplateMatcher(
+            catalog_path=str(ROOT / "build/nonexistent-separate-catalog.json"), trusted_gameplay_only=True)
+        self.assertEqual(separate.get_candidates("gold", 1, 1), [])
+
+    def test_single_candidate_requires_matching_reference_and_stable_complete_shape(self):
+        # A previously labelled full 4x4 crop exercises the recognition branch;
+        # matching it to its reference is a development regression, not accuracy.
+        catalog = json.loads((ROOT / "assets/catalog_065.json").read_text(encoding="utf-8"))
+        item = next(row for row in catalog if row["Id"] == "image5-0-0")
+        matcher = WarehouseTemplateMatcher(trusted_gameplay_only=True)
+        reference = next(row for row in matcher.gameplay_templates_by_id[item["Id"]]
+                         if row["metadata"]["referenceId"] == "ref_144037_23")
+        roi = reference["image"].copy()
+        self.assertEqual([row["Id"] for row in matcher.get_candidates("green", 4, 4)], [item["Id"]])
+        trusted = {item["Id"]: [reference]}
+        cases = (
+            ("trusted-full", roi, trusted, {}, True, True, EvidenceLevel.EXACT_IDENTIFIED),
+            ("blank", np.zeros_like(roi), trusted, {}, True, True, EvidenceLevel.UNIQUE_IN_CATALOG),
+            ("derived-only", roi, {}, {item["Id"]: {"image": roi.copy()}}, True, True,
+             EvidenceLevel.UNIQUE_IN_CATALOG),
+            ("not-stable", roi, trusted, {}, False, True, EvidenceLevel.RARITY_AND_SHAPE),
+            ("incomplete-shape", roi, trusted, {}, True, False, EvidenceLevel.RARITY_ONLY),
+            ("crop-exceeds-viewport", roi, trusted, {}, True, True, EvidenceLevel.RARITY_ONLY),
+        )
+        for label, image, real_refs, derived, stable, complete, expected in cases:
+            with self.subTest(label=label):
+                matcher.gameplay_templates_by_id = real_refs
+                matcher.derived_templates_by_id = derived
+                vision = WarehouseVisionV1.__new__(WarehouseVisionV1)
+                vision.config = WarehouseVisionConfig()
+                vision.matcher = matcher
+                track = TrackedSlotBlob(
+                    track_id=1, first_seen_frame=1, last_seen_frame=4,
+                    consecutive_stable_frames=4 if stable else 1, is_confirmed=stable,
+                    box=(0, 0, image.shape[1], image.shape[0]), width_cells=4,
+                    height_cells=4, cell_count=16, rarity="green",
+                    evidence_level=EvidenceLevel.RARITY_AND_SHAPE, shape_locked=complete,
+                )
+                if label == "crop-exceeds-viewport":
+                    # Slicing this request yields the same matching pixels, but
+                    # the requested full physical region was not visible.
+                    track.box = (-5, 0, image.shape[1] + 5, image.shape[0])
+                vision.tracked_blobs = {1: track}
+                vision._evaluate_all_tracks(image, 0, 0)
+                output = track.to_dict()
+                self.assertEqual(track.evidence_level, expected)
+                if label == "trusted-full":
+                    self.assertEqual(output["identifiedCatalogId"], item["Id"])
+                    self.assertEqual(output["identifiedName"], item["Name"])
+                    self.assertEqual(output["identityReferenceKind"], "DIRECT")
+                else:
+                    self.assertIsNone(output["identifiedCatalogId"])
+                    self.assertIsNone(output["identifiedName"])
 
     def test_native_commit_projects_direct_identity_to_existing_facts_only(self):
         catalog = json.loads((ROOT / "assets/catalog_065.json").read_text(encoding="utf-8-sig"))

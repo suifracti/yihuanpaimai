@@ -105,8 +105,15 @@ def _detect_track_and_thumb(crop: np.ndarray) -> Optional[Dict[str, Any]]:
         if (2 <= cw <= max(12, int(width * .025))
                 and ch >= max(16, int(height * .06))
                 and ch >= cw * 5 and area >= cw * ch * .55):
-            candidates.append((x + cw / 2, int(x + cw / 2)))
-    local = max(candidates)[1] if candidates else int(np.argmax(thumb_score))
+            candidates.append((x + cw / 2, int(x), int(x + cw)))
+    if not candidates:
+        return None
+    local = int(max(candidates)[0])
+    # A cursor can split one thumb into separate narrow white components.
+    # Neither fragment proves the complete thumb; never promote a brightest
+    # column or the longest fragment to trusted endpoint geometry.
+    if sum(left <= local < right for _, left, right in candidates) != 1:
+        return None
     col = right0 + local
     sl = slice(max(0, col - 2), min(width, col + 3))
     sat_col = sat[:, sl].mean(axis=1)

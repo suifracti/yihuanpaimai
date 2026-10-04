@@ -1,0 +1,47 @@
+{
+  "source": "build/native-observation/session-f564d0116a0646b083b8da4c45bc68cb/latest-business-frame.bmp",
+  "sourceSha256": "bb3b81624f0853977982952b4ffee6f23210069a3173dd375251b7bb26e2c3ec",
+  "cropXYXY": [
+    1315,
+    211,
+    1878,
+    816
+  ],
+  "fixtureSha256": "c7d103cfa547f2e400fb266b8422c83c69fe043a6db2630af4658f0174317e1e",
+  "expectedVisibleOutlines": [
+    {
+      "sourceBoxXYWH": [
+        1316,
+        382,
+        112,
+        112
+      ],
+      "sizeCells": [
+        2,
+        2
+      ],
+      "rarity": "purple",
+      "identity": null
+    },
+    {
+      "sourceBoxXYWH": [
+        1428,
+        438,
+        224,
+        224
+      ],
+      "sizeCells": [
+        4,
+        4
+      ],
+      "rarity": "red",
+      "identity": null
+    }
+  ],
+  "visibleSquareCellSpacing": 56,
+  "authority": "Independent visible empty-grid lines and complete coloured outer frames reviewed before round2 repair; no recognizer output or catalog dimension used as truth",
+  "role": "KNOWN_USED_REGRESSION_NOT_UNSEEN",
+  "formalIdentity": null,
+  "quantity": null,
+  "qualityPatchPhysicalOccupancy": null
+}

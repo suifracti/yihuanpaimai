@@ -1,0 +1,47 @@
+{
+  "schema": "warehouse-active-boundary-fixture-v1",
+  "frames": [
+    {
+      "file": "quality-phase-1440.png",
+      "sourceVideo": "data/videos/2026-09-09 00-31-38.mkv",
+      "decodedFrameIndex": 2403,
+      "cropRect": [
+        1753,
+        282,
+        2504,
+        1088
+      ],
+      "sha256": "896ba18191fad2c6a5e8919c1bb0cc7c9b00ba729c33a280dc444f572088b81a",
+      "sampleClass": "development regression, no unseen identity accuracy"
+    },
+    {
+      "file": "development-split-2x1.png",
+      "sourceVideo": "data/videos/2026-09-08 14-40-37.mkv",
+      "decodedFrameIndex": 9003,
+      "cropRect": [
+        1753,
+        282,
+        2504,
+        1088
+      ],
+      "sha256": "e84863ddaefe067de7678f7db738d22fb3e49e66fa144f240beae021e3e135ff",
+      "sampleClass": "development regression, no unseen identity accuracy"
+    },
+    {
+      "file": "white-frame-gold-artwork.png",
+      "sourceVideo": "data/videos/2026-09-08 13-40-43.mkv",
+      "decodedFrameIndex": 9003,
+      "sourcePngSha256": "7b0d28e850b29349c632b9a8ab8806e9346c2e186eca178c9e3bf7bbf6638091",
+      "cropRect": [
+        1428,
+        270,
+        1484,
+        326
+      ],
+      "sha256": "b52658b20d9944c5f323b499e4a7886c854f6bd2c3096663cdf2aac0bc68d855",
+      "sampleClass": "development regression, admitted reference reuse, no unseen accuracy",
+      "qualityAuthority": "assets/items/video_ground_truth_reference_134043_visible.json ref_134043_visible_03: white image2-1-2; original labels unchanged"
+    }
+  ],
+  "splitGeometryAuthority": "assets/items/video_ground_truth_reference_144037.json ref_144037_18; independent geometry 2x1, source identity withheld from recognition"
+}
