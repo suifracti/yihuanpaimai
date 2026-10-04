@@ -1,0 +1,29 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net8.0-windows10.0.19041.0</TargetFramework>
+    <PlatformTarget>x64</PlatformTarget>
+    <EnableWindowsTargeting>true</EnableWindowsTargeting>
+    <Nullable>enable</Nullable>
+    <NuGetAudit>false</NuGetAudit>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <AssemblyName>BoundedWgcQaWorker</AssemblyName>
+    <EnableDefaultCompileItems>false</EnableDefaultCompileItems>
+    <NoWarn>$(NoWarn);CA1416</NoWarn>
+  </PropertyGroup>
+  <ItemGroup>
+    <Compile Include="Worker.cs" />
+    <Reference Include="NteHost.Protocol">
+      <HintPath>..\..\build\native-observation\NteHost.Protocol.dll</HintPath>
+    </Reference>
+    <Reference Include="System.Text.Json">
+      <HintPath>..\..\build\native-observation\System.Text.Json.dll</HintPath>
+    </Reference>
+    <Reference Include="System.Text.Encodings.Web">
+      <HintPath>..\..\build\native-observation\System.Text.Encodings.Web.dll</HintPath>
+    </Reference>
+    <Reference Include="System.IO.Pipelines">
+      <HintPath>..\..\build\native-observation\System.IO.Pipelines.dll</HintPath>
+    </Reference>
+  </ItemGroup>
+</Project>

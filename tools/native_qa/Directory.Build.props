@@ -1,0 +1,7 @@
+<Project>
+  <PropertyGroup>
+    <BaseIntermediateOutputPath>$(MSBuildThisFileDirectory)..\..\build\native_qa\obj\</BaseIntermediateOutputPath>
+    <OutputPath>$(MSBuildThisFileDirectory)..\..\build\native_qa\out\</OutputPath>
+    <AppendTargetFrameworkToOutputPath>false</AppendTargetFrameworkToOutputPath>
+  </PropertyGroup>
+</Project>
