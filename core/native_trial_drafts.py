@@ -83,11 +83,19 @@ class NativeTrialDraftStore:
                 expected_inventory_archive=expected_archive,
             )
 
-    def capture_frame(self, source_path: os.PathLike[str] | str, metadata: Mapping[str, Any], *, expected_pixel_sha256: Optional[str] = None) -> dict[str, Any]:
+    def capture_frame(self, source_path: os.PathLike[str] | str, metadata: Mapping[str, Any], *, expected_pixel_sha256: Optional[str] = None, max_bytes: Optional[int] = None) -> dict[str, Any]:
         source = Path(source_path).resolve(strict=True)
         if not source.is_file():
             raise NativeTrialDraftError("原始观察帧不存在，草稿尚未保存")
-        raw = source.read_bytes()
+        if max_bytes is None:
+            raw = source.read_bytes()
+        else:
+            if type(max_bytes) is not int or max_bytes <= 0:
+                raise NativeTrialDraftError("Invalid original-frame byte limit")
+            with source.open("rb") as stream:
+                raw = stream.read(max_bytes + 1)
+            if len(raw) > max_bytes:
+                raise NativeTrialDraftError("Original frame exceeds intake byte limit")
         if not raw:
             raise NativeTrialDraftError("原始观察帧为空，草稿尚未保存")
         if expected_pixel_sha256:

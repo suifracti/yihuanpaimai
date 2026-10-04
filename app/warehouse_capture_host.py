@@ -348,6 +348,7 @@ class WarehouseCaptureHost:
         self._settlement_game_remainings: Dict[str, float] = {}
         self._settlement_effective_deadlines: Dict[str, float] = {}
         self._manual_mode = False
+        self._manual_processing = False
         self._manual_record_key: Optional[str] = None
         self._manual_pages: List[Dict[str, Any]] = []
         self._manual_frames: Dict[str, Any] = {}
@@ -432,7 +433,7 @@ class WarehouseCaptureHost:
             if self._arming_required and not self._confirmed_once:
                 return {"ok": False, "reason": REASON_TOKEN_INVALID}
             self._confirmed_once = False
-            if self._running:
+            if self._running or self._manual_mode or self._manual_processing:
                 return {"ok": False, "reason": REASON_ALREADY_RUNNING}
             if not self.factory_ready:
                 self._presentation = self._build_presentation(
@@ -551,7 +552,7 @@ class WarehouseCaptureHost:
         """Manual takeover prepare gate: requires game HWND, stable record key, store available.
         Does NOT require automatic settlementReady or stable detection.
         """
-        if self._running or self._manual_mode:
+        if self._running or self._manual_mode or self._manual_processing:
             return {"ok": False, "reason": REASON_ALREADY_RUNNING}
 
         snap = self._snapshot_bindings() or {}
@@ -608,7 +609,7 @@ class WarehouseCaptureHost:
     def start_manual(self, record_key: Optional[str] = None) -> Dict[str, Any]:
         """Enter manual takeover capture mode."""
         with self._lock:
-            if self._running:
+            if self._running or self._manual_processing:
                 return {"ok": False, "reason": REASON_ALREADY_RUNNING}
             prep = self.prepare_manual()
             if not prep.get("ok"):
@@ -652,46 +653,46 @@ class WarehouseCaptureHost:
             image_bytes = encode_settlement_original(frame)
             digest = hashlib.sha256(image_bytes).hexdigest()
 
-            # Duplicate rejection against previous page
-            if self._manual_pages and self._manual_pages[-1].get("sha256") == digest:
+            # Duplicate rejection against every already accepted source image
+            if any(page.get("sha256") == digest for page in self._manual_pages):
                 return {
                     "ok": True,
                     "duplicate": True,
                     "pageCount": len(self._manual_pages),
-                    "message": f"该截图与上一页完全相同，未重复追加；已保存 {len(self._manual_pages)} 页",
+                    "message": f"该截图已采集，未重复追加；已保存 {len(self._manual_pages)} 页",
                 }
 
-            store = self._store_factory() if self._store_factory else None
-            captured_at = datetime.now().astimezone().isoformat(timespec="seconds")
-            desc = None
-            if store is not None and hasattr(store, "save_original"):
-                try:
-                    desc = store.save_original(
-                        record_stable_key=self._manual_record_key,
-                        kind="warehouse-segment",
-                        image_bytes=image_bytes,
-                        captured_at=captured_at,
-                        coverage_mode="manual_scroll",
-                        coverage_status="COVERAGE_UNPROVEN",
-                    )
-                except Exception as exc:
-                    logger.warning("save_original failed in manual capture: %s", exc)
-                    desc = None
-
-            seq = len(self._manual_pages)
-            h, w = frame.shape[:2]
-            page_desc = {
-                "evidenceId": f"manual_page_{seq + 1}",
-                "recordStableKey": self._manual_record_key,
-                "sha256": digest,
-                "kind": "warehouse-segment",
-                "sequenceIndex": seq,
-                "width": w,
-                "height": h,
-                "coverageStatus": "PARTIAL",
-            }
-            if desc and isinstance(desc, dict):
-                page_desc.update({k: v for k, v in desc.items() if k not in page_desc})
+            # A page is accepted only after its immutable original is saved
+            # and verified. Keep the Store descriptor intact; sequence is a
+            # separate ledger argument, never an original-evidence field.
+            try:
+                from settlement_truth_evidence_contract import validate_settlement_evidence_original_v2
+                store = self._store_factory() if self._store_factory else None
+                if store is None or not callable(getattr(store, "save_original", None)) or not callable(getattr(store, "verify", None)):
+                    raise RuntimeError("STORE_UNAVAILABLE")
+                page_desc = store.save_original(
+                    record_stable_key=self._manual_record_key,
+                    kind="warehouse-segment",
+                    image_bytes=image_bytes,
+                    captured_at=datetime.now().astimezone().isoformat(timespec="seconds"),
+                    coverage_mode="viewport-segment",
+                    coverage_status="COVERAGE_UNPROVEN",
+                )
+                valid, reasons = validate_settlement_evidence_original_v2(page_desc)
+                if (not valid or page_desc.get("sha256") != digest
+                        or page_desc.get("recordStableKey") != self._manual_record_key
+                        or page_desc.get("kind") != "warehouse-segment"
+                        or not store.verify(page_desc).get("ok")):
+                    raise ValueError("ORIGINAL_NOT_VERIFIED: " + ",".join(reasons))
+            except Exception as exc:
+                logger.warning("manual original was not accepted: %s", exc)
+                message = "原图保存失败，未追加页面；已保存页面保持可用"
+                self._presentation = self._build_presentation(
+                    STATE_MANUAL_CAPTURING, len(self._manual_pages),
+                    "COVERAGE_UNPROVEN", "STORE_FAILED", message=message,
+                )
+                return {"ok": False, "reason": "STORE_FAILED", "pageCount": len(self._manual_pages),
+                        "message": message}
 
             self._manual_pages.append(page_desc)
             self._manual_frames[page_desc["evidenceId"]] = frame
@@ -718,6 +719,7 @@ class WarehouseCaptureHost:
             record_key = self._manual_record_key
 
             self._manual_mode = False
+            self._manual_processing = True
             self._presentation = self._build_presentation(
                 STATE_ALIGNING,
                 len(pages),
@@ -732,12 +734,19 @@ class WarehouseCaptureHost:
                 name="warehouse-manual-processing",
                 daemon=True,
             )
-            th.start()
+            try:
+                th.start()
+            except Exception:
+                self._manual_processing = False
+                raise
             return {"ok": True, "pageCount": len(pages), "message": f"{len(pages)}页处理中…"}
 
     def cancel_manual_capture(self) -> Dict[str, Any]:
         """Cancel manual takeover."""
         with self._lock:
+            if self._manual_processing:
+                return {"ok": False, "reason": REASON_ALREADY_RUNNING,
+                        "message": "页面处理中，未取消；已保存原图保持可用"}
             self._manual_mode = False
             self._manual_pages = []
             self._manual_frames = {}
@@ -755,139 +764,178 @@ class WarehouseCaptureHost:
         pages: List[Dict[str, Any]],
         frames: Dict[str, Any],
     ) -> None:
+        # Reload the verified immutable originals, rather than mutable capture
+        # buffers. Manual and saved-image entry points share the same pipeline.
         try:
-            from warehouse_catalog_geometry import CatalogGeometryIndex
-            from warehouse_capture_production import get_production_placement_resolver
-            from warehouse_reconstruction import WarehouseReconstructionProcessor
-            from warehouse_scrollbar_observation import WarehouseScrollbarObserver, warehouse_search_roi
-            from warehouse_segment_overlap import align_warehouse_segments, DIR_DOWN
-            from warehouse_auto_confirmation import evaluate_auto_confirmation
-            from warehouse_identity_review import CatalogAuthority, build_auto_identity_review_artifact
+            self._process_saved_pages(record_key, pages)
+        except Exception as exc:
+            logger.exception("WarehouseCaptureHost: manual processing error: %s", exc)
+            self._saved_pages_failure(len(pages), "PROCESSING_FAILED", str(exc))
+        finally:
+            with self._lock:
+                self._manual_processing = False
 
-            catalog_candidates = [
-                Path(r"D:\yihuanpaimai\assets\catalog_065.json"),
-                Path("assets/catalog_065.json"),
-            ]
-            catalog_path = next((p for p in catalog_candidates if p.is_file()), None)
-            catalog_data = json.loads(catalog_path.read_text(encoding="utf-8")) if catalog_path else []
-            catalog_index = CatalogGeometryIndex(catalog_data)
-            resolver = get_production_placement_resolver()
-
-            proc = WarehouseReconstructionProcessor(
-                record_key,
-                catalog_index=catalog_index,
-                placement_resolver=resolver,
+    def _saved_pages_failure(self, page_count: int, reason: str, error: str) -> Dict[str, Any]:
+        message = "采集处理未完成，尚未保存本局记录；已保存原图保持可用"
+        with self._lock:
+            self._presentation = self._build_presentation(
+                STATE_ERROR, page_count, "COVERAGE_UNPROVEN", reason, message=message,
             )
-            obs = WarehouseScrollbarObserver()
-            prev_crop = None
-            prev_id = None
+        return {"ok": False, "reason": reason, "pageCount": page_count,
+                "persisted": False, "error": error[:240], "message": message}
 
-            for i, desc in enumerate(pages):
-                seg_id = desc["evidenceId"]
-                frame = frames.get(seg_id)
-                if frame is None:
-                    continue
-                h, w = frame.shape[:2]
-                obs_res = obs.observe(frame)
-                x1, y1, x2, y2 = warehouse_search_roi(w, h)
-                curr_crop = frame[y1:y2, x1:x2]
+    def _process_saved_pages(
+        self,
+        record_key: str,
+        pages: Sequence[Mapping[str, Any]],
+        *,
+        history_store: Optional[Any] = None,
+        already_cropped: bool = False,
+        finalization_reason: str = 'COMPLETE',
+    ) -> Dict[str, Any]:
+        """Consume Store originals; coverage and physical identity have separate proofs."""
+        import cv2
+        import numpy as np
+        from warehouse_catalog_geometry import CatalogGeometryIndex
+        from warehouse_capture_production import get_production_placement_resolver
+        from warehouse_coverage_ledger import WarehouseCoverageLedger
+        from warehouse_reconstruction import WarehouseReconstructionProcessor
+        from warehouse_scrollbar_observation import WarehouseScrollbarObserver, warehouse_search_roi
+        from warehouse_segment_overlap import align_warehouse_segments, DIR_DOWN
+        from warehouse_support_frame import stationary_support_proof
+        from warehouse_auto_confirmation import evaluate_auto_confirmation
+        from warehouse_identity_review import CatalogAuthority, build_auto_identity_review_artifact
+        from settlement_truth_evidence_contract import validate_settlement_evidence_original_v2
 
-                overlap_proof = None
-                if prev_crop is not None and prev_id is not None:
-                    alignment = align_warehouse_segments(
-                        prev_crop,
-                        curr_crop,
-                        prev_id=prev_id,
-                        next_id=seg_id,
-                        required_direction=DIR_DOWN,
-                    )
-                    overlap_proof = {
-                        "trusted": alignment.get("status") == "VERIFIED",
-                        "aligned": alignment.get("status") == "VERIFIED",
-                        "proofId": f"overlap_{prev_id}_{seg_id}",
-                        "previousEvidenceId": prev_id,
-                        "verticalOffsetPx": alignment.get("verticalOffsetPx"),
-                        "direction": alignment.get("direction"),
+        evidence_store = self._store_factory() if self._store_factory else None
+        if evidence_store is None or not callable(getattr(evidence_store, "load_original", None)):
+            raise RuntimeError("STORE_UNAVAILABLE")
+        catalog_path = Path(__file__).resolve().parents[1] / "assets/catalog_065.json"
+        catalog_data = json.loads(catalog_path.read_text(encoding="utf-8"))
+        proc = WarehouseReconstructionProcessor(
+            record_key, catalog_index=CatalogGeometryIndex(catalog_data),
+            placement_resolver=get_production_placement_resolver(),
+        )
+        ledger = WarehouseCoverageLedger(record_key)
+        observer = WarehouseScrollbarObserver()
+        accepted_pages = []
+        seen_hashes, seen_pixels = set(), set()
+        ids = {}
+        previous = None
+        for supplied in pages:
+            desc = dict(supplied)
+            valid, reasons = validate_settlement_evidence_original_v2(desc)
+            if not valid or desc.get("recordStableKey") != record_key or desc.get("kind") != "warehouse-segment":
+                raise ValueError("INVALID_ORIGINAL: " + ",".join(reasons))
+            seg_id, digest = desc["evidenceId"], desc["sha256"]
+            if seg_id in ids and ids[seg_id] != digest:
+                raise ValueError("SOURCE_HASH_CONFLICT")
+            ids[seg_id] = digest
+            payload = evidence_store.load_original(desc)
+            if hashlib.sha256(payload).hexdigest() != digest:
+                raise ValueError("SOURCE_HASH_MISMATCH")
+            frame = cv2.imdecode(np.frombuffer(payload, dtype=np.uint8), cv2.IMREAD_COLOR)
+            if frame is None or frame.shape[:2] != (desc["height"], desc["width"]):
+                raise ValueError("SOURCE_FRAME_SIZE_MISMATCH")
+            pixel_digest = hashlib.sha256(frame.tobytes()).hexdigest()
+            if digest in seen_hashes or pixel_digest in seen_pixels:
+                continue
+            seen_hashes.add(digest)
+            seen_pixels.add(pixel_digest)
+            sequence = len(accepted_pages)
+            observation = observer.observe(frame, source_id=seg_id, already_cropped=already_cropped)
+            if already_cropped:
+                crop = frame
+            else:
+                x1, y1, x2, y2 = warehouse_search_roi(desc["width"], desc["height"])
+                crop = frame[y1:y2, x1:x2]
+            coverage_link, physical_link = None, None
+            if previous is not None:
+                prev_crop, prev_desc = previous
+                alignment = align_warehouse_segments(
+                    prev_crop, crop, prev_id=prev_desc["evidenceId"],
+                    next_id=seg_id, required_direction=DIR_DOWN,
+                )
+                offset = alignment.get("verticalOffsetPx")
+                verified_motion = (alignment.get("status") == "VERIFIED"
+                                   and alignment.get("direction") == DIR_DOWN
+                                   and isinstance(offset, (int, float)) and not isinstance(offset, bool)
+                                   and math.isfinite(offset) and offset < 0)
+                proof = alignment if verified_motion else stationary_support_proof(prev_crop, crop)
+                if proof is not None:
+                    coverage_link = {
+                        "trusted": True, "aligned": True,
+                        "proofId": proof.get("progressionProofId") or proof.get("proofId")
+                                   or f"overlap:{prev_desc['sha256']}:{digest}",
+                        "previousEvidenceId": prev_desc["evidenceId"],
                     }
-                proc.accept_segment(frame, desc, i, obs_res, overlap_proof, already_cropped=False)
-                prev_crop = curr_crop
-                prev_id = seg_id
-
-            coverage_status = "PARTIAL" if len(pages) < 3 else "COMPLETE"
-            cov = {
-                "recordStableKey": record_key,
-                "coverageStatus": coverage_status,
-                "finalized": True,
-                "terminationReason": "MANUAL_PAGES",
-                "segments": pages,
-            }
-            proc.finalize(cov)
-            packet = proc.build_review_packet()
-            if packet is None:
-                raise RuntimeError("build_review_packet returned None")
-
-            raw_units = packet.get("reviewUnits", [])
-            authority = CatalogAuthority(catalog_data)
-            evaluated_units = evaluate_auto_confirmation(raw_units, segments=pages)
-            identity_review = build_auto_identity_review_artifact(packet, evaluated_units, catalog=authority)
-
-            # Persist evidence to history store
-            store = self._history_store_factory() if self._history_store_factory else None
+                    # A stationary support frame may preserve the same origin;
+                    # only VERIFIED pixel motion can move a global instance.
+                    physical_link = {**proof, **coverage_link}
+            state = observation.get("scrollState")
+            top = {"trusted": True, "proofId": f"top:{digest}"} if state in {"TOP", "NO_SCROLL"} else None
+            bottom = {"trusted": True, "proofId": f"bottom:{digest}"} if state in {"BOTTOM", "NO_SCROLL"} else None
+            ledger.add_segment(desc, sequence_index=sequence, top_proof=top,
+                               bottom_proof=bottom, overlap_proof=coverage_link)
+            intake = proc.accept_segment(frame, desc, sequence, observation, physical_link,
+                                         already_cropped=already_cropped)
+            if not intake.get("accepted"):
+                raise ValueError("RECONSTRUCTION_REJECTED: " + str(intake.get("reason")))
+            accepted_pages.append(desc)
+            previous = (crop, desc)
+        if not accepted_pages:
+            raise ValueError("NO_PAGES")
+        coverage = ledger.finalize(finalization_reason)
+        proc.finalize(coverage)
+        packet = proc.packet_copy()
+        if packet is None:
+            raise RuntimeError("BUILD_PACKET_FAILED")
+        units = evaluate_auto_confirmation(packet.get("reviewUnits", []), segments=accepted_pages)
+        identity_review = build_auto_identity_review_artifact(packet, units, catalog=CatalogAuthority(catalog_data))
+        persisted, persist_error = None, None
+        try:
+            store = history_store if history_store is not None else (
+                self._history_store_factory() if self._history_store_factory else None)
             if store is None:
                 from canonical_history_store import CanonicalHistoryStore
                 store = CanonicalHistoryStore()
-
-            persisted = None
-            try:
-                persisted = store.persist_warehouse_evidence(
-                    record_key,
-                    review_units=evaluated_units,
-                    identity_review=identity_review,
-                    review_packet=packet,
-                )
-                if persisted is None and hasattr(store, "append_finalized_evidence"):
-                    persisted = store.append_finalized_evidence(
-                        record_key,
-                        review_update={
-                            "warehouseReviewUnits": evaluated_units,
-                            "reviewUnits": evaluated_units,
-                            "warehouseIdentityReview": identity_review,
-                            "warehouseReviewPacket": packet,
-                            "pageCount": len(pages),
-                            "warehousePageCount": len(pages),
-                        },
-                        audit_reason="MANUAL_WAREHOUSE_TAKEOVER_ENRICHMENT",
-                    )
-            except Exception as store_err:
-                logger.warning("Failed to persist warehouse evidence for %s: %s", record_key, store_err)
-
-            total_slots = len(evaluated_units)
-            confirmed_count = sum(1 for u in evaluated_units if u.get("confirmationStatus") == "CONFIRMED")
-            unconfirmed_count = total_slots - confirmed_count
-
-            with self._lock:
-                self._review_packet = packet
-                self._presentation = self._build_presentation(
-                    STATE_COMPLETE if coverage_status == "COMPLETE" else STATE_PARTIAL,
-                    len(pages),
-                    coverage_status,
-                    None,
-                    packet_available=True,
-                    packet_status="READY",
-                    packet_fingerprint=packet.get("sourceFingerprint"),
-                    review_status="READY",
-                    message=f"共识别 {total_slots} 个槽位 / {confirmed_count} 已确认 / {unconfirmed_count} 待确认",
-                )
+            # This API validates attribution and protects current human decisions
+            # under the store lock. Never bypass a rejection with a raw patch.
+            persisted = store.persist_warehouse_evidence(
+                record_key, review_units=units, identity_review=identity_review, review_packet=packet,
+            )
+            if persisted is None:
+                raise RuntimeError("HISTORY_RECORD_REJECTED")
         except Exception as exc:
-            logger.exception("WarehouseCaptureHost: manual processing error: %s", exc)
-            with self._lock:
-                self._presentation = self._build_presentation(
-                    STATE_ERROR,
-                    len(pages),
-                    "COVERAGE_UNPROVEN",
-                    "PROCESSING_FAILED",
-                    message=f"识别失败：{exc}",
-                )
+            persist_error = f"{type(exc).__name__}: {exc}"[:240]
+            logger.warning("Warehouse review not saved for %s: %s", record_key, exc)
+        if isinstance(persisted, Mapping):
+            saved_settlement = persisted.get("settlement") or {}
+            units = saved_settlement.get("reviewUnits", units)
+            identity_review = saved_settlement.get("warehouseIdentityReview", identity_review)
+        total_slots = len(units)
+        confirmed_count = sum(unit.get("confirmationStatus") == "CONFIRMED" for unit in units)
+        counts = f"{total_slots} 个槽位 / {confirmed_count} 已确认 / {total_slots - confirmed_count} 待确认"
+        message = (f"已生成审阅包，尚未保存本局记录；{counts}" if persist_error
+                   else f"已写入本局记录；{counts}")
+        with self._lock:
+            self._review_packet = packet
+            self._presentation = self._build_presentation(
+                STATE_ERROR if persist_error else (STATE_COMPLETE if coverage["coverageStatus"] == "COMPLETE" else STATE_PARTIAL),
+                len(accepted_pages), coverage["coverageStatus"],
+                "HISTORY_NOT_SAVED" if persist_error else coverage["terminationReason"],
+                packet_available=True, packet_status="READY",
+                packet_fingerprint=packet.get("sourceFingerprint"), review_status="READY", message=message,
+            )
+        return {
+            "ok": persist_error is None, "reason": "HISTORY_NOT_SAVED" if persist_error else coverage["terminationReason"],
+            "recordStableKey": record_key, "pageCount": len(accepted_pages),
+            "coverageStatus": coverage["coverageStatus"], "coverage": coverage,
+            "totalSlots": total_slots, "confirmedCount": confirmed_count,
+            "unconfirmedCount": total_slots - confirmed_count,
+            "packet": packet, "identityReview": identity_review,
+            "persisted": persist_error is None, "error": persist_error, "message": message,
+        }
 
     def process_capture_images(
         self,
@@ -896,168 +944,48 @@ class WarehouseCaptureHost:
         *,
         history_store: Optional[Any] = None,
     ) -> Dict[str, Any]:
-        """Synchronously process a group of capture images (file paths or np.ndarrays).
-        Used for forensic replay, regression fixtures, and multi-image manual enrichment.
-        """
+        """Save supplied images as immutable originals, then use the manual pipeline."""
         import cv2
         import numpy as np
-        from warehouse_catalog_geometry import CatalogGeometryIndex
-        from warehouse_capture_production import get_production_placement_resolver
-        from warehouse_reconstruction import WarehouseReconstructionProcessor
-        from warehouse_scrollbar_observation import WarehouseScrollbarObserver, warehouse_search_roi
-        from warehouse_segment_overlap import align_warehouse_segments, DIR_DOWN
-        from warehouse_auto_confirmation import evaluate_auto_confirmation
-        from warehouse_identity_review import CatalogAuthority, build_auto_identity_review_artifact
-
-        catalog_candidates = [
-            Path(r"D:\yihuanpaimai\assets\catalog_065.json"),
-            Path("assets/catalog_065.json"),
-        ]
-        catalog_path = next((p for p in catalog_candidates if p.is_file()), None)
-        catalog_data = json.loads(catalog_path.read_text(encoding="utf-8")) if catalog_path else []
-        catalog_index = CatalogGeometryIndex(catalog_data)
-        resolver = get_production_placement_resolver()
-
-        proc = WarehouseReconstructionProcessor(
-            record_key,
-            catalog_index=catalog_index,
-            placement_resolver=resolver,
-        )
-        obs = WarehouseScrollbarObserver()
+        from settlement_evidence_store_v2 import detect_image_type
+        from settlement_stable_frame_persist import encode_settlement_original
         pages = []
-        frames = {}
-        prev_crop = None
-        prev_id = None
-
-        for idx, item in enumerate(images):
-            seg_id = f"page_{idx + 1}"
-            if isinstance(item, (str, Path)):
-                p = Path(item)
-                frame = cv2.imdecode(np.fromfile(str(p), dtype=np.uint8), cv2.IMREAD_COLOR)
-                digest = hashlib.sha256(p.read_bytes()).hexdigest()
-            elif isinstance(item, np.ndarray):
-                frame = item
-                from settlement_stable_frame_persist import encode_settlement_original
-                digest = hashlib.sha256(encode_settlement_original(frame)).hexdigest()
-            else:
-                continue
-
-            h, w = frame.shape[:2]
-            desc = {
-                "evidenceId": seg_id,
-                "recordStableKey": record_key,
-                "sha256": digest,
-                "kind": "warehouse-segment",
-                "sequenceIndex": idx,
-                "width": w,
-                "height": h,
-                "coverageStatus": "PARTIAL",
-            }
-            pages.append(desc)
-            frames[seg_id] = frame
-
-            obs_res = obs.observe(frame)
-            x1, y1, x2, y2 = warehouse_search_roi(w, h)
-            curr_crop = frame[y1:y2, x1:x2]
-
-            overlap_proof = None
-            if prev_crop is not None and prev_id is not None:
-                alignment = align_warehouse_segments(
-                    prev_crop,
-                    curr_crop,
-                    prev_id=prev_id,
-                    next_id=seg_id,
-                    required_direction=DIR_DOWN,
-                )
-                overlap_proof = {
-                    "trusted": alignment.get("status") == "VERIFIED",
-                    "aligned": alignment.get("status") == "VERIFIED",
-                    "proofId": f"overlap_{prev_id}_{seg_id}",
-                    "previousEvidenceId": prev_id,
-                    "verticalOffsetPx": alignment.get("verticalOffsetPx"),
-                    "direction": alignment.get("direction"),
-                }
-            proc.accept_segment(frame, desc, idx, obs_res, overlap_proof, already_cropped=False)
-            prev_crop = curr_crop
-            prev_id = seg_id
-
-        coverage_status = "PARTIAL" if len(pages) < 3 else "COMPLETE"
-        cov = {
-            "recordStableKey": record_key,
-            "coverageStatus": coverage_status,
-            "finalized": True,
-            "terminationReason": "MANUAL_PAGES",
-            "segments": pages,
-        }
-        proc.finalize(cov)
-        packet = proc.build_review_packet()
-        if packet is None:
-            return {"ok": False, "reason": "BUILD_PACKET_FAILED"}
-
-        raw_units = packet.get("reviewUnits", [])
-        authority = CatalogAuthority(catalog_data)
-        evaluated_units = evaluate_auto_confirmation(raw_units, segments=pages)
-        identity_review = build_auto_identity_review_artifact(packet, evaluated_units, catalog=authority)
-
-        store = history_store or (self._history_store_factory() if self._history_store_factory else None)
-        if store is None:
-            from canonical_history_store import CanonicalHistoryStore
-            store = CanonicalHistoryStore()
-
-        persisted = None
-        try:
-            persisted = store.persist_warehouse_evidence(
-                record_key,
-                review_units=evaluated_units,
-                identity_review=identity_review,
-                review_packet=packet,
-            )
-            if persisted is None and hasattr(store, "append_finalized_evidence"):
-                persisted = store.append_finalized_evidence(
-                    record_key,
-                    review_update={
-                        "warehouseReviewUnits": evaluated_units,
-                        "reviewUnits": evaluated_units,
-                        "warehouseIdentityReview": identity_review,
-                        "warehouseReviewPacket": packet,
-                        "pageCount": len(pages),
-                        "warehousePageCount": len(pages),
-                    },
-                    audit_reason="MANUAL_WAREHOUSE_TAKEOVER_ENRICHMENT",
-                )
-        except Exception as store_err:
-            logger.warning("Failed to persist warehouse evidence for %s: %s", record_key, store_err)
-
-        total_slots = len(evaluated_units)
-        confirmed_count = sum(1 for u in evaluated_units if u.get("confirmationStatus") == "CONFIRMED")
-        unconfirmed_count = total_slots - confirmed_count
-
         with self._lock:
-            self._review_packet = packet
+            if self._running or self._manual_mode or self._manual_processing:
+                return {"ok": False, "reason": REASON_ALREADY_RUNNING, "persisted": False}
+            self._manual_processing = True
             self._presentation = self._build_presentation(
-                STATE_COMPLETE if coverage_status == "COMPLETE" else STATE_PARTIAL,
-                len(pages),
-                coverage_status,
-                None,
-                packet_available=True,
-                packet_status="READY",
-                packet_fingerprint=packet.get("sourceFingerprint"),
-                review_status="READY",
-                message=f"共识别 {total_slots} 个槽位 / {confirmed_count} 已确认 / {unconfirmed_count} 待确认",
+                STATE_ALIGNING, 0, "COVERAGE_UNPROVEN", None,
+                message="正在校验图片并生成仓库审阅包",
             )
-
-        return {
-            "ok": True,
-            "recordStableKey": record_key,
-            "pageCount": len(pages),
-            "totalSlots": total_slots,
-            "confirmedCount": confirmed_count,
-            "unconfirmedCount": unconfirmed_count,
-            "packet": packet,
-            "identityReview": identity_review,
-            "persisted": persisted is not None,
-            "message": f"共识别 {total_slots} 个槽位 / {confirmed_count} 已确认 / {unconfirmed_count} 待确认",
-        }
+        try:
+            evidence_store = self._store_factory() if self._store_factory else None
+            if evidence_store is None or not callable(getattr(evidence_store, "save_original", None)):
+                raise RuntimeError("STORE_UNAVAILABLE")
+            for image in images:
+                if isinstance(image, (str, Path)):
+                    payload = Path(image).read_bytes()
+                    if detect_image_type(payload) is None:
+                        frame = cv2.imdecode(np.frombuffer(payload, dtype=np.uint8), cv2.IMREAD_COLOR)
+                        if frame is None:
+                            raise ValueError("INVALID_IMAGE")
+                        payload = encode_settlement_original(frame)
+                elif isinstance(image, np.ndarray):
+                    payload = encode_settlement_original(image)
+                else:
+                    raise ValueError("INVALID_IMAGE")
+                pages.append(evidence_store.save_original(
+                    record_stable_key=record_key, kind="warehouse-segment", image_bytes=payload,
+                    coverage_mode="viewport-segment", coverage_status="COVERAGE_UNPROVEN",
+                    evidence_origin="user-import",
+                ))
+            return self._process_saved_pages(record_key, pages, history_store=history_store)
+        except Exception as exc:
+            logger.warning("Warehouse saved-image intake failed: %s", exc)
+            return self._saved_pages_failure(len(pages), "PROCESSING_FAILED", str(exc))
+        finally:
+            with self._lock:
+                self._manual_processing = False
 
     def _resume_available(self, snap) -> bool:
         previous = self._resume_session
