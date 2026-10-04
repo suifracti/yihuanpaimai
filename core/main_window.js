@@ -75,6 +75,7 @@ const dashboard = {
     debug: false,
   },
   review: null,
+  pendingObservationWindowMode: false,
   reviewEdits: null,
   pendingReviewRequestId: null,
   matchState: {
@@ -987,7 +988,9 @@ function renderHistoryDetail(record) {
     if (unknown > 0) {
       warehouseText = `${recordSource === "live-trial" ? "竞拍期：" : ""}${total} 个可见候选槽位（${unknown} 个身份未确证；非完整仓库）`;
     } else {
-      warehouseText = `${total} 件`;
+      // Identity matches within the current viewport do not prove full coverage.
+      warehouseText = recordSource === "live-trial"
+        ? `竞拍期：${total} 个可见槽位（非完整仓库）` : `${total} 件`;
     }
   } else if (reviewUnits.length > 0) {
     const confirmedCount = reviewUnits.filter(u => u.status === 'CONFIRMED' || u.confirmed || u.exactMatch).length;
@@ -1899,7 +1902,7 @@ function renderSettings() {
   const overlay = document.getElementById("settings-overlay-toggle");
   if (name) name.textContent = match.configuredPlayerName || "未设置 · 按画面姓名识别";
   if (profile) profile.textContent = match.observationProfile === "native-readonly-v1"
-    ? "Native 只读观察 · 游戏输入关闭" : "观察档案待读取";
+    ? `${(match.effectiveObservationWindowMode || match.observationWindowMode) === 'background-readonly' ? '后台只读识别' : '前台只读识别'}${match.nativeObservationRunning && !match.effectiveObservationWindowMode ? '（待确认）' : ''} · 游戏输入关闭` : "观察档案待读取";
   if (diagnostic) diagnostic.textContent = match.visionHealth
     ? `场景 ${match.scene || "UNKNOWN"} · ${match.visionHealth.status || "状态未知"} · ${match.visionHealth.reason || "无额外原因"} · 草稿 ${match.draftSaveStatus || "未知"}`
     : "尚无观察诊断；不据此推断游戏状态";
@@ -3208,6 +3211,41 @@ function syncWarehouseInstanceReviewFromMatch(currentMatch) {
   renderWarehouseInstanceReviewPanel();
 }
 
+function renderObservationWindowMode(currentMatch = {}) {
+  const control = document.getElementById('observation-window-mode-control');
+  const checkbox = document.getElementById('observation-background-readonly');
+  const status = document.getElementById('observation-window-mode-status');
+  const health = currentMatch.visionHealth || {};
+  const native = currentMatch.observationProfile === 'native-readonly-v1' || health.profile === 'native-readonly-v1';
+  const configured = currentMatch.observationWindowMode === 'background-readonly' ? 'background-readonly' : 'foreground';
+  const effectiveConfirmed = ['foreground', 'background-readonly'].includes(currentMatch.effectiveObservationWindowMode);
+  const effective = effectiveConfirmed ? currentMatch.effectiveObservationWindowMode : configured;
+  const running = typeof currentMatch.nativeObservationRunning === 'boolean'
+    ? currentMatch.nativeObservationRunning
+    : Boolean(currentMatch.visionLive || (native && (health.status === 'READY' || ['native-starting', 'native-ready', 'native-refreshing'].includes(health.stage))));
+  if (control) control.hidden = !native;
+  if (checkbox) {
+    checkbox.checked = configured === 'background-readonly';
+    checkbox.disabled = !native || running || dashboard.pendingObservationWindowMode;
+    checkbox.title = running ? '观察运行中无法更改，结束观察后再选' : '游戏窗口未最小化时，失焦后仍可只读识别';
+  }
+  if (status) {
+    status.hidden = !native;
+    status.textContent = dashboard.pendingObservationWindowMode ? '正在保存观察模式…'
+      : `${running ? '当前' : '下次开始'}：${(running ? effective : configured) === 'background-readonly' ? '后台只读识别' : '前台只读识别'}${running && !effectiveConfirmed ? ' · 等待 Host 确认' : ''}${running ? ' · 结束观察后可更改' : ''}`;
+  }
+}
+
+function requestObservationWindowMode(mode) {
+  if (!['foreground', 'background-readonly'].includes(mode) || dashboard.pendingObservationWindowMode) return;
+  dashboard.pendingObservationWindowMode = true;
+  const checkbox = document.getElementById('observation-background-readonly');
+  const status = document.getElementById('observation-window-mode-status');
+  if (checkbox) checkbox.disabled = true;
+  if (status) status.textContent = '正在保存观察模式…';
+  postNative('set_observation_window_mode', { mode });
+}
+
 function renderMatch(currentMatch, overlayVisible) {
   if (!currentMatch) return;
   renderMatchFocus(currentMatch);
@@ -3243,6 +3281,7 @@ function renderMatch(currentMatch, overlayVisible) {
   }
   renderManualCommandReceipt(currentMatch.manualCommandResult || currentMatch.nativeControlResult);
   dashboard.lastCurrentMatch = currentMatch;
+  renderObservationWindowMode(currentMatch);
   if (dashboard.currentView === "settings") renderSettings();
   syncWarehouseInstanceReviewFromMatch(currentMatch);
   dashboard.matchState.factsRevision = Number(currentMatch.factsRevision || 0);
@@ -3263,7 +3302,9 @@ function renderMatch(currentMatch, overlayVisible) {
       else if (health.stage === 'native-ready') visionHealthStatus.textContent = 'Native Host 已就绪，等待首个业务帧';
       else if (health.stage === 'native-refreshing') visionHealthStatus.textContent = `等待当前局的新观察帧：${health.reason || '实时建议暂不可用'}`;
       else if (health.stage === 'native-explicit-start' || health.stage === 'native-stopped') visionHealthStatus.textContent = 'Native 观察未启动，点击开始观察';
-      else if (health.stage === 'native-starting') visionHealthStatus.textContent = '正在启动 Native 观察，请保持游戏窗口可见并置前';
+      else if (health.stage === 'native-starting') visionHealthStatus.textContent = (currentMatch.effectiveObservationWindowMode || currentMatch.observationWindowMode) === 'background-readonly'
+        ? '正在启动后台只读识别，等待 Host 确认；请保持游戏窗口未最小化'
+        : '正在启动 Native 观察，请保持游戏窗口可见并置前';
       else if (health.stage === 'native-paused') visionHealthStatus.textContent = `Native 观察已暂停：${health.reason || '目标窗口或场景边界变化'}；点击重新开始`;
       else if (health.stage === 'native-error') visionHealthStatus.textContent = `Native 观察异常：${health.reason || '请重新开始观察'}`;
     } else if (!visionHealthStatus.hidden && health.stage === 'process') {
@@ -3879,6 +3920,7 @@ function renderWarehouseCapture(capture) {
   const manualPageCounter = document.getElementById("warehouse-manual-page-counter");
   const manualMessage = document.getElementById("warehouse-manual-message");
   const manualConfirm = document.getElementById("warehouse-manual-confirm");
+  if (manualStartBtn) manualStartBtn.disabled = running;
 
   if (capture && capture.state === "MANUAL_CAPTURING") {
     if (manualControls) manualControls.hidden = false;
@@ -5671,6 +5713,14 @@ function handleNativeMessage(event) {
   }
   if (payload.currentMatch) {
     renderMatch(payload.currentMatch, dashboard.overlayVisible);
+  }
+  if (payload.action === 'set_observation_window_mode' && payload.observationWindowModeResult) {
+    dashboard.pendingObservationWindowMode = false;
+    renderObservationWindowMode(payload.currentMatch || dashboard.lastCurrentMatch || {});
+    if (!payload.observationWindowModeResult.ok) {
+      const status = document.getElementById('observation-window-mode-status');
+      if (status) status.textContent = payload.observationWindowModeResult.message || payload.observationWindowModeResult.reason || '观察模式未保存，请重试';
+    }
   }
   if (payload.warehouseCapture) {
     renderWarehouseCapture(payload.warehouseCapture);

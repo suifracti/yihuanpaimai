@@ -166,6 +166,8 @@
             <div class="workbench-primary-actions">
               <span id="isolated-trial-label" role="status" hidden>隔离试用 · 数据单独保存</span>
               <span id="vision-health-status" role="status" hidden></span>
+              <label id="observation-window-mode-control" class="btn-wb-action" hidden><input id="observation-background-readonly" type="checkbox" onchange="requestObservationWindowMode(this.checked ? 'background-readonly' : 'foreground')"> 后台只读识别</label>
+              <span id="observation-window-mode-status" role="status" hidden></span>
               <button class="btn-wb-action" id="restore-vision-btn" type="button" hidden onclick="postNative('start_live_vision', {resumeSameMatch: this.dataset.resumeSameMatch === 'true'})">恢复识别</button>
               <button class="btn-wb-action" id="start-new-vision-btn" type="button" hidden onclick="postNative('start_live_vision', {resumeSameMatch: false})">开始新局观察</button>
             </div>
@@ -1428,7 +1430,7 @@
           <section class="settings-card"><h2>观察与身份</h2>
             <div class="settings-row"><div><strong>本人昵称</strong><p>按既有唯一匹配规则识别本人席位；不是游戏 UID。</p></div><div><span id="settings-player-name">未设置</span><button type="button" id="settings-edit-name" class="btn-wb-action">在对局页修改</button></div></div>
             <div class="settings-row"><div><strong>观察与游戏输入</strong><p>当前观察档案与运行状态来自 Main；设置页不会发送任何游戏操作。</p></div><span id="settings-observation-profile">状态待读取</span></div>
-            <div class="settings-row"><div><strong>失焦与目标变化保护</strong><p>失效立即撤销当前建议；恢复须新鲜有效帧。</p></div><span>始终启用</span></div>
+            <div class="settings-row"><div><strong>目标变化保护</strong><p>目标失效立即停止观察；后台只读模式允许窗口失焦，恢复仍须新鲜有效帧。</p></div><span>始终启用</span></div>
           </section>
           <section class="settings-card"><h2>窗口与悬浮窗</h2>
             <div class="settings-row"><div><strong>主窗口置顶</strong><p>通过现有窗口控制接口切换。</p></div><button type="button" id="settings-pin-toggle" class="btn-wb-action">读取中</button></div>

@@ -20,7 +20,8 @@ internal sealed record CapturedBgraFrame(
     int Stride,
     byte[] Pixels,
     long CaptureTimestampNs,
-    string CapturedAtUtc);
+    string CapturedAtUtc,
+    long SourceTimestampNs);
 
 /// <summary>
 /// Minimal WGC -> D3D11 readback for the Native observation profile. It
@@ -45,6 +46,7 @@ internal sealed class WgcWindowCapture : IDisposable
     private readonly AutoResetEvent _frameArrived = new(false);
     private readonly IntPtr _hwnd;
     private readonly ClientAreaMapping _clientArea;
+    private readonly WarehouseBoundsSource _warehouseBoundsSource;
     private bool _disposed;
 
     public int Width { get; }
@@ -53,6 +55,9 @@ internal sealed class WgcWindowCapture : IDisposable
     public int CaptureItemHeight { get; }
     public int ClientOffsetX => _clientArea.X;
     public int ClientOffsetY => _clientArea.Y;
+    public int LastRequestDiscardedQueuedFrames { get; private set; }
+    public bool EnableRequestClockDiagnostics { get; set; }
+    public string? LastRequestClockDiagnosticsJson { get; private set; }
 
     public WgcWindowCapture(IntPtr hwnd)
     {
@@ -75,6 +80,7 @@ internal sealed class WgcWindowCapture : IDisposable
             Width = _clientArea.Width;
             Height = _clientArea.Height;
             ValidateFixedV1Geometry(Width, Height);
+            _warehouseBoundsSource = ResolveWarehouseBoundsProof();
 
             stage = "create-winrt-direct3d-device";
             var direct3DDevice = CreateWinRtDirect3DDevice(_device);
@@ -117,6 +123,58 @@ internal sealed class WgcWindowCapture : IDisposable
         {
             throw new InvalidOperationException("WGC signalled FrameArrived but TryGetNextFrame returned null");
         }
+
+        return ReadBack(frame);
+    }
+
+    // Explicit requests retain the caller's QPC gate and original deadline.
+    // Ordinary continuous Capture/FRAME keeps its existing selection policy.
+    public CapturedBgraFrame CaptureAfterRequest(int timeoutMs, long requestNs,
+        long absoluteWorkDeadlineNs, Func<bool> stopped)
+    {
+        ObjectDisposedException.ThrowIf(_disposed, this);
+        ArgumentNullException.ThrowIfNull(stopped);
+        var deadlineNs = RequestFrameSelector.DeadlineForRequest(timeoutMs, requestNs, absoluteWorkDeadlineNs);
+        var discarded = 0;
+        LastRequestDiscardedQueuedFrames = 0;
+        LastRequestClockDiagnosticsJson = null;
+        var diagnostics = EnableRequestClockDiagnostics ? new RequestClockDiagnostics(requestNs, deadlineNs) : null;
+        void CheckAvailable()
+        {
+            if (stopped()) throw new OperationCanceledException("Explicit frame request stopped.");
+            if (ProtocolClock.NowNs() >= deadlineNs)
+                throw new TimeoutException("Explicit frame request reached its original deadline.");
+            if (stopped()) throw new OperationCanceledException("Explicit frame request stopped.");
+        }
+        try
+        {
+            using var frame = RequestFrameSelector.Select(
+                () => _framePool.TryGetNextFrame(),
+                candidate => diagnostics is null ? checked(candidate.SystemRelativeTime.Ticks * 100L)
+                    : diagnostics.Source(candidate.SystemRelativeTime.Ticks),
+                candidate => candidate.Dispose(),
+                remainingMs => _frameArrived.WaitOne(remainingMs),
+                diagnostics is null ? ProtocolClock.NowNs : diagnostics.SelectionClock,
+                stopped, requestNs, deadlineNs, out discarded);
+            CheckAvailable();
+            var result = ReadBack(frame, diagnostics);
+            CheckAvailable();
+            return result;
+        }
+        catch (Exception ex)
+        {
+            if (diagnostics is not null) diagnostics.Failure = ex.GetType().Name + ": " + ex.Message;
+            throw;
+        }
+        finally
+        {
+            LastRequestDiscardedQueuedFrames = discarded;
+            if (diagnostics is not null) LastRequestClockDiagnosticsJson = diagnostics.ToJson();
+        }
+    }
+
+    private CapturedBgraFrame ReadBack(Direct3D11CaptureFrame frame, RequestClockDiagnostics? diagnostics = null)
+    {
 
         var size = frame.ContentSize;
         ValidateCaptureSourceGeometry(size.Width, size.Height);
@@ -180,19 +238,96 @@ internal sealed class WgcWindowCapture : IDisposable
                     stride);
             }
 
+            if (diagnostics is not null)
+            {
+                var sample = QpcClockSample.Read();
+                var utc = DateTimeOffset.UtcNow.ToString("O");
+                var rawSourceTicks = frame.SystemRelativeTime.Ticks;
+                var sourceNs = checked(rawSourceTicks * 100L);
+                diagnostics.Readback(rawSourceTicks, sample);
+                return new CapturedBgraFrame(Width, Height, stride, pixels, sample.Nanoseconds, utc, sourceNs);
+            }
             return new CapturedBgraFrame(
                 Width,
                 Height,
                 stride,
                 pixels,
                 ProtocolClock.NowNs(),
-                DateTimeOffset.UtcNow.ToString("O"));
+                DateTimeOffset.UtcNow.ToString("O"),
+                checked(frame.SystemRelativeTime.Ticks * 100L));
         }
         finally
         {
             _context.Unmap(staging, 0);
         }
     }
+
+    // Source-only gate: the business Capture/FRAME path keeps its existing mapping policy.
+    public bool IsClientAreaMappingCurrent()
+    {
+        if (_disposed || _warehouseBoundsSource == WarehouseBoundsSource.Unproven) return false;
+        try
+        {
+            var size = _item.Size;
+            return size.Width == CaptureItemWidth && size.Height == CaptureItemHeight
+                && WarehouseMappingMatches(_clientArea, CaptureItemWidth, CaptureItemHeight,
+                    ReadWarehouseMappingObservation(_warehouseBoundsSource));
+        }
+        catch (Exception)
+        {
+            // An unavailable mapping cannot authorise an original-frame publication.
+            return false;
+        }
+    }
+
+    private WarehouseBoundsSource ResolveWarehouseBoundsProof()
+    {
+        foreach (var source in new[] { WarehouseBoundsSource.WindowRect, WarehouseBoundsSource.DwmExtendedFrameBounds })
+        {
+            if (WarehouseMappingMatches(_clientArea, CaptureItemWidth, CaptureItemHeight,
+                    ReadWarehouseMappingObservation(source))) return source;
+        }
+        return WarehouseBoundsSource.Unproven;
+    }
+
+    private WarehouseMappingObservation? ReadWarehouseMappingObservation(WarehouseBoundsSource source)
+    {
+        try
+        {
+            if (!GetClientRect(_hwnd, out var client)) return null;
+            var origin = new Point32();
+            if (!ClientToScreen(_hwnd, ref origin)) return null;
+            Rect32 bounds;
+            if (source == WarehouseBoundsSource.WindowRect)
+            {
+                if (!GetWindowRect(_hwnd, out bounds)) return null;
+            }
+            else if (source == WarehouseBoundsSource.DwmExtendedFrameBounds)
+            {
+                if (DwmGetWindowAttribute(_hwnd, DwmExtendedFrameBounds, out bounds,
+                        (uint)Marshal.SizeOf<Rect32>()) != 0) return null;
+            }
+            else return null;
+            return new WarehouseMappingObservation(checked(client.Right - client.Left), checked(client.Bottom - client.Top),
+                origin.X, origin.Y, bounds.Left, bounds.Top,
+                checked(bounds.Right - bounds.Left), checked(bounds.Bottom - bounds.Top));
+        }
+        catch (Exception)
+        {
+            return null;
+        }
+    }
+
+    private static bool WarehouseMappingMatches(ClientAreaMapping expected, int itemWidth, int itemHeight,
+        WarehouseMappingObservation? observed) => observed is { } value
+        && value.ClientWidth == expected.Width && value.ClientHeight == expected.Height
+        && value.BoundsWidth == itemWidth && value.BoundsHeight == itemHeight
+        && (long)value.ClientOriginX - value.BoundsLeft == expected.X
+        && (long)value.ClientOriginY - value.BoundsTop == expected.Y;
+
+    private enum WarehouseBoundsSource { Unproven, WindowRect, DwmExtendedFrameBounds }
+    private readonly record struct WarehouseMappingObservation(int ClientWidth, int ClientHeight,
+        int ClientOriginX, int ClientOriginY, int BoundsLeft, int BoundsTop, int BoundsWidth, int BoundsHeight);
 
     private void OnFrameArrived(Direct3D11CaptureFramePool sender, object args) =>
         _frameArrived.Set();

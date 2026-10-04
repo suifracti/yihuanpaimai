@@ -328,6 +328,7 @@ class MainWindowBridge:
             "manual_finalize",
             "manual_bootstrap",
             "start_live_vision",
+            "set_observation_window_mode",
             "triggered_snapshot",
             "save_settlement_screenshot",
             "save_game_screenshot",
@@ -403,6 +404,7 @@ class MainWindowBridge:
         user_pinned: bool = True,
         warehouse_slot_evidence_provider=None,
         warehouse_instance_decision_provider=None,
+        observation_window_mode_provider=None,
     ):
         self._overlay_controller = overlay_controller
         self._presentation_runtime_provider = presentation_runtime_provider
@@ -421,6 +423,7 @@ class MainWindowBridge:
         self._manual_finalize_provider = manual_finalize_provider
         self._manual_bootstrap_provider = manual_bootstrap_provider
         self._start_vision_provider = start_vision_provider
+        self._observation_window_mode_provider = observation_window_mode_provider
         self._triggered_snapshot_provider = triggered_snapshot_provider
         self._save_settlement_screenshot_provider = save_settlement_screenshot_provider
         self._save_game_screenshot_provider = save_game_screenshot_provider
@@ -1024,6 +1027,18 @@ class MainWindowBridge:
             else:
                 response["manualBootstrapResult"] = {"ok": False, "error": "NO_MANUAL_BOOTSTRAP_PROVIDER"}
 
+        if action == "set_observation_window_mode":
+            provider = self._observation_window_mode_provider
+            if provider is None:
+                response["observationWindowModeResult"] = {
+                    "ok": False, "message": "观察模式服务未就绪",
+                }
+            else:
+                try:
+                    response["observationWindowModeResult"] = provider(payload.get("mode"))
+                except Exception as exc:
+                    response["observationWindowModeResult"] = {"ok": False, "message": str(exc)}
+
         if action == 'start_live_vision':
             try:
                 resume_same_match = bool(payload.get('resumeSameMatch'))
@@ -1528,6 +1543,7 @@ def create_main_window_type(WinForms, Drawing):
             shutdown_started_provider=None,
             warehouse_slot_evidence_provider=None,
             warehouse_instance_decision_provider=None,
+            observation_window_mode_provider=None,
         ) -> None:
             self._overlay_controller = overlay_controller
             self._bridge = MainWindowBridge(
@@ -1548,6 +1564,7 @@ def create_main_window_type(WinForms, Drawing):
                 manual_finalize_provider=manual_finalize_provider,
                 manual_bootstrap_provider=manual_bootstrap_provider,
                 start_vision_provider=start_vision_provider,
+                observation_window_mode_provider=observation_window_mode_provider,
                 triggered_snapshot_provider=triggered_snapshot_provider,
                 save_settlement_screenshot_provider=save_settlement_screenshot_provider,
                 save_game_screenshot_provider=save_game_screenshot_provider,

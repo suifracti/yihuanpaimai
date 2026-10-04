@@ -2,7 +2,11 @@
 
 ## 当前工作
 
-- [2026-09-20 Luna Max 长时间 Goal 执行规划](plans/2026-09-20-luna-max-goal.md)：已按单目录清理后的 `D:/yihuanpaimai` 和 `cb86697` V2-2 A/B/C、I1 集成整份重写。安排约 12–16 小时的真实观察桥、实际传帧、真实业务接入、恢复与长稳交付；含最多两个子代理的文件分工及第9节可直接使用的 Goal 指令。尚未启动实施。
+- [2026-10-03 正式后台只读识别设计与交付](superpowers/specs/2026-10-03-native-background-observation-design.md)及[自动翻页候选](superpowers/specs/2026-10-03-native-warehouse-auto-scroll-design.md)：代码已实施、真实生产验收未完成。早期大厅QA为2尝试/1接受，最新结算QA为3尝试/2接受、未来来源时间拒绝，均整体未通过；原始时钟诊断已准备，真实滚动、全仓覆盖及完整拍卖仍未验证。
+
+- [当前项目 Handoff](D:/ObsidianLiveSyncTestVault/03-项目与工程/异环拍卖助手/Handoff.md) 与 [Decisions](D:/ObsidianLiveSyncTestVault/03-项目与工程/异环拍卖助手/Decisions.md)：Native 主路线 `YH-MASTER-2026-09-22` 的当前执行入口；2026-09-28 状态为 P5 未完成，目录接线、结算归档与离场续作按各自离线范围解读。
+
+- [2026-09-20 Luna Max Goal 执行规划](plans/2026-09-20-luna-max-goal.md) 与 [已实施范围报告](reports/luna-goal-acceptance.md)：保留当时 V2-2 A/B/C、I1 的传帧、恢复与受控窗口证据；其结果不替代当前 Native P5 现场验收，旧时长/验证矩阵不作为本轮默认执行要求。
 
 - [3c270c8 最小实际 EXE 运行](reports/2026-09-15-frozen-exe-runtime-verify.md)：冻结进程跑通；整窗结算 29/26 exact；日志不打印 v2 文件名；识别未归档故无逐件回看。
 - [运行时视觉图鉴真实加载与 v2 打包](reports/2026-09-14-runtime-visual-catalog-load.md)：3c270c8 隔离候选已选中 v2；源码/包 213+107 解码校验通过。旧 84e0207 包保留。
@@ -13,7 +17,7 @@
 - [裁图来源绑定与事务恢复修复](reports/2026-09-12-crop-provenance-recovery.md)：前轮4dabf27缓存/事务验证；当时哈希与DOM检查未覆盖裁切位置，本轮坐标修复另见上项。
 - [18b5e23独立复核](audits/2026-09-12-18b5e23-independent-audit.md)：修复前历史，58项回归通过但三个裁图证据链反例失败。
 
-- [当前执行规划、证据范围与唯一下一步](plans/2026-09-05-project-replan.md)：2026-09-12与Obsidian项目Handoff同步，沿用原路径；旧9月5—7日过程已归档。按用户授权由Codex继续实施；当前修复、验证及下一步见同一计划。
+- [旧识别执行规划与证据范围](plans/2026-09-05-project-replan.md)：保留旧 P1/P2/P3 识别阶段及历史证据；页首已有当前主路线导航，最新修复与下一动作见上述项目 Handoff。
 - [桌面环境与构建复现](desktop-environment.md)：依赖、启动、测试和打包步骤。
 - [仓库整理记录](reports/2026-09-08-repository-cleanup.md)：保留范围与整理依据。
 - [9月8日手动对局排查](reports/2026-09-08-manual-match-diagnosis.md)：历史问题与证据，不代替当前计划。
@@ -32,6 +36,6 @@
 | `audits/` | 专题审计，按其基线与证据范围阅读 |
 | `archive/` | 旧阶段报告与整理前原文 |
 
-代码与真实运行证据是工程事实源。已提交基线、正在修改的工作区、既有测试结果、当前独立验收和已知日常包必须区分。当前P3保持PARTIAL，完整身份与实机采集尚未验收。
+代码与真实运行证据是工程事实源。已提交基线、正在修改的工作区、既有测试结果、当前独立验收和已知日常包必须区分。旧识别阶段 P3 保持 PARTIAL；当前 Native P5 仍未完成，完整身份与实机采集不能由旧报告推定通过。
 
 历史报告中的代码路径以仓库根目录为基准；本次备份文件中的相对链接保留原文，以原文件位置解释。`lab/`是可运行入口，`experiments/`包含实际导入的采集模块；`design/`、`assets/`及测试夹具分别保留设计来源、产品素材和回归依据。

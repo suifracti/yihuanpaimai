@@ -1,0 +1,45 @@
+{
+  "schema": "native-intake-contract-fixtures-v1",
+  "scope": "Known development warehouse crops for persistence/scope/IPC contracts; no full original in Git, no unseen accuracy or real WGC proof",
+  "canvasPolicy": "Tests place unchanged crop pixels into black offline canvas at original coordinates; this is not an actual full game frame",
+  "frames": [
+    {
+      "seconds": 163,
+      "file": "warehouse-163.png",
+      "source": "build/warehouse-recognition-20260930/continuous-144037-158-168/store/evidence/settlement_v2/blobs/74/74ca93dcefe336993a13d53d5631c4775f75ea6ed83e1d5c89fc06b7263e2712.png",
+      "sourceSha256": "74ca93dcefe336993a13d53d5631c4775f75ea6ed83e1d5c89fc06b7263e2712",
+      "sourceVideo": "data/videos/2026-09-08 14-40-37.mkv",
+      "decodedFrameIndex": 9780,
+      "canvasSizeWH": [
+        2560,
+        1440
+      ],
+      "cropXYXY": [
+        1750,
+        280,
+        2550,
+        1140
+      ],
+      "fixtureSha256": "76f45154b89297f123cfa28822f8559c8ed17a28cf71d6643eb555da32efdc20"
+    },
+    {
+      "seconds": 164,
+      "file": "warehouse-164.png",
+      "source": "build/warehouse-recognition-20260930/continuous-144037-158-168/store/evidence/settlement_v2/blobs/e1/e1b1381806fabaa266bbc74c929ee0b89a9e2927aba8f1e0f7ea13f27e60e11f.png",
+      "sourceSha256": "e1b1381806fabaa266bbc74c929ee0b89a9e2927aba8f1e0f7ea13f27e60e11f",
+      "sourceVideo": "data/videos/2026-09-08 14-40-37.mkv",
+      "decodedFrameIndex": 9840,
+      "canvasSizeWH": [
+        2560,
+        1440
+      ],
+      "cropXYXY": [
+        1750,
+        280,
+        2550,
+        1140
+      ],
+      "fixtureSha256": "35a11ce06ca0973fd37c15ffacb315c6c48dac19f517692a45974b09cc6802dc"
+    }
+  ]
+}

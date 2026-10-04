@@ -323,6 +323,8 @@ class RealEngine:
         self._warehouse_review_vision: dict = {}
         self._warehouse_review_scope: dict = {}
         self.frame_records_path = self.work_dir / "frame_records.ndjson"
+        self._diagnostic_lock = threading.Lock()
+        self._diagnostic_limit_bytes = int(os.environ.get("NTE_BACKGROUND_DIAGNOSTIC_LIMIT_BYTES", "0"))
         self.state_path = self.work_dir / "engine_state.json"
         self.state_manifest_path = self.work_dir / "engine_state_manifest.json"
         self.history_path = self.work_dir / "canonical_history.json"
@@ -391,10 +393,22 @@ class RealEngine:
         line = json.dumps(record, ensure_ascii=False)
         print(line, file=sys.stderr, flush=True)
         try:
-            with self.log_path.open("a", encoding="utf-8") as fh:
-                fh.write(line + "\n")
+            self._append_diagnostic(self.log_path, line)
         except Exception:
             pass
+
+    def _append_diagnostic(self, path: Path, line: str) -> None:
+        data = (line + "\n").encode("utf-8")
+        limit = self._diagnostic_limit_bytes
+        if limit and len(data) > limit:
+            return
+        with self._diagnostic_lock:
+            path.parent.mkdir(parents=True, exist_ok=True)
+            mode = "ab"
+            if limit and path.exists() and path.stat().st_size + len(data) > limit:
+                mode = "wb"
+            with path.open(mode) as handle:
+                handle.write(data)
 
     def preload(self) -> None:
         if self.fault == "model_load_fail":
@@ -570,9 +584,7 @@ class RealEngine:
         )
 
     def _append_frame_record(self, record: dict) -> None:
-        self.frame_records_path.parent.mkdir(parents=True, exist_ok=True)
-        with self.frame_records_path.open("a", encoding="utf-8") as fh:
-            fh.write(json.dumps(_safe(record), ensure_ascii=False, sort_keys=True) + "\n")
+        self._append_diagnostic(self.frame_records_path, json.dumps(_safe(record), ensure_ascii=False, sort_keys=True))
 
     def _persist_history(self) -> str:
         try:

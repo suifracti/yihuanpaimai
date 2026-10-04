@@ -679,6 +679,10 @@ _NATIVE_OBSERVATION_LOCK = threading.RLock()
 _NATIVE_OBSERVATION_RECEIVER = None
 _NATIVE_OBSERVATION_SESSION: Optional[str] = None
 _NATIVE_EXPECTED_SESSION: Optional[str] = None
+_NATIVE_WINDOW_MODE = "foreground"
+_NATIVE_WINDOW_MODE_CONFIRMED = False
+_NATIVE_WINDOW_TARGET_INSTANCE: Optional[Dict[str, Any]] = None
+_NATIVE_OBSERVATION_SOURCE_NS: Optional[int] = None
 _NATIVE_OBSERVATION_SEQUENCE = 0
 _NATIVE_OBSERVATION_LAST_FRAME_NS: Optional[int] = None
 _NATIVE_CONTROL_BINDINGS: Dict[int, Dict[str, Any]] = {}
@@ -698,6 +702,8 @@ _NATIVE_DRAFT_SAVE_ERROR_MATCH_ID: Optional[str] = None
 # observation.  It is intentionally local to presentation/admission and does
 # not extend the frozen Host/Engine protocol.
 _NATIVE_SOLVER_INVALIDATION_GENERATION = 0
+_NATIVE_WAREHOUSE_FRAME_LEASE = None
+_NATIVE_WAREHOUSE_SOURCE_COORDINATOR = None
 _NATIVE_SOLVER_LEASE: Optional[Dict[str, Any]] = None
 _NATIVE_FRAME_WATCHDOG_THREAD: Optional[threading.Thread] = None
 _NATIVE_FRAME_TIMEOUT_SECONDS = 31.0  # Host's SendFrame deadline is 30 seconds.
@@ -761,9 +767,20 @@ def log_stage(category: str, msg: str):
     print(line, flush=True)
     try:
         with _LOG_LOCK:
-            with open(LOG_FILE_PATH, "a", encoding="utf-8") as f:
-                f.write(line + "\n")
-                f.flush()
+            bridge = globals().get("NATIVE_OBSERVATION_BRIDGE")
+            if (bridge is not None and getattr(bridge, "observation_window_mode", None) == "background-readonly"
+                    and getattr(bridge, "session_dir", None) is not None):
+                path = os.path.join(str(bridge.session_dir), "main-diagnostic.log")
+                data = (line + "\n").encode("utf-8")
+                limit = 8 * 1024 * 1024
+                if len(data) <= limit:
+                    mode = "wb" if os.path.exists(path) and os.path.getsize(path) + len(data) > limit else "ab"
+                    with open(path, mode) as f:
+                        f.write(data)
+            else:
+                with open(LOG_FILE_PATH, "a", encoding="utf-8") as f:
+                    f.write(line + "\n")
+                    f.flush()
     except Exception:
         pass
 
@@ -1135,6 +1152,9 @@ def get_current_match_presentation_summary() -> dict:
             "factsRevision": CURRENT_MATCH.facts_revision,
             "recognitionMode": get_recognition_mode(),
             "observationProfile": native_observation_profile(),
+            "observationWindowMode": native_observation_window_mode(),
+            "effectiveObservationWindowMode": _NATIVE_WINDOW_MODE if _NATIVE_WINDOW_MODE_CONFIRMED else None,
+            "nativeObservationRunning": bool(NATIVE_OBSERVATION_BRIDGE is not None and NATIVE_OBSERVATION_BRIDGE.running),
             "configuredPlayerName": get_player_name(),
             "visionHealth": vision_health,
             "observationStatus": native_payload.get("observationStatus") or vision_health.get("status"),
@@ -1502,6 +1522,32 @@ def native_observation_profile() -> str:
 def native_observation_enabled() -> bool:
     return native_observation_profile() == "native-readonly-v1"
 
+
+def native_observation_window_mode() -> str:
+    value = CONFIG.get("app", {}).get("observationWindowMode", "foreground")
+    if value not in {"foreground", "background-readonly"}:
+        raise ValueError("Unknown observation window mode")
+    return value
+
+
+def handle_observation_window_mode(mode: Any) -> Dict[str, Any]:
+    if mode not in ("foreground", "background-readonly"):
+        return {"ok": False, "reason": "观察模式无效"}
+    with _VISION_PROCESS_LOCK, _NATIVE_OBSERVATION_LOCK:
+        if NATIVE_OBSERVATION_BRIDGE is not None and NATIVE_OBSERVATION_BRIDGE.running:
+            return {"ok": False, "reason": "观察运行中无法更改，结束观察后再选"}
+        next_config = copy.deepcopy(CONFIG)
+        next_config.setdefault("app", {})["observationWindowMode"] = mode
+        try:
+            with open(os.path.join(BASE_DIR, "config.json"), "w", encoding="utf-8") as handle:
+                json.dump(next_config, handle, ensure_ascii=False, indent=2)
+                handle.write("\n")
+        except OSError as exc:
+            return {"ok": False, "reason": f"观察模式未保存：{type(exc).__name__}"}
+        CONFIG.clear()
+        CONFIG.update(next_config)
+    return {"ok": True, "mode": mode}
+
 _boot_replay_video = str(os.environ.get("NTE_REPLAY_VIDEO") or CONFIG.get("app", {}).get("replayVideo") or "").strip()
 _boot_replay_frames_dir = str(os.environ.get("NTE_REPLAY_FRAMES_DIR") or "").strip()
 if _boot_replay_frames_dir or _boot_replay_video:
@@ -1572,6 +1618,7 @@ def _native_health_from_event(event: Dict[str, Any], *, frame: Optional[Dict[str
         "reason": reason or None,
         "inputActions": False,
         "formalHistoryWriter": False,
+        "observationWindowMode": _NATIVE_WINDOW_MODE,
     }
     details = event.get("details")
     if isinstance(details, dict):
@@ -1591,6 +1638,7 @@ def _native_health_from_event(event: Dict[str, Any], *, frame: Optional[Dict[str
         health.update({
             "frameSequence": frame.get("sequence"),
             "capturedAtNs": frame.get("capturedAtNs"),
+            "sourceTimestampNs": frame.get("sourceTimestampNs"),
             "capturedAtUtc": frame.get("capturedAtUtc"),
             "freshnessMs": frame.get("freshnessMs"),
         })
@@ -1641,6 +1689,80 @@ def _native_target_instance(target: Any) -> Optional[Dict[str, Any]]:
     }
 
 
+def _native_observation_target_instance(target: Any) -> Optional[Dict[str, Any]]:
+    """Read-only qualification; game input keeps the strict foreground helper."""
+    if _NATIVE_WINDOW_MODE == "foreground":
+        return _native_target_instance(target)
+    if (not _NATIVE_WINDOW_MODE_CONFIRMED or not _NATIVE_EXPECTED_SESSION
+            or not isinstance(target, dict)):
+        return None
+    if (target.get("isTargetAlive") is not True or target.get("isTargetVisible") is not True
+            or target.get("isTargetMinimized") is not False or target.get("clientAreaAvailable") is not True):
+        return None
+    try:
+        hwnd, pid = int(target["targetHwnd"]), int(target["targetPid"])
+        width, height = int(target["clientWidth"]), int(target["clientHeight"])
+    except (KeyError, TypeError, ValueError):
+        return None
+    identity = target.get("identity") if isinstance(target.get("identity"), dict) else {}
+    token = identity.get("ProcessInstanceToken", identity.get("processInstanceToken"))
+    generation = target.get("generation")
+    if not hwnd or not pid or not (0 < width <= 1920 and 0 < height <= 1080) or not token or generation is None:
+        return None
+    result = {"targetHwnd": hwnd, "targetPid": pid, "generation": generation,
+              "processInstanceToken": token}
+    if _NATIVE_WINDOW_TARGET_INSTANCE is not None and result != _NATIVE_WINDOW_TARGET_INSTANCE:
+        return None
+    return result
+
+
+def _native_confirm_window_mode(event: Dict[str, Any]) -> bool:
+    global _NATIVE_WINDOW_MODE_CONFIRMED, _NATIVE_WINDOW_TARGET_INSTANCE
+    actual = event.get("observationWindowMode")
+    if _NATIVE_WINDOW_MODE == "foreground":
+        if actual not in (None, "foreground"):
+            return False
+        _NATIVE_WINDOW_MODE_CONFIRMED = True
+        return True
+    if actual != "background-readonly":
+        return False
+    status = str(event.get("status") or "").upper()
+    if status == "READY":
+        _NATIVE_WINDOW_MODE_CONFIRMED = True
+        details = event.get("details") if isinstance(event.get("details"), dict) else {}
+        target_instance = _native_observation_target_instance(details.get("target"))
+        if target_instance is None:
+            _NATIVE_WINDOW_MODE_CONFIRMED = False
+            return False
+        _NATIVE_WINDOW_TARGET_INSTANCE = target_instance
+    return status == "STARTING" or _NATIVE_WINDOW_MODE_CONFIRMED
+
+
+def _native_source_frame_rejection(frame: Dict[str, Any]) -> Optional[str]:
+    if _NATIVE_WINDOW_MODE != "background-readonly":
+        return None
+    try:
+        source_ns = int(frame["sourceTimestampNs"])
+    except (KeyError, TypeError, ValueError):
+        return "native-source-clock-missing"
+    age_ns = time.perf_counter_ns() - source_ns
+    if source_ns <= 0 or not 0 <= age_ns < int(_NATIVE_FRAME_TIMEOUT_SECONDS * 1_000_000_000):
+        return "native-source-clock-expired-or-future"
+    if _NATIVE_OBSERVATION_SOURCE_NS is not None and source_ns <= _NATIVE_OBSERVATION_SOURCE_NS:
+        return "native-source-clock-not-progressing"
+    return None
+
+
+def _native_background_source_current(context: Dict[str, Any]) -> bool:
+    if _NATIVE_WINDOW_MODE != "background-readonly":
+        return True
+    try:
+        source_ns = int(context["sourceTimestampNs"])
+    except (KeyError, TypeError, ValueError):
+        return False
+    return source_ns > 0 and 0 <= time.perf_counter_ns() - source_ns < int(_NATIVE_FRAME_TIMEOUT_SECONDS * 1_000_000_000)
+
+
 def _native_warehouse_instance_key(match_id: Any, anchor: Any) -> Optional[str]:
     if not isinstance(anchor, dict):
         return None
@@ -1666,10 +1788,11 @@ def _native_instance_decision_scope_key(payload: Dict[str, Any]) -> Optional[tup
             or str(payload.get("scene") or "").upper() != "IN_AUCTION"
             or payload.get("inAuction") is not True
             or payload.get("observationStatus") != "FRAME"
-            or payload.get("nativeInvalidated") is True):
+            or payload.get("nativeInvalidated") is True
+            or not _native_background_source_current(payload)):
         return None
     session_id = str(payload.get("observationSessionId") or "")
-    target = _native_target_instance(payload.get("target"))
+    target = _native_observation_target_instance(payload.get("target"))
     match_id = str(payload.get("matchId") or "")
     try:
         round_no = int(payload.get("round"))
@@ -1780,7 +1903,7 @@ def _native_reject_pending_controls_locked(reason: str) -> None:
                 and preparation.get("status") == "APPLYING"
                 and CURRENT_MATCH.id == binding.get("matchId")
                 and binding.get("sessionId") == _NATIVE_EXPECTED_SESSION == _NATIVE_OBSERVATION_SESSION
-                and binding.get("targetInstance") == _native_target_instance(LATEST_PAYLOAD.get("target"))
+                and binding.get("targetInstance") == _native_observation_target_instance(LATEST_PAYLOAD.get("target"))
             ):
                 # Round/fact changes inside the same worker-confirmed match do
                 # not retarget the command. Keep its receipt binding so a late
@@ -1923,9 +2046,11 @@ def _native_solver_lease_matches_locked(context: Dict[str, Any]) -> bool:
     if not isinstance(context, dict) or not isinstance(lease, dict):
         return False
     now_ns = time.monotonic_ns()
-    if now_ns - int(lease.get("acceptedAtMonotonicNs") or 0) >= int(_NATIVE_FRAME_TIMEOUT_SECONDS * 1_000_000_000):
+    expires_ns = lease.get("expiresAtMonotonicNs") or (int(lease.get("acceptedAtMonotonicNs") or 0)
+        + int(_NATIVE_FRAME_TIMEOUT_SECONDS * 1_000_000_000))
+    if now_ns >= expires_ns:
         return False
-    target = _native_target_instance(context.get("target"))
+    target = _native_observation_target_instance(context.get("target"))
     return bool(
         lease.get("generation") == _NATIVE_SOLVER_INVALIDATION_GENERATION
         and context.get("nativeSolverGeneration") == lease.get("generation")
@@ -1950,7 +2075,7 @@ def _native_solver_lease_matches(context: Dict[str, Any]) -> bool:
 
 def _native_accept_observation_locked(data: Dict[str, Any]) -> Optional[Dict[str, Any]]:
     global _NATIVE_SOLVER_LEASE
-    target_instance = _native_target_instance(data.get("target"))
+    target_instance = _native_observation_target_instance(data.get("target"))
     try:
         freshness_ms = float(data.get("freshnessMs"))
     except (TypeError, ValueError):
@@ -1960,10 +2085,19 @@ def _native_accept_observation_locked(data: Dict[str, Any]) -> Optional[Dict[str
         or data.get("inAuction") is not True
         or data.get("isSettlement") is True
         or target_instance is None
-        or freshness_ms < 0
-        or freshness_ms > _NATIVE_FRAME_TIMEOUT_SECONDS * 1000
+        or not 0 <= freshness_ms < _NATIVE_FRAME_TIMEOUT_SECONDS * 1000
     ):
         return None
+    accepted_ns = time.monotonic_ns()
+    remaining_ns = int(_NATIVE_FRAME_TIMEOUT_SECONDS * 1_000_000_000)
+    if _NATIVE_WINDOW_MODE == "background-readonly":
+        try:
+            age_ns = time.perf_counter_ns() - int(data["sourceTimestampNs"])
+        except (KeyError, TypeError, ValueError):
+            return None
+        if not 0 <= age_ns < remaining_ns:
+            return None
+        remaining_ns -= age_ns
     lease = {
         "generation": _NATIVE_SOLVER_INVALIDATION_GENERATION,
         "sessionId": data.get("observationSessionId"),
@@ -1974,7 +2108,8 @@ def _native_accept_observation_locked(data: Dict[str, Any]) -> Optional[Dict[str
         "engineFactsRevision": data.get("engineFactsRevision"),
         "matchGeneration": data.get("matchGeneration"),
         "frameSequence": data.get("frameSequence"),
-        "acceptedAtMonotonicNs": time.monotonic_ns(),
+        "acceptedAtMonotonicNs": accepted_ns,
+        "expiresAtMonotonicNs": accepted_ns + remaining_ns,
     }
     _NATIVE_SOLVER_LEASE = lease
     data["nativeSolverGeneration"] = lease["generation"]
@@ -1989,8 +2124,9 @@ def _native_frame_watchdog_loop() -> None:
             lease = _NATIVE_SOLVER_LEASE
             if not isinstance(lease, dict):
                 continue
-            elapsed_ns = time.monotonic_ns() - int(lease.get("acceptedAtMonotonicNs") or 0)
-            if elapsed_ns < int(_NATIVE_FRAME_TIMEOUT_SECONDS * 1_000_000_000):
+            expires_ns = lease.get("expiresAtMonotonicNs") or (int(lease.get("acceptedAtMonotonicNs") or 0)
+                + int(_NATIVE_FRAME_TIMEOUT_SECONDS * 1_000_000_000))
+            if time.monotonic_ns() < expires_ns:
                 continue
             session_id = str(lease.get("sessionId") or "")
             generation = lease.get("generation")
@@ -2083,7 +2219,7 @@ def _native_capture_intel_source_locked(frame: Dict[str, Any], event: Dict[str, 
             "width": frame.get("width"), "height": frame.get("height"),
             "capturedAtUtc": captured_at, "frameSequence": frame.get("sequence"),
             "observationSessionId": event.get("observationSessionId"),
-            "targetInstance": _native_target_instance(event.get("target")),
+            "targetInstance": _native_observation_target_instance(event.get("target")),
         }, expected_pixel_sha256=last["pixelSha256"])
     except (OSError, ValueError, RuntimeError) as exc:
         log_stage("DRAFT:NATIVE", f"intel source not linked: {type(exc).__name__}: {exc}")
@@ -2260,9 +2396,11 @@ def _native_observation_event(event: Dict[str, Any]) -> None:
     global _NATIVE_OBSERVATION_RECEIVER, _NATIVE_OBSERVATION_SESSION
     global _NATIVE_OBSERVATION_SEQUENCE, _NATIVE_OBSERVATION_LAST_FRAME_NS
     global _NATIVE_EXPECTED_SESSION
+    global _NATIVE_WINDOW_MODE_CONFIRMED, _NATIVE_OBSERVATION_SOURCE_NS
     global _LIVE_VISION_ACTIVE, _LIVE_VISION_MATCH_ID, _LIVE_CONTROL_WAITING_EXIT
     global _NATIVE_TRIAL_WAREHOUSE_SOURCES, _NATIVE_TRIAL_WAREHOUSE_DECISIONS
     global _NATIVE_WAREHOUSE_DECISION_RECEIPT
+    global _NATIVE_WAREHOUSE_FRAME_LEASE
 
     if not isinstance(event, dict):
         return
@@ -2283,9 +2421,19 @@ def _native_observation_event(event: Dict[str, Any]) -> None:
     status = str(event.get("status") or "").upper()
     incoming_session = str(event.get("observationSessionId") or "").strip()
     if status == "STARTING":
+        if _NATIVE_EXPECTED_SESSION and incoming_session != _NATIVE_EXPECTED_SESSION:
+            return
         _NATIVE_EXPECTED_SESSION = incoming_session or None
     elif incoming_session and incoming_session != _NATIVE_EXPECTED_SESSION and status != "CONTROL":
         # An old reader/result must not revive or invalidate the new session.
+        return
+    if status in {"STARTING", "READY", "FRAME"} and not _native_confirm_window_mode(event):
+        _native_observation_event({
+            "type": "native_observation", "schemaVersion": "native-observation-v1",
+            "status": "ERROR", "observationSessionId": incoming_session,
+            "sourceKind": "native_wgc", "reason": "native-window-mode-not-acknowledged",
+            "inputActions": False, "formalHistoryWriter": False,
+        })
         return
     if status == "PAUSED" and event.get("reason") == "observation-frame-timeout":
         details = event.get("details") if isinstance(event.get("details"), dict) else {}
@@ -2298,6 +2446,11 @@ def _native_observation_event(event: Dict[str, Any]) -> None:
             ):
                 return
     if status in {"PAUSED", "ERROR", "STOPPED"}:
+        if _NATIVE_WINDOW_MODE == "background-readonly" and status != "STOPPED":
+            # Fail closed even when an older Host cannot acknowledge the new mode.
+            bridge = globals().get("NATIVE_OBSERVATION_BRIDGE")
+            if bridge is not None:
+                bridge.send_control({"type": "native_stop"})
         _NATIVE_EXPECTED_SESSION = None
     if status != "FRAME":
         if status == "CONTROL":
@@ -2324,7 +2477,7 @@ def _native_observation_event(event: Dict[str, Any]) -> None:
                         and binding.get("sessionId") == incoming_session == _NATIVE_EXPECTED_SESSION == _NATIVE_OBSERVATION_SESSION
                         and binding.get("mainDecisionGeneration") == _NATIVE_INSTANCE_DECISION_GENERATION
                         and binding.get("scope") == live_scope == _NATIVE_INSTANCE_DECISION_SCOPE
-                        and binding.get("targetInstance") == _native_target_instance(LATEST_PAYLOAD.get("target"))
+                        and binding.get("targetInstance") == _native_observation_target_instance(LATEST_PAYLOAD.get("target"))
                         and binding.get("matchId") == CURRENT_MATCH.id == LATEST_PAYLOAD.get("matchId")
                         and binding.get("round") == LATEST_PAYLOAD.get("round")
                         and binding.get("instanceDecisionToken") == current_slot.get("instanceDecisionToken")
@@ -2435,7 +2588,7 @@ def _native_observation_event(event: Dict[str, Any]) -> None:
                     scope_is_current = bool(
                         plan_is_current
                         and binding.get("sessionId") == incoming_session == _NATIVE_EXPECTED_SESSION == _NATIVE_OBSERVATION_SESSION
-                        and binding.get("targetInstance") == _native_target_instance(LATEST_PAYLOAD.get("target"))
+                        and binding.get("targetInstance") == _native_observation_target_instance(LATEST_PAYLOAD.get("target"))
                         and CURRENT_MATCH.id == binding.get("matchId") == LATEST_PAYLOAD.get("matchId")
                         and LATEST_PAYLOAD.get("observationSessionId") == binding.get("sessionId")
                     )
@@ -2508,7 +2661,7 @@ def _native_observation_event(event: Dict[str, Any]) -> None:
                     scope_is_current = bool(
                         binding.get("sessionId") == incoming_session == _NATIVE_EXPECTED_SESSION == _NATIVE_OBSERVATION_SESSION
                         and binding.get("invalidationGeneration") == _NATIVE_SOLVER_INVALIDATION_GENERATION
-                        and binding.get("targetInstance") == _native_target_instance(LATEST_PAYLOAD.get("target"))
+                        and binding.get("targetInstance") == _native_observation_target_instance(LATEST_PAYLOAD.get("target"))
                         and CURRENT_MATCH.id == binding.get("projectedMatchId")
                         and (binding.get("reset") or CURRENT_MATCH.facts_revision == binding.get("appliedMainFactsRevision"))
                         and str(result_data.get("matchId") or "") == str(expected_result_match or "")
@@ -2588,7 +2741,7 @@ def _native_observation_event(event: Dict[str, Any]) -> None:
                     "capturedAtUtc": details.get("capturedAtUtc"),
                     "frameSequence": details.get("frameSequence"),
                     "observationSessionId": incoming_session,
-                    "targetInstance": _native_target_instance(details.get("target")),
+                    "targetInstance": _native_observation_target_instance(details.get("target")),
                 }, boundary=True)
         _native_publish_health(event, force_main=status in {"STARTING", "READY", "PAUSED", "ERROR", "STOPPED"})
         if status in {"PAUSED", "ERROR", "STOPPED"}:
@@ -2633,14 +2786,15 @@ def _native_observation_event(event: Dict[str, Any]) -> None:
         }, force_main=True)
         return
     target = event.get("target")
+    source_rejection = _native_source_frame_rejection(frame)
     try:
         frame_freshness_ms = float(frame.get("freshnessMs"))
     except (TypeError, ValueError):
         frame_freshness_ms = float("inf")
     if (
-        _native_target_instance(target) is None
-        or frame_freshness_ms < 0
-        or frame_freshness_ms > _NATIVE_FRAME_TIMEOUT_SECONDS * 1000
+        _native_observation_target_instance(target) is None
+        or not 0 <= frame_freshness_ms < _NATIVE_FRAME_TIMEOUT_SECONDS * 1000
+        or source_rejection is not None
     ):
         _native_observation_event({
             "type": "native_observation",
@@ -2648,7 +2802,7 @@ def _native_observation_event(event: Dict[str, Any]) -> None:
             "status": "ERROR",
             "observationSessionId": session_id,
             "sourceKind": "native_wgc",
-            "reason": "native-frame-target-or-freshness-invalid",
+            "reason": source_rejection or "native-frame-target-or-freshness-invalid",
             "inputActions": False,
             "formalHistoryWriter": False,
         })
@@ -2746,6 +2900,8 @@ def _native_observation_event(event: Dict[str, Any]) -> None:
             _LIVE_VISION_MATCH_ID = CURRENT_MATCH.id
             _LIVE_VISION_ACTIVE = True
             _NATIVE_OBSERVATION_SEQUENCE = sequence
+            if _NATIVE_WINDOW_MODE == "background-readonly":
+                _NATIVE_OBSERVATION_SOURCE_NS = int(frame["sourceTimestampNs"])
 
             context = event.get("pipelineContext")
             context = dict(context) if isinstance(context, dict) else {}
@@ -2776,6 +2932,7 @@ def _native_observation_event(event: Dict[str, Any]) -> None:
                 "observationStatus": "FRAME",
                 "nativeInvalidated": False,
                 "observationSessionId": session_id,
+                "observationWindowMode": _NATIVE_WINDOW_MODE,
                 "sourceKind": "native_wgc",
                 "source": "native_wgc",
                 "dataOrigin": "live-trial",
@@ -2802,6 +2959,7 @@ def _native_observation_event(event: Dict[str, Any]) -> None:
                 "engineFactsRevision": snapshot.get("factsRevision"),
                 "mainFactsRevision": CURRENT_MATCH.facts_revision,
                 "capturedAtNs": capture_ns,
+                "sourceTimestampNs": frame.get("sourceTimestampNs"),
                 "capturedAtUtc": frame.get("capturedAtUtc"),
                 "freshnessMs": frame.get("freshnessMs"),
                 "target": event.get("target"),
@@ -2835,12 +2993,12 @@ def _native_observation_event(event: Dict[str, Any]) -> None:
             _native_project_current_quote(data, CURRENT_MATCH)
             previous_identity = (
                 LATEST_PAYLOAD.get("observationSessionId"),
-                _native_target_instance(LATEST_PAYLOAD.get("target")),
+                _native_observation_target_instance(LATEST_PAYLOAD.get("target")),
                 LATEST_PAYLOAD.get("matchId"), LATEST_PAYLOAD.get("round"),
                 LATEST_PAYLOAD.get("matchGeneration"),
             )
             current_identity = (
-                session_id, _native_target_instance(data.get("target")),
+                session_id, _native_observation_target_instance(data.get("target")),
                 CURRENT_MATCH.id, round_no, CURRENT_MATCH._seq,
             )
             # A new frame/revision updates the exact result lease below, but
@@ -2924,6 +3082,21 @@ def _native_observation_event(event: Dict[str, Any]) -> None:
             LATEST_PAYLOAD.update(data)
             PRESENTATION_RUNTIME.observe_transport(data)
             _NATIVE_OBSERVATION_LAST_FRAME_NS = capture_ns
+            # Metadata only: a page is copied solely on an explicit manual command.
+            accepted_source = event.get("lastFrame") or {}
+            with _NATIVE_OBSERVATION_LOCK:
+                bridge = NATIVE_OBSERVATION_BRIDGE
+                source_root = getattr(bridge, "session_dir", None) if bridge is not None else None
+            _NATIVE_WAREHOUSE_FRAME_LEASE = None
+            if (source_root and accepted_source.get("frameSequence") == sequence
+                    and accepted_source.get("pixelSha256") and data.get("isSettlement")):
+                _NATIVE_WAREHOUSE_FRAME_LEASE = {
+                    "path": frame.get("rawFramePath"), "sourceRoot": str(source_root),
+                    "width": frame.get("width"), "height": frame.get("height"),
+                    "frameSequence": sequence, "capturedAt": frame.get("capturedAtUtc"),
+                    "pixelSha256": accepted_source["pixelSha256"],
+                    "receivedAt": time.monotonic(), "scope": _native_warehouse_intake_scope(),
+                }
             if sequence == 1 or not _NATIVE_TRIAL_SOURCE_FRAMES or _NATIVE_TRIAL_FRAME_MATCH_ID != CURRENT_MATCH.id:
                 _native_capture_trial_frame_locked(frame.get("rawFramePath"), {
                     "width": frame.get("width"),
@@ -2931,7 +3104,7 @@ def _native_observation_event(event: Dict[str, Any]) -> None:
                     "capturedAtUtc": frame.get("capturedAtUtc"),
                     "frameSequence": sequence,
                     "observationSessionId": session_id,
-                    "targetInstance": _native_target_instance(data.get("target")),
+                    "targetInstance": _native_observation_target_instance(data.get("target")),
                 })
             boundary_frame = event.get("lastFrame") or {}
             if (data["isSettlement"] and boundary_frame.get("scene") == "SETTLEMENT"
@@ -2945,7 +3118,7 @@ def _native_observation_event(event: Dict[str, Any]) -> None:
                     "capturedAtUtc": frame.get("capturedAtUtc"),
                     "frameSequence": sequence,
                     "observationSessionId": session_id,
-                    "targetInstance": _native_target_instance(data.get("target")),
+                    "targetInstance": _native_observation_target_instance(data.get("target")),
                     "pixelSha256": boundary_frame.get("pixelSha256"),
                 }, boundary=True)
                 source_captured = source_captured or bool(boundary_recorded) or len(_NATIVE_TRIAL_SOURCE_FRAMES) > prior_source_count
@@ -2998,7 +3171,7 @@ def _send_native_manual_control(
         freshness = float(scope.get("freshnessMs"))
     except (TypeError, ValueError):
         freshness = float("inf")
-    scope_target = _native_target_instance(scope.get("target"))
+    scope_target = _native_observation_target_instance(scope.get("target"))
     if validated_observation_scope is not None:
         valid_scope = (
             expected_match_id
@@ -3010,7 +3183,7 @@ def _send_native_manual_control(
             and type(expected_round) is int
             and expected_round == scope.get("round")
             and isinstance(expected_target, dict)
-            and expected_target == scope_target == _native_target_instance(LATEST_PAYLOAD.get("target"))
+            and expected_target == scope_target == _native_observation_target_instance(LATEST_PAYLOAD.get("target"))
             and scope.get("frameSequence") == LATEST_PAYLOAD.get("frameSequence")
             and scope.get("observationStatus") == "FRAME"
             and scope.get("nativeInvalidated") is not True
@@ -3028,13 +3201,13 @@ def _send_native_manual_control(
             and type(expected_round) is int
             and expected_round == LATEST_PAYLOAD.get("round")
             and isinstance(expected_target, dict)
-            and expected_target == _native_target_instance(LATEST_PAYLOAD.get("target"))
+            and expected_target == _native_observation_target_instance(LATEST_PAYLOAD.get("target"))
             and LATEST_PAYLOAD.get("observationStatus") == "FRAME"
             and LATEST_PAYLOAD.get("nativeInvalidated") is not True
             and 0 <= freshness <= _NATIVE_FRAME_TIMEOUT_SECONDS * 1000
             and command.get("expectedInvalidationGeneration") == _NATIVE_SOLVER_INVALIDATION_GENERATION
         )
-    if not valid_scope:
+    if not valid_scope or not _native_background_source_current(scope):
         return {"status": "REJECTED", "reason": "STALE_MATCH_COMMAND", "revision": revision}
     if not command.get("reset") and expected_match_id != CURRENT_MATCH.id:
         return {"status": "REJECTED", "reason": "STALE_MATCH_COMMAND", "revision": revision}
@@ -3097,6 +3270,57 @@ def _send_native_manual_control(
     }
 
 
+def _native_source_observation_notice(event: Dict[str, Any]) -> None:
+    # Keep ordinary observation handling intact; the evidence owner observes its boundary afterwards.
+    _native_observation_event(event)
+    coordinator = _NATIVE_WAREHOUSE_SOURCE_COORDINATOR
+    if coordinator is not None:
+        coordinator.check_business_boundary(event)
+
+
+def _native_source_evidence_event(event: Dict[str, Any]) -> None:
+    coordinator = _NATIVE_WAREHOUSE_SOURCE_COORDINATOR
+    if coordinator is not None:
+        coordinator.on_event(event)
+
+
+def _native_source_send_control(command: Dict[str, Any]) -> bool:
+    with _NATIVE_OBSERVATION_LOCK:
+        bridge = NATIVE_OBSERVATION_BRIDGE
+    return bool(bridge is not None and bridge.send_control(command))
+
+
+def _native_source_root():
+    with _NATIVE_OBSERVATION_LOCK:
+        return getattr(NATIVE_OBSERVATION_BRIDGE, 'session_dir', None)
+
+
+def _native_warehouse_intake_scope() -> Dict[str, Any]:
+    """Authority tags from Main's accepted Native state, never UI descriptors."""
+    return {
+        "recordStableKey": str(CURRENT_MATCH.id or ""),
+        "observationSessionId": str(_NATIVE_OBSERVATION_SESSION or ""),
+        "targetInstance": _native_observation_target_instance(LATEST_PAYLOAD.get("target")),
+        "matchGeneration": CURRENT_MATCH._seq,
+        "scene": LATEST_PAYLOAD.get("scene")
+            if ((LATEST_PAYLOAD.get("visionHealth") or {}).get("status") == "READY"
+                and _native_background_source_current(LATEST_PAYLOAD)) else "UNKNOWN",
+    }
+
+
+def _native_warehouse_source_scope() -> Dict[str, Any]:
+    scope = _native_warehouse_intake_scope()
+    coordinator = _NATIVE_WAREHOUSE_SOURCE_COORDINATOR
+    # A frozen bill stops ordinary business FRAME publication. Its independent SOURCE lease
+    # keeps the saved settlement scope, while every source/input is still checked live by Host.
+    # This never refreshes ordinary vision health, source timestamps or business facts.
+    if (scope['scene'] == 'UNKNOWN' and LATEST_PAYLOAD.get('scene') == 'SETTLEMENT'
+        and (LATEST_PAYLOAD.get('visionHealth') or {}).get('status') == 'READY'
+        and coordinator is not None and coordinator.lease_scope_is_current(scope)):
+        scope['scene'] = 'SETTLEMENT'
+    return scope
+
+
 def _native_find_warehouse_slot(anchor: Any) -> Optional[Dict[str, Any]]:
     key = _native_warehouse_instance_key(CURRENT_MATCH.id, anchor)
     if key is None:
@@ -3153,8 +3377,8 @@ def handle_request_warehouse_slot_evidence(payload: Dict[str, Any]) -> Dict[str,
             and live_scope == _NATIVE_INSTANCE_DECISION_SCOPE
             and payload.get("mainDecisionGeneration") == _NATIVE_INSTANCE_DECISION_GENERATION
             and str(payload.get("sessionId") or "") == str(LATEST_PAYLOAD.get("observationSessionId") or "")
-            and _native_target_instance(payload.get("targetInstance"))
-                == _native_target_instance(LATEST_PAYLOAD.get("target"))
+            and _native_observation_target_instance(payload.get("targetInstance"))
+                == _native_observation_target_instance(LATEST_PAYLOAD.get("target"))
             and activity_is_current
             and (current_slot.get("identityStatus") == "CANDIDATE" or isinstance(current_slot.get("manualDecision"), dict))
         )
@@ -3216,9 +3440,9 @@ def handle_warehouse_instance_decision(payload: Dict[str, Any]) -> Dict[str, Any
                 or match_id != str(CURRENT_MATCH.id)
                 or payload.get("round") != LATEST_PAYLOAD.get("round")):
             return {"status": "REJECTED", "reason": "会话、对局或回合已变化，修改未发送"}
-        target = _native_target_instance(LATEST_PAYLOAD.get("target"))
+        target = _native_observation_target_instance(LATEST_PAYLOAD.get("target"))
         if (not isinstance(target, dict)
-                or _native_target_instance(payload.get("targetInstance")) != target):
+                or _native_observation_target_instance(payload.get("targetInstance")) != target):
             return {"status": "REJECTED", "reason": "目标实例已变化，修改未发送"}
         anchor = payload.get("instanceAnchor")
         slot = _native_find_warehouse_slot(anchor)
@@ -3384,7 +3608,7 @@ def _publish_live_shadow_event(event: Dict[str, Any]) -> None:
                 or event.get("round") != payload.get("round")
                 or event.get("matchGeneration") != payload.get("matchGeneration")
                 or event.get("nativeSolverGeneration") != payload.get("nativeSolverGeneration")
-                or _native_target_instance(event_target) != _native_target_instance(target)
+                or _native_observation_target_instance(event_target) != _native_observation_target_instance(target)
                 or payload.get("nativeInvalidated")
                 or not _native_solver_lease_matches(event)
             ):
@@ -3929,7 +4153,7 @@ def _next_match_preparation_current_scope(scope: Optional[Dict[str, Any]] = None
         return None
     match_id = str(candidate.get("matchId") or "").strip()
     session_id = str(candidate.get("observationSessionId") or "").strip()
-    target = _native_target_instance(candidate.get("target"))
+    target = _native_observation_target_instance(candidate.get("target"))
     if (
         candidate.get("observationStatus") != "FRAME"
         or candidate.get("scene") != "IN_AUCTION"
@@ -3944,7 +4168,7 @@ def _next_match_preparation_current_scope(scope: Optional[Dict[str, Any]] = None
         or session_id != _NATIVE_OBSERVATION_SESSION
         or session_id != str(LATEST_PAYLOAD.get("observationSessionId") or "")
         or target is None
-        or target != _native_target_instance(LATEST_PAYLOAD.get("target"))
+        or target != _native_observation_target_instance(LATEST_PAYLOAD.get("target"))
         or type(candidate.get("factsRevision")) is not int
         or candidate.get("factsRevision") != LATEST_PAYLOAD.get("factsRevision")
         or type(candidate.get("round")) is not int
@@ -4049,7 +4273,7 @@ def _next_match_preparation_frame_gate(data: Dict[str, Any], lease: Optional[Dic
             "status": "BOUND",
             "matchId": match_id,
             "sessionId": data.get("observationSessionId"),
-            "targetInstance": copy.deepcopy(_native_target_instance(data.get("target"))),
+            "targetInstance": copy.deepcopy(_native_observation_target_instance(data.get("target"))),
             "conflicts": [],
             "reason": None,
             "retryable": False,
@@ -4275,7 +4499,7 @@ def make_live_control_command(
             "expectedObservationSessionId": scope.get("observationSessionId") or _NATIVE_OBSERVATION_SESSION,
             "expectedFactsRevision": scope.get("factsRevision"),
             "expectedRound": scope.get("round"),
-            "expectedTargetInstance": _native_target_instance(scope.get("target")) if "target" in scope else _native_target_instance(LATEST_PAYLOAD.get("target")),
+            "expectedTargetInstance": _native_observation_target_instance(scope.get("target")) if "target" in scope else _native_observation_target_instance(LATEST_PAYLOAD.get("target")),
             "expectedInvalidationGeneration": _NATIVE_SOLVER_INVALIDATION_GENERATION,
         })
     if cleared_fields:
@@ -4363,7 +4587,7 @@ def _persist_current_draft_now() -> Optional[Dict[str, Any]]:
                 scope = {
                     "profile": "native-readonly-v1",
                     "observationSessionId": _NATIVE_OBSERVATION_SESSION,
-                    "targetInstance": _native_target_instance(LATEST_PAYLOAD.get("target")),
+                    "targetInstance": _native_observation_target_instance(LATEST_PAYLOAD.get("target")),
                     "workerFactsRevision": LATEST_PAYLOAD.get("factsRevision"),
                     "mainFactsRevision": CURRENT_MATCH.facts_revision,
                     "round": LATEST_PAYLOAD.get("round"),
@@ -4681,7 +4905,7 @@ def apply_manual_facts(facts: Optional[Dict[str, Any]]) -> Dict[str, Any]:
             expected_revision = raw_data.get("expectedFactsRevision")
             expected_session = str(raw_data.get("expectedObservationSessionId") or "").strip()
             expected_round = raw_data.get("expectedRound")
-            expected_target = _native_target_instance(raw_data.get("expectedTargetInstance"))
+            expected_target = _native_observation_target_instance(raw_data.get("expectedTargetInstance"))
             current_worker_revision = LATEST_PAYLOAD.get("factsRevision")
             revision_matches = type(expected_revision) is int and expected_revision == current_worker_revision
             round_matches = type(expected_round) is int and expected_round == LATEST_PAYLOAD.get("round")
@@ -4699,7 +4923,7 @@ def apply_manual_facts(facts: Optional[Dict[str, Any]]) -> Dict[str, Any]:
                 or expected_session != _NATIVE_OBSERVATION_SESSION
                 or expected_session != _NATIVE_EXPECTED_SESSION
                 or expected_target is None
-                or expected_target != _native_target_instance(LATEST_PAYLOAD.get("target"))
+                or expected_target != _native_observation_target_instance(LATEST_PAYLOAD.get("target"))
                 or LATEST_PAYLOAD.get("observationStatus") != "FRAME"
                 or LATEST_PAYLOAD.get("nativeInvalidated") is True
                 or observation_age < 0
@@ -7229,6 +7453,8 @@ class HudJsApi:
 
 def _start_native_observation_locked(*, resume_same_match: bool = False):
     global NATIVE_OBSERVATION_BRIDGE
+    global _NATIVE_WINDOW_MODE, _NATIVE_WINDOW_MODE_CONFIRMED, _NATIVE_WINDOW_TARGET_INSTANCE
+    global _NATIVE_EXPECTED_SESSION, _NATIVE_OBSERVATION_SOURCE_NS
     if os.environ.get("NTE_DISABLE_VISION") == "1":
         PRESENTATION_RUNTIME.set_vision_process_state("disabled")
         log_stage("STARTUP:NATIVE", "Native observation disabled via NTE_DISABLE_VISION=1")
@@ -7253,17 +7479,24 @@ def _start_native_observation_locked(*, resume_same_match: bool = False):
                     }
         bridge = NativeObservationBridge(
             PROJECT_ROOT,
-            lambda event: _native_observation_event(event)
+            lambda event: _native_source_observation_notice(event)
                 if NATIVE_OBSERVATION_BRIDGE is bridge else None,
             log_stage,
+            on_evidence=lambda event: _native_source_evidence_event(event)
+                if NATIVE_OBSERVATION_BRIDGE is bridge else None,
         )
         NATIVE_OBSERVATION_BRIDGE = bridge
+        _NATIVE_WINDOW_MODE = native_observation_window_mode()
+        _NATIVE_WINDOW_MODE_CONFIRMED = False
+        _NATIVE_WINDOW_TARGET_INSTANCE = None
+        _NATIVE_EXPECTED_SESSION = None
+        _NATIVE_OBSERVATION_SOURCE_NS = None
         _native_publish_health({
             "status": "STARTING",
             "reason": "explicit-start",
             "details": {"inputActions": False, "formalHistoryWriter": False},
         }, force_main=True)
-        child = bridge.start(resume_state=resume_state)
+        child = bridge.start(resume_state=resume_state, observation_window_mode=_NATIVE_WINDOW_MODE)
         if child is None:
             PRESENTATION_RUNTIME.set_vision_process_state("stopped")
             _native_publish_health({
@@ -7522,6 +7755,8 @@ def run_hud_app():
     log_stage("STARTUP:MAIN", f"Creating DirectComposition Visual HUD window (html={html_path}, pos=({init_x}, {init_y}), size=({hud_w}x{hud_h}))")
 
     def _gui_thread():
+        global WAREHOUSE_CAPTURE_HOST, WAREHOUSE_IDENTITY_REVIEW, WAREHOUSE_IDENTITY_HISTORY
+        global _NATIVE_WAREHOUSE_SOURCE_COORDINATOR
         MainWindow = create_main_window_type(WinForms, Drawing)
         main_window = MainWindow()
         _MAIN_WINDOW_HOLDER.clear()
@@ -7701,7 +7936,7 @@ def run_hud_app():
             begin_shutdown=begin_shutdown,
             cleanup_steps=(
                 ("flush-manual-draft", flush_draft_save_sync),
-                ("cancel-warehouse-capture", WAREHOUSE_CAPTURE_HOST.stop),
+                ("cancel-warehouse-capture", lambda: WAREHOUSE_CAPTURE_HOST.stop()),
                 ("stop-vision-worker", stop_vision_worker),
                 ("stop-manual-shadow-runtime", stop_manual_shadow_runtime),
                 ("stop-websocket-bus", stop_ws_loop),
@@ -7724,6 +7959,32 @@ def run_hud_app():
             native_trial_store=NATIVE_TRIAL_DRAFT_STORE,
             inventory_archive=SETTLEMENT_INVENTORY_ARCHIVE,
         )
+        if native_observation_enabled():
+            from native_warehouse_intake import (
+                NativeWarehouseIntake, WarehouseCaptureRouter,
+                WarehouseReviewHistoryRouter, WarehouseIdentityReviewRouter,
+            )
+            from native_warehouse_source import NativeWarehouseSourceCoordinator
+            from native_warehouse_auto_capture import NativeWarehouseAutoCapture
+            native_intake = NativeWarehouseIntake(
+                draft_store=NATIVE_TRIAL_DRAFT_STORE,
+                scope_provider=_native_warehouse_source_scope,
+                source_provider=lambda: copy.deepcopy(_NATIVE_WAREHOUSE_FRAME_LEASE),
+                scope_lock=_MANUAL_STATE_LOCK,
+            )
+            native_source = NativeWarehouseSourceCoordinator(
+                native_intake, send_control=_native_source_send_control,
+                source_root_provider=_native_source_root)
+            _NATIVE_WAREHOUSE_SOURCE_COORDINATOR = NativeWarehouseAutoCapture(native_source,
+                diagnostic_log=lambda message: log_stage('WAREHOUSE:NATIVE_AUTO', message))
+            WAREHOUSE_CAPTURE_HOST = WarehouseCaptureRouter(
+                WAREHOUSE_CAPTURE_HOST, _NATIVE_WAREHOUSE_SOURCE_COORDINATOR, native_observation_enabled)
+            set_warehouse_capture_host(WAREHOUSE_CAPTURE_HOST)
+            review_history = WarehouseReviewHistoryRouter(WAREHOUSE_IDENTITY_HISTORY, native_intake)
+            WAREHOUSE_IDENTITY_REVIEW = WarehouseIdentityReviewRouter(
+                WAREHOUSE_IDENTITY_REVIEW, native_intake, review_history)
+            WAREHOUSE_IDENTITY_HISTORY = review_history
+
         main_window.bind_lifecycle(
             visibility_controller,
             shutdown_coordinator.request,
@@ -7742,6 +8003,7 @@ def run_hud_app():
             start_vision_provider=lambda resume_same_match=False: start_vision_worker(
                 resume_same_match=bool(resume_same_match)
             ) is not None,
+            observation_window_mode_provider=handle_observation_window_mode,
             manual_next_match_provider=lambda req: publish_manual_payload(begin_next_manual_match(req)),
             manual_finalize_provider=lambda req: publish_manual_payload(finalize_manual_match(req)),
             manual_bootstrap_provider=lambda: publish_manual_payload(build_manual_alpha_payload()),

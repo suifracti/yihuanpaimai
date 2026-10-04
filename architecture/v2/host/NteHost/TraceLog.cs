@@ -16,6 +16,7 @@ namespace NteHost;
 public sealed class TraceLog : IDisposable
 {
     private readonly StreamWriter? _writer;
+    private readonly long? _maxBytes;
     private readonly object _gate = new();
     public string Path { get; }
     public string SessionId { get; }
@@ -28,8 +29,10 @@ public sealed class TraceLog : IDisposable
         SessionNonceShort = sessionNonce.Length <= 8 ? sessionNonce : sessionNonce[..8];
     }
 
-    public TraceLog(string? path, string sessionId, string sessionNonce)
+    public TraceLog(string? path, string sessionId, string sessionNonce, long? maxBytes = null)
     {
+        if (maxBytes is <= 0) throw new ArgumentOutOfRangeException(nameof(maxBytes));
+        _maxBytes = maxBytes;
         Path = path ?? string.Empty;
         SessionId = sessionId;
         SessionNonceShort = sessionNonce.Length <= 8 ? sessionNonce : sessionNonce[..8];
@@ -61,6 +64,17 @@ public sealed class TraceLog : IDisposable
         var line = JsonSerializer.Serialize(record, new JsonSerializerOptions { WriteIndented = false });
         lock (_gate)
         {
+            if (_writer is not null && _maxBytes is long limit)
+            {
+                var bytes = Encoding.UTF8.GetByteCount(line + Environment.NewLine);
+                if (bytes > limit) return;
+                _writer.Flush();
+                if (_writer.BaseStream.Position + bytes > limit)
+                {
+                    _writer.BaseStream.SetLength(0);
+                    _writer.BaseStream.Position = 0;
+                }
+            }
             _writer?.WriteLine(line);
             Console.Error.WriteLine("[host] " + line);
         }

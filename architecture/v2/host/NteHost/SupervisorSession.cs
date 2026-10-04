@@ -69,6 +69,7 @@ public sealed class SupervisorSession : IDisposable
         public string? EngineFaultCapability { get; set; }
         public string? EngineFaultHelloSize { get; set; }
         public string? EngineLogPath { get; set; }
+        public long? BackgroundDiagnosticLimitBytes { get; set; }
         /// <summary>
         /// Business-origin label carried into the single Python worker.  The
         /// transport contract stays unchanged; this only prevents a live
@@ -376,6 +377,11 @@ public sealed class SupervisorSession : IDisposable
         {
             psi.ArgumentList.Add(arg);
         }
+        // Opt-in for this child only; foreground and existing sessions retain their logging.
+        if (_options.BackgroundDiagnosticLimitBytes is long diagnosticLimit)
+            psi.Environment["NTE_BACKGROUND_DIAGNOSTIC_LIMIT_BYTES"] = diagnosticLimit.ToString(System.Globalization.CultureInfo.InvariantCulture);
+        else
+            psi.Environment.Remove("NTE_BACKGROUND_DIAGNOSTIC_LIMIT_BYTES");
 
         var process = new Process { StartInfo = psi, EnableRaisingEvents = true };
         process.Exited += OnChildExited;

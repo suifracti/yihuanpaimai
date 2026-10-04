@@ -1,11 +1,12 @@
 @echo off
 cd /d "%~dp0"
 set NTE_DEBUG=1
-if not exist "logs" mkdir logs
+set "NTE_RUN_LOG_DIR=%~dp0..\build\native-observation\runtime-logs"
+if not exist "%NTE_RUN_LOG_DIR%" mkdir "%NTE_RUN_LOG_DIR%"
 for /f %%i in ('powershell -NoProfile -Command "Get-Date -Format yyyy-MM-dd_HH-mm-ss"') do set NTE_RUN_STAMP=%%i
 if not defined NTE_RUN_STAMP set NTE_RUN_STAMP=%DATE:~0,4%-%DATE:~5,2%-%DATE:~8,2%_%TIME:~0,2%-%TIME:~3,2%-%TIME:~6,2%
 set NTE_RUN_STAMP=%NTE_RUN_STAMP: =0%
-set NTE_LOG_FILE=%~dp0logs\run_%NTE_RUN_STAMP%.log
+set "NTE_LOG_FILE=%NTE_RUN_LOG_DIR%\run_%NTE_RUN_STAMP%.log"
 title NTE Auction HUD DEBUG
 echo ========================================================
 echo   Starting NTE Auction HUD (DEBUG)

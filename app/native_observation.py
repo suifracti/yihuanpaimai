@@ -17,6 +17,11 @@ import uuid
 from pathlib import Path
 from typing import Any, Callable, Optional
 
+from native_diagnostic_log import NativeDiagnosticLog
+
+
+OBSERVATION_WINDOW_MODES = frozenset({"foreground", "background-readonly"})
+
 
 class NativeObservationBridge:
     def __init__(
@@ -24,15 +29,18 @@ class NativeObservationBridge:
         repo_root: str,
         on_event: Callable[[dict[str, Any]], None],
         log: Callable[[str, str], None],
+        on_evidence: Optional[Callable[[dict[str, Any]], None]] = None,
     ) -> None:
         self.repo_root = Path(repo_root).resolve()
         self.on_event = on_event
         self.log = log
+        self.on_evidence = on_evidence
         self.process: Optional[subprocess.Popen[str]] = None
         self._lock = threading.RLock()
         self._reader: Optional[threading.Thread] = None
         self._stderr_reader: Optional[threading.Thread] = None
         self.session_dir: Optional[Path] = None
+        self.observation_window_mode = "foreground"
         self.last_status = "STOPPED"
 
     @property
@@ -40,9 +48,14 @@ class NativeObservationBridge:
         with self._lock:
             return self.process is not None and self.process.poll() is None
 
-    def start(self, *, resume_state: Optional[dict[str, Any]] = None) -> Optional[subprocess.Popen[str]]:
+    def start(self, *, resume_state: Optional[dict[str, Any]] = None,
+              observation_window_mode: str = "foreground") -> Optional[subprocess.Popen[str]]:
+        if not isinstance(observation_window_mode, str) or observation_window_mode not in OBSERVATION_WINDOW_MODES:
+            raise ValueError("Unknown observation window mode")
         with self._lock:
             if self.process is not None and self.process.poll() is None:
+                if observation_window_mode != self.observation_window_mode:
+                    raise RuntimeError("Stop the observation session before changing its window mode")
                 return self.process
 
             command = self._resolve_command()
@@ -54,6 +67,7 @@ class NativeObservationBridge:
             )
             session_dir.mkdir(parents=True, exist_ok=True)
             self.session_dir = session_dir
+            self.observation_window_mode = observation_window_mode
             if resume_state is not None:
                 (session_dir / "resume-state.json").write_text(
                     json.dumps(resume_state, ensure_ascii=False), encoding="utf-8"
@@ -74,8 +88,12 @@ class NativeObservationBridge:
                     "htgame.exe",
                     "--spec-class",
                     "UnrealWindow",
+                    "--observation-window-mode",
+                    observation_window_mode,
                 ]
             )
+            diagnostics = (NativeDiagnosticLog(session_dir)
+                           if observation_window_mode == "background-readonly" else None)
             self.log("STARTUP:NATIVE", f"starting native observation host: {' '.join(command)}")
             flags = getattr(subprocess, "CREATE_NO_WINDOW", 0x08000000)
             try:
@@ -92,6 +110,8 @@ class NativeObservationBridge:
                     creationflags=flags,
                 )
             except Exception as exc:
+                if diagnostics is not None:
+                    diagnostics.close()
                 self.log("STARTUP:NATIVE", f"native observation start failed: {type(exc).__name__}: {exc}")
                 self.last_status = "ERROR"
                 return None
@@ -100,13 +120,13 @@ class NativeObservationBridge:
             self.last_status = "STARTING"
             self._reader = threading.Thread(
                 target=self._read_stdout,
-                args=(child,),
+                args=(child, diagnostics),
                 name="native-observation-output",
                 daemon=True,
             )
             self._stderr_reader = threading.Thread(
                 target=self._read_stderr,
-                args=(child,),
+                args=(child, diagnostics),
                 name="native-observation-errors",
                 daemon=True,
             )
@@ -144,7 +164,8 @@ class NativeObservationBridge:
 
         The GUI never sends protocol messages directly.  This small stdin
         channel is only the Host-control boundary; the Host still owns the
-        Named Pipe/MMF session and sends the actual command through the frozen
+        Named Pipe/MMF session. Warehouse evidence controls stay Host-local;
+        ordinary worker controls send the actual command through the frozen
         SupervisorSession protocol.
         """
         if not isinstance(message, dict):
@@ -161,7 +182,7 @@ class NativeObservationBridge:
                 self.log("STARTUP:NATIVE", f"native control send failed: {type(exc).__name__}: {exc}")
                 return False
 
-    def _read_stdout(self, child: subprocess.Popen[str]) -> None:
+    def _read_stdout(self, child: subprocess.Popen[str], diagnostics=None) -> None:
         try:
             if child.stdout is None:
                 return
@@ -172,27 +193,47 @@ class NativeObservationBridge:
                 try:
                     event = json.loads(line)
                 except Exception:
-                    self.log("STARTUP:NATIVE", f"ignored non-json native output: {line[:300]}")
+                    if diagnostics is not None:
+                        diagnostics.submit("host-stderr.log", f"ignored non-json native output: {line[:300]}\n")
+                    else:
+                        self.log("STARTUP:NATIVE", f"ignored non-json native output: {line[:300]}")
+                    continue
+                if isinstance(event, dict) and event.get('type') == 'native_warehouse_evidence':
+                    # Independent source events cannot change business FRAME logs or last_status.
+                    if len(line.encode('utf-8')) <= 16 * 1024 and self.on_evidence is not None:
+                        try:
+                            self.on_evidence(event)
+                        except Exception as exc:
+                            if diagnostics is not None:
+                                diagnostics.submit("host-stderr.log", f"source callback failed: {type(exc).__name__}: {exc}\n")
+                            else:
+                                self.log('OBSERVATION:NATIVE', f'source callback failed: {type(exc).__name__}: {exc}')
                     continue
                 if not isinstance(event, dict) or event.get("type") != "native_observation":
                     continue
                 status = str(event.get("status") or "").upper()
                 if status != "FRAME":
-                    self._record_status_event(event)
-                    self.log(
-                        "OBSERVATION:NATIVE",
-                        json.dumps(event, ensure_ascii=False, separators=(",", ":"))[:4000],
-                    )
+                    self._record_status_event(event, diagnostics=diagnostics)
+                    if diagnostics is None:
+                        self.log(
+                            "OBSERVATION:NATIVE",
+                            json.dumps(event, ensure_ascii=False, separators=(",", ":"))[:4000],
+                        )
                 else:
                     # Preserve the actual handoff, not just engine counters.
                     # The session is isolated under build/; no formal history.
-                    self._record_frame_event(event)
+                    self._record_frame_event(event, diagnostics=diagnostics)
                 self.last_status = str(event.get("status") or self.last_status)
                 try:
                     self.on_event(event)
                 except Exception as exc:
-                    self.log("STARTUP:NATIVE", f"native event callback failed: {type(exc).__name__}: {exc}")
+                    if diagnostics is not None:
+                        diagnostics.submit("host-stderr.log", f"native event callback failed: {type(exc).__name__}: {exc}\n")
+                    else:
+                        self.log("STARTUP:NATIVE", f"native event callback failed: {type(exc).__name__}: {exc}")
         finally:
+            if diagnostics is not None:
+                diagnostics.close()
             code = child.poll()
             with self._lock:
                 if self.process is child:
@@ -214,10 +255,25 @@ class NativeObservationBridge:
                 except Exception:
                     pass
 
-    def _record_frame_event(self, event: dict[str, Any]) -> None:
+    def _record_frame_event(self, event: dict[str, Any], *, diagnostics=None) -> None:
         if self.session_dir is None:
             return
         try:
+            if diagnostics is not None:
+                match = event.get("currentMatch") or {}
+                summary = {
+                    "stage": "bridge-received",
+                    "observationSessionId": event.get("observationSessionId"),
+                    "frame": event.get("frame"),
+                    "matchId": match.get("id"),
+                    "factsRevision": match.get("factsRevision"),
+                    "q": match.get("q"),
+                    "historicalBids": match.get("historicalBids"),
+                }
+                diagnostics.submit("ui-frame-events.jsonl",
+                    json.dumps(summary, ensure_ascii=False, separators=(",", ":")) + "\n")
+                diagnostics.submit("ui-last-frame.json", json.dumps(event, ensure_ascii=False), replace=True)
+                return
             with (self.session_dir / "ui-frame-events.jsonl").open(
                 "a", encoding="utf-8", newline="\n"
             ) as stream:
@@ -236,9 +292,12 @@ class NativeObservationBridge:
                 json.dumps(event, ensure_ascii=False), encoding="utf-8"
             )
         except Exception as exc:
-            self.log("OBSERVATION:NATIVE", f"frame evidence write failed: {exc}")
+            if diagnostics is not None:
+                diagnostics.submit("host-stderr.log", f"frame evidence write failed: {exc}\n")
+            else:
+                self.log("OBSERVATION:NATIVE", f"frame evidence write failed: {exc}")
 
-    def _record_status_event(self, event: dict[str, Any]) -> None:
+    def _record_status_event(self, event: dict[str, Any], *, diagnostics=None) -> None:
         """Keep a bounded status/error trail beside the isolated session.
 
         FRAME payloads already carry the selected raw frame and engine state;
@@ -249,19 +308,29 @@ class NativeObservationBridge:
         if session_dir is None:
             return
         try:
+            if diagnostics is not None:
+                diagnostics.submit("host-status.jsonl",
+                    json.dumps(event, ensure_ascii=False, separators=(",", ":")) + "\n")
+                return
             path = session_dir / "host-status.jsonl"
             with path.open("a", encoding="utf-8", newline="\n") as stream:
                 stream.write(json.dumps(event, ensure_ascii=False, separators=(",", ":")) + "\n")
         except Exception as exc:
-            self.log("OBSERVATION:NATIVE", f"status evidence write failed: {type(exc).__name__}: {exc}")
+            if diagnostics is not None:
+                diagnostics.submit("host-stderr.log", f"status evidence write failed: {type(exc).__name__}: {exc}\n")
+            else:
+                self.log("OBSERVATION:NATIVE", f"status evidence write failed: {type(exc).__name__}: {exc}")
 
-    def _read_stderr(self, child: subprocess.Popen[str]) -> None:
+    def _read_stderr(self, child: subprocess.Popen[str], diagnostics=None) -> None:
         if child.stderr is None:
             return
         for raw in child.stderr:
             line = raw.strip()
             if line:
-                self.log("STARTUP:NATIVE", line[:1000])
+                if diagnostics is not None:
+                    diagnostics.submit("host-stderr.log", line[:1000] + "\n")
+                else:
+                    self.log("STARTUP:NATIVE", line[:1000])
 
     def _python_executable(self) -> str:
         configured = str(os.environ.get("NTE_PYTHON_EXE") or "").strip()
