@@ -1,0 +1,16 @@
+{
+  "schemaVersion": "readme-window-screenshot.v1",
+  "date": "2026-10-07",
+  "sourceCommit": "a4476058ee8301f9be2dd1fa8ce6082335d92a8b",
+  "source": "computer-use sky.get_window_state; assistant main window only",
+  "capture": "original bounded JPEG, no desktop or game capture",
+  "visionDisabled": true,
+  "busDisabled": true,
+  "isolatedEmptyRuntimeData": true,
+  "observationStarted": false,
+  "gameInput": false,
+  "imageSha256": "8b05a2c8d6a34ede4f9c9febb4f8467441209e5be99dffea44b549be3a581c6a",
+  "width": 1282,
+  "height": 692,
+  "meaning": "Actual application interface while observation is disabled; checked options reflect preserved local preferences, not template defaults or acceptance evidence."
+}

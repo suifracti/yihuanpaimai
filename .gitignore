@@ -51,6 +51,7 @@ ocr_results.txt
 .env
 .env.*
 config.local.json
+/app/config.json
 
 # Live auction databases and historical runtime copies
 **/异环拍卖数据*.json
