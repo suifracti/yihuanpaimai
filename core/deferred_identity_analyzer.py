@@ -116,7 +116,7 @@ class DeferredIdentityAnalyzer:
                 task_key = (
                     task.get("sessionId"), task.get("generationId"), task.get("matchId"),
                     task.get("matchSequence"), task.get("pipelineMatchGeneration"),
-                    task.get("invalidationGeneration"), task.get("round"),
+                    task.get("invalidationGeneration"), task.get("round"), task.get("viewportScope"),
                 )
                 if task_key != owner_key:
                     # Scope changes invalidate temporal tracks, but the

@@ -1,0 +1,16 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType><TargetFramework>net8.0-windows10.0.19041.0</TargetFramework>
+    <WindowsSdkPackageVersion>10.0.19041.57</WindowsSdkPackageVersion><UseWindowsForms>true</UseWindowsForms>
+    <StartupObject>DxgiProbe</StartupObject><PlatformTarget>x64</PlatformTarget><Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings><AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <NuGetAudit>false</NuGetAudit><NoWarn>$(NoWarn);CA1416</NoWarn>
+  </PropertyGroup>
+  <ItemGroup>
+    <Compile Include="..\game_timestamp_probe\Program.cs" Link="AuditedAbiReader.cs" />
+    <FrameworkReference Include="Microsoft.Windows.SDK.NET.Ref" />
+    <Reference Include="NteHost.Protocol"><HintPath>..\..\..\build\native-observation\NteHost.Protocol.dll</HintPath></Reference>
+    <PackageReference Include="Vortice.Direct3D11" Version="3.8.3" />
+    <PackageReference Include="Vortice.DXGI" Version="3.8.3" />
+  </ItemGroup>
+</Project>

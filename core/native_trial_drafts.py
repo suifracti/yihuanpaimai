@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import copy
 import hashlib
+import json
 import os
 import sys
 import tempfile
@@ -82,6 +83,30 @@ class NativeTrialDraftStore:
                 record_id, {"settlement": dict(settlement_patch)},
                 expected_inventory_archive=expected_archive,
             )
+
+    def warehouse_capture_attempted(self, record_id: str) -> bool:
+        """Even an interrupted marker blocks a second attempt; this is evidence, not billing."""
+        key = hashlib.sha256(str(record_id).encode('utf-8')).hexdigest()
+        return (self.root / 'warehouse-intake' / 'attempts' / (key + '.json')).exists()
+
+    def claim_warehouse_capture(self, scope: Mapping[str, Any]) -> bool:
+        """Durably consume the existing once-per-record permission before opening SOURCE."""
+        record_id = str(scope.get('recordStableKey') or '')
+        with self._lock:
+            if not record_id or self.lookup(record_id) is None:
+                raise NativeTrialDraftError('NATIVE_DRAFT_NOT_SAVED')
+            key = hashlib.sha256(record_id.encode('utf-8')).hexdigest()
+            directory = self.root / 'warehouse-intake' / 'attempts'
+            directory.mkdir(parents=True, exist_ok=True)
+            try:
+                with (directory / (key + '.json')).open('x', encoding='utf-8') as stream:
+                    json.dump({'schemaVersion': 'native-warehouse-attempt.v1',
+                        'scope': dict(scope), 'attempted': True}, stream, ensure_ascii=False)
+                    stream.flush()
+                    os.fsync(stream.fileno())
+            except FileExistsError:
+                return False
+            return True
 
     def capture_frame(self, source_path: os.PathLike[str] | str, metadata: Mapping[str, Any], *, expected_pixel_sha256: Optional[str] = None, max_bytes: Optional[int] = None) -> dict[str, Any]:
         source = Path(source_path).resolve(strict=True)

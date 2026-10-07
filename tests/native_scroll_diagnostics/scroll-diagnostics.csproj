@@ -1,0 +1,13 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup><OutputType>Exe</OutputType><TargetFramework>net8.0</TargetFramework><ImplicitUsings>enable</ImplicitUsings><Nullable>enable</Nullable><NuGetAudit>false</NuGetAudit></PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="../../architecture/v2/host/NteHost.Protocol/NteHost.Protocol.csproj" />
+    <ProjectReference Include="../../architecture/v2/host/NteHost.WindowMonitor/NteHost.WindowMonitor.csproj" />
+    <Compile Include="../../architecture/v2/host/wgc_live_harness/RequestClockDiagnostics.cs" />
+    <Compile Include="../../architecture/v2/host/wgc_live_harness/CaptureDeliveryProof.cs" />
+    <Compile Include="../../architecture/v2/host/wgc_live_harness/DeliveryVisualSummary.cs" />
+    <Compile Include="../../architecture/v2/host/wgc_live_harness/CapturedBgraFrame.cs" />
+    <Compile Include="../../architecture/v2/host/wgc_live_harness/WarehouseEvidenceLease.cs" />
+    <Compile Include="../../architecture/v2/host/wgc_live_harness/WarehouseWindowScroll.cs" />
+  </ItemGroup>
+</Project>

@@ -51,7 +51,10 @@ if hasattr(sys.stdout, 'reconfigure'):
         pass
 
 import time
+ENTRY_START_NS = time.perf_counter_ns()
+ENTRY_START_TIME = ENTRY_START_NS / 1_000_000_000
 from datetime import datetime, timezone, timedelta
+ENTRY_START_UTC = datetime.now(timezone.utc).isoformat()
 import json
 import threading
 import asyncio
@@ -279,6 +282,7 @@ def reset_auto_capture_guard() -> None:
 def maybe_trigger_auto_warehouse_capture(
     ctx: Optional[Dict[str, Any]] = None,
     host: Optional[Any] = None,
+    *, native_accepted: bool = False,
 ) -> Optional[Dict[str, Any]]:
     """Phase 11: Auto-trigger full warehouse capture orchestration once per recordStableKey.
 
@@ -290,6 +294,8 @@ def maybe_trigger_auto_warehouse_capture(
     5. Set existing captureSafetyOverride
     6. Call existing host.confirm(token_id)
     """
+    if native_accepted:
+        return _maybe_trigger_native_warehouse_capture(ctx, host)
     if not _game_input_execution_allowed():
         return {"ok": False, "reason": REASON_OBSERVATION_PROFILE_READONLY}
     if host is None:
@@ -679,6 +685,12 @@ _NATIVE_OBSERVATION_LOCK = threading.RLock()
 _NATIVE_OBSERVATION_RECEIVER = None
 _NATIVE_OBSERVATION_SESSION: Optional[str] = None
 _NATIVE_EXPECTED_SESSION: Optional[str] = None
+_NATIVE_AUTO_WAREHOUSE_ENABLED = False
+_NATIVE_SOURCE_CAPTURE_CAPABILITY = False
+from native_capture_delivery import STRICT, DELIVERY, POLICIES, validate_delivery
+_NATIVE_CAPTURE_POLICY = STRICT
+_NATIVE_DELIVERY_ANCHORED_MATCH = None
+_NATIVE_AUTO_TRIGGER_STATUS = {}
 _NATIVE_WINDOW_MODE = "foreground"
 _NATIVE_WINDOW_MODE_CONFIRMED = False
 _NATIVE_WINDOW_TARGET_INSTANCE: Optional[Dict[str, Any]] = None
@@ -1152,7 +1164,17 @@ def get_current_match_presentation_summary() -> dict:
             "factsRevision": CURRENT_MATCH.facts_revision,
             "recognitionMode": get_recognition_mode(),
             "observationProfile": native_observation_profile(),
+            "nativeAutoWarehouseConfigured": CONFIG.get("app", {}).get("nativeAutoWarehouseCapture") is True,
+            "nativeAutoWarehouseEnabled": _NATIVE_AUTO_WAREHOUSE_ENABLED,
+            "nativeAutoWarehouseCapability": _NATIVE_SOURCE_CAPTURE_CAPABILITY,
+            "nativeAutoWarehouseTrigger": (copy.deepcopy(_NATIVE_AUTO_TRIGGER_STATUS)
+                if _NATIVE_AUTO_TRIGGER_STATUS.get('matchId') == CURRENT_MATCH.id
+                and _NATIVE_AUTO_TRIGGER_STATUS.get('observationSessionId') == _NATIVE_OBSERVATION_SESSION else {}),
             "observationWindowMode": native_observation_window_mode(),
+            "captureFreshnessPolicy": native_capture_policy(),
+            "effectiveCaptureFreshnessPolicy": _NATIVE_CAPTURE_POLICY if _NATIVE_WINDOW_MODE_CONFIRMED else None,
+            "deliveryAgeMs": native_payload.get('deliveryAgeMs'),
+            "originStatus": (native_payload.get('deliveryProof') or {}).get('originStatus'),
             "effectiveObservationWindowMode": _NATIVE_WINDOW_MODE if _NATIVE_WINDOW_MODE_CONFIRMED else None,
             "nativeObservationRunning": bool(NATIVE_OBSERVATION_BRIDGE is not None and NATIVE_OBSERVATION_BRIDGE.running),
             "configuredPlayerName": get_player_name(),
@@ -1530,6 +1552,321 @@ def native_observation_window_mode() -> str:
     return value
 
 
+def handle_native_auto_warehouse_capture(enabled: Any) -> Dict[str, Any]:
+    global _NATIVE_AUTO_WAREHOUSE_ENABLED
+    if type(enabled) is not bool:
+        return {'ok': False, 'reason': '自动收页选项无效'}
+    with _VISION_PROCESS_LOCK, _NATIVE_OBSERVATION_LOCK:
+        running = NATIVE_OBSERVATION_BRIDGE is not None and NATIVE_OBSERVATION_BRIDGE.running
+        if enabled and running:
+            return {'ok': False, 'reason': '结束观察后再启用结算自动收页'}
+        config = copy.deepcopy(CONFIG)
+        config.setdefault('app', {})['nativeAutoWarehouseCapture'] = enabled
+        try:
+            with open(os.path.join(BASE_DIR, 'config.json'), 'w', encoding='utf-8') as stream:
+                json.dump(config, stream, ensure_ascii=False, indent=2)
+                stream.write('\n')
+        except OSError as exc:
+            return {'ok': False, 'reason': '选项未保存：' + type(exc).__name__}
+        CONFIG.clear()
+        CONFIG.update(config)
+        if not enabled:
+            _NATIVE_AUTO_WAREHOUSE_ENABLED = False
+    if not enabled and _NATIVE_WAREHOUSE_SOURCE_COORDINATOR is not None:
+        _NATIVE_WAREHOUSE_SOURCE_COORDINATOR.stop()
+    _native_post_main_status('native_auto_warehouse_option')
+    return {'ok': True, 'enabled': enabled}
+
+
+def _native_claim_warehouse_attempt(scope: Dict[str, Any]) -> bool:
+    # Caller holds the existing intake/Main scope lock, including manual confirmation.
+    if scope != _native_warehouse_source_scope():
+        return False
+    key = scope['recordStableKey']
+    if key in _AUTO_CAPTURE_ATTEMPTED_KEYS:
+        return False
+    # A failed persistence operation must not cause a retry storm on subsequent frames.
+    # No SOURCE is opened unless the durable claim succeeds.
+    _AUTO_CAPTURE_ATTEMPTED_KEYS.add(key)
+    if not NATIVE_TRIAL_DRAFT_STORE.claim_warehouse_capture(scope):
+        return False
+    return True
+
+
+def _native_auto_trigger_notice(scope, reasons, ctx=None):
+    """Describe the existing gates; this never authorizes collection or changes facts."""
+    global _NATIVE_AUTO_TRIGGER_STATUS
+    labels = {
+        'OBSERVATION_DISABLED': 'Native观察未启用', 'AUTO_DISABLED': '自动收页关闭',
+        'SOURCE_UNAVAILABLE': '收页入口不可用', 'CAPABILITY_UNCONFIRMED': 'Host能力未确认',
+        'CONTEXT_MISSING': '观察上下文缺失', 'NOT_SETTLEMENT': '等待结算画面',
+        'SOURCE_KIND_MISMATCH': '画面来源不符', 'SESSION_MISMATCH': '观察会话不符',
+        'MATCH_MISMATCH': '局记录不符', 'GENERATION_MISMATCH': '局代际不符',
+        'TARGET_MISMATCH': '目标窗口身份不符', 'FRAME_MISMATCH': '非当前接纳帧',
+        'COLLECTION_RUNNING': '当前正在收页', 'AUCTION_ANCHOR_MISSING': '未建立同局对局锚点',
+        'SOURCE_MARKER_NO_PROGRESS': '来源标记未前进', 'ALREADY_ATTEMPTED': '本局已尝试收页，不重复触发',
+        'FRAME_LEASE_MISSING': '当前原帧租约缺失', 'FRAME_PATH_REJECTED': '原帧路径不符',
+        'FRAME_SIZE_REJECTED': '原帧尺寸不符', 'FRAME_HASH_REJECTED': '原帧格式或哈希不符',
+        'FRAME_DECODE_REJECTED': '原帧解码不符', 'SETTLEMENT_TITLE_MISSING': '当前原图缺结算标题',
+        'WAREHOUSE_GRID_MISSING': '仓库网格未成立', 'WAREHOUSE_NOT_TOP': '未确认仓库顶端',
+        'DRAFT_NOT_SAVED': '本局草稿未保存', 'SOURCE_PREPARE_REJECTED': '收页准备被拒绝',
+        'SOURCE_START_REJECTED': '收页启动被拒绝', 'EVIDENCE_EXCEPTION': '触发证据检查异常',
+        'TRIGGER_WATCH_NOT_ARMED': '结算后探针未授权', 'TRIGGER_PROBE_SCOPE_MISMATCH': '探针作用域不符',
+        'TRIGGER_PROBE_DUPLICATE_OR_OUT_OF_ORDER': '探针重复或乱序', 'TRIGGER_PROBE_EXPIRED': '探针已过期',
+        'TRIGGER_PROBE_FILE_MISSING': '探针文件缺失', 'TRIGGER_PROBE_HASH_MISMATCH': '探针哈希不符',
+        'TRIGGER_PROBE_REPLACED_DURING_READ': '探针读取期间被替换',
+        'TRIGGER_PROBE_STALE': '探针画面已过期', 'TRIGGER_SCOPE_STALE': '待触发结算作用域已失效',
+        'TRIGGER_PROBE_LIMIT_REACHED': '结算后探针预算已用尽',
+        'TRIGGER_CURRENT_SCENE_NOT_SETTLEMENT': '当前原帧已离开结算场景',
+        'TRIGGER_WATCH_NOT_ARMED': '结算后探针未获授权或不满足接线条件',
+        'TRIGGER_SAME_MATCH_ANCHOR_MISSING': '缺少本局对局锚点',
+        'TRIGGER_DEADLINE_INVALID': '固定结算期限无效或已过期',
+        'TRIGGER_SCOPE_NOT_CURRENT': '结算触发作用域已失效',
+        'TRIGGER_WATCH_ALREADY_ATTEMPTED': '本局已尝试收页，不再启动探针',
+    }
+    scope = scope or {}
+    status = {'kind': 'automatic-trigger-rejected' if reasons else 'automatic-trigger-admitted',
+              'observationSessionId': scope.get('observationSessionId'),
+              'matchId': scope.get('recordStableKey'), 'matchGeneration': scope.get('matchGeneration'),
+              'frameSequence': (ctx or {}).get('frameSequence'), 'reasonCodes': list(reasons),
+              'reasonText': '；'.join(labels.get(r, r) for r in reasons),
+              'captureFreshnessPolicy': _NATIVE_CAPTURE_POLICY}
+    for key in ('watchId', 'probeId', 'probeOrdinal', 'probeLimit', 'remainingProbeAttempts',
+                'sourcePagesWritten', 'sourceRequestAttempts', 'deadlineNs'):
+        if isinstance(ctx, dict) and key in ctx:
+            status[key] = copy.deepcopy(ctx[key])
+    if _NATIVE_CAPTURE_POLICY == DELIVERY and isinstance(ctx, dict) and not ctx.get('triggerProbe'):
+        proof = ctx.get('deliveryProof') if isinstance(ctx.get('deliveryProof'), dict) else {}
+        advice = ctx.get('currentAdviceQualification')
+        status['sourceQualification'] = {
+            'deliveryProofQualified': proof.get('deliveryQualified') is True,
+            'sourceMarkerProgress': proof.get('sourceMarkerProgress') is True,
+            'currentAdviceQualified': ctx.get('currentAdviceQualified') is True,
+            'adviceIsSourceAdmissionGate': False,
+            'currentAdviceQualification': (copy.deepcopy(advice) if isinstance(advice, dict) else {
+                'qualified': ctx.get('currentAdviceQualified') is True,
+                'diagnosticsAvailable': False,
+                'failureReasons': ['QUALIFICATION_DETAIL_MISSING'],
+            }),
+        }
+    elif _NATIVE_CAPTURE_POLICY == DELIVERY and isinstance(ctx, dict) and ctx.get('triggerProbe'):
+        proof = ctx.get('deliveryProof') if isinstance(ctx.get('deliveryProof'), dict) else {}
+        status['sourceQualification'] = {
+            'sourceMarkerProgress': proof.get('sourceMarkerProgress') is True,
+            'adviceQualificationEvaluated': False,
+            'adviceIsSourceAdmissionGate': False,
+            'probeIsCurrentSceneEvidence': True,
+        }
+    qualification_key = json.dumps(status.get('sourceQualification'), sort_keys=True, ensure_ascii=False)
+    old_key = tuple(_NATIVE_AUTO_TRIGGER_STATUS.get(k) for k in
+                    ('observationSessionId', 'matchId', 'matchGeneration', 'kind', 'reasonCodes', 'probeId')) + (
+                        json.dumps(_NATIVE_AUTO_TRIGGER_STATUS.get('sourceQualification'), sort_keys=True, ensure_ascii=False),)
+    new_key = tuple(status.get(k) for k in
+                    ('observationSessionId', 'matchId', 'matchGeneration', 'kind', 'reasonCodes', 'probeId')) + (qualification_key,)
+    _NATIVE_AUTO_TRIGGER_STATUS = status
+    if old_key != new_key:
+        # Diagnostic adapters must not change an admission decision or claim a retry.
+        try:
+            log_stage('WAREHOUSE:NATIVE_AUTO', json.dumps(status, ensure_ascii=False))
+            _native_post_main_status('native-auto-trigger-status')
+        except Exception as exc:
+            status['diagnosticPublishError'] = type(exc).__name__
+
+
+def _maybe_trigger_native_warehouse_capture(ctx, host, *, trigger_probe_event=None):
+    if not native_observation_enabled():
+        _native_auto_trigger_notice(_native_warehouse_source_scope(), ['OBSERVATION_DISABLED'], ctx)
+        return None
+    if not _NATIVE_AUTO_WAREHOUSE_ENABLED:
+        _native_auto_trigger_notice(_native_warehouse_source_scope(), ['AUTO_DISABLED'], ctx)
+        return None
+    if host is None:
+        _native_auto_trigger_notice(_native_warehouse_source_scope(), ['SOURCE_UNAVAILABLE'], ctx)
+        return None
+    if not _NATIVE_SOURCE_CAPTURE_CAPABILITY:
+        _native_auto_trigger_notice(_native_warehouse_source_scope(), ['CAPABILITY_UNCONFIRMED'], ctx)
+        return None
+    with _MANUAL_STATE_LOCK:
+        is_probe = isinstance(trigger_probe_event, dict)
+        scope = _native_warehouse_source_scope() if is_probe else _native_warehouse_intake_scope()
+        if not isinstance(ctx, dict):
+            _native_auto_trigger_notice(scope, ['CONTEXT_MISSING'])
+            return None
+        checks = [
+            (not _NATIVE_AUTO_WAREHOUSE_ENABLED, 'AUTO_DISABLED'),
+            (not _NATIVE_SOURCE_CAPTURE_CAPABILITY, 'CAPABILITY_UNCONFIRMED'),
+            (scope['scene'] != 'SETTLEMENT' or (not is_probe and ctx.get('scene') != 'SETTLEMENT'), 'NOT_SETTLEMENT'),
+            (ctx.get('sourceKind') != 'native_wgc', 'SOURCE_KIND_MISMATCH'),
+            (ctx.get('observationSessionId') != scope['observationSessionId'], 'SESSION_MISMATCH'),
+            (ctx.get('matchId') != scope['recordStableKey'], 'MATCH_MISMATCH'),
+            (ctx.get('sourceMatchGeneration' if _NATIVE_CAPTURE_POLICY == DELIVERY else 'matchGeneration') != scope['matchGeneration'], 'GENERATION_MISMATCH'),
+            (_native_observation_target_instance(ctx.get('target')) != scope['targetInstance'], 'TARGET_MISMATCH'),
+            (not is_probe and (ctx.get('frameSequence') != _NATIVE_OBSERVATION_SEQUENCE
+                or ctx.get('capturedAtNs') != _NATIVE_OBSERVATION_LAST_FRAME_NS), 'FRAME_MISMATCH'),
+            (is_probe and not host.trigger_watch_scope_is_current(scope), 'TRIGGER_SCOPE_STALE'),
+            (getattr(host, '_running', False), 'COLLECTION_RUNNING'),
+        ]
+        if _NATIVE_CAPTURE_POLICY == DELIVERY:
+            proof = ctx.get('deliveryProof') if isinstance(ctx.get('deliveryProof'), dict) else {}
+            checks.extend([
+                (_NATIVE_DELIVERY_ANCHORED_MATCH != CURRENT_MATCH.id, 'AUCTION_ANCHOR_MISSING'),
+                (proof.get('sourceMarkerProgress') is not True, 'SOURCE_MARKER_NO_PROGRESS'),
+            ])
+        reasons = [code for rejected, code in checks if rejected]
+        if reasons:
+            _native_auto_trigger_notice(scope, reasons, ctx)
+            return None
+        key = scope['recordStableKey']
+        if key in _AUTO_CAPTURE_ATTEMPTED_KEYS or NATIVE_TRIAL_DRAFT_STORE.warehouse_capture_attempted(key):
+            _AUTO_CAPTURE_ATTEMPTED_KEYS.add(key)
+            _native_auto_trigger_notice(scope, ['ALREADY_ATTEMPTED'], ctx)
+            return None
+        # Use the exact accepted business frame, or a unique pending post-close probe.
+        # Probe files are immutable and Host-owned until this callback ACKs their ID.
+        if is_probe:
+            detail = trigger_probe_event.get('details') if isinstance(trigger_probe_event.get('details'), dict) else {}
+            now_ns = time.perf_counter_ns()
+            probe_age = ctx.get('readbackTimestampNs')
+            current_scope = _native_warehouse_source_scope()
+            if (trigger_probe_event.get('scene') != 'UNCLASSIFIED_CURRENT_PROBE'
+                    or current_scope != scope or not host.trigger_watch_scope_is_current(current_scope)):
+                _native_auto_trigger_notice(scope, ['TRIGGER_SCOPE_STALE'], ctx)
+                return None
+            if (type(probe_age) is not int or now_ns < probe_age
+                    or now_ns - probe_age > 2_000_000_000
+                    or detail.get('deadlineNs') != ctx.get('deadlineNs')
+                    or now_ns >= ctx.get('deadlineNs', 0)):
+                _native_auto_trigger_notice(scope, ['TRIGGER_PROBE_STALE'], ctx)
+                return None
+            source = host.trigger_probe_file(trigger_probe_event)
+            if not source or source.get('scope') != scope or source.get('frameSequence') != ctx.get('frameSequence'):
+                _native_auto_trigger_notice(scope, ['TRIGGER_PROBE_FILE_MISSING'], ctx)
+                return None
+        else:
+            source = _NATIVE_WAREHOUSE_FRAME_LEASE
+            if not source or source.get('frameSequence') != ctx.get('frameSequence') or source.get('scope') != scope:
+                _native_auto_trigger_notice(scope, ['FRAME_LEASE_MISSING'], ctx)
+                return None
+        try:
+            import hashlib
+            path = Path(source['path']).resolve(strict=True)
+            if not path.is_relative_to(Path(source['sourceRoot']).resolve()):
+                _native_auto_trigger_notice(scope, ['FRAME_PATH_REJECTED'], ctx)
+                return None
+            width, height = source['width'], source['height']
+            if (type(width) is not int or type(height) is not int
+                    or not (0 < width <= 1920 and 0 < height <= 1080)):
+                _native_auto_trigger_notice(scope, ['FRAME_SIZE_REJECTED'], ctx)
+                return None
+            probe_stat_before = path.stat() if is_probe else None
+            with path.open('rb') as stream:
+                raw = stream.read(55 + 4 * width * height)
+            if (len(raw) != 54 + 4 * width * height or raw[:2] != b'BM'
+                    or raw[28:30] != b'\x20\x00'
+                    or hashlib.sha256(raw[54:]).hexdigest() != source['pixelSha256']):
+                _native_auto_trigger_notice(scope, ['TRIGGER_PROBE_HASH_MISMATCH' if is_probe else 'FRAME_HASH_REJECTED'], ctx)
+                return None
+            raw_hash = hashlib.sha256(raw).hexdigest()
+            if is_probe and raw_hash != source.get('bmpSha256'):
+                _native_auto_trigger_notice(scope, ['TRIGGER_PROBE_HASH_MISMATCH'], ctx)
+                return None
+            img = cv2.imdecode(np.frombuffer(raw, np.uint8), cv2.IMREAD_COLOR)
+            if img is None or img.shape[:2] != (height, width):
+                _native_auto_trigger_notice(scope, ['FRAME_DECODE_REJECTED'], ctx)
+                return None
+            if is_probe or _NATIVE_CAPTURE_POLICY == DELIVERY:
+                from scene_anchors import settlement_title_visible
+                if not settlement_title_visible(img):
+                    _native_auto_trigger_notice(scope, ['TRIGGER_CURRENT_SCENE_NOT_SETTLEMENT'] if is_probe
+                        else ['SETTLEMENT_TITLE_MISSING'], ctx)
+                    if is_probe:
+                        host.cancel_trigger_watch('TRIGGER_CURRENT_SCENE_NOT_SETTLEMENT')
+                        return {'ok': False, 'reason': 'TRIGGER_CURRENT_SCENE_NOT_SETTLEMENT'}
+                    return None
+                if is_probe:
+                    # The probe scene is asserted only after checking this probe's original pixels.
+                    ctx['scene'] = 'SETTLEMENT'
+            from warehouse_grid_geometry import observe_warehouse_grid
+            from warehouse_scrollbar_observation import observe_warehouse_scrollbar
+            grid = observe_warehouse_grid(img, already_cropped=False)
+            scrollbar = observe_warehouse_scrollbar(img, already_cropped=False)
+            warehouse_present = (grid.get('grid') or {}).get('status') == 'OK'
+            if is_probe:
+                post_raw = path.read_bytes()
+                probe_stat_after = path.stat()
+                post_scope = _native_warehouse_source_scope()
+                now_ns = time.perf_counter_ns()
+                identity_changed = (probe_stat_before.st_size != probe_stat_after.st_size
+                    or probe_stat_before.st_mtime_ns != probe_stat_after.st_mtime_ns
+                    or probe_stat_before.st_ctime_ns != probe_stat_after.st_ctime_ns
+                    or getattr(probe_stat_before, 'st_ino', None) != getattr(probe_stat_after, 'st_ino', None))
+                probe_age_invalid = (type(ctx.get('readbackTimestampNs')) is not int
+                    or now_ns < ctx['readbackTimestampNs'] or now_ns - ctx['readbackTimestampNs'] > 2_000_000_000)
+                if (hashlib.sha256(post_raw).hexdigest() != raw_hash
+                        or hashlib.sha256(post_raw).hexdigest() != source.get('bmpSha256') or identity_changed):
+                    _native_auto_trigger_notice(scope, ['TRIGGER_PROBE_REPLACED_DURING_READ'], ctx)
+                    return None
+                if (post_scope != scope or not host.trigger_watch_scope_is_current(post_scope)
+                        or trigger_probe_event.get('scene') != 'UNCLASSIFIED_CURRENT_PROBE'):
+                    _native_auto_trigger_notice(scope, ['TRIGGER_SCOPE_STALE'], ctx)
+                    return None
+                if probe_age_invalid:
+                    _native_auto_trigger_notice(scope, ['TRIGGER_PROBE_STALE'], ctx)
+                    return None
+            if not warehouse_present or scrollbar.get('scrollState') not in {'TOP', 'NO_SCROLL'}:
+                _native_auto_trigger_notice(scope, [code for rejected, code in (
+                    (not warehouse_present, 'WAREHOUSE_GRID_MISSING'),
+                    (scrollbar.get('scrollState') not in {'TOP', 'NO_SCROLL'}, 'WAREHOUSE_NOT_TOP')) if rejected], ctx)
+                return None
+            if NATIVE_TRIAL_DRAFT_STORE.lookup(key) is None and _persist_current_draft_now() is None:
+                _native_auto_trigger_notice(scope, ['DRAFT_NOT_SAVED'], ctx)
+                return {'ok': False, 'reason': 'NATIVE_DRAFT_NOT_SAVED'}
+            prep = host.prepare()
+            if not prep.get('ok'):
+                _native_auto_trigger_notice(scope, ['SOURCE_PREPARE_REJECTED'], ctx)
+                return prep
+            result = host.confirm(prep['armingToken'])
+            _native_auto_trigger_notice(scope, [] if result.get('ok') else ['SOURCE_START_REJECTED'], ctx)
+            log_stage('WAREHOUSE:NATIVE_AUTO', json.dumps({'kind': 'automatic-trigger',
+                'scope': scope, 'frameSequence': ctx['frameSequence'], 'result': result}, ensure_ascii=False))
+            return result
+        except Exception as exc:
+            _native_auto_trigger_notice(scope, ['EVIDENCE_EXCEPTION'], ctx)
+            log_stage('WAREHOUSE:NATIVE_AUTO', 'automatic trigger rejected: ' + type(exc).__name__)
+            return {'ok': False, 'reason': 'AUTO_TRIGGER_EVIDENCE_REJECTED'}
+
+
+def native_capture_policy():
+    return CONFIG.get('app', {}).get('captureFreshnessPolicy', STRICT)
+
+
+def handle_capture_freshness_policy(policy):
+    if policy not in POLICIES:
+        return {'ok': False, 'reason': '采集证据模式无效'}
+    with _VISION_PROCESS_LOCK, _NATIVE_OBSERVATION_LOCK:
+        if NATIVE_OBSERVATION_BRIDGE is not None and NATIVE_OBSERVATION_BRIDGE.running:
+            return {'ok': False, 'reason': '观察运行中不能切换；停止后开始新会话'}
+        next_config = copy.deepcopy(CONFIG)
+        next_config.setdefault('app', {})['captureFreshnessPolicy'] = policy
+        try:
+            with open(os.path.join(BASE_DIR, 'config.json'), 'w', encoding='utf-8') as handle:
+                json.dump(next_config, handle, ensure_ascii=False, indent=2)
+                handle.write('\n')
+        except OSError as exc:
+            return {'ok': False, 'reason': str(exc)}
+        CONFIG.clear(); CONFIG.update(next_config)
+    return {'ok': True, 'policy': policy}
+
+
+def _native_use_age_ms(data):
+    if data.get('captureFreshnessPolicy') == DELIVERY:
+        if validate_delivery(data.get('deliveryProof'), time.perf_counter_ns(),
+                             session=data.get('observationSessionId'), max_age_ns=31_000_000_000) is not None:
+            return float('inf')
+        return (time.perf_counter_ns() - data['deliveryProof']['readbackCompletedNs']) / 1_000_000
+    return data.get('freshnessMs')
+
+
 def handle_observation_window_mode(mode: Any) -> Dict[str, Any]:
     if mode not in ("foreground", "background-readonly"):
         return {"ok": False, "reason": "观察模式无效"}
@@ -1619,9 +1956,13 @@ def _native_health_from_event(event: Dict[str, Any], *, frame: Optional[Dict[str
         "inputActions": False,
         "formalHistoryWriter": False,
         "observationWindowMode": _NATIVE_WINDOW_MODE,
+        "captureFreshnessPolicy": _NATIVE_CAPTURE_POLICY,
     }
     details = event.get("details")
     if isinstance(details, dict):
+        for exit_field in ("processExitConfirmed", "exitConfirmed", "hostExitCode", "outputClosed"):
+            if exit_field in details:
+                health[exit_field] = details[exit_field]
         if details.get("error") is not None:
             health["error"] = str(details.get("error"))
         if details.get("scene") is not None:
@@ -1641,7 +1982,26 @@ def _native_health_from_event(event: Dict[str, Any], *, frame: Optional[Dict[str
             "sourceTimestampNs": frame.get("sourceTimestampNs"),
             "capturedAtUtc": frame.get("capturedAtUtc"),
             "freshnessMs": frame.get("freshnessMs"),
+            "deliveryAgeMs": frame.get('deliveryAgeMs'),
+            "originStatus": (frame.get('deliveryProof') or {}).get('originStatus'),
+            "originStrictQualified": (frame.get('deliveryProof') or {}).get('originStrictQualified'),
         })
+        health["lastSuccessfulObservation"] = {
+            "sessionId": event.get("observationSessionId"),
+            "matchId": (event.get("currentMatch") or {}).get("id") or CURRENT_MATCH.id,
+            "frameSequence": frame.get("sequence"),
+            "capturedAtUtc": frame.get("capturedAtUtc"),
+            "capturedAtNs": frame.get("capturedAtNs"),
+            "sourceTimestampNs": frame.get("sourceTimestampNs"),
+            "captureFreshnessPolicy": _NATIVE_CAPTURE_POLICY,
+            "captureId": (frame.get('deliveryProof') or {}).get('captureId'),
+            "originStatus": (frame.get('deliveryProof') or {}).get('originStatus'),
+        }
+    elif raw_status not in {"STARTING", "READY"}:
+        previous = (LATEST_PAYLOAD.get("visionHealth") or {}).get("lastSuccessfulObservation")
+        if isinstance(previous, dict):
+            health["lastSuccessfulObservation"] = copy.deepcopy(previous)
+    health["observationStopped"] = raw_status in {"PAUSED", "ERROR", "STOPPED"}
     return health
 
 
@@ -1739,6 +2099,10 @@ def _native_confirm_window_mode(event: Dict[str, Any]) -> bool:
 
 
 def _native_source_frame_rejection(frame: Dict[str, Any]) -> Optional[str]:
+    if _NATIVE_CAPTURE_POLICY == DELIVERY:
+        rejection = validate_delivery(frame.get('deliveryProof'), time.perf_counter_ns(),
+            session=_NATIVE_EXPECTED_SESSION, max_age_ns=31_000_000_000, require_progress=False)
+        return rejection
     if _NATIVE_WINDOW_MODE != "background-readonly":
         return None
     try:
@@ -1754,6 +2118,10 @@ def _native_source_frame_rejection(frame: Dict[str, Any]) -> Optional[str]:
 
 
 def _native_background_source_current(context: Dict[str, Any]) -> bool:
+    if _NATIVE_CAPTURE_POLICY == DELIVERY:
+        return context.get('captureFreshnessPolicy') == DELIVERY and validate_delivery(
+            context.get('deliveryProof'), time.perf_counter_ns(), session=_NATIVE_EXPECTED_SESSION,
+            max_age_ns=31_000_000_000) is None
     if _NATIVE_WINDOW_MODE != "background-readonly":
         return True
     try:
@@ -2077,11 +2445,13 @@ def _native_accept_observation_locked(data: Dict[str, Any]) -> Optional[Dict[str
     global _NATIVE_SOLVER_LEASE
     target_instance = _native_observation_target_instance(data.get("target"))
     try:
-        freshness_ms = float(data.get("freshnessMs"))
+        freshness_ms = float(_native_use_age_ms(data))
     except (TypeError, ValueError):
         return None
     if (
-        data.get("scene") != "IN_AUCTION"
+        (_NATIVE_CAPTURE_POLICY == DELIVERY and (data.get("currentAdviceQualified") is not True
+            or (data.get('deliveryProof') or {}).get('sourceMarkerProgress') is not True))
+        or data.get("scene") != "IN_AUCTION"
         or data.get("inAuction") is not True
         or data.get("isSettlement") is True
         or target_instance is None
@@ -2090,9 +2460,9 @@ def _native_accept_observation_locked(data: Dict[str, Any]) -> Optional[Dict[str
         return None
     accepted_ns = time.monotonic_ns()
     remaining_ns = int(_NATIVE_FRAME_TIMEOUT_SECONDS * 1_000_000_000)
-    if _NATIVE_WINDOW_MODE == "background-readonly":
+    if _NATIVE_WINDOW_MODE == "background-readonly" or _NATIVE_CAPTURE_POLICY == DELIVERY:
         try:
-            age_ns = time.perf_counter_ns() - int(data["sourceTimestampNs"])
+            age_ns = time.perf_counter_ns() - int(data["deliveryProof"]["readbackCompletedNs"] if _NATIVE_CAPTURE_POLICY == DELIVERY else data["sourceTimestampNs"])
         except (KeyError, TypeError, ValueError):
             return None
         if not 0 <= age_ns < remaining_ns:
@@ -2283,6 +2653,17 @@ def _native_publish_health(event: Dict[str, Any], *, force_main: bool = False) -
     return health
 
 
+def _native_report_ui_ready() -> None:
+    """Late WebView readiness cannot overwrite an active or failed Host."""
+    with _NATIVE_OBSERVATION_LOCK:
+        health = LATEST_PAYLOAD.get("visionHealth") or {}
+        bridge = NATIVE_OBSERVATION_BRIDGE
+        if health.get("profile") == "native-readonly-v1" or (bridge is not None and bridge.running):
+            _native_post_main_status("native-ui-ready", force=True)
+            return
+        _native_publish_health({"status": "STOPPED", "reason": "explicit-start-required"}, force_main=True)
+
+
 def _native_solver_admission_details(
     facts: Dict[str, Any],
 ) -> tuple[Optional[Dict[str, Any]], Optional[str], Dict[str, Any]]:
@@ -2391,16 +2772,16 @@ def _native_project_current_quote(data: Dict[str, Any], match: Any) -> None:
         data["myBid"] = my_seat.get("currentBid") if my_seat else None
 
 
-def _native_observation_event(event: Dict[str, Any]) -> None:
+def _native_observation_event(event: Dict[str, Any]) -> Optional[Dict[str, Any]]:
     """Consume one versioned native Host line and project it into Main/HUD."""
     global _NATIVE_OBSERVATION_RECEIVER, _NATIVE_OBSERVATION_SESSION
     global _NATIVE_OBSERVATION_SEQUENCE, _NATIVE_OBSERVATION_LAST_FRAME_NS
     global _NATIVE_EXPECTED_SESSION
-    global _NATIVE_WINDOW_MODE_CONFIRMED, _NATIVE_OBSERVATION_SOURCE_NS
+    global _NATIVE_WINDOW_MODE_CONFIRMED, _NATIVE_OBSERVATION_SOURCE_NS, _NATIVE_DELIVERY_ANCHORED_MATCH
     global _LIVE_VISION_ACTIVE, _LIVE_VISION_MATCH_ID, _LIVE_CONTROL_WAITING_EXIT
     global _NATIVE_TRIAL_WAREHOUSE_SOURCES, _NATIVE_TRIAL_WAREHOUSE_DECISIONS
     global _NATIVE_WAREHOUSE_DECISION_RECEIPT
-    global _NATIVE_WAREHOUSE_FRAME_LEASE
+    global _NATIVE_WAREHOUSE_FRAME_LEASE, _NATIVE_SOURCE_CAPTURE_CAPABILITY
 
     if not isinstance(event, dict):
         return
@@ -2445,6 +2826,16 @@ def _native_observation_event(event: Dict[str, Any]) -> None:
                 or lease.get("frameSequence") != details.get("frameSequence")
             ):
                 return
+    if status in {'READY', 'FRAME'} and event.get('captureFreshnessPolicy', STRICT) != _NATIVE_CAPTURE_POLICY:
+        _native_publish_health({'status': 'ERROR', 'reason': 'capture-policy-not-acknowledged'}, force_main=True)
+        bridge = globals().get('NATIVE_OBSERVATION_BRIDGE')
+        if bridge is not None:
+            bridge.send_control({'type': 'native_stop'})
+        return
+    if status == "READY":
+        _NATIVE_SOURCE_CAPTURE_CAPABILITY = (event.get("details") or {}).get("warehouseSourceBeforeBillFrozen") is True
+    if status in {"STARTING", "PAUSED", "ERROR", "STOPPED"}:
+        _NATIVE_SOURCE_CAPTURE_CAPABILITY = False
     if status in {"PAUSED", "ERROR", "STOPPED"}:
         if _NATIVE_WINDOW_MODE == "background-readonly" and status != "STOPPED":
             # Fail closed even when an older Host cannot acknowledge the new mode.
@@ -2749,7 +3140,7 @@ def _native_observation_event(event: Dict[str, Any]) -> None:
             _LIVE_VISION_MATCH_ID = None
             if CURRENT_MATCH.has_any_fact():
                 flush_draft_save_sync()
-        return
+        return {"observationStatus": status, "observationSessionId": incoming_session}
 
     frame = event.get("frame")
     snapshot = event.get("currentMatch")
@@ -2788,7 +3179,7 @@ def _native_observation_event(event: Dict[str, Any]) -> None:
     target = event.get("target")
     source_rejection = _native_source_frame_rejection(frame)
     try:
-        frame_freshness_ms = float(frame.get("freshnessMs"))
+        frame_freshness_ms = float(frame.get("deliveryAgeMs") if _NATIVE_CAPTURE_POLICY == DELIVERY else frame.get("freshnessMs"))
     except (TypeError, ValueError):
         frame_freshness_ms = float("inf")
     if (
@@ -2906,6 +3297,10 @@ def _native_observation_event(event: Dict[str, Any]) -> None:
             context = event.get("pipelineContext")
             context = dict(context) if isinstance(context, dict) else {}
             scene = str(perception.get("scene") or context.get("scene") or "UNKNOWN")
+            if (_NATIVE_CAPTURE_POLICY == DELIVERY and scene == 'IN_AUCTION'
+                    and (frame.get('deliveryProof') or {}).get('sourceMarkerProgress') is True
+                    and context.get('observationEvidenceOnly') is not True):
+                _NATIVE_DELIVERY_ANCHORED_MATCH = CURRENT_MATCH.id
             in_auction = bool(perception.get("inAuction") or context.get("inAuction") or scene == "IN_AUCTION")
             bids = perception.get("bids") if isinstance(perception.get("bids"), list) else []
             seats = [dict(row) for row in context.get("seats", []) if isinstance(row, dict)] if isinstance(context.get("seats"), list) else []
@@ -2933,6 +3328,13 @@ def _native_observation_event(event: Dict[str, Any]) -> None:
                 "nativeInvalidated": False,
                 "observationSessionId": session_id,
                 "observationWindowMode": _NATIVE_WINDOW_MODE,
+                "captureFreshnessPolicy": _NATIVE_CAPTURE_POLICY,
+                "deliveryProof": copy.deepcopy(frame.get('deliveryProof')),
+                "deliveryAgeMs": frame.get('deliveryAgeMs'),
+                "sourceAbsoluteAgeMs": None if _NATIVE_CAPTURE_POLICY == DELIVERY else frame.get('freshnessMs'),
+                "currentAdviceQualified": frame.get('currentAdviceQualified', True),
+                "currentAdviceQualification": copy.deepcopy(frame.get('currentAdviceQualification')),
+                "sourceMatchGeneration": (event.get('lastFrame') or {}).get('matchGeneration', CURRENT_MATCH._seq),
                 "sourceKind": "native_wgc",
                 "source": "native_wgc",
                 "dataOrigin": "live-trial",
@@ -3150,6 +3552,7 @@ def _native_observation_event(event: Dict[str, Any]) -> None:
         except Exception as exc:
             log_stage("PRESENTATION:NATIVE", f"frame broadcast failed: {exc}")
     _native_post_main_status("native_frame")
+    return data
 
 
 def _send_native_manual_control(
@@ -3168,7 +3571,7 @@ def _send_native_manual_control(
     current_worker_match = str(LATEST_PAYLOAD.get("matchId") or "").strip()
     scope = validated_observation_scope if isinstance(validated_observation_scope, dict) else LATEST_PAYLOAD
     try:
-        freshness = float(scope.get("freshnessMs"))
+        freshness = float(_native_use_age_ms(scope))
     except (TypeError, ValueError):
         freshness = float("inf")
     scope_target = _native_observation_target_instance(scope.get("target"))
@@ -3272,16 +3675,139 @@ def _send_native_manual_control(
 
 def _native_source_observation_notice(event: Dict[str, Any]) -> None:
     # Keep ordinary observation handling intact; the evidence owner observes its boundary afterwards.
-    _native_observation_event(event)
+    accepted = _native_observation_event(event)
     coordinator = _NATIVE_WAREHOUSE_SOURCE_COORDINATOR
     if coordinator is not None:
-        coordinator.check_business_boundary(event)
+        # Rejected old events cannot revoke a newer SOURCE. Actual invalidations still
+        # close via the current intake contract, even if FRAME validation returned early.
+        coordinator.check_business_boundary(event if accepted is not None else {})
+        if accepted is not None and event.get('status') == 'FRAME':
+            maybe_trigger_auto_warehouse_capture(accepted, coordinator, native_accepted=True)
+            _arm_native_postclose_trigger_watch(event, accepted, coordinator)
+
+
+def _arm_native_postclose_trigger_watch(event: Dict[str, Any], accepted: Dict[str, Any], coordinator: Any) -> None:
+    frame = event.get('frame') if isinstance(event.get('frame'), dict) else {}
+    if frame.get('settlementBusinessClosed') is not True:
+        return
+    if getattr(coordinator, '_running', False):
+        return
+    scope = _native_warehouse_intake_scope()
+    deadline_ns = frame.get('settlementDeadlineNs')
+    target = accepted.get('target')
+    map_values = tuple(frame.get(k) for k in ('captureItemWidth', 'captureItemHeight',
+                                               'clientOffsetX', 'clientOffsetY', 'width', 'height'))
+    try:
+        client_map = f'{int(map_values[0])}x{int(map_values[1])}:{int(map_values[2])},{int(map_values[3])}:{int(map_values[4])}x{int(map_values[5])}'
+    except (TypeError, ValueError):
+        client_map = ''
+    reasons = []
+    if not native_observation_enabled():
+        reasons.append('OBSERVATION_DISABLED')
+    if not _NATIVE_AUTO_WAREHOUSE_ENABLED:
+        reasons.append('AUTO_DISABLED')
+    if not _NATIVE_SOURCE_CAPTURE_CAPABILITY:
+        reasons.append('CAPABILITY_UNCONFIRMED')
+    if (scope.get('scene') != 'SETTLEMENT' or accepted.get('scene') != 'SETTLEMENT'):
+        reasons.append('TRIGGER_SCOPE_NOT_CURRENT')
+    if (accepted.get('observationSessionId') != _NATIVE_EXPECTED_SESSION
+            or accepted.get('observationSessionId') != _NATIVE_OBSERVATION_SESSION
+            or accepted.get('matchId') != CURRENT_MATCH.id
+            or _native_observation_target_instance(target) != scope.get('targetInstance')):
+        reasons.append('TRIGGER_SCOPE_NOT_CURRENT')
+    now_ns = time.perf_counter_ns()
+    if (type(deadline_ns) is not int or deadline_ns <= now_ns
+            or deadline_ns - now_ns > 70_000_000_000):
+        reasons.append('TRIGGER_DEADLINE_INVALID')
+    if not client_map:
+        reasons.append('TRIGGER_SCOPE_NOT_CURRENT')
+    if (_NATIVE_CAPTURE_POLICY == DELIVERY
+            and _NATIVE_DELIVERY_ANCHORED_MATCH != CURRENT_MATCH.id):
+        reasons.append('TRIGGER_SAME_MATCH_ANCHOR_MISSING')
+    key = str(scope.get('recordStableKey') or '')
+    if (not key or key in _AUTO_CAPTURE_ATTEMPTED_KEYS
+            or NATIVE_TRIAL_DRAFT_STORE.warehouse_capture_attempted(key)):
+        reasons.append('TRIGGER_WATCH_ALREADY_ATTEMPTED')
+    if reasons:
+        ctx = {'frameSequence': accepted.get('frameSequence'), 'deadlineNs': deadline_ns,
+               'captureFreshnessPolicy': _NATIVE_CAPTURE_POLICY}
+        _native_auto_trigger_notice(scope, ['TRIGGER_WATCH_NOT_ARMED', *dict.fromkeys(reasons)], ctx)
+        return
+    result = coordinator.arm_trigger_watch(scope, deadline_ns=deadline_ns, client_map=client_map)
+    if not result.get('ok'):
+        _native_auto_trigger_notice(scope, ['TRIGGER_WATCH_NOT_ARMED', result.get('reason') or 'TRIGGER_SCOPE_NOT_CURRENT'], {
+            'frameSequence': accepted.get('frameSequence'), 'deadlineNs': deadline_ns,
+            'captureFreshnessPolicy': _NATIVE_CAPTURE_POLICY})
+        return
+    log_stage('WAREHOUSE:NATIVE_AUTO', json.dumps({
+        'kind': 'automatic-trigger-watch-armed', 'scope': scope,
+        'watchId': result.get('watchId'), 'deadlineNs': deadline_ns,
+        'probeLimit': result.get('probeLimit'),
+        'minimumIntervalNs': result.get('minimumIntervalNs'),
+        'sourcePagesWritten': 0, 'sourceRequestAttempts': 0,
+    }, ensure_ascii=False))
 
 
 def _native_source_evidence_event(event: Dict[str, Any]) -> None:
     coordinator = _NATIVE_WAREHOUSE_SOURCE_COORDINATOR
-    if coordinator is not None:
-        coordinator.on_event(event)
+    if coordinator is None:
+        return
+    if isinstance(event, dict) and event.get('event') == 'TRIGGER_PROBE':
+        details = event.get('details') if isinstance(event.get('details'), dict) else {}
+        target = LATEST_PAYLOAD.get('target')
+        generation = event.get('matchGeneration')
+        ctx = {
+            'triggerProbe': True, 'watchId': event.get('watchId'), 'probeId': details.get('probeId'),
+            'probeOrdinal': details.get('probeOrdinal'), 'probeLimit': details.get('probeLimit'),
+            'remainingProbeAttempts': details.get('remainingProbeAttempts'),
+            'sourcePagesWritten': details.get('sourcePagesWritten'),
+            'sourceRequestAttempts': details.get('sourceRequestAttempts'),
+            'deadlineNs': event.get('deadlineNs'), 'scene': 'UNCLASSIFIED_CURRENT_PROBE',
+            'sourceKind': event.get('sourceKind'), 'observationSessionId': event.get('observationSessionId'),
+            'matchId': event.get('recordStableKey'), 'matchGeneration': generation,
+            'sourceMatchGeneration': generation, 'target': copy.deepcopy(target),
+            'frameSequence': details.get('frameSequence'),
+            'capturedAtNs': details.get('readbackTimestampNs'),
+            'readbackTimestampNs': details.get('readbackTimestampNs'),
+            'sourceTimestampNs': details.get('sourceTimestampNs'),
+            'captureFreshnessPolicy': event.get('capturePolicy'),
+            'deliveryProof': copy.deepcopy(details.get('deliveryProof')),
+        }
+        with _MANUAL_STATE_LOCK:
+            accepted = coordinator.accept_trigger_probe(event)
+            if not accepted.get('ok'):
+                reason = accepted.get('reason') or 'TRIGGER_PROBE_SCOPE_MISMATCH'
+                watch = getattr(coordinator, '_trigger_watch', None)
+                stale_duplicate = bool(watch and watch.get('pendingProbeId') is None
+                    and type(details.get('probeOrdinal')) is int
+                    and details['probeOrdinal'] <= watch.get('lastOrdinal', 0))
+                _native_auto_trigger_notice(_native_warehouse_source_scope(), [reason], ctx)
+                if watch is not None and not stale_duplicate:
+                    coordinator.cancel_trigger_watch(reason)
+                return
+            outcome = None
+            try:
+                outcome = _maybe_trigger_native_warehouse_capture(ctx, coordinator, trigger_probe_event=event)
+            except Exception as exc:
+                _native_auto_trigger_notice(_native_warehouse_source_scope(), ['EVIDENCE_EXCEPTION'], ctx)
+                outcome = {'ok': False, 'reason': 'EVIDENCE_EXCEPTION:' + type(exc).__name__}
+            finally:
+                if not getattr(coordinator, '_running', False):
+                    key = str(event.get('recordStableKey') or '')
+                    claimed = key in _AUTO_CAPTURE_ATTEMPTED_KEYS or NATIVE_TRIAL_DRAFT_STORE.warehouse_capture_attempted(key)
+                    if claimed:
+                        coordinator.cancel_trigger_watch('TRIGGER_WATCH_ALREADY_ATTEMPTED')
+                    elif getattr(coordinator, '_trigger_watch', None) is not None:
+                        status = _NATIVE_AUTO_TRIGGER_STATUS
+                        codes = (status.get('reasonCodes') if isinstance(status, dict)
+                                 and status.get('probeId') == ctx.get('probeId') else None)
+                        if outcome and outcome.get('reason') == 'TRIGGER_CURRENT_SCENE_NOT_SETTLEMENT':
+                            coordinator.cancel_trigger_watch('TRIGGER_CURRENT_SCENE_NOT_SETTLEMENT')
+                        else:
+                            coordinator.acknowledge_trigger_probe(event, result='REJECTED',
+                                reason_codes=codes or ([outcome.get('reason')] if outcome and outcome.get('reason') else ['TRIGGER_PROBE_NOT_ELIGIBLE']))
+        return
+    coordinator.on_event(event)
 
 
 def _native_source_send_control(command: Dict[str, Any]) -> bool:
@@ -3301,7 +3827,8 @@ def _native_warehouse_intake_scope() -> Dict[str, Any]:
         "recordStableKey": str(CURRENT_MATCH.id or ""),
         "observationSessionId": str(_NATIVE_OBSERVATION_SESSION or ""),
         "targetInstance": _native_observation_target_instance(LATEST_PAYLOAD.get("target")),
-        "matchGeneration": CURRENT_MATCH._seq,
+        "matchGeneration": LATEST_PAYLOAD.get('sourceMatchGeneration', CURRENT_MATCH._seq) if _NATIVE_CAPTURE_POLICY == DELIVERY else CURRENT_MATCH._seq,
+        **({'capturePolicy': DELIVERY} if _NATIVE_CAPTURE_POLICY == DELIVERY else {}),
         "scene": LATEST_PAYLOAD.get("scene")
             if ((LATEST_PAYLOAD.get("visionHealth") or {}).get("status") == "READY"
                 and _native_background_source_current(LATEST_PAYLOAD)) else "UNKNOWN",
@@ -3314,10 +3841,11 @@ def _native_warehouse_source_scope() -> Dict[str, Any]:
     # A frozen bill stops ordinary business FRAME publication. Its independent SOURCE lease
     # keeps the saved settlement scope, while every source/input is still checked live by Host.
     # This never refreshes ordinary vision health, source timestamps or business facts.
-    if (scope['scene'] == 'UNKNOWN' and LATEST_PAYLOAD.get('scene') == 'SETTLEMENT'
-        and (LATEST_PAYLOAD.get('visionHealth') or {}).get('status') == 'READY'
-        and coordinator is not None and coordinator.lease_scope_is_current(scope)):
-        scope['scene'] = 'SETTLEMENT'
+    if scope['scene'] == 'UNKNOWN' and LATEST_PAYLOAD.get('scene') == 'SETTLEMENT' and coordinator is not None:
+        active_source = bool(getattr(coordinator, 'lease_scope_is_current', lambda _scope: False)(scope))
+        active_watch = bool(getattr(coordinator, 'trigger_watch_scope_is_current', lambda _scope: False)(scope))
+        if active_source or active_watch:
+            scope['scene'] = 'SETTLEMENT'
     return scope
 
 
@@ -3831,10 +4359,7 @@ async def ws_handler(websocket):
                     log_stage("STARTUP:HUD", "HUD responsive: True")
                     log_stage("STARTUP:HUD", f"startup duration: {(time.perf_counter() - PROCESS_START_TIME) * 1000:.2f}ms")
                     if native_observation_enabled():
-                        _native_publish_health({
-                            "status": "STOPPED",
-                            "reason": "explicit-start-required",
-                        }, force_main=True)
+                        _native_report_ui_ready()
                     else:
                         start_vision_worker()
                 elif msg_type == "force_refresh":
@@ -3848,6 +4373,12 @@ async def ws_handler(websocket):
                     start_vision_worker(
                         resume_same_match=bool(data.get("resumeSameMatch"))
                     )
+                elif msg_type == "stop_live_vision":
+                    await asyncio.to_thread(stop_vision_worker)
+                    with _NATIVE_OBSERVATION_LOCK:
+                        exit_confirmed = NATIVE_OBSERVATION_BRIDGE is None
+                    await websocket.send(json.dumps({"type": "native_stop_receipt",
+                        "processExitConfirmed": exit_confirmed}))
                 elif msg_type == "drag_delta":
                     dx = int(data.get("dx", 0))
                     dy = int(data.get("dy", 0))
@@ -3975,6 +4506,10 @@ def start_ws_loop():
         log_stage("STARTUP:WS", f"WebSocket bus starting on ws://127.0.0.1:{WS_PORT}...")
         async with websockets.serve(ws_handler, "127.0.0.1", WS_PORT, max_size=16 * 1024 * 1024):
             log_stage("STARTUP:WS", f"WebSocket bus ready on ws://127.0.0.1:{WS_PORT}")
+            log_stage("STARTUP:PROCESS_IDENTITY", json.dumps({
+                "kind": "main-bus-ready", "mainPid": os.getpid(), "mainParentPid": os.getppid(),
+                "pythonExecutable": sys.executable, "controlledBus": f"ws://127.0.0.1:{WS_PORT}",
+            }, ensure_ascii=False))
             await WS_STOP_EVENT.wait()
     try:
         asyncio.run(_runner())
@@ -4148,7 +4683,7 @@ def _next_match_preparation_current_scope(scope: Optional[Dict[str, Any]] = None
         return None
     candidate = scope if isinstance(scope, dict) else LATEST_PAYLOAD
     try:
-        freshness_ms = float(candidate.get("freshnessMs"))
+        freshness_ms = float(_native_use_age_ms(candidate))
     except (TypeError, ValueError):
         return None
     match_id = str(candidate.get("matchId") or "").strip()
@@ -4186,7 +4721,10 @@ def _next_match_preparation_current_scope(scope: Optional[Dict[str, Any]] = None
         "target": copy.deepcopy(candidate.get("target")),
         "targetInstance": copy.deepcopy(target),
         "frameSequence": candidate.get("frameSequence"),
-        "freshnessMs": freshness_ms,
+        "freshnessMs": freshness_ms if candidate.get('captureFreshnessPolicy') != DELIVERY else None,
+        "captureFreshnessPolicy": candidate.get('captureFreshnessPolicy', STRICT),
+        "deliveryProof": copy.deepcopy(candidate.get('deliveryProof')),
+        "deliveryAgeMs": freshness_ms if candidate.get('captureFreshnessPolicy') == DELIVERY else None,
         "observationStatus": candidate.get("observationStatus"),
         "nativeInvalidated": candidate.get("nativeInvalidated"),
     }
@@ -4910,7 +5448,7 @@ def apply_manual_facts(facts: Optional[Dict[str, Any]]) -> Dict[str, Any]:
             revision_matches = type(expected_revision) is int and expected_revision == current_worker_revision
             round_matches = type(expected_round) is int and expected_round == LATEST_PAYLOAD.get("round")
             try:
-                observation_age = float(LATEST_PAYLOAD.get("freshnessMs"))
+                observation_age = float(_native_use_age_ms(LATEST_PAYLOAD))
             except (TypeError, ValueError):
                 observation_age = float("inf")
             if (
@@ -7229,10 +7767,7 @@ class HudJsApi:
         log_stage("STARTUP:HUD", "HUD responsive: True")
         log_stage("STARTUP:HUD", f"startup duration: {(time.perf_counter() - PROCESS_START_TIME) * 1000:.2f}ms")
         if native_observation_enabled():
-            _native_publish_health({
-                "status": "STOPPED",
-                "reason": "explicit-start-required",
-            }, force_main=True)
+            _native_report_ui_ready()
         else:
             start_vision_worker()
         return {"status": "ok"}
@@ -7455,6 +7990,7 @@ def _start_native_observation_locked(*, resume_same_match: bool = False):
     global NATIVE_OBSERVATION_BRIDGE
     global _NATIVE_WINDOW_MODE, _NATIVE_WINDOW_MODE_CONFIRMED, _NATIVE_WINDOW_TARGET_INSTANCE
     global _NATIVE_EXPECTED_SESSION, _NATIVE_OBSERVATION_SOURCE_NS
+    global _NATIVE_AUTO_WAREHOUSE_ENABLED, _NATIVE_SOURCE_CAPTURE_CAPABILITY, _NATIVE_CAPTURE_POLICY, _NATIVE_DELIVERY_ANCHORED_MATCH, _NATIVE_AUTO_TRIGGER_STATUS
     if os.environ.get("NTE_DISABLE_VISION") == "1":
         PRESENTATION_RUNTIME.set_vision_process_state("disabled")
         log_stage("STARTUP:NATIVE", "Native observation disabled via NTE_DISABLE_VISION=1")
@@ -7486,6 +8022,11 @@ def _start_native_observation_locked(*, resume_same_match: bool = False):
                 if NATIVE_OBSERVATION_BRIDGE is bridge else None,
         )
         NATIVE_OBSERVATION_BRIDGE = bridge
+        _NATIVE_AUTO_WAREHOUSE_ENABLED = CONFIG.get("app", {}).get("nativeAutoWarehouseCapture") is True
+        _NATIVE_SOURCE_CAPTURE_CAPABILITY = False
+        _NATIVE_CAPTURE_POLICY = native_capture_policy()
+        _NATIVE_DELIVERY_ANCHORED_MATCH = None
+        _NATIVE_AUTO_TRIGGER_STATUS = {}
         _NATIVE_WINDOW_MODE = native_observation_window_mode()
         _NATIVE_WINDOW_MODE_CONFIRMED = False
         _NATIVE_WINDOW_TARGET_INSTANCE = None
@@ -7496,7 +8037,7 @@ def _start_native_observation_locked(*, resume_same_match: bool = False):
             "reason": "explicit-start",
             "details": {"inputActions": False, "formalHistoryWriter": False},
         }, force_main=True)
-        child = bridge.start(resume_state=resume_state, observation_window_mode=_NATIVE_WINDOW_MODE)
+        child = bridge.start(resume_state=resume_state, observation_window_mode=_NATIVE_WINDOW_MODE, capture_freshness_policy=_NATIVE_CAPTURE_POLICY)
         if child is None:
             PRESENTATION_RUNTIME.set_vision_process_state("stopped")
             _native_publish_health({
@@ -7604,7 +8145,7 @@ def _stop_vision_worker_locked():
     global VISION_PROCESS, NATIVE_OBSERVATION_BRIDGE
     worker, VISION_PROCESS = VISION_PROCESS, None
     with _NATIVE_OBSERVATION_LOCK:
-        native, NATIVE_OBSERVATION_BRIDGE = NATIVE_OBSERVATION_BRIDGE, None
+        native = NATIVE_OBSERVATION_BRIDGE
     PRESENTATION_RUNTIME.set_vision_process_state(
         "disabled" if os.environ.get("NTE_DISABLE_VISION") == "1" else "stopped"
     )
@@ -7612,7 +8153,18 @@ def _stop_vision_worker_locked():
         log_stage("SHUTDOWN:NATIVE", "Stopping native observation host...")
         try:
             native.stop()
-            log_stage("SHUTDOWN:NATIVE", "Native observation host stopped cleanly")
+            confirmed = not native.running
+            with _NATIVE_OBSERVATION_LOCK:
+                if confirmed and NATIVE_OBSERVATION_BRIDGE is native:
+                    NATIVE_OBSERVATION_BRIDGE = None
+            if confirmed:
+                log_stage("SHUTDOWN:NATIVE", "Native observation host exit confirmed")
+            else:
+                previous = LATEST_PAYLOAD.get("visionHealth") or {}
+                _native_publish_health({"status": "ERROR",
+                    "reason": previous.get("reason") if previous.get("observationStopped") else "native-host-exit-unconfirmed",
+                    "details": {"processExitConfirmed": False, "error": previous.get("error")}}, force_main=True)
+                log_stage("SHUTDOWN:NATIVE", "Native observation stopped; Host exit remains unconfirmed; ownership retained")
         except Exception as exc:
             log_stage("SHUTDOWN:NATIVE", f"Native observation stop failed: {exc}")
     if worker is None:
@@ -7976,7 +8528,8 @@ def run_hud_app():
                 native_intake, send_control=_native_source_send_control,
                 source_root_provider=_native_source_root)
             _NATIVE_WAREHOUSE_SOURCE_COORDINATOR = NativeWarehouseAutoCapture(native_source,
-                diagnostic_log=lambda message: log_stage('WAREHOUSE:NATIVE_AUTO', message))
+                diagnostic_log=lambda message: log_stage('WAREHOUSE:NATIVE_AUTO', message),
+                claim_attempt=_native_claim_warehouse_attempt)
             WAREHOUSE_CAPTURE_HOST = WarehouseCaptureRouter(
                 WAREHOUSE_CAPTURE_HOST, _NATIVE_WAREHOUSE_SOURCE_COORDINATOR, native_observation_enabled)
             set_warehouse_capture_host(WAREHOUSE_CAPTURE_HOST)
@@ -8004,6 +8557,8 @@ def run_hud_app():
                 resume_same_match=bool(resume_same_match)
             ) is not None,
             observation_window_mode_provider=handle_observation_window_mode,
+            capture_freshness_policy_provider=handle_capture_freshness_policy,
+            native_auto_warehouse_provider=handle_native_auto_warehouse_capture,
             manual_next_match_provider=lambda req: publish_manual_payload(begin_next_manual_match(req)),
             manual_finalize_provider=lambda req: publish_manual_payload(finalize_manual_match(req)),
             manual_bootstrap_provider=lambda: publish_manual_payload(build_manual_alpha_payload()),
@@ -8045,6 +8600,10 @@ def run_hud_app():
 
 
 def main():
+    log_stage("STARTUP:ENTRY", json.dumps({"entryUtc": ENTRY_START_UTC,
+        "entryPerfCounterNs": ENTRY_START_NS,
+        "importsAndConfigurationMs": (PROCESS_START_TIME - ENTRY_START_TIME) * 1000,
+        "pid": os.getpid()}, ensure_ascii=False))
     profile = "isolated-trial-v1" if is_isolated_trial() else "standard"
     data_root = str(resolve_runtime_data_root())
     log_stage("STARTUP:PROFILE", f"Runtime profile={profile} DATA_ROOT={data_root}")

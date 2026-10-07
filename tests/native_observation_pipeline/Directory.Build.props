@@ -1,0 +1,7 @@
+<Project>
+  <PropertyGroup>
+    <BaseIntermediateOutputPath>$(MSBuildThisFileDirectory)..\..\build\native-observation-pipeline-contracts\obj\</BaseIntermediateOutputPath>
+    <OutputPath>$(MSBuildThisFileDirectory)..\..\build\native-observation-pipeline-contracts\out\</OutputPath>
+    <AppendTargetFrameworkToOutputPath>false</AppendTargetFrameworkToOutputPath>
+  </PropertyGroup>
+</Project>

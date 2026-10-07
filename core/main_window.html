@@ -168,6 +168,10 @@
               <span id="vision-health-status" role="status" hidden></span>
               <label id="observation-window-mode-control" class="btn-wb-action" hidden><input id="observation-background-readonly" type="checkbox" onchange="requestObservationWindowMode(this.checked ? 'background-readonly' : 'foreground')"> 后台只读识别</label>
               <span id="observation-window-mode-status" role="status" hidden></span>
+              <label id="capture-delivery-control" class="btn-wb-action" hidden title="不能证明请求后渲染或来源绝对年龄；仍可能有上游迟交或重放"><input id="capture-delivery-enabled" type="checkbox" onchange="requestCaptureFreshnessPolicy(this.checked ? 'wgc-delivery-v1' : 'wgc-origin-strict-v1')"> 交付时序自动观察</label>
+              <span id="capture-delivery-status" role="status" hidden></span>
+              <label id="native-auto-warehouse-control" class="btn-wb-action" hidden><input id="native-auto-warehouse-enabled" type="checkbox" onchange="requestNativeAutoWarehouse(this.checked)"> 结算自动收页</label>
+              <span id="native-auto-warehouse-status" role="status" hidden></span>
               <button class="btn-wb-action" id="restore-vision-btn" type="button" hidden onclick="postNative('start_live_vision', {resumeSameMatch: this.dataset.resumeSameMatch === 'true'})">恢复识别</button>
               <button class="btn-wb-action" id="start-new-vision-btn" type="button" hidden onclick="postNative('start_live_vision', {resumeSameMatch: false})">开始新局观察</button>
             </div>

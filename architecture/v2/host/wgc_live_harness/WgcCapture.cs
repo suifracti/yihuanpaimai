@@ -14,15 +14,6 @@ using WinRT;
 
 namespace WgcLiveHarness;
 
-internal sealed record CapturedBgraFrame(
-    int Width,
-    int Height,
-    int Stride,
-    byte[] Pixels,
-    long CaptureTimestampNs,
-    string CapturedAtUtc,
-    long SourceTimestampNs);
-
 /// <summary>
 /// Minimal WGC -> D3D11 readback for the Native observation profile. It
 /// deliberately owns no input path and never resizes pixels. WGC may expose a
@@ -48,6 +39,105 @@ internal sealed class WgcWindowCapture : IDisposable
     private readonly ClientAreaMapping _clientArea;
     private readonly WarehouseBoundsSource _warehouseBoundsSource;
     private bool _disposed;
+    private long _completedReadbacks;
+    private long _deliverySequence, _deliveryMarker;
+
+    public CapturedBgraFrame CaptureDelivered(int timeoutMs, long requestNs, long absoluteDeadlineNs,
+        Func<bool> stopped, string observationSessionId, long poolEpoch)
+    {
+        ObjectDisposedException.ThrowIf(_disposed, this);
+        var deadline = RequestFrameSelector.DeadlineForRequest(timeoutMs, requestNs, absoluteDeadlineNs);
+        var operations = new Queue<object>();
+        var boundaryOperations = new List<DeliveryBoundaryOperation>();
+        var releaseOperations = new List<object>(4);
+        var drainedSources = new List<object>(2);
+        Direct3D11CaptureFrame? selected = null;
+        Exception? firstFailure = null;
+        void ReleaseFrame(Direct3D11CaptureFrame frame)
+        {
+            var before = QpcClockSample.Read(); string? error = null;
+            try { frame.Dispose(); }
+            catch (Exception ex) { error = ex.GetType().Name; throw; }
+            finally { releaseOperations.Add(new { before, after = QpcClockSample.Read(), error }); }
+        }
+        var diagnostic = new System.Text.Json.Nodes.JsonObject {
+            ["schemaVersion"] = "delivery-clock-diagnostic.v1", ["requestNs"] = requestNs, ["deadlineNs"] = deadline,
+            ["callerRequestClock"] = System.Text.Json.JsonSerializer.SerializeToNode(RequestGateClockSample),
+            ["ownerEntryClock"] = System.Text.Json.JsonSerializer.SerializeToNode(QpcClockSample.Read()) };
+        Direct3D11CaptureFrame? TakeNext()
+        {
+            var before = QpcClockSample.Read(); var taken = _framePool.TryGetNextFrame(); var after = QpcClockSample.Read();
+            while (operations.Count >= 12) operations.Dequeue();
+            operations.Enqueue(new { stage = "pool-dequeue", before, after, frameAvailable = taken is not null });
+            return taken;
+        }
+        try
+        {
+        var frame = DeliveredFrameSelector.Select(TakeNext, ReleaseFrame,
+            f => {
+                var before = QpcClockSample.Read(); var raw = f.SystemRelativeTime.Ticks; var after = QpcClockSample.Read();
+                drainedSources.Add(new { ordinal = drainedSources.Count + 1, before, after, sourceTicks = raw });
+                _deliveryMarker = Math.Max(_deliveryMarker, checked(raw * 100));
+            },
+            ms => _frameArrived.WaitOne(ms), ProtocolClock.NowNs, stopped, requestNs, deadline,
+            out var barrier, out var dequeueBefore, out var dequeueAfter,
+            out var releaseCompleted, out var drainTakes, out var boundaryHeldCount, boundaryOperations.Add);
+        selected = frame;
+        var getterBefore = QpcClockSample.Read();
+        var sourceTicks = frame.SystemRelativeTime.Ticks;
+        var comparison = QpcClockSample.Read(); // Frozen before the repeat/readback; never replaced.
+        diagnostic["getterBefore"] = System.Text.Json.JsonSerializer.SerializeToNode(getterBefore);
+        diagnostic["originalComparison"] = System.Text.Json.JsonSerializer.SerializeToNode(comparison);
+        diagnostic["sourceTicks"] = sourceTicks; diagnostic["requestNs"] = requestNs;
+        diagnostic["emptyBoundaryNs"] = barrier; diagnostic["releaseCompletedNs"] = releaseCompleted;
+        diagnostic["dequeueBeforeNs"] = dequeueBefore; diagnostic["dequeueAfterNs"] = dequeueAfter;
+        var repeat = frame.SystemRelativeTime.Ticks;
+        var readbackBefore = ProtocolClock.NowNs();
+        if (stopped()) throw new OperationCanceledException("delivery-stopped-before-readback");
+        var result = ReadBack(frame);
+        var repeatAfter = frame.SystemRelativeTime.Ticks;
+        var proof = new CaptureDeliveryProof(observationSessionId, poolEpoch, ++_deliverySequence,
+            requestNs, deadline, barrier, dequeueBefore, dequeueAfter, getterBefore, comparison,
+            sourceTicks, repeat, _deliveryMarker,
+            readbackBefore, result.CaptureTimestampNs) { ReadbackSourceTicks = repeatAfter,
+                ReleaseCompletedNs = releaseCompleted, DrainTakeCount = drainTakes, BoundaryHeldCount = boundaryHeldCount };
+        diagnostic["deliveryProof"] = proof.ToJson();
+        diagnostic["repeatAfterTicks"] = repeatAfter;
+        if (stopped()) throw new OperationCanceledException("delivery-stopped-after-readback");
+        var checkedAt = ProtocolClock.NowNs();
+        if (checkedAt >= deadline) throw new TimeoutException("DELIVERY_DEADLINE_AFTER_READBACK");
+        var rejection = proof.Rejection(checkedAt);
+        if (result.SourceTimestampNs != proof.SourceNs || rejection is not null)
+            throw new InvalidOperationException(rejection ?? "CHANGED_ON_SAME_FRAME");
+        _deliveryMarker = Math.Max(_deliveryMarker, proof.SourceNs);
+        diagnostic["result"] = "DELIVERY_QUALIFIED";
+        diagnostic["boundaryOperations"] = System.Text.Json.JsonSerializer.SerializeToNode(boundaryOperations);
+        diagnostic["drainedSources"] = System.Text.Json.JsonSerializer.SerializeToNode(drainedSources);
+        diagnostic["operations"] = System.Text.Json.JsonSerializer.SerializeToNode(operations);
+        return result with { AcquisitionSequence = proof.AcquisitionSequence, DeliveryProof = proof,
+            DeliveryDiagnosticJson = diagnostic.ToJsonString() };
+        }
+        catch (Exception ex) { firstFailure = ex; diagnostic["failure"] = ex.ToString(); throw; }
+        finally
+        {
+            Exception? cleanup = null;
+            if (selected is not null)
+            {
+                try { ReleaseFrame(selected); }
+                catch (Exception ex) { cleanup = ex; diagnostic["selectedReleaseFailure"] = ex.ToString(); }
+            }
+            diagnostic["frameReleases"] = System.Text.Json.JsonSerializer.SerializeToNode(releaseOperations);
+            diagnostic["drainedSources"] = System.Text.Json.JsonSerializer.SerializeToNode(drainedSources);
+            diagnostic["boundaryOperations"] = System.Text.Json.JsonSerializer.SerializeToNode(boundaryOperations);
+            diagnostic["operations"] = System.Text.Json.JsonSerializer.SerializeToNode(operations);
+            LastDeliveryDiagnosticJson = diagnostic.ToJsonString();
+            if (cleanup is not null && firstFailure is null)
+                throw new InvalidOperationException("DELIVERY_SELECTED_RELEASE_FAILED", cleanup);
+        }
+    }
+
+    public long CompletedReadbacks => Interlocked.Read(ref _completedReadbacks);
+    internal QpcClockSample? RequestGateClockSample { get; set; }
 
     public int Width { get; }
     public int Height { get; }
@@ -58,6 +148,7 @@ internal sealed class WgcWindowCapture : IDisposable
     public int LastRequestDiscardedQueuedFrames { get; private set; }
     public bool EnableRequestClockDiagnostics { get; set; }
     public string? LastRequestClockDiagnosticsJson { get; private set; }
+    public string? LastDeliveryDiagnosticJson { get; private set; }
 
     public WgcWindowCapture(IntPtr hwnd)
     {
@@ -112,23 +203,14 @@ internal sealed class WgcWindowCapture : IDisposable
 
     public CapturedBgraFrame Capture(int timeoutMs)
     {
-        ObjectDisposedException.ThrowIf(_disposed, this);
-        if (!_frameArrived.WaitOne(timeoutMs))
-        {
-            throw new TimeoutException($"WGC frame did not arrive within {timeoutMs}ms");
-        }
-
-        using var frame = _framePool.TryGetNextFrame();
-        if (frame is null)
-        {
-            throw new InvalidOperationException("WGC signalled FrameArrived but TryGetNextFrame returned null");
-        }
-
-        return ReadBack(frame);
+        // Perception can hold the Host for seconds while WGC queues frames.
+        // Start one bounded fresh selection after that work, rather than read
+        // the oldest queued frame. Readback/publication freshness gates remain.
+        return CaptureAfterRequest(timeoutMs, ProtocolClock.NowNs(), long.MaxValue, static () => false);
     }
 
-    // Explicit requests retain the caller's QPC gate and original deadline.
-    // Ordinary continuous Capture/FRAME keeps its existing selection policy.
+    // Explicit SOURCE requests retain the caller's QPC gate and original deadline.
+    // Continuous FRAME starts its own fixed gate through Capture above.
     public CapturedBgraFrame CaptureAfterRequest(int timeoutMs, long requestNs,
         long absoluteWorkDeadlineNs, Func<bool> stopped)
     {
@@ -138,7 +220,7 @@ internal sealed class WgcWindowCapture : IDisposable
         var discarded = 0;
         LastRequestDiscardedQueuedFrames = 0;
         LastRequestClockDiagnosticsJson = null;
-        var diagnostics = EnableRequestClockDiagnostics ? new RequestClockDiagnostics(requestNs, deadlineNs) : null;
+        var diagnostics = EnableRequestClockDiagnostics ? new RequestClockDiagnostics(requestNs, deadlineNs, RequestGateClockSample) : null;
         void CheckAvailable()
         {
             if (stopped()) throw new OperationCanceledException("Explicit frame request stopped.");
@@ -148,10 +230,25 @@ internal sealed class WgcWindowCapture : IDisposable
         }
         try
         {
+            Direct3D11CaptureFrame? TakeNext()
+            {
+                if (diagnostics is null) return _framePool.TryGetNextFrame();
+                var before = QpcClockSample.Read();
+                var candidate = _framePool.TryGetNextFrame();
+                diagnostics.Operation("pool-dequeue", before, QpcClockSample.Read(), new { frameAvailable = candidate is not null });
+                return candidate;
+            }
+            long SourceTimestamp(Direct3D11CaptureFrame candidate)
+            {
+                if (diagnostics is null) return checked(candidate.SystemRelativeTime.Ticks * 100L);
+                var before = QpcClockSample.Read();
+                var ticks = candidate.SystemRelativeTime.Ticks;
+                var after = QpcClockSample.Read();
+                diagnostics.Operation("source-property-read", before, after, new { systemRelativeTicks = ticks });
+                return diagnostics.Source(ticks);
+            }
             using var frame = RequestFrameSelector.Select(
-                () => _framePool.TryGetNextFrame(),
-                candidate => diagnostics is null ? checked(candidate.SystemRelativeTime.Ticks * 100L)
-                    : diagnostics.Source(candidate.SystemRelativeTime.Ticks),
+                TakeNext, SourceTimestamp,
                 candidate => candidate.Dispose(),
                 remainingMs => _frameArrived.WaitOne(remainingMs),
                 diagnostics is null ? ProtocolClock.NowNs : diagnostics.SelectionClock,
@@ -238,6 +335,7 @@ internal sealed class WgcWindowCapture : IDisposable
                     stride);
             }
 
+            Interlocked.Increment(ref _completedReadbacks);
             if (diagnostics is not null)
             {
                 var sample = QpcClockSample.Read();

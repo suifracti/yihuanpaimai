@@ -1,0 +1,15 @@
+{
+  "sourceFrame": "build/native-observation/trial-drafts/evidence/settlement_v2/blobs/73/734e34d72d2d6fb03fae3f75bb20eba9fcd56773021f38e8f3a768ff9c4917ad.png",
+  "sourceSha256": "734e34d72d2d6fb03fae3f75bb20eba9fcd56773021f38e8f3a768ff9c4917ad",
+  "roi1920x1080": [
+    1440,
+    984,
+    1558,
+    1011
+  ],
+  "assetSha256": "188dd345008cc912b4fcd6ca3ba697eb047c9db5c1988295e6f76f70768190e4",
+  "independentPositiveFrame": "build/native-observation/trial-drafts/evidence/settlement_v2/blobs/f1/f1a289c3f2349db4aa4d263ec82b5a3278c6f5580d92ba3d22faf6016b4637fd.png",
+  "independentPositiveSha256": "f1a289c3f2349db4aa4d263ec82b5a3278c6f5580d92ba3d22faf6016b4637fd",
+  "independentCropSha256": "188dd345008cc912b4fcd6ca3ba697eb047c9db5c1988295e6f76f70768190e4",
+  "meaning": "Retained read-only skip-animation text crop; not an item label, input target or stability grant. Full originals remain local evidence."
+}

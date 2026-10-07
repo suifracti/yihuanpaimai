@@ -20,6 +20,8 @@ from typing import Any, Callable, Optional
 from native_diagnostic_log import NativeDiagnosticLog
 
 
+from native_capture_delivery import STRICT, POLICIES
+
 OBSERVATION_WINDOW_MODES = frozenset({"foreground", "background-readonly"})
 
 
@@ -41,6 +43,7 @@ class NativeObservationBridge:
         self._stderr_reader: Optional[threading.Thread] = None
         self.session_dir: Optional[Path] = None
         self.observation_window_mode = "foreground"
+        self.capture_freshness_policy = STRICT
         self.last_status = "STOPPED"
 
     @property
@@ -49,12 +52,14 @@ class NativeObservationBridge:
             return self.process is not None and self.process.poll() is None
 
     def start(self, *, resume_state: Optional[dict[str, Any]] = None,
-              observation_window_mode: str = "foreground") -> Optional[subprocess.Popen[str]]:
+              observation_window_mode: str = "foreground", capture_freshness_policy: str = STRICT) -> Optional[subprocess.Popen[str]]:
         if not isinstance(observation_window_mode, str) or observation_window_mode not in OBSERVATION_WINDOW_MODES:
             raise ValueError("Unknown observation window mode")
+        if capture_freshness_policy not in POLICIES:
+            raise ValueError("Unknown capture freshness policy")
         with self._lock:
             if self.process is not None and self.process.poll() is None:
-                if observation_window_mode != self.observation_window_mode:
+                if observation_window_mode != self.observation_window_mode or capture_freshness_policy != self.capture_freshness_policy:
                     raise RuntimeError("Stop the observation session before changing its window mode")
                 return self.process
 
@@ -68,6 +73,7 @@ class NativeObservationBridge:
             session_dir.mkdir(parents=True, exist_ok=True)
             self.session_dir = session_dir
             self.observation_window_mode = observation_window_mode
+            self.capture_freshness_policy = capture_freshness_policy
             if resume_state is not None:
                 (session_dir / "resume-state.json").write_text(
                     json.dumps(resume_state, ensure_ascii=False), encoding="utf-8"
@@ -89,7 +95,7 @@ class NativeObservationBridge:
                     "--spec-class",
                     "UnrealWindow",
                     "--observation-window-mode",
-                    observation_window_mode,
+                    observation_window_mode, "--capture-freshness-policy", capture_freshness_policy,
                 ]
             )
             diagnostics = (NativeDiagnosticLog(session_dir)
@@ -117,6 +123,13 @@ class NativeObservationBridge:
                 return None
 
             self.process = child
+            self.log("STARTUP:NATIVE_IDENTITY", json.dumps({
+                "kind": "host-spawned", "mainPid": os.getpid(), "mainParentPid": os.getppid(),
+                "hostSpawnPid": child.pid, "parentPidAtSpawn": os.getpid(),
+                "hostExecutable": command[0], "sessionDirectory": str(session_dir),
+                "captureFreshnessPolicy": capture_freshness_policy,
+                "observationWindowMode": observation_window_mode,
+            }, ensure_ascii=False))
             self.last_status = "STARTING"
             self._reader = threading.Thread(
                 target=self._read_stdout,
@@ -152,12 +165,18 @@ class NativeObservationBridge:
             except Exception:
                 try:
                     child.kill()
+                    child.wait(timeout=1.0)
                 except Exception:
                     pass
         with self._lock:
             if self.process is child:
-                self.process = None
-                self.last_status = "STOPPED"
+                if child.poll() is not None:
+                    self.process = None
+                    self.last_status = "STOPPED"
+                else:
+                    # Keep ownership: a failed exit must not permit a second Host.
+                    self.last_status = "ERROR"
+                    self.log("OBSERVATION:NATIVE", "Host stop requested, exit remains unconfirmed")
 
     def send_control(self, message: dict[str, Any]) -> bool:
         """Send one JSON control envelope to the single native Host.
@@ -183,6 +202,8 @@ class NativeObservationBridge:
                 return False
 
     def _read_stdout(self, child: subprocess.Popen[str], diagnostics=None) -> None:
+        last_event = None
+        first_terminal = None
         try:
             if child.stdout is None:
                 return
@@ -211,7 +232,21 @@ class NativeObservationBridge:
                     continue
                 if not isinstance(event, dict) or event.get("type") != "native_observation":
                     continue
+                with self._lock:
+                    if self.process is not child:
+                        continue
+                last_event = event
                 status = str(event.get("status") or "").upper()
+                if status in {"PAUSED", "ERROR", "STOPPED"}:
+                    if first_terminal is None:
+                        first_terminal = event
+                    else:
+                        event = {**event, "status": first_terminal["status"],
+                                 "reason": first_terminal.get("reason"),
+                                 "details": {**(event.get("details") or {}),
+                                             **(first_terminal.get("details") or {}),
+                                             "laterTerminalReason": event.get("reason")}}
+                    last_event = event
                 if status != "FRAME":
                     self._record_status_event(event, diagnostics=diagnostics)
                     if diagnostics is None:
@@ -232,28 +267,37 @@ class NativeObservationBridge:
                     else:
                         self.log("STARTUP:NATIVE", f"native event callback failed: {type(exc).__name__}: {exc}")
         finally:
-            if diagnostics is not None:
-                diagnostics.close()
             code = child.poll()
             with self._lock:
-                if self.process is child:
+                current = self.process is child
+                if current and code is not None:
                     self.process = None
-            if code not in (None, 0) and self.last_status not in {"PAUSED", "STOPPED"}:
-                self.last_status = "ERROR"
+            if current:
+                terminal = first_terminal or last_event or {}
+                reported_terminal = terminal.get("status") in {"PAUSED", "ERROR", "STOPPED"}
+                stopped = {
+                    "type": "native_observation", "schemaVersion": "native-observation-v1",
+                    "status": terminal["status"] if reported_terminal else "ERROR",
+                    "sourceKind": "native_wgc",
+                    "observationSessionId": terminal.get("observationSessionId"),
+                    "reason": terminal.get("reason") if reported_terminal else (
+                        f"host-exited:{code}" if code is not None else "host-output-closed"),
+                    "details": {**(terminal.get("details") or {}), "outputClosed": True,
+                                "processExitConfirmed": code is not None, "hostExitCode": code},
+                    "inputActions": False, "formalHistoryWriter": False,
+                }
+                self.last_status = stopped["status"]
                 try:
-                    self.on_event(
-                        {
-                            "type": "native_observation",
-                            "schemaVersion": "native-observation-v1",
-                            "status": "ERROR",
-                            "sourceKind": "native_wgc",
-                            "reason": f"host-exited:{code}",
-                            "inputActions": False,
-                            "formalHistoryWriter": False,
-                        }
-                    )
-                except Exception:
-                    pass
+                    self._record_status_event(stopped, diagnostics=diagnostics)
+                    self.on_event(stopped)
+                except Exception as exc:
+                    self.log("OBSERVATION:NATIVE", f"Host EOF status callback failed: {type(exc).__name__}")
+                if code is None:
+                    # EOF already means observation stopped; use the existing
+                    # bounded shutdown, never relaunch or discard a live child.
+                    self.stop(timeout=1.0)
+            if diagnostics is not None:
+                diagnostics.close()
 
     def _record_frame_event(self, event: dict[str, Any], *, diagnostics=None) -> None:
         if self.session_dir is None:

@@ -328,7 +328,8 @@ class MainWindowBridge:
             "manual_finalize",
             "manual_bootstrap",
             "start_live_vision",
-            "set_observation_window_mode",
+            "set_observation_window_mode", "set_capture_freshness_policy",
+            "set_native_auto_warehouse_capture",
             "triggered_snapshot",
             "save_settlement_screenshot",
             "save_game_screenshot",
@@ -405,6 +406,8 @@ class MainWindowBridge:
         warehouse_slot_evidence_provider=None,
         warehouse_instance_decision_provider=None,
         observation_window_mode_provider=None,
+        capture_freshness_policy_provider=None,
+        native_auto_warehouse_provider=None,
     ):
         self._overlay_controller = overlay_controller
         self._presentation_runtime_provider = presentation_runtime_provider
@@ -424,6 +427,8 @@ class MainWindowBridge:
         self._manual_bootstrap_provider = manual_bootstrap_provider
         self._start_vision_provider = start_vision_provider
         self._observation_window_mode_provider = observation_window_mode_provider
+        self._capture_freshness_policy_provider = capture_freshness_policy_provider
+        self._native_auto_warehouse_provider = native_auto_warehouse_provider
         self._triggered_snapshot_provider = triggered_snapshot_provider
         self._save_settlement_screenshot_provider = save_settlement_screenshot_provider
         self._save_game_screenshot_provider = save_game_screenshot_provider
@@ -463,7 +468,9 @@ class MainWindowBridge:
         return self._user_pinned
 
     def set_capture_safety_override(self, override: bool) -> bool:
-        override = bool(override)
+        # Native paging never enters the legacy topmost/focus preparation path,
+        # including automatic dashboard refreshes while its state is CAPTURING.
+        override = bool(override) and not getattr(self._warehouse_capture_host, 'window_message_only', False)
         try:
             import main as app_main
             app_main._CAPTURE_SAFETY_OVERRIDE_FLAG = override
@@ -1027,6 +1034,18 @@ class MainWindowBridge:
             else:
                 response["manualBootstrapResult"] = {"ok": False, "error": "NO_MANUAL_BOOTSTRAP_PROVIDER"}
 
+        if action == "set_native_auto_warehouse_capture":
+            provider = self._native_auto_warehouse_provider
+            try:
+                response["nativeAutoWarehouseResult"] = (provider(payload.get("enabled")) if provider else
+                    {"ok": False, "reason": "自动收页服务未就绪"})
+            except Exception as exc:
+                response["nativeAutoWarehouseResult"] = {"ok": False, "reason": str(exc)}
+
+        if action == 'set_capture_freshness_policy':
+            provider = self._capture_freshness_policy_provider
+            response['captureFreshnessPolicyResult'] = provider(payload.get('policy')) if provider else {'ok': False, 'reason': '采集模式服务未就绪'}
+
         if action == "set_observation_window_mode":
             provider = self._observation_window_mode_provider
             if provider is None:
@@ -1544,6 +1563,8 @@ def create_main_window_type(WinForms, Drawing):
             warehouse_slot_evidence_provider=None,
             warehouse_instance_decision_provider=None,
             observation_window_mode_provider=None,
+            capture_freshness_policy_provider=None,
+            native_auto_warehouse_provider=None,
         ) -> None:
             self._overlay_controller = overlay_controller
             self._bridge = MainWindowBridge(
@@ -1565,6 +1586,8 @@ def create_main_window_type(WinForms, Drawing):
                 manual_bootstrap_provider=manual_bootstrap_provider,
                 start_vision_provider=start_vision_provider,
                 observation_window_mode_provider=observation_window_mode_provider,
+                capture_freshness_policy_provider=capture_freshness_policy_provider,
+                native_auto_warehouse_provider=native_auto_warehouse_provider,
                 triggered_snapshot_provider=triggered_snapshot_provider,
                 save_settlement_screenshot_provider=save_settlement_screenshot_provider,
                 save_game_screenshot_provider=save_game_screenshot_provider,

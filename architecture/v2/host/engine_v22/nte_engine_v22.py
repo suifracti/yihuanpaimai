@@ -70,6 +70,8 @@ from venue_box_catalog import (  # noqa: E402
     normalize_venue_from_box,
 )
 from vision_pipeline import NTEVisionPipeline  # noqa: E402
+from native_capture_delivery import DELIVERY, STRICT, POLICIES, validate_delivery, read_slot_proof
+from warehouse_viewport_scope import WarehouseViewportScope
 from scene_anchors import settlement_title_visible  # noqa: E402
 
 # PipeClient's reference reader is intentionally blocking for V2-1 tests.  The
@@ -303,6 +305,17 @@ class RealEngine:
         self.fault = args.fault or ""
         self.data_origin = args.data_origin or "replay"
         self.observation_target_identity = self._load_observation_target_identity()
+        target_path = self.work_dir / 'observation-target.json'
+        launch = json.loads(target_path.read_text(encoding='utf-8')) if target_path.exists() else {}
+        self.capture_policy = launch.get('captureFreshnessPolicy', STRICT)
+        self.capture_client_map = launch.get('clientMap')
+        if self.capture_policy not in POLICIES:
+            raise ValueError('unsupported-capture-policy')
+        self._last_delivery_sequence = 0
+        self._last_delivery_epoch = 0
+        (self.work_dir / 'capture-policy-ready.json').write_text(json.dumps({
+            'sessionId': self.session_id, 'captureFreshnessPolicy': self.capture_policy,
+            'frameProofSchema': 'capture-delivery-proof.v2', 'sourceSchema': 'native-warehouse-source.v2'}), encoding='utf-8')
 
         self.pipe: Optional[PipeClient] = None
         self.reader: Optional[FrameMapReader] = None
@@ -322,6 +335,7 @@ class RealEngine:
         self._warehouse_activity_sources: dict[tuple[Any, ...], dict] = {}
         self._warehouse_review_vision: dict = {}
         self._warehouse_review_scope: dict = {}
+        self._warehouse_viewport_scope = WarehouseViewportScope()
         self.frame_records_path = self.work_dir / "frame_records.ndjson"
         self._diagnostic_lock = threading.Lock()
         self._diagnostic_limit_bytes = int(os.environ.get("NTE_BACKGROUND_DIAGNOSTIC_LIMIT_BYTES", "0"))
@@ -411,6 +425,7 @@ class RealEngine:
                 handle.write(data)
 
     def preload(self) -> None:
+        self.log("business_preload_begin")
         if self.fault == "model_load_fail":
             # G4 fault injection: fail before HELLO_ACK so the Host cannot
             # mistake an IPC process for a business-ready Engine.
@@ -420,8 +435,10 @@ class RealEngine:
         self.venue_catalog = load_venue_box_catalog()
         self.venue_catalog_provenance = canonical_catalog_provenance(self.venue_catalog)
         self.pipeline = NTEVisionPipeline(catalog_path=str(self.catalog_path))
+        self.log("business_catalog_ready")
         # The property constructs the real RapidOCR runtime and its ONNX model.
         ocr_engine = self.pipeline.ocr
+        self.log("business_ocr_ready")
         if ocr_engine is None or not self.pipeline.catalog:
             raise RuntimeError("business preload did not produce catalog and OCR objects")
 
@@ -563,6 +580,7 @@ class RealEngine:
             "manualOverrides": copy.deepcopy(self.manual_overrides),
             "pipelineContext": copy.deepcopy(self.last_context or self.pipeline.current_context),
             "observationTargetIdentity": copy.deepcopy(self.observation_target_identity),
+            "captureFreshnessPolicy": self.capture_policy,
             "activePipelineMatchGeneration": self._active_pipeline_match_generation,
             "pendingLobbyVenue": copy.deepcopy(self._pending_lobby_venue),
             "lastFrame": frame_record or self.last_frame,
@@ -1557,6 +1575,7 @@ class RealEngine:
         header = item["header"]
         descriptor = {
             "kind": kind,
+            "viewportScope": getattr(self, "_warehouse_viewport_scope", None).current_key if kind == "warehouse" else None,
             "sessionId": self.session_id,
             "generationId": self.generation_id,
             "matchId": self.current_match.id,
@@ -1572,12 +1591,18 @@ class RealEngine:
             "captureTimestampNs": int(header["captureTimestampNs"]),
             "capturedAt": str(item.get("capturedAt") or pending.get("captured_at") or ""),
             "pixelSha256": str(item.get("rawSha256") or ""),
+            "captureFreshnessPolicy": getattr(self, 'capture_policy', STRICT),
+            "captureDeliveryProof": copy.deepcopy((item.get('captureProof') or {}).get('deliveryProof')),
+            "captureId": ((item.get('captureProof') or {}).get('deliveryProof') or {}).get('captureId'),
             "actualTotal": pending.get("actual_total"),
             "dataOrigin": self.data_origin,
         }
         frame = pending.get("frame")
         if not isinstance(frame, np.ndarray) or frame.size == 0:
             frame = item.get("bgr")
+        if getattr(self, 'capture_policy', STRICT) == DELIVERY and not np.array_equal(frame, item.get('bgr')):
+            self.log('identity.deferred_original_mismatch', captureId=descriptor['captureId'])
+            return
         if self._identity_analyzer.submit(descriptor, frame):
             self.log("identity.deferred_dispatched", kind=kind, matchId=descriptor["matchId"],
                      round=round_value, frameSequence=descriptor["frameSequence"],
@@ -1586,12 +1611,7 @@ class RealEngine:
 
     @staticmethod
     def _warehouse_slot_anchor(slot: dict) -> Optional[tuple[int, int]]:
-        """Use the existing grid placement as a match-stable item instance key.
-
-        trackId belongs to the temporal image tracker and is reset when its
-        worker is recreated (including round/session scope changes). A grid
-        origin remains the physical instance address in the match's warehouse.
-        """
+        """Local row/col, meaningful only within an admitted viewport scope."""
         try:
             return int(slot["row"]), int(slot["col"])
         except (KeyError, TypeError, ValueError):
@@ -1698,6 +1718,9 @@ class RealEngine:
         descriptor = {
             "evidenceId": evidence_id,
             "kind": "warehouse-activity-crop",
+            "captureFreshnessPolicy": result.get('captureFreshnessPolicy', STRICT),
+            "captureId": result.get('captureId'),
+            "captureDeliveryProof": copy.deepcopy(result.get('captureDeliveryProof')),
             "sourceKind": source_kind,
             "dataOrigin": str(result.get("dataOrigin") or self.data_origin),
             "sessionId": str(result.get("sessionId") or ""),
@@ -1739,7 +1762,11 @@ class RealEngine:
 
     @staticmethod
     def _merge_warehouse_fact_slots(previous: Any, incoming: dict) -> dict:
-        """Accumulate known item identities by physical grid origin, not trackId."""
+        """Merge local addresses only after independent same-viewport admission."""
+        if not incoming.get("viewportScope"):
+            return copy.deepcopy(previous) if isinstance(previous, dict) else {"slots": []}
+        if isinstance(previous, dict) and previous.get("slots") and previous.get("viewportScope") != incoming["viewportScope"]:
+            return copy.deepcopy(previous)
         previous_slots = previous.get("slots") if isinstance(previous, dict) else []
         slots: list[dict] = []
         indexes: dict[tuple[int, int], int] = {}
@@ -1841,7 +1868,7 @@ class RealEngine:
             slots[index] = merged
 
         slots.sort(key=lambda slot: (int(slot["row"]), int(slot["col"])))
-        return {"slots": slots}
+        return {"slots": slots, "viewportScope": incoming["viewportScope"]}
 
     @staticmethod
     def _known_fact_entries(value: Any) -> list[str]:
@@ -2319,6 +2346,8 @@ class RealEngine:
         return "ACK", None, result
 
     def _commit_deferred_identity(self, result: dict) -> bool:
+        if self.stop_event.is_set():
+            return False
         kind = str(result.get("kind") or "")
         scope_key = (kind, str(result.get("matchId") or ""), result.get("round") if kind == "warehouse" else None)
         scene = str((self.last_context or {}).get("scene") or "UNKNOWN")
@@ -2343,6 +2372,13 @@ class RealEngine:
             "scene": scene,
             "round": round_value,
         }
+        if getattr(self, 'capture_policy', STRICT) == DELIVERY:
+            rejection = validate_delivery(result.get('captureDeliveryProof'), qpc_ns(),
+                session=self.session_id, max_age_ns=31_000_000_000, require_progress=True)
+            if (rejection or result.get('captureFreshnessPolicy') != DELIVERY
+                    or result.get('captureId') != (result.get('captureDeliveryProof') or {}).get('captureId')):
+                self.log('identity.deferred_delivery_rejected', reason=rejection or 'capture-binding-mismatch')
+                return False
         if not deferred_identity_result_is_current(result, current):
             self.log("identity.deferred_result_rejected", kind=kind,
                      matchId=result.get("matchId"), round=result.get("round"),
@@ -2371,6 +2407,18 @@ class RealEngine:
             if not isinstance(vision, dict):
                 return False
             vision = copy.deepcopy(vision)
+            viewport = getattr(self, "_warehouse_viewport_scope", None)
+            scope = result.get("viewportScope")
+            if viewport is None or not viewport.permits(scope):
+                self.last_context["warehouseViewportObservation"] = {
+                    "frameSequence": result.get("frameSequence"), "pixelSha256": result.get("pixelSha256"),
+                    "vision": vision, "projectionStatus": "UNPROVEN_VIEWPORT", "viewportScope": scope,
+                }
+                self.log("identity.viewport_projection_withheld", frameSequence=result.get("frameSequence"),
+                         matchId=result.get("matchId"), viewportScope=scope,
+                         capturedAt=result.get("capturedAt"), pixelSha256=result.get("pixelSha256"),
+                         warehouseVision=_safe(vision))
+                return False
             review_scope = {
                 "sessionId": self.session_id,
                 "generationId": self.generation_id,
@@ -2399,6 +2447,7 @@ class RealEngine:
             official_by_id = self._warehouse_official_catalog_index(self.pipeline.catalog)
             quality_targets = {"gold": ("knownGold", "金"), "purple": ("knownPurple", "紫"), "red": ("knownRed", "红")}
             projected = self._warehouse_fact_projection(vision)
+            projected["viewportScope"] = scope
             previous_warehouse = self.current_match.facts.get("warehouse")
             if projected["slots"]:
                 merged_warehouse = self._merge_warehouse_fact_slots(previous_warehouse, projected)
@@ -2522,6 +2571,20 @@ class RealEngine:
         )
         context = self._apply_manual_overrides(context)
         self._identity_scope_kind(context)
+        if str(context.get("scene") or "") == "IN_AUCTION":
+            viewport = self._warehouse_viewport_scope
+            key = viewport.observe(self.current_match.id, item["bgr"])
+            context["warehouseViewportScope"] = key
+            if key is None:
+                # Do not discard existing same-view facts or user intel. Only
+                # the image-derived warehouse projections lack an address.
+                context["warehouseViewportObservation"] = copy.deepcopy(context.get("warehouseVision") or {})
+                for name in ("warehouse", "warehouseOccupancy", "warehouseExpectedVal", "warehouseValRange"):
+                    context.pop(name, None)
+                context["warehouseVision"] = {"slots": [], "projectionStatus": "UNPROVEN_VIEWPORT"}
+                context["warehouseSlots"] = []
+        else:
+            self._warehouse_viewport_scope.current_key = None
         self.last_context = copy.deepcopy(context)
         self._apply_pipeline_context(context, captured_at, lobby_handoff=lobby_handoff)
         return context
@@ -2547,16 +2610,68 @@ class RealEngine:
     def _process_frame(self, item: dict) -> None:
         started = qpc_ns()
         header = item["header"]
+        stages: dict[str, float] = {}
+        stage_start = started
+
+        def mark_stage(name: str) -> None:
+            nonlocal stage_start
+            completed = qpc_ns()
+            stages[name] = max(0.0, (completed - stage_start) / 1_000_000.0)
+            stage_start = completed
+
         try:
+            if self.capture_policy == DELIVERY:
+                binding = item['captureProof']
+                rejection = validate_delivery(binding['deliveryProof'], qpc_ns(), session=self.session_id)
+                if (rejection or item['entryMatchId'] != self.current_match.id
+                        or item['entryMatchGeneration'] != self.current_match._seq):
+                    raise ValueError(rejection or 'FRAME_SCOPE_RETIRED')
             captured_at = self._capture_iso(int(header["captureTimestampNs"]))
-            context, closed_settlement_frame = self._observe_frame_context(item["bgr"], captured_at)
+            marker_stalled = self.capture_policy == DELIVERY and not item['captureProof']['deliveryProof']['sourceMarkerProgress']
+            if marker_stalled:
+                # A delivery marker alone cannot keep a closed settlement scope alive.
+                # The cheap title anchor is checked on these frames too; a missing title
+                # invalidates the current scene without advancing facts or OCR lifecycle.
+                closed_settlement_candidate = bool(
+                    self._settlement_collection_closed
+                    and self.pipeline.current_context.get("scene") == "SETTLEMENT"
+                )
+                if closed_settlement_candidate:
+                    context = dict(self.last_context)
+                    closed_settlement_frame = True
+                    if settlement_title_visible(item["bgr"]):
+                        context['observationEvidenceOnly'] = True
+                    else:
+                        context.update(scene="UNKNOWN", sceneLabel="UNKNOWN", isSettlement=False,
+                                       inAuction=False, observationEvidenceOnly=True)
+                else:
+                    # Recent delivery of an unchanged producer marker is observation only.
+                    # It cannot increment bill stability, apply facts or advance the lifecycle.
+                    context, closed_settlement_frame = dict(self.last_context), True
+                    context['observationEvidenceOnly'] = True
+            else:
+                context, closed_settlement_frame = self._observe_frame_context(item["bgr"], captured_at)
+            mark_stage("observe")
+            if self.stop_event.is_set() or int(item.get("identityInvalidationGeneration", -1)) != self._identity_generation():
+                self.log("frame.cancelled_before_commit", frameSequence=header["sequence"], processingStagesMs=stages)
+                return
+            if self.capture_policy == DELIVERY:
+                rejection = validate_delivery(item['captureProof']['deliveryProof'], qpc_ns(),
+                                              session=self.session_id, max_age_ns=31_000_000_000)
+                if rejection:
+                    raise ValueError(rejection)
             context = _safe(context)
+            context['captureFreshnessPolicy'] = self.capture_policy
+            if self.capture_policy == DELIVERY:
+                context['captureDeliveryProof'] = copy.deepcopy(item['captureProof']['deliveryProof'])
             context["capturedAt"] = captured_at
             context["captureTimestampNs"] = int(header["captureTimestampNs"])
             if not closed_settlement_frame:
                 context = self._apply_observation_context(context, item, captured_at)
             scene = str(context.get("scene") or "UNKNOWN")
-            if scene == "SETTLEMENT":
+            if marker_stalled:
+                pass
+            elif scene == "SETTLEMENT":
                 self._settlement_observed_since = self._settlement_observed_since or time.monotonic()
                 if (context.get("settlementReady") is True
                         or time.monotonic() - self._settlement_observed_since >= 45.0):
@@ -2564,7 +2679,11 @@ class RealEngine:
             elif scene != "UNKNOWN":
                 self._settlement_observed_since = None
                 self._settlement_collection_closed = False
+            mark_stage("contextAndLifecycle")
+            if self.stop_event.is_set():
+                return
             history_status = "UNCHANGED" if closed_settlement_frame else self._persist_history()
+            mark_stage("history")
             if scene == "SETTLEMENT" and history_status == "PERSISTED_DRAFT":
                 # A recoverable isolated DRAFT lets the existing pipeline
                 # clear this match on real egress; it is not FINALIZED truth.
@@ -2580,6 +2699,9 @@ class RealEngine:
                 "pixelSha256": item["rawSha256"],
                 "processingMs": processing_ms,
                 "historyStatus": history_status,
+                "capturePolicy": self.capture_policy,
+                "captureProof": copy.deepcopy(item.get('captureProof')),
+                "matchGeneration": self.current_match._seq,
             }
             record = {
                 "frameSequence": int(header["sequence"]),
@@ -2594,10 +2716,16 @@ class RealEngine:
                 "stateMatchId": self.current_match.id,
                 "stateFactsRevision": self.current_match.facts_revision,
                 "historyStatus": history_status,
+                "capturePolicy": self.capture_policy,
+                "captureProof": copy.deepcopy(item.get('captureProof')),
+                "matchGeneration": self.current_match._seq,
                 "processingMs": processing_ms,
+                "warehouseViewportScope": context.get("warehouseViewportScope"),
+                "warehouseViewportObservation": copy.deepcopy(context.get("warehouseViewportObservation")),
             }
             self._append_frame_record(record)
             self._persist_state(reason="frame_processed", frame_record=record)
+            mark_stage("frameAndStateEvidence")
 
             if self.fault == "no_ack":
                 self.log("frame.no_ack_fault", frameSequence=header["sequence"])
@@ -2605,12 +2733,15 @@ class RealEngine:
             if self.fault == "consumer_exit":
                 os._exit(8)
 
+            if self.stop_event.is_set():
+                return
             if self.fault not in {"bad_ack", "old_session_ack"}:
                 self.send(
                     "PERCEPTION_RESULT",
                     self._perception_payload(item, context, processing_ms),
                     "perception",
                 )
+            mark_stage("perceptionSend")
             # Publish current bids/intel first. Only after the fast result has
             # crossed the existing pipe do we copy pixels for optional identity.
             if not closed_settlement_frame:
@@ -2619,6 +2750,7 @@ class RealEngine:
                 except Exception as exc:
                     self.log("identity.deferred_dispatch_failed", frameSequence=header.get("sequence"),
                              error=f"{type(exc).__name__}: {exc}")
+            mark_stage("deferredIdentityDispatch")
             self.log(
                 "frame.processed",
                 frameSequence=header["sequence"],
@@ -2626,6 +2758,8 @@ class RealEngine:
                 scene=context.get("scene"),
                 inAuction=bool(context.get("inAuction")),
                 processingMs=processing_ms,
+                processingStagesMs=stages,
+                queueWaitMs=max(0.0, (started - item.get("readCompletedNs", started)) / 1_000_000.0),
             )
         except Exception as exc:
             self.processing_errors.append(f"{type(exc).__name__}: {exc}")
@@ -2641,19 +2775,29 @@ class RealEngine:
                 pass
 
     def _worker_loop(self) -> None:
-        while not self.stop_event.is_set() or not self.frame_queue.empty():
+        while not self.stop_event.is_set():
             try:
                 item = self.frame_queue.get(timeout=0.1)
             except queue.Empty:
                 self._drain_deferred_identity()
                 continue
             try:
-                self._process_frame(item)
+                if not self.stop_event.is_set():
+                    self._process_frame(item)
             finally:
                 self.frame_queue.task_done()
-                self._drain_deferred_identity()
+                if not self.stop_event.is_set():
+                    self._drain_deferred_identity()
+        while True:
+            try:
+                self.frame_queue.get_nowait()
+                self.frame_queue.task_done()
+            except queue.Empty:
+                break
 
     def handle_frame_ready(self, envelope: dict) -> None:
+        if self.stop_event.is_set():
+            return
         if self.reader is None:
             raise ProtocolError("ERR_BUFFER_UNAVAILABLE", "frame reader is not initialized")
         if self.fault == "consumer_exit":
@@ -2661,6 +2805,23 @@ class RealEngine:
         received_ns = qpc_ns()
         item = self.reader.read_frame(envelope.get("payload") or {}, self.session_id)
         item["receivedNs"] = received_ns
+        if self.capture_policy == DELIVERY:
+            try:
+                binding = read_slot_proof(self.work_dir, item, self.session_id, self.observation_target_identity, qpc_ns())
+            except (OSError, ValueError, TypeError, KeyError) as exc:
+                raise ProtocolError('ERR_SCHEMA_VALIDATION_FAILED', 'capture proof: ' + str(exc)) from exc
+            proof = binding['deliveryProof']
+            if not self.capture_client_map or binding.get('clientMap') != self.capture_client_map:
+                raise ProtocolError('ERR_STALE_SESSION', 'client mapping proof mismatch')
+            if proof['acquisitionSequence'] <= self._last_delivery_sequence or proof['poolEpoch'] < self._last_delivery_epoch:
+                raise ProtocolError('ERR_STALE_SESSION', 'repeated or reordered delivery')
+            if binding.get('recordStableKey') not in (None, '', self.current_match.id):
+                raise ProtocolError('ERR_STALE_SESSION', 'frame scope retired')
+            self._last_delivery_sequence = proof['acquisitionSequence']
+            self._last_delivery_epoch = proof['poolEpoch']
+            item['captureProof'] = copy.deepcopy(binding)  # before ACK/slot reuse
+            item['entryMatchId'] = self.current_match.id
+            item['entryMatchGeneration'] = self.current_match._seq
         item["identityInvalidationGeneration"] = self._identity_generation()
         if self.fault == "bad_header":
             self.send_error("ERR_CORRUPT_FRAME_MAGIC", "PAYLOAD", "test fault: header rejected", False)
@@ -2720,6 +2881,8 @@ class RealEngine:
             mapName=self.map_name,
             frameBufferSize=self.frame_buffer_size,
             pid=os.getpid(),
+            parentPid=os.getppid(),
+            sessionId=self.session_id,
             catalogPath=str(self.catalog_path),
             dataOrigin=self.data_origin,
         )
@@ -2782,7 +2945,10 @@ class RealEngine:
             if self._identity_analyzer is not None:
                 self._identity_analyzer.close(timeout=0.25)
             try:
-                self._persist_state(reason="engine_exit")
+                if self.worker is not None and self.worker.is_alive():
+                    self.log("worker.exit_unconfirmed", reason="vision-call-still-running", joinTimeoutMs=1500)
+                else:
+                    self._persist_state(reason="engine_exit")
             except Exception as exc:
                 self.log("state.persist_on_exit_failed", error=str(exc))
             if self.reader is not None:

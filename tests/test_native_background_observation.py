@@ -5,6 +5,8 @@ initializers. Frames and clocks are fixtures; no window or capture API is used.
 """
 import ast
 import copy
+import io
+import json
 import os
 from pathlib import Path
 import sys
@@ -15,11 +17,13 @@ from unittest.mock import Mock, patch
 
 
 ROOT = Path(__file__).resolve().parents[1]
-sys.path.insert(0, str(ROOT / "core"))
+sys.path[:0] = [str(ROOT / "core"), str(ROOT / "app")]
+from native_capture_delivery import STRICT, DELIVERY, POLICIES, validate_delivery
 from current_match import CurrentMatch
 
 
 _MAIN_FUNCTIONS = {
+    "_native_use_age_ms", "native_capture_policy", "handle_capture_freshness_policy",
     "_native_target_instance", "_native_observation_target_instance",
     "native_observation_window_mode", "_native_confirm_window_mode",
     "_native_source_frame_rejection", "_native_observation_event",
@@ -27,8 +31,15 @@ _MAIN_FUNCTIONS = {
     "_native_accept_observation_locked", "_native_solver_lease_matches_locked",
     "_native_solver_lease_matches", "_native_health_from_event",
     "_native_publish_health", "_native_warehouse_intake_scope",
+    "_native_report_ui_ready",
+    "_stop_vision_worker_locked",
     "_send_native_manual_control", "_game_input_execution_allowed",
     "_native_profile_selected_before_config_load",
+    "_native_warehouse_source_scope", "_native_source_observation_notice",
+    "maybe_trigger_auto_warehouse_capture", "_maybe_trigger_native_warehouse_capture",
+    "_arm_native_postclose_trigger_watch", "_native_source_evidence_event",
+    "_native_auto_trigger_notice",
+    "_native_claim_warehouse_attempt", "handle_native_auto_warehouse_capture",
 }
 
 
@@ -46,6 +57,9 @@ def _isolated_main(mode="foreground"):
     bridge = SimpleNamespace(running=True, session_dir=None, send_control=Mock(return_value=True))
     ns = {
         "__name__": "isolated_native_main", "os": os, "copy": copy,
+        "STRICT": STRICT, "DELIVERY": DELIVERY, "POLICIES": POLICIES, "validate_delivery": validate_delivery,
+        "_NATIVE_CAPTURE_POLICY": STRICT, "_NATIVE_DELIVERY_ANCHORED_MATCH": None,
+        "_NATIVE_AUTO_TRIGGER_STATUS": {},
         "time": SimpleNamespace(monotonic_ns=lambda: clock[0],
                                 perf_counter_ns=lambda: clock[0],
                                 monotonic=lambda: clock[0] / 1_000_000_000),
@@ -55,6 +69,8 @@ def _isolated_main(mode="foreground"):
         "_MANUAL_STATE_LOCK": threading.RLock(), "_NATIVE_OBSERVATION_LOCK": threading.RLock(),
         "_VISION_PROCESS_LOCK": threading.RLock(),
         "_NATIVE_WINDOW_MODE": mode, "_NATIVE_WINDOW_MODE_CONFIRMED": False,
+        "_NATIVE_AUTO_WAREHOUSE_ENABLED": False, "_NATIVE_SOURCE_CAPTURE_CAPABILITY": False,
+        "_NATIVE_WAREHOUSE_SOURCE_COORDINATOR": None, "_AUTO_CAPTURE_ATTEMPTED_KEYS": set(),
         "_NATIVE_WINDOW_TARGET_INSTANCE": None,
         "_NATIVE_EXPECTED_SESSION": None, "_NATIVE_OBSERVATION_SESSION": None,
         "_NATIVE_OBSERVATION_SOURCE_NS": None, "_NATIVE_OBSERVATION_RECEIVER": None,
@@ -71,6 +87,7 @@ def _isolated_main(mode="foreground"):
         "_LAST_DRAFT_WRITE": (current.id, current.facts_revision),
         "NATIVE_OBSERVATION_BRIDGE": bridge, "WS_EVENT_LOOP": None,
         "PRESENTATION_RUNTIME": SimpleNamespace(set_vision_process_state=Mock(), observe_transport=Mock()),
+        "ACTIVE_SETTLEMENT_TRUTH_HOLDER": SimpleNamespace(clear=Mock()),
         "native_observation_enabled": lambda: True,
         "get_recognition_mode": lambda: "live",
         "get_current_match_presentation_summary": lambda: {"matchId": current.id},
@@ -135,6 +152,64 @@ def _frame(ns, *, session="background-session", sequence=1):
 
 
 class NativeBackgroundObservationTests(unittest.TestCase):
+    def test_stop_retains_host_ownership_until_exit_is_confirmed(self):
+        ns, _, bridge = _isolated_main("background-readonly")
+        ns.update({"VISION_PROCESS": None, "log_stage": Mock()})
+        bridge.stop = Mock()
+        ns["LATEST_PAYLOAD"]["visionHealth"] = {"observationStopped": True,
+            "reason": "source-clock-future-at-selection", "error": "aheadNs=985900"}
+        ns["_stop_vision_worker_locked"]()
+        self.assertIs(ns["NATIVE_OBSERVATION_BRIDGE"], bridge)
+        self.assertFalse(ns["LATEST_PAYLOAD"]["visionHealth"]["processExitConfirmed"])
+        self.assertEqual(ns["LATEST_PAYLOAD"]["visionHealth"]["reason"], "source-clock-future-at-selection")
+        bridge.running = False
+        ns["_stop_vision_worker_locked"]()
+        self.assertIsNone(ns["NATIVE_OBSERVATION_BRIDGE"])
+
+    def test_late_ui_ready_preserves_active_and_first_failed_health(self):
+        ns, _, bridge = _isolated_main("background-readonly")
+        publish = Mock()
+        ns["_native_publish_health"] = publish
+        for health, running in (({}, True), ({"profile": "native-readonly-v1", "stage": "native-error",
+                "reason": "source-clock-future-at-selection"}, False)):
+            ns["LATEST_PAYLOAD"]["visionHealth"] = copy.deepcopy(health)
+            bridge.running = running
+            ns["_native_report_ui_ready"]()
+            self.assertEqual(ns["LATEST_PAYLOAD"]["visionHealth"], health)
+            publish.assert_not_called()
+        ns["LATEST_PAYLOAD"].clear()
+        ns["_native_report_ui_ready"]()
+        self.assertEqual(publish.call_args.args[0]["reason"], "explicit-start-required")
+
+    def test_terminal_status_keeps_last_success_and_never_revives_facts(self):
+        ns, _, bridge = _isolated_main("background-readonly")
+        # Include the actual revocation here; the broad existing fixture replaces
+        # it with an inert output adapter and cannot prove lease revocation.
+        tree = ast.parse((ROOT / "app/main.py").read_text(encoding="utf-8"))
+        revoke = next(node for node in tree.body if isinstance(node, ast.FunctionDef)
+                      and node.name == "_native_invalidate_solver_locked")
+        ns.update({"ACTIVE_SNAPSHOT_HOLDER": Mock(), "_SHADOW_PRESENTATION_LOCK": threading.RLock(),
+                   "_SHADOW_PRESENTATION_KEYS": {}, "_native_reject_pending_controls_locked": Mock()})
+        exec(compile(ast.fix_missing_locations(ast.Module(body=[revoke], type_ignores=[])),
+                     str(ROOT / "app/main.py"), "exec"), ns)
+        with patch.dict(sys.modules, {"live_shadow": SimpleNamespace(invalidate_match_shadow=Mock())}):
+            _confirmed_start(ns)
+        frame = _frame(ns)
+        frame["frame"]["capturedAtUtc"] = "2026-10-04T12:56:21.7745133+00:00"
+        ns["_native_observation_event"](frame)
+        before = copy.deepcopy(ns["CURRENT_MATCH"].snapshot())
+        with patch.dict(sys.modules, {"live_shadow": SimpleNamespace(invalidate_match_shadow=Mock())}):
+            _status(ns, "PAUSED")
+        health = ns["LATEST_PAYLOAD"]["visionHealth"]
+        self.assertTrue(health["observationStopped"])
+        self.assertEqual(health["lastSuccessfulObservation"]["frameSequence"], 1)
+        self.assertEqual(health["lastSuccessfulObservation"]["matchId"], "background-match")
+        self.assertEqual(health["lastSuccessfulObservation"]["capturedAtUtc"], frame["frame"]["capturedAtUtc"])
+        self.assertFalse(ns["_LIVE_VISION_ACTIVE"])
+        self.assertIsNone(ns["_NATIVE_SOLVER_LEASE"])
+        self.assertEqual(ns["CURRENT_MATCH"].snapshot(), before)
+        bridge.send_control.assert_called_once_with({"type": "native_stop"})
+
     def test_same_unfocused_frame_requires_explicit_matching_mode_confirmation(self):
         # The actual foreground failure is accepted only by the explicitly
         # selected background session; safety flags and identity remain intact.
@@ -255,6 +330,79 @@ class NativeBackgroundObservationTests(unittest.TestCase):
         self.assertEqual(ns["CONFIG"], before)
         self.assertEqual(ns["_NATIVE_WINDOW_MODE"], "foreground")
         self.assertFalse(ns["handle_observation_window_mode"]("unknown")["ok"])
+
+
+class NativeHostExitReceiptTests(unittest.TestCase):
+    def make_bridge(self, events, code, *, terminal=False):
+        sys.path.insert(0, str(ROOT / "app"))
+        from native_observation import NativeObservationBridge
+        frame = {"type": "native_observation", "status": "FRAME", "observationSessionId": "exit-session"}
+        messages = [frame]
+        if terminal:
+            messages.append({**frame, "status": "PAUSED", "reason": "source-clock-stale-at-readback"})
+        child = SimpleNamespace(stdout=io.StringIO("\n".join(json.dumps(x) for x in messages)),
+                                poll=lambda: code)
+        bridge = NativeObservationBridge(str(ROOT), events.append, Mock())
+        bridge.process = child
+        bridge._record_frame_event = Mock()
+        bridge._record_status_event = Mock()
+        return bridge, child
+
+    def test_zero_exit_after_frame_is_not_left_recording(self):
+        events = []
+        bridge, child = self.make_bridge(events, 0)
+        bridge._read_stdout(child)
+        self.assertEqual(events[-1]["status"], "ERROR")
+        self.assertEqual(events[-1]["reason"], "host-exited:0")
+        self.assertEqual(events[-1]["observationSessionId"], "exit-session")
+        self.assertTrue(events[-1]["details"]["processExitConfirmed"])
+        self.assertFalse(bridge.running)
+
+    def test_paused_exit_keeps_actual_reason(self):
+        events = []
+        bridge, child = self.make_bridge(events, 3, terminal=True)
+        bridge._read_stdout(child)
+        self.assertEqual(events[-1]["status"], "PAUSED")
+        self.assertEqual(events[-1]["reason"], "source-clock-stale-at-readback")
+        self.assertTrue(events[-1]["details"]["processExitConfirmed"])
+        self.assertFalse(bridge.running)
+
+    def test_first_failure_survives_later_mapping_stop_and_unconfirmed_eof(self):
+        events = []
+        bridge, child = self.make_bridge(events, None)
+        messages = [{"type": "native_observation", "status": "ERROR", "reason": "source-clock-future-at-selection",
+                     "details": {"error": "aheadNs=985900"}},
+                    {"type": "native_observation", "status": "PAUSED", "reason": "client-area-mapping-changed"},
+                    {"type": "native_observation", "status": "STOPPED", "reason": "explicit-stop"}]
+        child.stdout = io.StringIO("\n".join(json.dumps(x) for x in messages))
+        bridge.stop = Mock()
+        bridge._read_stdout(child)
+        self.assertTrue(all(e["reason"] == "source-clock-future-at-selection" for e in events))
+        self.assertEqual(events[-1]["details"]["error"], "aheadNs=985900")
+        self.assertFalse(events[-1]["details"]["processExitConfirmed"])
+        ns, _, _ = _isolated_main()
+        health = ns["_native_health_from_event"](events[-1])
+        self.assertFalse(health["processExitConfirmed"])
+        self.assertTrue(health["observationStopped"])
+
+    def test_eof_before_process_exit_reports_unknown_and_keeps_ownership(self):
+        events = []
+        bridge, child = self.make_bridge(events, None)
+        bridge.stop = Mock()
+        bridge._read_stdout(child)
+        self.assertEqual(events[-1]["reason"], "host-output-closed")
+        self.assertFalse(events[-1]["details"]["processExitConfirmed"])
+        self.assertIs(bridge.process, child)
+        bridge.stop.assert_called_once()
+
+    def test_old_reader_cannot_stop_new_host(self):
+        events = []
+        bridge, child = self.make_bridge(events, 3)
+        replacement = SimpleNamespace(poll=lambda: None)
+        bridge.process = replacement
+        bridge._read_stdout(child)
+        self.assertEqual(events, [])
+        self.assertIs(bridge.process, replacement)
 
 
 if __name__ == "__main__":

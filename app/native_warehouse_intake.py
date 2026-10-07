@@ -22,6 +22,7 @@ from settlement_evidence_store_v2 import SettlementEvidenceStoreV2
 from settlement_stable_frame_persist import encode_settlement_original
 from settlement_truth_evidence_contract import validate_settlement_evidence_original_v2
 from warehouse_capture_host import WarehouseCaptureHost
+from native_capture_delivery import DELIVERY, STRICT
 
 MAX_PAGES = 16
 MAX_PIXELS = 8_388_608
@@ -44,6 +45,8 @@ def _anchor(scope):
             or not isinstance(anchor['targetInstance'], dict)
             or not anchor['targetInstance'] or type(anchor['matchGeneration']) is not int):
         raise IntakeRejected('NATIVE_SCOPE_UNAVAILABLE')
+    if scope.get('capturePolicy') == DELIVERY:
+        anchor['capturePolicy'] = DELIVERY
     return anchor
 
 
@@ -87,7 +90,10 @@ class NativeWarehouseIntake:
     def _write_manifest(self, pages):
         raw = json.dumps({'schemaVersion': 'native-warehouse-intake.v1',
             'sessionId': self._session_id, 'generation': self._generation,
-            'scope': self._binding, 'pages': pages}, ensure_ascii=False).encode('utf-8')
+            'scope': self._binding, 'pages': pages, 'state': self._state,
+            'terminationReason': self._reason,
+            'resultSourceFingerprint': (self._packet or {}).get('sourceFingerprint'),
+            'rejectedOriginals': getattr(self, '_rejected_originals', [])}, ensure_ascii=False).encode('utf-8')
         if len(raw) > MAX_MANIFEST_BYTES:
             raise IntakeRejected('LIMIT_REACHED')
         directory = self.draft_store.root / 'warehouse-intake'
@@ -141,6 +147,7 @@ class NativeWarehouseIntake:
             self._session_id = uuid.uuid4().hex
             self._binding = _anchor(self._scope_provider())
             self._pages, self._encoded_bytes = [], 0
+            self._rejected_originals = []
             self._state, self._reason = 'MANUAL_CAPTURING', None
             self._coverage, self._packet = 'COVERAGE_UNPROVEN', None
             self._processor = None
@@ -202,11 +209,24 @@ class NativeWarehouseIntake:
                     'frameSequence': sequence,
                     'observationSessionId': self._binding['observationSessionId'],
                     'targetInstance': self._binding['targetInstance'],
+                    'matchGeneration': self._binding['matchGeneration'],
+                    'capturePolicy': source.get('capturePolicy', STRICT),
+                    'deliveryProof': copy.deepcopy(source.get('deliveryProof')),
                 }, expected_pixel_sha256=pixel_hash, max_bytes=MAX_BMP_BYTES)
                 verified = self.draft_store.read_source_image_descriptor(native_source)
                 if verified.get('error') or verified.get('data') != raw:
                     raise IntakeRejected('ORIGINAL_FRAME_LEASE_MISMATCH')
                 del raw, verified
+                if source.get('capturePolicy') == DELIVERY:
+                    from scene_anchors import settlement_title_visible
+                    original = self.draft_store.read_source_image_descriptor(native_source)['data']
+                    source_frame = cv2.imdecode(np.frombuffer(original, np.uint8), cv2.IMREAD_COLOR)
+                    if source_frame is None or not settlement_title_visible(source_frame):
+                        self._rejected_originals.append({'nativeSource': native_source,
+                            'deliveryProof': source.get('deliveryProof'), 'reason': 'SAVED_ORIGINAL_NOT_SETTLEMENT'})
+                        self._write_manifest(self._pages)
+                        raise IntakeRejected('SAVED_ORIGINAL_NOT_SETTLEMENT')
+                    del source_frame, original
                 descriptor = self.evidence_store.save_original(
                     record_stable_key=self._binding['recordStableKey'], kind='warehouse-segment',
                     image_bytes=payload, captured_at=source['capturedAt'],
@@ -216,7 +236,10 @@ class NativeWarehouseIntake:
                         or not self.evidence_store.verify(descriptor).get('ok')):
                     raise IntakeRejected('ORIGINAL_NOT_VERIFIED')
                 page = {'descriptor': descriptor, 'nativeSource': native_source,
-                    'pixelSha256': pixel_hash, 'sourceSequence': sequence}
+                    'pixelSha256': pixel_hash, 'sourceSequence': sequence,
+                    'capturePolicy': source.get('capturePolicy', STRICT), 'bmpSha256': source.get('bmpSha256'),
+                    'clientMap': source.get('clientMap'),
+                    'deliveryProof': copy.deepcopy(source.get('deliveryProof'))}
                 # Durable, bounded provenance is separate from first/latest
                 # sourceFrames and single-frame settlement inventoryArchive.
                 if self._source_validator is not None and not self._source_validator():
@@ -230,15 +253,67 @@ class NativeWarehouseIntake:
             except (OSError, ValueError, KeyError, RuntimeError, TypeError) as exc:
                 return self._reply(False, 'STORE_FAILED', error=type(exc).__name__)
 
-    def finish_manual_capture(self, *, termination_reason='COMPLETE'):
+    def annotate_offline_content_support(self, certificate):
+        """Offline experiment only: bind representative/support to immutable saved originals.
+
+        No production caller selects this path; it neither freezes a bill nor
+        creates item facts. Late/stale certificates cannot annotate a new intake.
+        """
+        with self._scope_lock, self._lock:
+            if (certificate.get('schema') != 'offline-content-support.v1'
+                    or certificate.get('formalFactsQualified') is not False
+                    or certificate.get('rendererContractEstablishedForGame') is not False
+                    or certificate.get('topologySupported') is not True
+                    or certificate.get('unexplainedPixels') != 0 or not certificate.get('mapping')):
+                raise IntakeRejected('CONTENT_CERTIFICATE_UNPROVEN')
+            if (self._state != 'MANUAL_CAPTURING' or _anchor(self._scope_provider()) != self._binding
+                    or _anchor(certificate.get('scope')) != self._binding
+                    or certificate.get('reviewBinding') != {'sessionId':self._session_id,'generation':self._generation}
+                    or certificate['scope'].get('scene') != 'SETTLEMENT'):
+                raise IntakeRejected('STALE_CONTENT_CERTIFICATE')
+            indexed = {p['descriptor']['evidenceId']: p for p in self._pages}
+            updates = []
+            for role, key in (('STABLE_ANCHOR', 'anchor'), ('STABLE_SUPPORT', 'support')):
+                ref = certificate[key]
+                page = indexed.get(ref['evidenceId'])
+                if (not page or page['descriptor']['sha256'] != ref['sha256']
+                        or page.get('clientMap') != certificate['mapping']
+                        or page['deliveryProof']['captureId'] != ref['captureId']
+                        or not self.evidence_store.verify(page['descriptor']).get('ok')):
+                    raise IntakeRejected('CONTENT_CERTIFICATE_ORIGINAL_CHANGED')
+                updates.append((page, role))
+            for page, role in updates:
+                page['offlineContentRole'] = role
+                page['offlineContentCertificate'] = copy.deepcopy(certificate)
+            self._write_manifest(self._pages)
+
+    def finish_manual_capture(self, *, termination_reason='COMPLETE', qualified_evidence_ids=None):
         with self._scope_lock, self._lock:
             if self._state != 'MANUAL_CAPTURING' or not self._pages:
                 return self._reply(False, 'NO_PAGES' if not self._pages else 'NOT_IN_MANUAL_MODE')
             generation = self._generation
-            descriptors = [copy.deepcopy(p['descriptor']) for p in self._pages]
+            selected = self._pages
+            if qualified_evidence_ids is not None:
+                if (len(set(qualified_evidence_ids)) != len(qualified_evidence_ids)
+                        or any(not any(p['descriptor']['evidenceId'] == eid and
+                            p.get('offlineContentRole') == 'STABLE_SUPPORT' for p in self._pages)
+                            for eid in qualified_evidence_ids)):
+                    return self._reply(False, 'QUALIFIED_PAGE_SELECTION_UNPROVEN')
+                selected = [p for eid in qualified_evidence_ids for p in self._pages if p['descriptor']['evidenceId'] == eid]
+                if not selected:
+                    self._state, self._reason = 'PARTIAL', 'NO_QUALIFIED_PAGES'
+                    self._write_manifest(self._pages)
+                    return self._reply(False, 'NO_QUALIFIED_PAGES')
+            descriptors = [copy.deepcopy(p['descriptor']) for p in selected]
             record_key = self._binding['recordStableKey']
             processor = WarehouseCaptureHost(store_factory=lambda: self.evidence_store, driver_available=False)
             self._processor, self._state = processor, 'ALIGNING'
+            self._reason = termination_reason
+            try:
+                self._write_manifest(self._pages)
+            except (OSError, IntakeRejected):
+                self._state = 'ERROR'
+                return self._reply(False, 'PARTIAL_MANIFEST_WRITE_FAILED')
             self._worker = threading.Thread(target=self._process,
                 args=(generation, processor, record_key, descriptors, termination_reason), name='native-warehouse-intake', daemon=True)
             try:
@@ -250,24 +325,54 @@ class NativeWarehouseIntake:
 
     def _process(self, generation, processor, record_key, descriptors, termination_reason):
         try:
+            # Recognition uses exactly the pixels derived from each saved Native original.
+            # Hash/file integrity is checked again AFTER collection, before any OCR/result write.
+            with self._scope_lock, self._lock:
+                if (generation != self._generation or self._state != 'ALIGNING'
+                        or _anchor(self._scope_provider()) != self._binding):
+                    raise IntakeRejected('STALE_NATIVE_INTAKE_SESSION')
+                pages = copy.deepcopy(self._pages)
+            for page in pages:
+                verified = self.draft_store.read_source_image_descriptor(page['nativeSource'])
+                raw = verified.get('data')
+                if (verified.get('error') or not isinstance(raw, bytes)
+                        or hashlib.sha256(raw[54:]).hexdigest() != page['pixelSha256']
+                        or (page.get('bmpSha256') and hashlib.sha256(raw).hexdigest() != page['bmpSha256'])):
+                    raise IntakeRejected('ORIGINAL_FRAME_LEASE_MISMATCH')
+                original = cv2.imdecode(np.frombuffer(raw, np.uint8), cv2.IMREAD_COLOR)
+                encoded = self.evidence_store.load_original(page['descriptor'])
+                derived = cv2.imdecode(np.frombuffer(encoded, np.uint8), cv2.IMREAD_COLOR)
+                if original is None or derived is None or not np.array_equal(original, derived):
+                    raise IntakeRejected('ORIGINAL_DERIVATION_MISMATCH')
             result = processor._process_saved_pages(record_key, descriptors,
                 history_store=_SessionHistory(self, generation), finalization_reason=termination_reason)
         except Exception as exc:
             result = {'ok': False, 'reason': 'PROCESSING_FAILED', 'error': type(exc).__name__}
         with self._scope_lock, self._lock:
-            if generation != self._generation or self._state != 'ALIGNING':
+            if (generation != self._generation or self._state != 'ALIGNING'
+                    or _anchor(self._scope_provider()) != self._binding):
                 return
             self._coverage = result.get('coverageStatus', 'COVERAGE_UNPROVEN')
             self._packet = result.get('packet')
             self._reason = result.get('reason')
             self._state = ('COMPLETE' if self._coverage == 'COMPLETE' else 'PARTIAL') if result.get('ok') else 'ERROR'
+            try:
+                self._write_manifest(self._pages)
+            except (OSError, IntakeRejected):
+                self._state, self._reason = 'ERROR', 'RESULT_PROVENANCE_WRITE_FAILED'
+                self._packet = None
 
-    def cancel_manual_capture(self):
+    def cancel_manual_capture(self, *, reason='USER_CANCEL'):
         with self._scope_lock, self._lock:
             self._generation += 1
-            self._state, self._reason = 'CANCELLED', 'USER_CANCEL'
+            self._state, self._reason = 'CANCELLED', reason
             self._packet = None
-            return self._reply(True, 'USER_CANCEL')
+            if self._pages:
+                try:
+                    self._write_manifest(self._pages)
+                except (OSError, IntakeRejected):
+                    return self._reply(False, 'PARTIAL_MANIFEST_WRITE_FAILED')
+            return self._reply(True, reason)
 
     def pages_copy(self):
         with self._lock:
@@ -308,6 +413,10 @@ class WarehouseCaptureRouter:
 
     def _manual(self):
         return self.native if self.native_selected() else self.legacy
+
+    @property
+    def window_message_only(self):
+        return bool(self.native_selected())
 
     def __getattr__(self, name):
         if name in {'prepare_manual', 'start_manual', 'capture_manual_page', 'finish_manual_capture',

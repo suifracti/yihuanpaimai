@@ -1,4 +1,5 @@
 import copy
+import threading
 import json
 import sys
 import time
@@ -15,6 +16,7 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "core"))
 sys.path.insert(0, str(ROOT / "architecture" / "v2" / "host" / "engine_v22"))
 
+from warehouse_viewport_scope import WarehouseViewportScope
 from current_match import CurrentMatch
 from deferred_identity_analyzer import DeferredIdentityAnalyzer, deferred_identity_result_is_current
 from nte_engine_v22 import RealEngine
@@ -37,6 +39,10 @@ class _Pipeline:
 
 def _engine(current_match, catalog):
     engine = RealEngine.__new__(RealEngine)
+    engine.stop_event = threading.Event()
+    engine._warehouse_viewport_scope = WarehouseViewportScope()
+    engine._warehouse_viewport_scope.key = "same-viewport-fixture"
+    engine._warehouse_viewport_scope.current_key = "same-viewport-fixture"
     engine.session_id = "session-current"
     engine.generation_id = 9
     engine._identity_generation_lock = __import__("threading").Lock()
@@ -271,7 +277,7 @@ class DerivedWarehouseIdentityBoundaryTests(unittest.TestCase):
             "manualDecision": {"action": "CONFIRM_CANDIDATE", "catalogId": "candidate-a", "source": "HUMAN_INSTANCE_REVIEW"},
         }
         incoming = {**old, "identityStatus": "EXACT", "identifiedName": "其他身份", "identifiedCatalogId": "candidate-b"}
-        merged = engine._merge_warehouse_fact_slots({"slots": [old]}, {"slots": [incoming]})
+        merged = engine._merge_warehouse_fact_slots({"slots": [old], "viewportScope": "same-viewport-fixture"}, {"slots": [incoming], "viewportScope": "same-viewport-fixture"})
         slot = merged["slots"][0]
         self.assertEqual(slot["identityStatus"], "CANDIDATE")
         self.assertTrue(slot["identityConflict"])
@@ -416,7 +422,7 @@ class DerivedWarehouseIdentityBoundaryTests(unittest.TestCase):
             "identifiedCatalogId": "candidate-a", "identifiedName": "A",
         }
 
-        merged = RealEngine._merge_warehouse_fact_slots({"slots": [old]}, {"slots": [incoming]})
+        merged = RealEngine._merge_warehouse_fact_slots({"slots": [old], "viewportScope": "same-viewport-fixture"}, {"slots": [incoming], "viewportScope": "same-viewport-fixture"})
         slot = merged["slots"][0]
 
         self.assertEqual(slot["identityStatus"], "CANDIDATE")
@@ -850,7 +856,7 @@ class DerivedWarehouseIdentityBoundaryTests(unittest.TestCase):
     @staticmethod
     def _result(engine, warehouse_vision, *, frame_sequence=10, round_value=1):
         return {
-            "kind": "warehouse", "sessionId": engine.session_id, "generationId": engine.generation_id,
+            "kind": "warehouse", "viewportScope": "same-viewport-fixture", "sessionId": engine.session_id, "generationId": engine.generation_id,
             "matchId": engine.current_match.id, "matchSequence": engine.current_match._seq,
             "pipelineMatchGeneration": engine.pipeline._match_gen,
             "pipelineSessionGeneration": engine.pipeline._session_generation,

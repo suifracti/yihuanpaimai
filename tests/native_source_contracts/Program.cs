@@ -52,10 +52,182 @@ JsonObject Command(string op, int ordinal = 1) => new() {
     ["remainingPngBytes"] = 64L * 1024 * 1024, ["pngEncoding"] = "opencv-bgr8-png-bound.v1"
 };
 void Check(bool pass, string name) { if (!pass) throw new Exception("FAIL: " + name); Console.WriteLine("PASS: " + name); }
+if (args.Length > 1 && args[1] == "--settlement-wiring-only")
+{
+    // Settlement eligibility is independent of frozen-bill publication; no WGC or input API.
+    lease.UpdateContext(context with { SettlementCaptureEligible = false });
+    lease.Handle(Command("OPEN"));
+    Check(!lease.IsOpen, "non-settlement cannot open SOURCE");
+    lease.UpdateContext(context with { SettlementCaptureEligible = true });
+    lease.Handle(Command("OPEN"));
+    Check(lease.IsOpen, "observed settlement can open without bill freeze authority");
+    lease.Handle(Command("REQUEST_PAGE"));
+    lease.UpdateContext(context with { SettlementCaptureEligible = false });
+    Check(!lease.IsOpen && lease.PendingRequestGateNs is null, "leaving settlement cancels pending source");
+    lease.UpdateContext(context with { SettlementCaptureEligible = true });
+    lease.Handle(Command("OPEN")); lease.Handle(Command("REQUEST_PAGE"));
+    lease.SignalStop();
+    Check(!lease.IsOpen && lease.PendingRequestGateNs is null, "stop revokes early settlement request immediately");
+    using var next = new WarehouseEvidenceLease(Path.Combine(folder, "next"), "obs", events.Add, () => now);
+    next.UpdateContext(context);
+    next.Handle(Command("OPEN"));
+    next.UpdateContext(context with { RecordKey = "next-match", AbsoluteDeadlineNs = now + 70_000_000_000 });
+    Check(!next.IsOpen, "next match retires old lease");
+    var nextOpen = Command("OPEN"); nextOpen["recordStableKey"] = "next-match";
+    next.Handle(nextOpen);
+    Check(next.IsOpen && next.WrittenSources == 0, "new match has separate unchanged budget");
+    var stale = Command("REQUEST_PAGE");
+    next.Handle(stale);
+    Check(next.PendingRequestGateNs is null, "old match command cannot request next-match source");
+    next.UpdateContext(context with { RecordKey = "next-match", ClientMap = "invalid-mapping", AbsoluteDeadlineNs = now + 70_000_000_000 });
+    Check(!next.IsOpen, "mapping change revokes source");
+    Console.WriteLine("SETTLEMENT_WIRING_CONTRACTS_PASS");
+    return;
+}
 WarehouseSourceFrame Frame(long sourceTime, long sequence = 1) {
     var pixels = Enumerable.Range(0, 48).Select(i => (byte)(i + sequence)).ToArray();
     return new(4, 3, 16, pixels, sourceTime, now, "2026-09-30T10:00:00Z", sequence,
         Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(pixels)).ToLowerInvariant(), sequence);
+}
+if (args.Length > 1 && args[1] == "--trigger-watch-only")
+{
+    var triggerRoot = Path.Combine(folder, "trigger-watch");
+    var probeNow = 20_000_000_000L;
+    var deadline = probeNow + 70_000_000_000L;
+    var triggerEvents = new List<JsonObject>();
+    using var trigger = new WarehouseEvidenceLease(triggerRoot, "obs", e => triggerEvents.Add(e), () => probeNow);
+    var triggerContext = context with { AbsoluteDeadlineNs = deadline };
+    trigger.UpdateContext(triggerContext);
+    var watchId = Guid.NewGuid().ToString("N");
+    WarehouseSourceFrame TriggerFrame(long timestamp, long sequence)
+    {
+        var pixels = Enumerable.Range(0, 48).Select(i => (byte)(i + sequence)).ToArray();
+        return new WarehouseSourceFrame(4, 3, 16, pixels, timestamp - 1_000_000, timestamp,
+            "2026-10-06T00:00:00Z", sequence,
+            Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(pixels)).ToLowerInvariant(), sequence);
+    }
+    JsonObject TriggerCommand(string operation, string? probeId = null) => new() {
+        ["type"] = WarehouseEvidenceLease.ControlType, ["schemaVersion"] = WarehouseEvidenceLease.Schema,
+        ["operation"] = operation, ["commandId"] = Guid.NewGuid().ToString("N"),
+        ["nonce"] = Guid.NewGuid().ToString("N"), ["observationSessionId"] = "obs",
+        ["watchId"] = watchId, ["recordStableKey"] = "record",
+        ["expectedTargetInstance"] = target.DeepClone(), ["matchGeneration"] = 0,
+        ["clientMap"] = "map", ["maxProbes"] = WarehouseEvidenceLease.MaxTriggerProbes,
+        ["minimumIntervalNs"] = WarehouseEvidenceLease.MinTriggerProbeIntervalNs,
+        ["probeId"] = probeId, ["result"] = "REJECTED", ["reason"] = "offline-fixture",
+        ["reasonCodes"] = new JsonArray(JsonValue.Create("WAREHOUSE_NOT_TOP"))
+    };
+    // Fixture context has generation 0, matching the default WarehouseSourceContext.
+    trigger.Handle(TriggerCommand("WATCH_TRIGGER"));
+    Check(triggerEvents.Last()["event"]!.GetValue<string>() == "TRIGGER_WATCH_ARMED",
+        "bounded trigger watch arms with fixed source scope");
+    Check(trigger.PublishTriggerProbe(TriggerFrame(probeNow, 1), () => true), "first bounded probe publishes");
+    var firstProbe = triggerEvents.Last();
+    var firstDetails = (JsonObject)firstProbe["details"]!;
+    var firstPath = Path.Combine(triggerRoot, firstDetails["relativePath"]!.GetValue<string>().Replace('/', Path.DirectorySeparatorChar));
+    var firstBytes = File.ReadAllBytes(firstPath);
+    var replacementBlocked = false;
+    try { File.WriteAllBytes(firstPath, new byte[] { 1, 2, 3 }); }
+    catch (IOException) { replacementBlocked = true; }
+    catch (UnauthorizedAccessException) { replacementBlocked = true; }
+    Check(replacementBlocked && File.ReadAllBytes(firstPath).SequenceEqual(firstBytes),
+        "pending probe file cannot be replaced while its Host owner holds it");
+    probeNow += WarehouseEvidenceLease.MinTriggerProbeIntervalNs;
+    var publishedProbeCount = triggerEvents.Count(e => (string?)e["event"] == "TRIGGER_PROBE");
+    Check(!trigger.PublishTriggerProbe(TriggerFrame(probeNow, 2), () => true)
+        && triggerEvents.Count(e => (string?)e["event"] == "TRIGGER_PROBE") == publishedProbeCount
+        && File.ReadAllBytes(firstPath).SequenceEqual(firstBytes),
+        "slow consumer keeps one pending probe and does not queue or overwrite the next frame");
+    var firstAck = TriggerCommand("ACK_TRIGGER_PROBE", firstDetails["probeId"]!.GetValue<string>());
+    trigger.Handle(firstAck);
+    Check(triggerEvents.Any(e => (string?)e["event"] == "TRIGGER_PROBE_ACKED") && !File.Exists(firstPath),
+        "exact probe ACK releases only the consumed original");
+    var staleAck = TriggerCommand("ACK_TRIGGER_PROBE", firstDetails["probeId"]!.GetValue<string>());
+    trigger.Handle(staleAck);
+    Check(triggerEvents.Last()["reason"]!.GetValue<string>() == "STALE_TRIGGER_PROBE_ACK",
+        "late duplicate ACK cannot release a later probe");
+    for (var ordinal = 2; ordinal <= WarehouseEvidenceLease.MaxTriggerProbes; ordinal++)
+    {
+        probeNow += WarehouseEvidenceLease.MinTriggerProbeIntervalNs;
+        Check(trigger.PublishTriggerProbe(TriggerFrame(probeNow, ordinal), () => true),
+            "bounded probe attempt " + ordinal);
+        var published = triggerEvents.Last();
+        var details = (JsonObject)published["details"]!;
+        Check((int)details["probeOrdinal"]! == ordinal
+            && (int)details["sourcePagesWritten"]! == 0
+            && (int)details["sourceRequestAttempts"]! == 0,
+            "probe budget and SOURCE counters are separately recorded " + ordinal);
+        trigger.Handle(TriggerCommand("ACK_TRIGGER_PROBE", details["probeId"]!.GetValue<string>()));
+    }
+    Check(triggerEvents.Last()["reason"]!.GetValue<string>() == "TRIGGER_PROBE_LIMIT_REACHED",
+        "32nd probe ends watch with an explicit finite-budget reason");
+    probeNow += WarehouseEvidenceLease.MinTriggerProbeIntervalNs;
+    Check(!trigger.PublishTriggerProbe(TriggerFrame(probeNow, 33), () => true)
+        && triggerEvents.Count(e => (string?)e["event"] == "TRIGGER_PROBE") == WarehouseEvidenceLease.MaxTriggerProbes,
+        "probe 33 is rejected before file publication");
+
+    // The interval is independently enforced after ACK; it does not depend on
+    // the pending-slot guard or the application loop's sleep cadence.
+    long intervalNow = 30_000_000_000L;
+    var intervalEvents = new List<JsonObject>();
+    using (var interval = new WarehouseEvidenceLease(Path.Combine(folder, "interval-probe"), "obs",
+        e => intervalEvents.Add(e), () => intervalNow))
+    {
+        interval.UpdateContext(context with { AbsoluteDeadlineNs = intervalNow + 70_000_000_000L });
+        var priorWatchId = watchId;
+        watchId = Guid.NewGuid().ToString("N");
+        interval.Handle(TriggerCommand("WATCH_TRIGGER"));
+        Check(interval.PublishTriggerProbe(TriggerFrame(intervalNow, 1), () => true),
+            "interval fixture publishes initial probe");
+        var initial = (JsonObject)intervalEvents.Last()["details"]!;
+        interval.Handle(TriggerCommand("ACK_TRIGGER_PROBE", initial["probeId"]!.GetValue<string>()));
+        intervalNow += WarehouseEvidenceLease.MinTriggerProbeIntervalNs - 1;
+        var eventCountBeforeEarlyAttempt = intervalEvents.Count(e => (string?)e["event"] == "TRIGGER_PROBE");
+        Check(!interval.PublishTriggerProbe(TriggerFrame(intervalNow, 2), () => true)
+            && intervalEvents.Count(e => (string?)e["event"] == "TRIGGER_PROBE") == eventCountBeforeEarlyAttempt,
+            "probe inside the minimum interval is rejected without consuming an attempt");
+        intervalNow++;
+        Check(interval.PublishTriggerProbe(TriggerFrame(intervalNow, 2), () => true),
+            "probe is eligible exactly at the minimum interval");
+        var second = (JsonObject)intervalEvents.Last()["details"]!;
+        Check((int)second["probeOrdinal"]! == 2, "interval rejection does not consume the bounded probe budget");
+        interval.Handle(TriggerCommand("ACK_TRIGGER_PROBE", second["probeId"]!.GetValue<string>()));
+        watchId = priorWatchId;
+    }
+
+    var stopEvents = new List<JsonObject>();
+    var stopLease = new WarehouseEvidenceLease(Path.Combine(folder, "stop-probe"), "obs", e => stopEvents.Add(e), () => probeNow);
+    var stopDeadline = probeNow + 70_000_000_000L;
+    stopLease.UpdateContext(context with { AbsoluteDeadlineNs = stopDeadline });
+    var stopId = Guid.NewGuid().ToString("N");
+    var stopOpen = TriggerCommand("WATCH_TRIGGER"); stopOpen["watchId"] = stopId;
+    stopOpen["recordStableKey"] = "record"; stopOpen["expectedTargetInstance"] = target.DeepClone();
+    stopOpen["matchGeneration"] = 0;
+    stopLease.Handle(stopOpen);
+    Check(stopLease.PublishTriggerProbe(TriggerFrame(probeNow, 1), () => true), "stop fixture has one pending probe");
+    var stopDetails = (JsonObject)stopEvents.Last()["details"]!;
+    var stopPath = Path.Combine(folder, "stop-probe", stopDetails["relativePath"]!.GetValue<string>().Replace('/', Path.DirectorySeparatorChar));
+    stopLease.SignalStop();
+    Check(!stopLease.PublishTriggerProbe(TriggerFrame(probeNow + 1, 2), () => true),
+        "stop fences an in-flight probe publisher");
+    stopLease.Dispose();
+    Check(!File.Exists(stopPath), "Host stop closes owner and removes pending temporary evidence");
+
+    var scopeEvents = new List<JsonObject>();
+    using var changed = new WarehouseEvidenceLease(Path.Combine(folder, "next-match-probe"), "obs", e => scopeEvents.Add(e), () => probeNow);
+    changed.UpdateContext(context with { AbsoluteDeadlineNs = stopDeadline });
+    var scopeOpen = TriggerCommand("WATCH_TRIGGER"); scopeOpen["watchId"] = Guid.NewGuid().ToString("N");
+    scopeOpen["recordStableKey"] = "record"; scopeOpen["expectedTargetInstance"] = target.DeepClone();
+    scopeOpen["matchGeneration"] = 0;
+    changed.Handle(scopeOpen);
+    Check(changed.PublishTriggerProbe(TriggerFrame(probeNow, 1), () => true), "scope-change fixture publishes once");
+    var scopeDetails = (JsonObject)scopeEvents.Last()["details"]!;
+    var scopePath = Path.Combine(folder, "next-match-probe", scopeDetails["relativePath"]!.GetValue<string>().Replace('/', Path.DirectorySeparatorChar));
+    changed.UpdateContext(context with { RecordKey = "next-match", AbsoluteDeadlineNs = stopDeadline + 1 });
+    Check(!File.Exists(scopePath) && scopeEvents.Any(e => (string?)e["reason"] == "TRIGGER_SCOPE_CHANGED"),
+        "next match boundary immediately revokes and deletes the previous pending probe");
+    Console.WriteLine("TRIGGER_WATCH_CONTRACTS_PASS");
+    return;
 }
 if (args.Length < 2 || args[1] != "--limits-only")
 {

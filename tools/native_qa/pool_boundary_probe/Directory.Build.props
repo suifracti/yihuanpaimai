@@ -1,0 +1,5 @@
+<Project><PropertyGroup>
+  <BaseIntermediateOutputPath>$(MSBuildThisFileDirectory)..\..\..\build\native-pool-boundary-20261006\obj\</BaseIntermediateOutputPath>
+  <OutputPath>$(MSBuildThisFileDirectory)..\..\..\build\native-pool-boundary-20261006\out\</OutputPath>
+  <AppendTargetFrameworkToOutputPath>false</AppendTargetFrameworkToOutputPath>
+</PropertyGroup></Project>

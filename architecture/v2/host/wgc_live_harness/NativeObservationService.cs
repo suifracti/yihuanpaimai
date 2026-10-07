@@ -45,9 +45,10 @@ internal static class NativeObservationService
                 rawObservationWindowMode);
             return 2;
         }
+        var capturePolicy = CapturePolicy.Parse(Arg(args, "--capture-freshness-policy", CapturePolicy.Strict));
         // Capture this immutable launch choice; commands cannot change the running session's mode.
         void EmitStatus(string id, string status, string reason, object? details) =>
-            NativeObservationService.EmitStatus(id, status, reason, details, observationWindowMode);
+            NativeObservationService.EmitStatus(id, status, reason, details, observationWindowMode, capturePolicy);
 
         var repoRoot = FindRepoRoot(Arg(args, "--repo", Directory.GetCurrentDirectory()));
         var specImage = Arg(args, "--spec-image", "htgame.exe");
@@ -72,16 +73,46 @@ internal static class NativeObservationService
 
         var tracePath = Path.Combine(workDir, "host-trace.jsonl");
         var engineLogPath = Path.Combine(workDir, "engine-trace.jsonl");
-        var controlQueue = new BlockingCollection<JsonObject>();
+        var stop = new CancellationTokenSource();
+        var stopReason = string.Empty;
+        var controlQueue = new BlockingCollection<JsonObject>(32);
         var evidenceQueue = new BlockingCollection<JsonObject>(8);
         Func<WarehouseSourceContext, Func<bool>, bool>? scrollWindow = null;
+        Func<DeliveryVisualSummary?> latestSummary = () => null;
+        var scrollDiagnosticLock = new object();
+        long scrollDiagnosticBytes = 0;
+        void WriteScrollDiagnostic(JsonObject details)
+        {
+            try
+            {
+                lock (scrollDiagnosticLock)
+                {
+                    details["observationSessionId"] = sessionId;
+                    details["loggedAtNs"] = ProtocolClock.NowNs();
+                    var bytes = System.Text.Encoding.UTF8.GetBytes(details.ToJsonString() + "\n");
+                    if (scrollDiagnosticBytes + bytes.Length > 1_048_576) return;
+                    using var stream = new FileStream(Path.Combine(workDir, "warehouse-scroll-diagnostics.jsonl"), FileMode.Append, FileAccess.Write, FileShare.Read);
+                    stream.Write(bytes); stream.Flush(); scrollDiagnosticBytes += bytes.Length;
+                }
+            }
+            catch { } // no diagnostic IO failure can authorize input
+        }
         using var evidenceLease = new WarehouseEvidenceLease(workDir, sessionId, EmitLine,
-            scrollDown: (context, current) => scrollWindow?.Invoke(context, current) == true);
-        StartControlReader(controlQueue, evidenceQueue, evidenceLease);
+            scrollDown: (context, current) => scrollWindow?.Invoke(context, current) == true,
+            capturePolicy: capturePolicy, latestSummary: () => latestSummary(), scrollDiagnosticLog: WriteScrollDiagnostic);
+        void StopTransport(string reason)
+        {
+            Interlocked.CompareExchange(ref stopReason, reason, string.Empty);
+            evidenceLease.SignalStop();
+            stop.Cancel();
+        }
+        StartControlReader(controlQueue, evidenceQueue, evidenceLease, StopTransport);
 
         EmitStatus(sessionId, "STARTING", "explicit-start", new
         {
             profile = "native-readonly-v1",
+            hostPid = Environment.ProcessId,
+            hostExecutable = Environment.ProcessPath,
             workDir,
             engine = engineScript,
             inputActions = false,
@@ -126,12 +157,32 @@ internal static class NativeObservationService
                     targetPid = target.TargetPid,
                     targetGeneration = target.Generation,
                     processInstanceToken = target.TargetIdentity!.ProcessInstanceToken,
-                    observationWindowMode,
+                    observationWindowMode, captureFreshnessPolicy = capturePolicy,
                 }, JsonLineOptions));
-            using var capture = new WgcWindowCapture(new IntPtr(target.TargetHwnd));
-            scrollWindow = (context, current) => WarehouseWindowScroll.SendDown(context, () => current()
-                && MatchesObservationTargetIdentity(context.Target, monitor.Snapshot(), target, observationWindowMode)
-                && capture.IsClientAreaMappingCurrent());
+            using var capture = new ContinuousWgcCapture(new IntPtr(target.TargetHwnd), frameWaitMs, intervalMs,
+                observationWindowMode, () => stop.IsCancellationRequested,
+                () => IsObservationTargetUsable(monitor.Snapshot(), observationWindowMode)
+                    && BackgroundObservationPolicy.IsSameObservationTarget(monitor.Snapshot(), target),
+                reason => EmitStatus(sessionId, "ERROR", reason, new { exitConfirmed = false }), capturePolicy, sessionId);
+            var launchMetadata = ReadJsonObject(Path.Combine(workDir, "observation-target.json"))!;
+            launchMetadata["clientMap"] = $"{capture.CaptureItemWidth}x{capture.CaptureItemHeight}:{capture.ClientOffsetX},{capture.ClientOffsetY}:{capture.Width}x{capture.Height}";
+            File.WriteAllText(Path.Combine(workDir, "observation-target.json"), launchMetadata.ToJsonString());
+            latestSummary = () => capture.LatestSummary;
+            scrollWindow = (context, current) => WarehouseWindowScroll.SendDown(context, () => {
+                var leaseCurrent = current();
+                var observed = leaseCurrent ? monitor.Snapshot() : null;
+                var identityCurrent = observed is not null
+                    && MatchesObservationTargetIdentity(context.Target, observed, target, observationWindowMode);
+                bool? mappingCurrent = identityCurrent ? capture.IsClientAreaMappingCurrent() : null;
+                WriteScrollDiagnostic(new JsonObject {
+                    ["stage"] = "target-mapping-qualification", ["recordStableKey"] = context.RecordKey,
+                    ["matchGeneration"] = context.MatchGeneration, ["leaseCurrent"] = leaseCurrent,
+                    ["targetIdentityCurrent"] = observed is null ? null : identityCurrent,
+                    ["clientMapCurrent"] = mappingCurrent, ["expectedClientMap"] = context.ClientMap,
+                    ["mappingFailureMeaning"] = "changed or cannot prove current mapping",
+                    ["targetSnapshot"] = observed is null ? null : JsonSerializer.SerializeToNode(TargetEvidence(observed)) });
+                return leaseCurrent && identityCurrent && mappingCurrent == true;
+            }, WriteScrollDiagnostic);
             if (observationWindowMode == BackgroundObservationPolicy.BackgroundReadOnly
                 && !capture.IsClientAreaMappingCurrent())
                 throw new InvalidOperationException("background-client-area-mapping-unproven");
@@ -154,9 +205,44 @@ internal static class NativeObservationService
                 AcceptTimeoutMs = 15000,
             });
 
+            void ShutdownObservation()
+            {
+                stop.Cancel();
+                evidenceLease.SignalStop();
+                capture.Dispose();
+                trace.Event("observation.capture.final", session.GenerationId, capture.Statistics());
+                session.ControlledShutdown();
+            }
+
             session.StartGeneration(coldBoot: true);
             var handshake = session.Handshake(coldBoot: true);
             session.ReachReady(coldBoot: true, noRecoverableBusinessState: true);
+            capture.ThrowIfFailed();
+            if (capturePolicy == CapturePolicy.Delivery)
+            {
+                var capability = ReadJsonObject(Path.Combine(workDir, "capture-policy-ready.json"));
+                if ((string?)capability?["sessionId"] != sessionId
+                    || (string?)capability?["captureFreshnessPolicy"] != capturePolicy
+                    || (string?)capability?["sourceSchema"] != WarehouseEvidenceLease.SchemaV2)
+                    throw new InvalidOperationException("DELIVERY_ENGINE_CAPABILITY_MISSING");
+            }
+            using var sourcePump = capturePolicy == CapturePolicy.Delivery ? new DeliverySourcePump(evidenceLease, evidenceQueue,
+                () => DrainEvidenceControls(evidenceQueue, evidenceLease, monitor, target, observationWindowMode),
+                (request, cancelled) =>
+                {
+                    var original = capture.CaptureAfterRequest(frameWaitMs, request.Gate, request.Deadline, cancelled, evidenceLease.PendingRequestClockSample);
+                    trace.Event("warehouse.source.v2.delivery", session.GenerationId,
+                        new { scope = evidenceLease.PendingRequestDiagnosticContext,
+                            diagnostic = original.DeliveryDiagnosticJson is null ? null : JsonNode.Parse(original.DeliveryDiagnosticJson) });
+                    return new WarehouseSourceFrame(original.Width, original.Height, original.Stride, original.Pixels,
+                        original.SourceTimestampNs, original.CaptureTimestampNs, original.CapturedAtUtc,
+                        original.AcquisitionSequence, "", 0, original.DeliveryProof, DeliveryVisualSummary.From(original),
+                        request.Gate, request.Match);
+                }, () => IsObservationTargetUsable(monitor.Snapshot(), observationWindowMode)
+                    && BackgroundObservationPolicy.IsSameObservationTarget(monitor.Snapshot(), target)
+                    && capture.IsClientAreaMappingCurrent(),
+                ex => trace.Event("warehouse.source.v2.failed", session.GenerationId, new { error = ex.ToString(), diagnostic = capture.LastRequestClockDiagnosticsJson }),
+                reason => EmitStatus(sessionId, "ERROR", reason, new { exitConfirmed = false })) : null;
             EmitStatus(sessionId, "READY", "engine-ready", new
             {
                 target = TargetEvidence(target),
@@ -172,11 +258,15 @@ internal static class NativeObservationService
                     offsetX = capture.ClientOffsetX,
                     offsetY = capture.ClientOffsetY,
                 },
+                captureFreshnessPolicy = capturePolicy,
+                sourceSchema = capturePolicy == CapturePolicy.Delivery ? WarehouseEvidenceLease.SchemaV2 : WarehouseEvidenceLease.Schema,
+                warehouseSourceBeforeBillFrozen = true,
                 inputActions = false,
                 formalHistoryWriter = false,
             });
 
             var acceptedFrames = 0;
+            var processedFrames = 0;
             long lastSourceTimestampNs = 0;
             var firstFrameWritten = false;
             var firstLobbyFrameWritten = false;
@@ -185,15 +275,19 @@ internal static class NativeObservationService
             long? settlementSourceDeadlineNs = null;
             var settlementCollectionClosed = false;
             string? settlementMatchId = null;
+            string? deliveryRecordKey = null;
             while (maxFrames <= 0 || acceptedFrames < maxFrames)
             {
-                if (DrainControls(controlQueue, session, sessionId, monitor, target, observationWindowMode))
+                if (stop.IsCancellationRequested || DrainControls(controlQueue, session, sessionId, monitor, target, observationWindowMode))
                 {
-                    session.ControlledShutdown();
-                    EmitStatus(sessionId, "STOPPED", "explicit-stop", new { acceptedFrames });
+                    ShutdownObservation();
+                    EmitStatus(sessionId, "STOPPED", string.IsNullOrEmpty(stopReason) ? "explicit-stop" : Volatile.Read(ref stopReason), new { acceptedFrames });
                     return 0;
                 }
-                DrainEvidenceControls(evidenceQueue, evidenceLease, monitor, target, observationWindowMode);
+                // Admit queued SOURCE/wheel commands only after the next
+                // serial business result has refreshed the existing lifecycle
+                // context below. An old settlement context cannot send a wheel
+                // ahead of a newly acquired lobby/auction observation.
                 evidenceLease.Tick();
                 var beforeCapture = monitor.Snapshot();
                 if (!IsObservationTargetUsable(beforeCapture, observationWindowMode)
@@ -201,7 +295,7 @@ internal static class NativeObservationService
                 {
                     evidenceLease.SignalStop();
                     EmitStatus(sessionId, "PAUSED", PauseReason(beforeCapture, observationWindowMode), TargetEvidence(beforeCapture));
-                    session.ControlledShutdown();
+                    ShutdownObservation();
                     return 3;
                 }
                 if (observationWindowMode == BackgroundObservationPolicy.BackgroundReadOnly
@@ -209,15 +303,28 @@ internal static class NativeObservationService
                 {
                     evidenceLease.SignalStop();
                     EmitStatus(sessionId, "PAUSED", "client-area-mapping-changed", TargetEvidence(beforeCapture));
-                    session.ControlledShutdown();
+                    ShutdownObservation();
                     return 3;
                 }
 
                 CapturedBgraFrame frame;
-                var sourceRequestGate = evidenceLease.PendingRequestGateNs;
+                var sourceRequestGate = capturePolicy == CapturePolicy.Delivery ? null : evidenceLease.PendingRequestGateNs;
+                var requestDiagnosticContext = evidenceLease.PendingRequestDiagnosticContext;
+                capture.EnableRequestClockDiagnostics = sourceRequestGate.HasValue;
+                var requestClockWritten = false;
+                void WriteRequestClock()
+                {
+                    if (!requestClockWritten && sourceRequestGate.HasValue
+                        && capture.LastRequestClockDiagnosticsJson is { } diagnostic)
+                    {
+                        requestClockWritten = true;
+                        trace.Event("warehouse.source.request_clock", session.GenerationId,
+                            new { scope = requestDiagnosticContext, diagnostic = JsonNode.Parse(diagnostic) });
+                    }
+                }
                 try
                 {
-                    // Only an explicit SOURCE request selects after its own gate. Ordinary FRAME cadence is unchanged.
+                    // SOURCE retains its explicit gate; ordinary FRAME uses Capture's fresh gate after perception.
                     frame = sourceRequestGate is long requestGate
                         ? capture.CaptureAfterRequest(frameWaitMs, requestGate,
                             evidenceLease.PendingRequestDeadlineNs, () => !evidenceLease.IsOpen)
@@ -225,26 +332,36 @@ internal static class NativeObservationService
                 }
                 catch (OperationCanceledException) when (sourceRequestGate is not null && !evidenceLease.IsOpen)
                 {
+                    WriteRequestClock();
                     // Closing warehouse intake does not terminate ordinary observation.
                     // A native_stop is processed at the beginning of the next iteration.
                     continue;
                 }
                 catch (TimeoutException) when (sourceRequestGate is not null)
                 {
+                    WriteRequestClock();
                     evidenceLease.Close("SOURCE_REQUEST_TIMEOUT");
                     continue;
                 }
                 catch (Exception ex)
                 {
+                    WriteRequestClock();
                     evidenceLease.SignalStop();
-                    EmitStatus(sessionId, "PAUSED", "capture-failed", new
+                    EmitStatus(sessionId, stop.IsCancellationRequested ? "STOPPED" : "PAUSED",
+                        stop.IsCancellationRequested ? Volatile.Read(ref stopReason) : CaptureFailure.Reason(ex, "capture-failed"), new
                     {
-                        error = $"{ex.GetType().Name}: {ex.Message}",
+                        error = ex.ToString(),
                         stackTrace = ex.StackTrace,
                         target = TargetEvidence(beforeCapture),
                     });
-                    session.ControlledShutdown();
+                    ShutdownObservation();
                     return 4;
+                }
+
+                // CaptureAfterRequest stores the raw diagnostic even when selection/readback rejects.
+                finally
+                {
+                    WriteRequestClock();
                 }
 
                 var afterCapture = monitor.Snapshot();
@@ -253,10 +370,10 @@ internal static class NativeObservationService
                 {
                     evidenceLease.SignalStop();
                     EmitStatus(sessionId, "PAUSED", PauseReason(afterCapture, observationWindowMode), TargetEvidence(afterCapture));
-                    session.ControlledShutdown();
+                    ShutdownObservation();
                     return 3;
                 }
-                var sourceReadbackRejection = BackgroundObservationPolicy.BackgroundReadbackRejection(
+                var sourceReadbackRejection = capturePolicy == CapturePolicy.Delivery ? frame.DeliveryProof?.Rejection(ProtocolClock.NowNs()) : BackgroundObservationPolicy.BackgroundReadbackRejection(
                     observationWindowMode, frame.SourceTimestampNs, frame.CaptureTimestampNs, lastSourceTimestampNs);
                 if (sourceReadbackRejection is not null
                     || (observationWindowMode == BackgroundObservationPolicy.BackgroundReadOnly
@@ -268,11 +385,22 @@ internal static class NativeObservationService
                         sourceTimestampNs = frame.SourceTimestampNs, readbackTimestampNs = frame.CaptureTimestampNs,
                         lastSourceTimestampNs, target = TargetEvidence(afterCapture),
                     });
-                    session.ControlledShutdown();
+                    ShutdownObservation();
                     return 3;
                 }
                 lastSourceTimestampNs = frame.SourceTimestampNs;
 
+                var dequeueRejection = capturePolicy == CapturePolicy.Delivery ? frame.DeliveryProof?.Rejection(ProtocolClock.NowNs()) : BackgroundObservationPolicy.BackgroundReadbackRejection(
+                    observationWindowMode, frame.SourceTimestampNs, ProtocolClock.NowNs(), 0);
+                if (dequeueRejection is not null)
+                {
+                    evidenceLease.SignalStop();
+                    EmitStatus(sessionId, "PAUSED", "pending-frame:" + dequeueRejection,
+                        new { frame.SourceTimestampNs, frame.CaptureTimestampNs, comparedAtNs = ProtocolClock.NowNs() });
+                    ShutdownObservation();
+                    return 3;
+                }
+                var businessStartedNs = ProtocolClock.NowNs();
                 Dictionary<string, object?> transfer;
                 try
                 {
@@ -282,18 +410,35 @@ internal static class NativeObservationService
                         frame.Height,
                         frame.Stride,
                         frame.CaptureTimestampNs,
-                        timeoutMs: 30000);
+                        timeoutMs: 30000, cancelled: () => stop.IsCancellationRequested || capture.IsStopped,
+                        captureProof: frame.DeliveryProof is null ? null : new JsonObject {
+                            ["capturePolicy"] = capturePolicy, ["deliveryProof"] = frame.DeliveryProof.ToJson(),
+                            ["recordStableKey"] = (string?)ReadJsonObject(Path.Combine(workDir, "engine_state.json"))?["currentMatch"]?["id"],
+                            ["targetInstance"] = new JsonObject { ["targetHwnd"] = target.TargetHwnd,
+                                ["targetPid"] = target.TargetPid, ["targetGeneration"] = target.Generation,
+                                ["processInstanceToken"] = target.TargetIdentity!.ProcessInstanceToken },
+                            ["clientMap"] = $"{capture.CaptureItemWidth}x{capture.CaptureItemHeight}:{capture.ClientOffsetX},{capture.ClientOffsetY}:{frame.Width}x{frame.Height}" });
+                }
+                catch (OperationCanceledException)
+                {
+                    var requestedStop = stop.IsCancellationRequested;
+                    evidenceLease.SignalStop();
+                    EmitStatus(sessionId, stop.IsCancellationRequested ? "STOPPED" : "PAUSED",
+                        stop.IsCancellationRequested ? Volatile.Read(ref stopReason) : "capture-owner-stopped",
+                        new { capture = capture.Statistics(), error = capture.Failure, acceptedFrames });
+                    ShutdownObservation();
+                    return requestedStop ? 0 : 4;
                 }
                 catch (Exception ex)
                 {
                     evidenceLease.SignalStop();
                     EmitStatus(sessionId, "ERROR", "engine-frame-failed", new
                     {
-                        error = $"{ex.GetType().Name}: {ex.Message}",
+                        error = ex.ToString(),
                         capturedAtNs = frame.CaptureTimestampNs,
                         capturedAtUtc = frame.CapturedAtUtc,
                     });
-                    session.ControlledShutdown();
+                    ShutdownObservation();
                     return 5;
                 }
 
@@ -301,10 +446,19 @@ internal static class NativeObservationService
                 {
                     evidenceLease.SignalStop();
                     EmitStatus(sessionId, "ERROR", "perception-not-received", transfer);
-                    session.ControlledShutdown();
+                    ShutdownObservation();
                     return 6;
                 }
 
+                if (stop.IsCancellationRequested || capture.IsStopped) throw new OperationCanceledException("observation stopped before publication");
+                processedFrames++;
+                trace.Event("observation.capture.statistics", session.GenerationId,
+                    new { capture = capture.Statistics(), processedFrames, acceptedFrames,
+                        acquisitionSequence = frame.AcquisitionSequence,
+                        deliveryDiagnostic = frame.DeliveryDiagnosticJson is null ? null : JsonNode.Parse(frame.DeliveryDiagnosticJson),
+                        businessWaitMs = (ProtocolClock.NowNs() - businessStartedNs) / 1_000_000.0,
+                        sourceTimestampNs = frame.SourceTimestampNs,
+                        processingMs = (transfer.GetValueOrDefault("perceptionPayload") as JsonObject)?["processingMs"]?.DeepClone() });
                 var afterEngine = monitor.Snapshot();
                 if (!IsObservationTargetUsable(afterEngine, observationWindowMode)
                     || !BackgroundObservationPolicy.IsSameObservationTarget(afterEngine, target))
@@ -313,12 +467,12 @@ internal static class NativeObservationService
                     // allowed to become the next observation's HUD state.
                     evidenceLease.SignalStop();
                     EmitStatus(sessionId, "PAUSED", PauseReason(afterEngine, observationWindowMode), TargetEvidence(afterEngine));
-                    session.ControlledShutdown();
+                    ShutdownObservation();
                     return 3;
                 }
                 var mappingAfterEngineCurrent = observationWindowMode != BackgroundObservationPolicy.BackgroundReadOnly
                     || capture.IsClientAreaMappingCurrent();
-                var sourcePublicationRejection = BackgroundObservationPolicy.BackgroundPublicationRejection(
+                var sourcePublicationRejection = capturePolicy == CapturePolicy.Delivery ? frame.DeliveryProof?.Rejection(ProtocolClock.NowNs(), 31_000_000_000) : BackgroundObservationPolicy.BackgroundPublicationRejection(
                     observationWindowMode, frame.SourceTimestampNs, ProtocolClock.NowNs());
                 if (sourcePublicationRejection is not null || !mappingAfterEngineCurrent)
                 {
@@ -328,7 +482,7 @@ internal static class NativeObservationService
                         sourceTimestampNs = frame.SourceTimestampNs, readbackTimestampNs = frame.CaptureTimestampNs,
                         target = TargetEvidence(afterEngine),
                     });
-                    session.ControlledShutdown();
+                    ShutdownObservation();
                     return 3;
                 }
 
@@ -362,22 +516,40 @@ internal static class NativeObservationService
                 if (justClosedSettlement)
                     settlementCollectionClosed = true;
                 var frameSequence = Convert.ToInt64(transfer.GetValueOrDefault("sequence") ?? 0);
-                // Separate, explicit source channel. The closed-bill business publication guard below is unchanged.
+                // Evidence eligibility follows the observed settlement, independently of bill freezing.
+                // The closed-bill business publication guard below is unchanged.
+                var nextRecordKey = (string?)state?["currentMatch"]?["id"];
+                if (capturePolicy == CapturePolicy.Delivery && deliveryRecordKey != nextRecordKey)
+                {
+                    evidenceLease.Close("SOURCE_MATCH_RETIRED"); capture.InvalidateScope();
+                    deliveryRecordKey = nextRecordKey;
+                }
                 var evidenceTarget = EvidenceTargetIdentity(afterEngine);
                 var evidenceMap = $"{capture.CaptureItemWidth}x{capture.CaptureItemHeight}:"
                     + $"{capture.ClientOffsetX},{capture.ClientOffsetY}:{frame.Width}x{frame.Height}";
 
                 evidenceLease.UpdateContext(new WarehouseSourceContext(
                     (string?)state?["currentMatch"]?["id"] ?? "", evidenceTarget, evidenceMap,
-                    frame.Width, frame.Height, settlementCollectionClosed && scene == "SETTLEMENT",
-                    IsObservationTargetUsable(afterEngine, observationWindowMode), settlementSourceDeadlineNs ?? ProtocolClock.NowNs()));
-                DrainEvidenceControls(evidenceQueue, evidenceLease, monitor, target, observationWindowMode);
-                evidenceLease.TryPublish(new WarehouseSourceFrame(frame.Width, frame.Height, frame.Stride,
+                    frame.Width, frame.Height, scene == "SETTLEMENT",
+                    IsObservationTargetUsable(afterEngine, observationWindowMode), settlementSourceDeadlineNs ?? ProtocolClock.NowNs(), (long?)state?["lastFrame"]?["matchGeneration"] ?? 0));
+                if (capturePolicy != CapturePolicy.Delivery) DrainEvidenceControls(evidenceQueue, evidenceLease, monitor, target, observationWindowMode);
+                var sourcePublished = capturePolicy != CapturePolicy.Delivery && evidenceLease.TryPublish(new WarehouseSourceFrame(frame.Width, frame.Height, frame.Stride,
                     frame.Pixels, frame.SourceTimestampNs, frame.CaptureTimestampNs, frame.CapturedAtUtc,
                     frameSequence, (string?)state?["lastFrame"]?["pixelSha256"] ?? "",
                     (long?)state?["lastFrame"]?["frameSequence"] ?? -1L),
                     () => MatchesObservationTargetIdentity(evidenceTarget, monitor.Snapshot(), target, observationWindowMode)
                         && capture.IsClientAreaMappingCurrent());
+                if (sourceRequestGate is long attemptedGate && !sourcePublished
+                    && evidenceLease.PendingRequestGateNs == attemptedGate)
+                {
+                    // A completed explicit acquisition that failed admission
+                    // must not silently turn into another acquisition under
+                    // the same request. Retain the diagnostic and stop intake.
+                    trace.Event("warehouse.source.admission_rejected", session.GenerationId,
+                        new { requestGateNs = attemptedGate, frame.SourceTimestampNs, frame.CaptureTimestampNs,
+                            comparedAtNs = ProtocolClock.NowNs(), acquisitionSequence = frame.AcquisitionSequence });
+                    evidenceLease.Close("SOURCE_EXPLICIT_FRAME_NOT_ADMITTED");
+                }
 
                 if (scene == "AUCTION_LOBBY" && !firstLobbyFrameWritten)
                 {
@@ -443,7 +615,7 @@ internal static class NativeObservationService
                         boundaryEvidenceError,
                         target = TargetEvidence(afterEngine),
                     });
-                    session.ControlledShutdown();
+                    ShutdownObservation();
                     return 7;
                 }
 
@@ -468,6 +640,16 @@ internal static class NativeObservationService
                 {
                     // Keep watching target/focus and the exit scene, without
                     // repeatedly publishing an already closed bill.
+                    var currentTarget = monitor.Snapshot();
+                    var probeFrame = new WarehouseSourceFrame(frame.Width, frame.Height, frame.Stride, frame.Pixels,
+                        frame.SourceTimestampNs, frame.CaptureTimestampNs, frame.CapturedAtUtc,
+                        frame.AcquisitionSequence > 0 ? frame.AcquisitionSequence : frameSequence,
+                        "", 0, frame.DeliveryProof, frame.DeliveryProof is null ? null : DeliveryVisualSummary.From(frame),
+                        0, (long?)state?["lastFrame"]?["matchGeneration"] ?? 0);
+                    evidenceLease.PublishTriggerProbe(probeFrame,
+                        () => IsObservationTargetUsable(monitor.Snapshot(), observationWindowMode)
+                            && MatchesObservationTargetIdentity(evidenceTarget, monitor.Snapshot(), target, observationWindowMode)
+                            && capture.IsClientAreaMappingCurrent());
                     Thread.Sleep(Math.Max(intervalMs, 600));
                     continue;
                 }
@@ -498,14 +680,14 @@ internal static class NativeObservationService
                     var publicationTargetUsable = IsObservationTargetUsable(publicationTarget, observationWindowMode)
                         && BackgroundObservationPolicy.IsSameObservationTarget(publicationTarget, target);
                     var publicationMappingCurrent = capture.IsClientAreaMappingCurrent();
-                    var publicationReason = BackgroundObservationPolicy.BackgroundPublicationRejection(
+                    var publicationReason = capturePolicy == CapturePolicy.Delivery ? frame.DeliveryProof?.Rejection(ProtocolClock.NowNs(), 31_000_000_000) : BackgroundObservationPolicy.BackgroundPublicationRejection(
                         observationWindowMode, frame.SourceTimestampNs, ProtocolClock.NowNs());
                     if (!publicationTargetUsable || !publicationMappingCurrent || publicationReason is not null)
                     {
                         evidenceLease.SignalStop();
                         EmitStatus(sessionId, "PAUSED", publicationReason ?? "publication-target-or-mapping-changed",
                             TargetEvidence(publicationTarget));
-                        session.ControlledShutdown();
+                        ShutdownObservation();
                         return 3;
                     }
                     afterEngine = publicationTarget;
@@ -515,11 +697,15 @@ internal static class NativeObservationService
                     afterEngine,
                     frame,
                     transfer,
-                state,
+                    state,
                 acceptedFrames + 1,
                     latestRawPath,
                     capture,
-                    observationWindowMode);
+                    observationWindowMode,
+                    settlementBusinessClosed: justClosedSettlement && scene == "SETTLEMENT"
+                        && !string.IsNullOrEmpty(settlementMatchId)
+                        && string.Equals(settlementMatchId, nextRecordKey, StringComparison.Ordinal),
+                    settlementDeadlineNs: settlementSourceDeadlineNs);
                 if (observationRejection is not null)
                 {
                     evidenceLease.SignalStop();
@@ -528,23 +714,30 @@ internal static class NativeObservationService
                         sourceTimestampNs = frame.SourceTimestampNs,
                         readbackTimestampNs = frame.CaptureTimestampNs,
                     });
-                    session.ControlledShutdown();
+                    ShutdownObservation();
                     return 3;
                 }
                 acceptedFrames++;
                 Thread.Sleep(settlementCollectionClosed ? Math.Max(intervalMs, 600) : intervalMs);
             }
 
-            session.ControlledShutdown();
+            ShutdownObservation();
             EmitStatus(sessionId, "STOPPED", "frame-limit", new { acceptedFrames });
+            return 0;
+        }
+        catch (OperationCanceledException) when (stop.IsCancellationRequested)
+        {
+            evidenceLease.SignalStop();
+            EmitStatus(sessionId, "STOPPED", Volatile.Read(ref stopReason), new { inputActions = false });
             return 0;
         }
         catch (Exception ex)
         {
+            stop.Cancel();
             evidenceLease.SignalStop();
-            EmitStatus(sessionId, "ERROR", "native-observation-failed", new
+            EmitStatus(sessionId, "ERROR", CaptureFailure.Reason(ex, "native-observation-failed"), new
             {
-                error = $"{ex.GetType().Name}: {ex.Message}",
+                error = ex.ToString(),
                 stackTrace = ex.StackTrace,
                 inputActions = false,
                 formalHistoryWriter = false,
@@ -561,12 +754,14 @@ internal static class NativeObservationService
         JsonObject? state,
         int acceptedFrames,
         string rawFramePath,
-        WgcWindowCapture capture,
-        string observationWindowMode)
+        ContinuousWgcCapture capture,
+        string observationWindowMode,
+        bool settlementBusinessClosed,
+        long? settlementDeadlineNs)
     {
         var targetEvidence = JsonSerializer.SerializeToNode(TargetEvidence(target), JsonLineOptions);
         var publicationAtNs = ProtocolClock.NowNs();
-        var sourceRejection = BackgroundObservationPolicy.BackgroundPublicationRejection(
+        var sourceRejection = frame.DeliveryProof is { } proof ? proof.Rejection(publicationAtNs, 31_000_000_000) : BackgroundObservationPolicy.BackgroundPublicationRejection(
             observationWindowMode, frame.SourceTimestampNs, publicationAtNs);
         if (sourceRejection is not null) return sourceRejection;
         var line = new JsonObject
@@ -576,6 +771,7 @@ internal static class NativeObservationService
             ["status"] = "FRAME",
             ["observationSessionId"] = sessionId,
             ["observationWindowMode"] = observationWindowMode,
+            ["captureFreshnessPolicy"] = frame.DeliveryProof is null ? CapturePolicy.Strict : CapturePolicy.Delivery,
             ["sourceKind"] = "native_wgc",
             ["inputActions"] = false,
             ["formalHistoryWriter"] = false,
@@ -584,6 +780,7 @@ internal static class NativeObservationService
             ["frame"] = new JsonObject
             {
                 ["sequence"] = Convert.ToInt64(transfer.GetValueOrDefault("sequence") ?? 0),
+                ["acquisitionSequence"] = frame.AcquisitionSequence,
                 ["capturedAtNs"] = frame.CaptureTimestampNs,
                 ["sourceTimestampNs"] = frame.SourceTimestampNs,
                 ["capturedAtUtc"] = frame.CapturedAtUtc,
@@ -605,12 +802,33 @@ internal static class NativeObservationService
             ["pipelineContext"] = state?["pipelineContext"]?.DeepClone(),
             ["lastFrame"] = state?["lastFrame"]?.DeepClone(),
         };
+        if (settlementBusinessClosed && settlementDeadlineNs is long fixedDeadline)
+        {
+            var frameMetadata = (JsonObject)line["frame"]!;
+            frameMetadata["settlementBusinessClosed"] = true;
+            frameMetadata["settlementDeadlineNs"] = fixedDeadline;
+        }
+        if (frame.DeliveryProof is { } delivered)
+        {
+            var metadata = (JsonObject)line["frame"]!; metadata.Remove("freshnessMs");
+            metadata["deliveryProof"] = delivered.ToJson();
+            metadata["deliveryAgeMs"] = (publicationAtNs - frame.CaptureTimestampNs) / 1_000_000.0;
+            metadata["resultLagMs"] = metadata["deliveryAgeMs"]!.DeepClone();
+            metadata["sourceAbsoluteAgeMs"] = null;
+            var originalSummary = DeliveryVisualSummary.From(frame);
+            var latest = capture.LatestSummary;
+            var adviceQualification = DeliveryAdviceQualification.Evaluate(delivered, latest, originalSummary, publicationAtNs);
+            metadata["currentAdviceQualified"] = adviceQualification.Qualified;
+            metadata["currentAdviceQualification"] = adviceQualification.ToJson();
+            metadata["currentSupportCaptureId"] = latest?.CaptureId;
+        }
+        if (capture.IsStopped) return "observation-stopped-before-publication";
         EmitLine(line);
         return null;
     }
 
     private static void StartControlReader(BlockingCollection<JsonObject> queue,
-        BlockingCollection<JsonObject> evidenceQueue, WarehouseEvidenceLease evidenceLease)
+        BlockingCollection<JsonObject> evidenceQueue, WarehouseEvidenceLease evidenceLease, Action<string> stopTransport)
     {
         var reader = new Thread(() =>
         {
@@ -621,7 +839,7 @@ internal static class NativeObservationService
                     var raw = ReadBoundedControlLine(out var oversized);
                     if (raw is null)
                     {
-                        evidenceLease.SignalStop();
+                        stopTransport("control-input-closed");
                         return;
                     }
                     if (oversized || Encoding.UTF8.GetByteCount(raw) > ProtocolConstants.MaxMessageBytes)
@@ -646,13 +864,14 @@ internal static class NativeObservationService
                     else
                     {
                         // Revoke evidence immediately; ordinary business shutdown keeps its existing queue.
-                        if ((string?)message["type"] == "native_stop") evidenceLease.SignalStop();
-                        queue.Add(message);
+                        if ((string?)message["type"] == "native_stop") stopTransport("explicit-stop");
+                        if (!queue.TryAdd(message)) stopTransport("control-queue-full");
                     }
                 }
             }
             catch (Exception)
             {
+                stopTransport("control-reader-failed");
                 // The GUI may close stdin during shutdown.  The Host loop is
                 // still responsible for the protocol shutdown and will not
                 // infer a new observation frame from an EOF on this control
@@ -660,8 +879,8 @@ internal static class NativeObservationService
             }
             finally
             {
-                // EOF, reader failure and explicit stop cannot leave an evidence lease alive.
-                evidenceLease.SignalStop();
+                // EOF, reader failure and explicit stop cancel blocked acquisition and protocol waits.
+                stopTransport("control-input-closed");
             }
         })
         {
@@ -825,7 +1044,7 @@ internal static class NativeObservationService
                     commandId,
                     controlRevision = revision,
                     commandStatus = "ERROR",
-                    error = $"{ex.GetType().Name}: {ex.Message}",
+                    error = ex.ToString(),
                 });
             }
         }
@@ -861,15 +1080,17 @@ internal static class NativeObservationService
     }
 
     private static void EmitStatus(string sessionId, string status, string reason, object? details,
-        string observationWindowMode = BackgroundObservationPolicy.Foreground)
+        string observationWindowMode = BackgroundObservationPolicy.Foreground, string capturePolicy = CapturePolicy.Strict)
     {
         var line = new JsonObject
         {
             ["type"] = "native_observation",
             ["schemaVersion"] = "native-observation-v1",
             ["status"] = status,
+            ["hostPid"] = Environment.ProcessId,
+            ["hostExecutable"] = Environment.ProcessPath,
             ["observationSessionId"] = sessionId,
-            ["observationWindowMode"] = observationWindowMode,
+            ["observationWindowMode"] = observationWindowMode, ["captureFreshnessPolicy"] = capturePolicy,
             ["sourceKind"] = "native_wgc",
             ["reason"] = reason,
             ["inputActions"] = false,
@@ -881,8 +1102,7 @@ internal static class NativeObservationService
 
     private static void EmitLine(JsonObject line)
     {
-        Console.WriteLine(line.ToJsonString(JsonLineOptions));
-        Console.Out.Flush();
+        lock (JsonLineOptions) { Console.WriteLine(line.ToJsonString(JsonLineOptions)); Console.Out.Flush(); }
     }
 
     private static WindowMonitorSnapshot WaitForTarget(WindowMonitor monitor, int timeoutMs, string observationWindowMode)

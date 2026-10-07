@@ -9,10 +9,15 @@ import threading
 import time
 import uuid
 
+from native_capture_delivery import DELIVERY, STRICT, validate_delivery, independent_support
+
 SCHEMA = 'native-warehouse-source.v1'
+SCHEMA_V2 = 'native-warehouse-source.v2'
 CONTROL_TYPE = 'native_warehouse_evidence_control'
 EVENT_TYPE = 'native_warehouse_evidence'
 PNG_ENCODING = 'opencv-bgr8-png-bound.v1'
+MAX_TRIGGER_PROBES = 32
+MIN_TRIGGER_PROBE_INTERVAL_NS = 600_000_000
 
 
 class NativeWarehouseSourceCoordinator:
@@ -29,16 +34,24 @@ class NativeWarehouseSourceCoordinator:
         self._binding = self._lease = self._pending = self._last_closed = None
         self._state, self._reason = 'IDLE', None
         self._ordinal = 0
+        self._last_scroll_ns = 0
         self._deadline = self._pending_until = 0
         self._timer = None
         self._host_limits = {}
         self._saved_source = self._duplicate_proof = None
+        self._trigger_watch = None
         # The evidence callback is the only producer. Ordinary business FRAME leases are not consulted.
         intake._source_provider = self.source_copy
         intake._source_validator = self._source_is_current
 
     def __getattr__(self, name):
         return getattr(self.intake, name)
+
+    def _delivery(self):
+        return bool(self._binding and self._binding['scope'].get('capturePolicy') == DELIVERY)
+
+    def _schema(self):
+        return SCHEMA_V2 if self._delivery() else SCHEMA
 
     def source_copy(self):
         with self._lock:
@@ -47,14 +60,19 @@ class NativeWarehouseSourceCoordinator:
     def prepare_manual(self):
         result = self.intake.prepare_manual()
         if result.get('ok'):
+            result['capturePolicy'] = self.intake.source_contract()['scope'].get('capturePolicy', STRICT)
             result['confirmCaption'] = ('每次手动请求保全原游戏窗口客户端的一张新原帧；'
                 '会话受16帧和绝对70秒预算限制，窗口不合格、映射变化或过期将停止。')
+        if result.get('ok') and result.get('capturePolicy') == DELIVERY:
+            result['confirmCaption'] = '交付时序原帧：先保存再核对；不能证明请求后渲染或来源绝对年龄。16张来源／32次请求／70秒，不自动降级。'
         return result
 
     def _source_is_current(self):
         return bool(self._state == 'REQUEST_PENDING' and self._pending and self._source
             and self._clock() < self._pending_until and self._clock() < self._deadline
-            and 0 <= self._qpc() - self._source['sourceTimestampNs'] <= 2_000_000_000
+            and (validate_delivery(self._source.get('deliveryProof'), self._qpc(),
+                    session=self._binding['scope']['observationSessionId'], require_progress=True) is None
+                if self._delivery() else 0 <= self._qpc() - self._source['sourceTimestampNs'] <= 2_000_000_000)
             and self._same_contract(self.intake.source_contract()))
 
     def _reply(self, ok, reason):
@@ -63,13 +81,14 @@ class NativeWarehouseSourceCoordinator:
 
     def _command(self, operation, *, nonce=None):
         b = self._binding
-        return {'type': CONTROL_TYPE, 'schemaVersion': SCHEMA, 'operation': operation,
+        return {'type': CONTROL_TYPE, 'schemaVersion': self._schema(), 'operation': operation,
             'commandId': uuid.uuid4().hex, 'nonce': nonce or uuid.uuid4().hex,
             'observationSessionId': b['scope']['observationSessionId'],
             'reviewSessionId': b['sessionId'], 'reviewGeneration': b['generation'],
             'recordStableKey': b['scope']['recordStableKey'],
             'expectedTargetInstance': copy.deepcopy(b['scope']['targetInstance']),
-            'leaseToken': self._lease, 'requestOrdinal': self._ordinal}
+            'leaseToken': self._lease, 'requestOrdinal': self._ordinal,
+            'matchGeneration': b['scope']['matchGeneration']}
 
     def _send(self, command):
         try:
@@ -96,8 +115,12 @@ class NativeWarehouseSourceCoordinator:
             if not result['ok']:
                 return result
             self._binding = self.intake.source_contract()
+            # Keep the watch scope through prepare/start_manual; the normal OPEN below
+            # revokes the Host-side probe slot after this SOURCE binding exists.
+            self._trigger_watch = None
             self._lease = self._pending = self._source = None
             self._ordinal = 0
+            self._last_scroll_ns = 0
             self._host_limits = {}
             self._saved_source = self._duplicate_proof = None
             self._state = 'OPEN_PENDING'
@@ -151,17 +174,181 @@ class NativeWarehouseSourceCoordinator:
         with self.intake._scope_lock, self._lock:
             self.check_timeout()
             return {'state': self._state, 'reason': self._reason, 'deadline': self._deadline,
+                'requestAttempts': self._ordinal,
                 'binding': copy.deepcopy(self._binding), 'savedSource': copy.deepcopy(self._saved_source),
                 'duplicateProof': copy.deepcopy(self._duplicate_proof), 'limits': copy.deepcopy(self._host_limits)}
 
     def lease_scope_is_current(self, scope):
         """Independent active SOURCE authority; never renew ordinary FRAME health."""
         with self._lock:
-            return bool(self._binding and self._state in {'OPEN', 'REQUEST_PENDING', 'SCROLL_PENDING'}
+            return bool(self._binding and self._state in {'OPEN_PENDING', 'OPEN', 'REQUEST_PENDING', 'SCROLL_PENDING'}
                 and self._clock() < self._deadline and all(scope.get(k) == self._binding['scope'].get(k)
                 for k in ('recordStableKey', 'observationSessionId', 'targetInstance', 'matchGeneration')))
 
-    def request_scroll_down(self):
+    def arm_trigger_watch(self, scope, *, deadline_ns, client_map):
+        with self.intake._scope_lock, self._lock:
+            self.check_timeout()
+            if (not isinstance(scope, dict) or scope.get('scene') != 'SETTLEMENT'
+                    or not isinstance(client_map, str) or not client_map
+                    or type(deadline_ns) is not int):
+                return {'ok': False, 'reason': 'TRIGGER_CONTEXT_INVALID'}
+            remaining = deadline_ns - self._qpc()
+            if not 0 < remaining <= 70_000_000_000:
+                return {'ok': False, 'reason': 'TRIGGER_DEADLINE_EXPIRED'}
+            current = self.intake.source_contract()['scope']
+            if not self._same_scope_authority(scope, current):
+                return {'ok': False, 'reason': 'TRIGGER_SCOPE_CHANGED'}
+            if self._binding is not None or self._state not in {'IDLE', 'CLOSED'}:
+                return {'ok': False, 'reason': 'SOURCE_ALREADY_ACTIVE'}
+            if self._trigger_watch is not None:
+                if (self._trigger_watch['scope'] == scope and self._trigger_watch['deadlineNs'] == deadline_ns
+                        and self._trigger_watch['clientMap'] == client_map):
+                    return {'ok': True, 'reason': 'TRIGGER_WATCH_ALREADY_ARMED',
+                        'watchId': self._trigger_watch['watchId']}
+                return {'ok': False, 'reason': 'TRIGGER_WATCH_ALREADY_ACTIVE'}
+            watch_id = uuid.uuid4().hex
+            watch = {'watchId': watch_id, 'scope': copy.deepcopy(scope), 'deadlineNs': deadline_ns,
+                'clientMap': client_map, 'armed': False, 'lastOrdinal': 0, 'lastSequence': 0,
+                'pendingProbeId': None, 'pendingOrdinal': None,
+                'deadlineAt': self._clock() + remaining / 1_000_000_000}
+            schema = SCHEMA_V2 if scope.get('capturePolicy') == DELIVERY else SCHEMA
+            command = {'type': CONTROL_TYPE, 'schemaVersion': schema, 'operation': 'WATCH_TRIGGER',
+                'commandId': uuid.uuid4().hex, 'nonce': uuid.uuid4().hex,
+                'observationSessionId': scope['observationSessionId'], 'watchId': watch_id,
+                'recordStableKey': scope['recordStableKey'], 'expectedTargetInstance': copy.deepcopy(scope['targetInstance']),
+                'matchGeneration': scope['matchGeneration'], 'clientMap': client_map,
+                'maxProbes': MAX_TRIGGER_PROBES, 'minimumIntervalNs': MIN_TRIGGER_PROBE_INTERVAL_NS}
+            watch['armCommandId'] = command['commandId']
+            self._trigger_watch = watch
+            if not self._send(command):
+                self._trigger_watch = None
+                return {'ok': False, 'reason': 'TRIGGER_WATCH_SEND_FAILED'}
+            self._schedule(remaining / 1_000_000_000)
+            return {'ok': True, 'reason': 'TRIGGER_WATCH_REQUESTED', 'watchId': watch_id,
+                'deadlineNs': deadline_ns, 'probeLimit': MAX_TRIGGER_PROBES,
+                'minimumIntervalNs': MIN_TRIGGER_PROBE_INTERVAL_NS}
+
+    @staticmethod
+    def _same_scope_authority(left, right):
+        return all(left.get(key) == right.get(key) for key in (
+            'recordStableKey', 'observationSessionId', 'targetInstance', 'matchGeneration')) \
+            and left.get('capturePolicy', STRICT) == right.get('capturePolicy', STRICT)
+
+    def trigger_watch_scope_is_current(self, scope):
+        with self._lock:
+            watch = self._trigger_watch
+            return bool(watch and watch['armed'] and self._clock() < watch['deadlineAt']
+                and self._same_scope_authority(scope, watch['scope']))
+
+    def trigger_probe_file(self, event):
+        with self._lock:
+            watch = self._trigger_watch
+            details = event.get('details') if isinstance(event, dict) else None
+            if (not watch or not isinstance(details, dict) or not self._valid_trigger_event(event, watch)
+                    or details.get('probeId') != watch.get('pendingProbeId')
+                    or details.get('probeOrdinal') != watch.get('pendingOrdinal')):
+                return None
+            relative = details.get('relativePath')
+            if not isinstance(relative, str) or relative.replace('\\', '/').split('/') != [
+                    'warehouse-trigger-probes', watch['watchId'], details['probeId'] + '.bmp']:
+                return None
+            root = Path(self._root_provider()).resolve(strict=True)
+            path = (root / Path(relative)).resolve(strict=True)
+            expected_root = (root / 'warehouse-trigger-probes' / watch['watchId']).resolve(strict=True)
+            if path.parent != expected_root or path.name != details['probeId'] + '.bmp':
+                return None
+            return {'path': path, 'sourceRoot': expected_root, 'scope': copy.deepcopy(watch['scope']),
+                'watchId': watch['watchId'], 'probeId': details['probeId'],
+                'probeOrdinal': details['probeOrdinal'], 'deadlineNs': watch['deadlineNs'],
+                'frameSequence': details.get('frameSequence'), 'sourceTimestampNs': details.get('sourceTimestampNs'),
+                'readbackTimestampNs': details.get('readbackTimestampNs'), 'width': details.get('width'),
+                'height': details.get('height'), 'stride': details.get('stride'),
+                'bmpSha256': details.get('bmpSha256'), 'pixelSha256': details.get('pixelSha256'),
+                'deliveryProof': copy.deepcopy(details.get('deliveryProof'))}
+
+    def _valid_trigger_event(self, event, watch):
+        details = event.get('details') if isinstance(event, dict) else None
+        return bool(event.get('type') == EVENT_TYPE and event.get('event') == 'TRIGGER_PROBE'
+            and event.get('scene') == 'UNCLASSIFIED_CURRENT_PROBE'
+            and event.get('watchId') == watch['watchId']
+            and event.get('observationSessionId') == watch['scope']['observationSessionId']
+            and event.get('recordStableKey') == watch['scope']['recordStableKey']
+            and event.get('matchGeneration') == watch['scope']['matchGeneration']
+            and event.get('targetInstance') == watch['scope']['targetInstance']
+            and event.get('clientMap') == watch['clientMap']
+            and event.get('deadlineNs') == watch['deadlineNs']
+            and event.get('capturePolicy', STRICT) == watch['scope'].get('capturePolicy', STRICT)
+            and event.get('sourceKind') == 'native_wgc' and event.get('inputActions') is False
+            and event.get('formalHistoryWriter') is False and isinstance(details, dict))
+
+    def accept_trigger_probe(self, event):
+        with self.intake._scope_lock, self._lock:
+            self.check_timeout()
+            watch = self._trigger_watch
+            if not watch or not watch['armed']:
+                return {'ok': False, 'reason': 'TRIGGER_WATCH_NOT_ARMED'}
+            details = event.get('details') if isinstance(event, dict) else None
+            if not self._valid_trigger_event(event, watch):
+                return {'ok': False, 'reason': 'TRIGGER_PROBE_SCOPE_MISMATCH'}
+            ordinal = details.get('probeOrdinal')
+            sequence = details.get('frameSequence')
+            probe_id = details.get('probeId')
+            if (watch['pendingProbeId'] is not None or type(ordinal) is not int
+                    or ordinal != watch['lastOrdinal'] + 1 or type(sequence) is not int
+                    or sequence <= watch['lastSequence'] or not isinstance(probe_id, str)
+                    or not re.fullmatch('[0-9a-f]{32}', probe_id)):
+                return {'ok': False, 'reason': 'TRIGGER_PROBE_DUPLICATE_OR_OUT_OF_ORDER'}
+            if self._qpc() >= watch['deadlineNs']:
+                self.cancel_trigger_watch('ABSOLUTE_SETTLEMENT_BUDGET_EXPIRED')
+                return {'ok': False, 'reason': 'TRIGGER_PROBE_EXPIRED'}
+            current = self.intake.source_contract()['scope']
+            if not self._same_scope_authority(watch['scope'], current) or current.get('scene') != 'SETTLEMENT':
+                self.cancel_trigger_watch('TRIGGER_SCOPE_CHANGED')
+                return {'ok': False, 'reason': 'TRIGGER_SCOPE_CHANGED'}
+            watch['pendingProbeId'], watch['pendingOrdinal'] = probe_id, ordinal
+            watch['lastOrdinal'], watch['lastSequence'] = ordinal, sequence
+            return {'ok': True, 'reason': 'TRIGGER_PROBE_ACCEPTED'}
+
+    def acknowledge_trigger_probe(self, event, *, result, reason_codes=()):
+        with self.intake._scope_lock, self._lock:
+            watch = self._trigger_watch
+            details = event.get('details') if isinstance(event, dict) else None
+            if (not watch or not isinstance(details, dict) or event.get('watchId') != watch['watchId']
+                    or details.get('probeId') != watch['pendingProbeId']
+                    or details.get('probeOrdinal') != watch['pendingOrdinal']):
+                return False
+            scope = watch['scope']
+            schema = SCHEMA_V2 if scope.get('capturePolicy') == DELIVERY else SCHEMA
+            command = {'type': CONTROL_TYPE, 'schemaVersion': schema, 'operation': 'ACK_TRIGGER_PROBE',
+                'commandId': uuid.uuid4().hex, 'nonce': uuid.uuid4().hex,
+                'observationSessionId': scope['observationSessionId'], 'watchId': watch['watchId'],
+                'recordStableKey': scope['recordStableKey'], 'expectedTargetInstance': copy.deepcopy(scope['targetInstance']),
+                'matchGeneration': scope['matchGeneration'], 'clientMap': watch['clientMap'],
+                'probeId': watch['pendingProbeId'], 'result': result,
+                'reason': ';'.join(reason_codes), 'reasonCodes': list(reason_codes)}
+            sent = self._send(command)
+            watch['pendingProbeId'] = watch['pendingOrdinal'] = None
+            return sent
+
+    def cancel_trigger_watch(self, reason='TRIGGER_WATCH_CANCELLED', *, notify=True):
+        with self.intake._scope_lock, self._lock:
+            watch = self._trigger_watch
+            if not watch:
+                return False
+            scope = watch['scope']
+            if notify:
+                schema = SCHEMA_V2 if scope.get('capturePolicy') == DELIVERY else SCHEMA
+                self._send({'type': CONTROL_TYPE, 'schemaVersion': schema, 'operation': 'CANCEL_TRIGGER_WATCH',
+                    'commandId': uuid.uuid4().hex, 'nonce': uuid.uuid4().hex,
+                    'observationSessionId': scope['observationSessionId'], 'watchId': watch['watchId'],
+                    'recordStableKey': scope['recordStableKey'], 'expectedTargetInstance': copy.deepcopy(scope['targetInstance']),
+                    'matchGeneration': scope['matchGeneration'], 'clientMap': watch['clientMap'], 'reason': reason})
+            self._trigger_watch = None
+            self._cancel_timer()
+            self._reason = reason
+            return True
+
+    def request_scroll_down(self, *, stable_proof=None, base_proof=None):
         with self.intake._scope_lock, self._lock:
             self.check_timeout()
             if (self._state != 'OPEN' or self._pending or not self._saved_source
@@ -172,6 +359,11 @@ class NativeWarehouseSourceCoordinator:
                 return self._reply(False, self._reason)
             command = self._command('SCROLL_DOWN')
             command.update(sourceLeaseId=self._saved_source['sourceLeaseId'], pixelSha256=self._saved_source['pixelSha256'])
+            if self._delivery():
+                saved_proof = base_proof or self._saved_source.get('deliveryProof')
+                if not independent_support(saved_proof, stable_proof):
+                    return self._reply(False, 'INDEPENDENT_STABILITY_UNPROVEN')
+                command.update(savedCaptureId=saved_proof['captureId'], stableCaptureId=stable_proof['captureId'])
             self._pending, self._state = command, 'SCROLL_PENDING'
             self._pending_until = min(self._clock() + 2, self._deadline)
             if not self._send(command):
@@ -197,9 +389,18 @@ class NativeWarehouseSourceCoordinator:
 
     def on_event(self, event):
         with self.intake._scope_lock, self._lock:
+            if isinstance(event, dict) and event.get('type') == EVENT_TYPE \
+                    and isinstance(event.get('event'), str) and event['event'].startswith('TRIGGER_'):
+                self._on_trigger_status_event(event)
+                return
+            if self._on_trigger_status_event(event):
+                return
             if (not isinstance(event, dict) or event.get('type') != EVENT_TYPE
-                or event.get('schemaVersion') != SCHEMA or event.get('sourceKind') != 'native_wgc'
+                or event.get('schemaVersion') != self._schema() or event.get('sourceKind') != 'native_wgc'
                 or event.get('formalHistoryWriter') is not False):
+                return
+            if self._delivery() and (event.get('capturePolicy') != DELIVERY
+                    or event.get('matchGeneration') != self._binding['scope']['matchGeneration']):
                 return
             scroll_event = (event.get('event') == 'SCROLLED' and event.get('inputActions') is True
                 and self._state == 'SCROLL_PENDING' and self._pending
@@ -271,9 +472,15 @@ class NativeWarehouseSourceCoordinator:
                         or counters.get('pixelSha256') != self._saved_source['pixelSha256']
                         or counters.get('clientMap') != self._host_limits.get('clientMap')
                         or any(type(counters.get(k)) is not int for k in ('requestGateNs', 'sourceTimestampNs', 'frameSequence'))
-                        or not 0 < counters['requestGateNs'] < counters['sourceTimestampNs'] <= now
-                        or now - counters['sourceTimestampNs'] > 2_000_000_000
+                        or (validate_delivery(counters.get('deliveryProof'), now,
+                            session=self._binding['scope']['observationSessionId'], require_progress=True) is not None
+                            if self._delivery() else not 0 < counters['requestGateNs'] < counters['sourceTimestampNs'] <= now
+                            or now - counters['sourceTimestampNs'] > 2_000_000_000)
                         or counters['frameSequence'] <= self._saved_source['frameSequence']):
+                        raise ValueError()
+                    if self._delivery() and (counters['deliveryProof']['requestNs'] != counters['requestGateNs']
+                            or counters['deliveryProof']['sourceTimestampNs'] != counters['sourceTimestampNs']
+                            or counters['deliveryProof']['acquisitionSequence'] != counters['frameSequence']):
                         raise ValueError()
                     self._duplicate_proof = copy.deepcopy(counters)
                 except (KeyError, TypeError, ValueError):
@@ -284,13 +491,59 @@ class NativeWarehouseSourceCoordinator:
             elif kind == 'SOURCE' and self._state == 'REQUEST_PENDING':
                 self._accept_source(event)
             elif kind == 'SCROLLED' and scroll_event:
+                if (self._delivery() and (type(counters.get('messageCompletedNs')) is not int
+                        or not 0 < counters['messageCompletedNs'] <= self._qpc())):
+                    self._close('WINDOW_SCROLL_COMPLETION_CLOCK_REJECTED')
+                    return
                 if (counters.get('direction') != 'DOWN' or counters.get('delta') != -120
                     or not self._saved_source or counters.get('sourceLeaseId') != self._saved_source['sourceLeaseId']):
                     self._close('WINDOW_SCROLL_PROOF_REJECTED')
                     return
                 self._pending = None
+                self._last_scroll_ns = counters.get('messageCompletedNs', 0)
                 self._state, self._reason = 'OPEN', 'WINDOW_WHEEL_MESSAGE_SENT'
                 self._schedule(max(0, self._deadline - self._clock()))
+
+    def _on_trigger_status_event(self, event):
+        if not isinstance(event, dict) or event.get('type') != EVENT_TYPE:
+            return False
+        if event.get('event') not in {'TRIGGER_WATCH_ARMED', 'TRIGGER_WATCH_ENDED',
+                                      'TRIGGER_PROBE_ACKED', 'REJECTED'}:
+            return False
+        watch = self._trigger_watch
+        if not watch or event.get('watchId') != watch['watchId']:
+            return True
+        scope = watch['scope']
+        expected_schema = SCHEMA_V2 if scope.get('capturePolicy') == DELIVERY else SCHEMA
+        if (event.get('schemaVersion') != expected_schema
+                or event.get('observationSessionId') != scope['observationSessionId']
+                or event.get('recordStableKey') != scope['recordStableKey']
+                or event.get('targetInstance') != scope['targetInstance']
+                or event.get('capturePolicy', scope.get('capturePolicy', STRICT)) != scope.get('capturePolicy', STRICT)
+                or event.get('inputActions') is not False or event.get('formalHistoryWriter') is not False):
+            return True
+        kind = event.get('event')
+        if kind == 'TRIGGER_WATCH_ARMED':
+            if (event.get('matchGeneration') != scope['matchGeneration']
+                    or event.get('clientMap') != watch['clientMap']
+                    or event.get('deadlineNs') != watch['deadlineNs']):
+                self.cancel_trigger_watch('TRIGGER_ARM_BINDING_REJECTED', notify=False)
+                return True
+            watch['armed'] = True
+            self._schedule(max(0, watch['deadlineAt'] - self._clock()))
+        elif kind == 'TRIGGER_PROBE_ACKED':
+            details = event.get('details') or {}
+            if details.get('probeAttempts', 0) >= MAX_TRIGGER_PROBES:
+                self._reason = 'TRIGGER_PROBE_LIMIT_REACHED'
+        elif kind == 'TRIGGER_WATCH_ENDED':
+            self._reason = event.get('reason') or 'TRIGGER_WATCH_ENDED'
+            self._trigger_watch = None
+            self._cancel_timer()
+        elif kind == 'REJECTED' and event.get('commandId') == watch.get('armCommandId'):
+            self._reason = event.get('reason') or 'TRIGGER_WATCH_REJECTED'
+            self._trigger_watch = None
+            self._cancel_timer()
+        return True
 
     def _request_matches(self, event):
         return bool(self._pending and type(event.get('requestOrdinal')) is int
@@ -302,16 +555,29 @@ class NativeWarehouseSourceCoordinator:
         source = event.get('source') or {}
         result = {'ok': False, 'reason': 'SOURCE_PROOF_REJECTED'}
         try:
-            for key in ('width', 'height', 'stride', 'sourceTimestampNs', 'requestGateNs', 'frameSequence', 'workerFrameSequence', 'byteCount'):
+            required = ('width', 'height', 'stride', 'sourceTimestampNs', 'requestGateNs', 'frameSequence', 'byteCount')
+            if not self._delivery():
+                required += ('workerFrameSequence',)
+            for key in required:
                 if type(source[key]) is not int or source[key] <= 0:
                     raise ValueError()
             w, h = source['width'], source['height']
             if (w != self._host_limits['clientWidth'] or h != self._host_limits['clientHeight']
                 or source['stride'] != 4 * w or source['byteCount'] != 54 + 4 * w * h
                 or source.get('clientMap') != self._host_limits['clientMap']
-                or source['workerFrameSequence'] != source['frameSequence']
-                or not source['requestGateNs'] < source['sourceTimestampNs'] <= self._qpc()
-                or self._qpc() - source['sourceTimestampNs'] > 2_000_000_000):
+                or (validate_delivery(source.get('deliveryProof'), self._qpc(),
+                        session=self._binding['scope']['observationSessionId'], require_progress=True) is not None
+                    or source.get('capturePolicy') != DELIVERY
+                    or source.get('matchGeneration') != self._binding['scope']['matchGeneration']
+                    or source.get('formalFactsQualified') is not False
+                    or source['deliveryProof']['requestNs'] < self._last_scroll_ns
+                    or source['deliveryProof']['requestNs'] != source['requestGateNs']
+                    or source['deliveryProof']['sourceTimestampNs'] != source['sourceTimestampNs']
+                    or source['deliveryProof']['readbackCompletedNs'] != source.get('readbackTimestampNs')
+                    or source['deliveryProof']['acquisitionSequence'] != source['frameSequence']
+                    if self._delivery() else source['workerFrameSequence'] != source['frameSequence']
+                    or not source['requestGateNs'] < source['sourceTimestampNs'] <= self._qpc()
+                    or self._qpc() - source['sourceTimestampNs'] > 2_000_000_000)):
                 raise ValueError()
             if any(not re.fullmatch('[0-9a-f]{64}', source.get(key, '')) for key in ('bmpSha256', 'pixelSha256')):
                 raise ValueError()
@@ -331,6 +597,9 @@ class NativeWarehouseSourceCoordinator:
                 'width': w, 'height': h, 'frameSequence': source['frameSequence'],
                 'capturedAt': source['capturedAtUtc'], 'pixelSha256': source['pixelSha256'],
                 'sourceTimestampNs': source['sourceTimestampNs'],
+                'capturePolicy': DELIVERY if self._delivery() else STRICT,
+                'deliveryProof': copy.deepcopy(source.get('deliveryProof')), 'bmpSha256': source['bmpSha256'],
+                'clientMap': source['clientMap'],
                 'receivedAt': self._clock(), 'scope': copy.deepcopy(self._binding['scope'])}
             result = self.intake.capture_manual_page()
             if result['ok'] and not result.get('duplicate'):
@@ -352,11 +621,11 @@ class NativeWarehouseSourceCoordinator:
         if event.get('event') != 'OPENED' or not self._matches(event, self._last_closed):
             return
         b = self._last_closed
-        self._send({'type': CONTROL_TYPE, 'schemaVersion': SCHEMA, 'operation': 'CLOSE',
+        self._send({'type': CONTROL_TYPE, 'schemaVersion': SCHEMA_V2 if b['scope'].get('capturePolicy') == DELIVERY else SCHEMA, 'operation': 'CLOSE',
             'commandId': uuid.uuid4().hex, 'nonce': uuid.uuid4().hex,
             'observationSessionId': b['scope']['observationSessionId'], 'reviewSessionId': b['sessionId'],
             'reviewGeneration': b['generation'], 'recordStableKey': b['scope']['recordStableKey'],
-            'expectedTargetInstance': b['scope']['targetInstance'], 'leaseToken': event.get('leaseToken')})
+            'expectedTargetInstance': b['scope']['targetInstance'], 'matchGeneration': b['scope']['matchGeneration'], 'leaseToken': event.get('leaseToken')})
 
     def _close(self, reason, *, cancel_intake=False, notify=True):
         self._last_closed = copy.deepcopy(self._binding)
@@ -366,11 +635,13 @@ class NativeWarehouseSourceCoordinator:
         self._pending = self._source = None
         self._state, self._reason = 'CLOSED', reason
         if cancel_intake:
-            self.intake.cancel_manual_capture()
+            self.intake.cancel_manual_capture(reason=reason)
 
     def check_timeout(self):
         with self.intake._scope_lock, self._lock:
-            if self._state == 'OPEN_PENDING' and self._clock() >= self._pending_until:
+            if self._trigger_watch is not None and self._clock() >= self._trigger_watch['deadlineAt']:
+                self.cancel_trigger_watch('ABSOLUTE_SETTLEMENT_BUDGET_EXPIRED')
+            elif self._state == 'OPEN_PENDING' and self._clock() >= self._pending_until:
                 self._close('SOURCE_PUBLISH_UNSUPPORTED_OR_TIMEOUT')
             elif self._state in {'OPEN', 'REQUEST_PENDING', 'SCROLL_PENDING'} and self._clock() >= self._deadline:
                 self._close('ABSOLUTE_SETTLEMENT_BUDGET_EXPIRED')
@@ -379,28 +650,40 @@ class NativeWarehouseSourceCoordinator:
 
     def close_source(self, reason):
         with self.intake._scope_lock, self._lock:
+            self.cancel_trigger_watch(reason)
             self._close(reason)
 
-    def finish_manual_capture(self, *, termination_reason='COMPLETE'):
+    def finish_manual_capture(self, *, termination_reason='COMPLETE', qualified_evidence_ids=None):
         with self.intake._scope_lock, self._lock:
+            if qualified_evidence_ids is not None and not getattr(self, 'offline_test_adapter', False):
+                return self._reply(False, 'OFFLINE_CONTENT_ADAPTER_REQUIRED')
             if self._pending is not None:
                 return self._reply(False, 'SOURCE_REQUEST_PENDING')
             self._close('MANUAL_FINISHED')
-            return self.intake.finish_manual_capture(termination_reason=termination_reason)
+            options = ({'qualified_evidence_ids': qualified_evidence_ids}
+                if qualified_evidence_ids is not None else {})
+            return self.intake.finish_manual_capture(termination_reason=termination_reason, **options)
 
     def cancel_manual_capture(self):
         with self.intake._scope_lock, self._lock:
+            self.cancel_trigger_watch('USER_CANCEL')
             self._close('USER_CANCEL')
             return self.intake.cancel_manual_capture()
 
     def observation_ended(self, reason):
         with self.intake._scope_lock, self._lock:
+            self.cancel_trigger_watch(reason)
             if self._state not in {'IDLE', 'CLOSED'}:
                 self._close(reason, cancel_intake=True)
 
     def check_business_boundary(self, event):
         """Called after the unchanged ordinary handler; never refresh business health/facts."""
         with self.intake._scope_lock, self._lock:
+            if self._trigger_watch is not None:
+                contract = self.intake.source_contract()
+                if (contract.get('scope', {}).get('scene') != 'SETTLEMENT'
+                        or not self._same_scope_authority(self._trigger_watch['scope'], contract.get('scope', {}))):
+                    self.cancel_trigger_watch('TRIGGER_SCOPE_CHANGED')
             if self._state in {'IDLE', 'CLOSED'} or not self._binding:
                 return
             incoming = event.get('observationSessionId')
@@ -429,6 +712,9 @@ class NativeWarehouseSourceCoordinator:
                 'SOURCE_LEASE_EXPIRED': '原帧租约已过期，保留已保存材料，未追加页面。',
                 'SOURCE_LIMIT_REACHED': '已达本次原图数量或保存预算上限，未追加页面。',
                 'SOURCE_PROOF_REJECTED': '原帧时序或保存证据校验失败，未接受页面。'}
+            if self._delivery():
+                view['captureFreshnessPolicy'] = DELIVERY
+                messages['SOURCE_REQUESTED'] = '等待池空边界后的交付原帧；不证明请求后渲染，尚未保存页面。'
             if self._reason in messages:
                 view['message'] = messages[self._reason]
             elif self._reason:

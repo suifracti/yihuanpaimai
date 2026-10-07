@@ -394,7 +394,10 @@ public sealed class SupervisorSession : IDisposable
         ChildSpawnNs = ProtocolClock.NowNs();
         _child = process;
         ChildPid = process.Id;
-        _trace.Event("child.spawned", GenerationId, new { pid = process.Id, spawnMs = ProtocolClock.DeltaMs(spawnStartNs, ChildSpawnNs) });
+        _trace.Event("child.spawned", GenerationId, new { pid = process.Id,
+            parentPidAtSpawn = Environment.ProcessId, executable = psi.FileName,
+            pipeName = PipeName, mapName = MapName,
+            spawnMs = ProtocolClock.DeltaMs(spawnStartNs, ChildSpawnNs) });
 
         // Drain stdout/stderr into the trace: these are logs, not protocol.
         process.BeginOutputReadLine();
@@ -548,12 +551,13 @@ public sealed class SupervisorSession : IDisposable
         _pump.Start();
     }
 
-    public Envelope? WaitForMessage(Func<Envelope, bool> predicate, int timeoutMs, out List<Envelope> observed)
+    public Envelope? WaitForMessage(Func<Envelope, bool> predicate, int timeoutMs, out List<Envelope> observed, Func<bool>? cancelled = null)
     {
         observed = new List<Envelope>();
         var deadline = Environment.TickCount64 + timeoutMs;
         while (true)
         {
+            if (cancelled?.Invoke() == true) throw new OperationCanceledException("Host message wait cancelled");
             var remaining = (int)(deadline - Environment.TickCount64);
             if (remaining <= 0)
             {
@@ -562,9 +566,9 @@ public sealed class SupervisorSession : IDisposable
             Envelope envelope;
             try
             {
-                if (!_inbox.TryTake(out envelope!, remaining))
+                if (!_inbox.TryTake(out envelope!, cancelled is null ? remaining : Math.Min(50, remaining)))
                 {
-                    return null;
+                    continue;
                 }
             }
             catch (InvalidOperationException)
@@ -896,8 +900,9 @@ public sealed class SupervisorSession : IDisposable
         int height,
         int stride,
         long captureTimestampNs,
-        int timeoutMs = 5000)
+        int timeoutMs = 5000, Func<bool>? cancelled = null, JsonObject? captureProof = null)
     {
+        if (cancelled?.Invoke() == true) throw new OperationCanceledException("Frame publication cancelled");
         if (FrameRing is null)
         {
             throw new InvalidOperationException("frame transport is not enabled for this session");
@@ -936,6 +941,21 @@ public sealed class SupervisorSession : IDisposable
         outcome["producerTimestampNs"] = receipt.Header.ProducerTimestampNs;
         outcome["cornerChecksum"] = receipt.Header.CornerChecksum;
 
+        // Slot ownership includes the sidecar until this exact receipt is ACKed.
+        if (captureProof is not null)
+        {
+            var proof = (JsonObject)captureProof.DeepClone();
+            proof["sessionId"] = _options.SessionId;
+            proof["bufferIndex"] = receipt.BufferIndex; proof["sequence"] = receipt.Header.Sequence;
+            proof["pixelSha256"] = Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(bgraPixels)).ToLowerInvariant();
+            proof["transportPublishedNs"] = ProtocolClock.NowNs();
+            var serialized = proof.ToJsonString();
+            if (System.Text.Encoding.UTF8.GetByteCount(serialized) > 16 * 1024) throw new InvalidOperationException("FRAME_PROOF_TOO_LARGE");
+            var directory = Path.Combine(_options.WorkDir, "capture-proofs"); Directory.CreateDirectory(directory);
+            var path = Path.Combine(directory, receipt.BufferIndex + ".json");
+            File.WriteAllText(path + ".pending", serialized); File.Move(path + ".pending", path, overwrite: true);
+        }
+
         var framePayload = new JsonObject
         {
             ["sessionId"] = _options.SessionId,
@@ -962,7 +982,7 @@ public sealed class SupervisorSession : IDisposable
         var ack = WaitForMessage(
             e => e.MessageType is MessageTypes.FrameAck or MessageTypes.Error,
             Math.Min(timeoutMs, ProtocolConstants.FrameAckTimeoutMs),
-            out var ackObserved);
+            out var ackObserved, cancelled);
         if (ack is null)
         {
             FrameRing.RecordNoAck();
@@ -1007,7 +1027,7 @@ public sealed class SupervisorSession : IDisposable
         var perception = WaitForMessage(
             e => e.MessageType is MessageTypes.PerceptionResult or MessageTypes.Error,
             timeoutMs,
-            out var perceptionObserved);
+            out var perceptionObserved, cancelled);
         if (perception is null)
         {
             outcome["perceptionReceived"] = false;

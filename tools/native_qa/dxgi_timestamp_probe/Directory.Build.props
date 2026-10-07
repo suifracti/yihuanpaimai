@@ -1,0 +1,5 @@
+<Project><PropertyGroup>
+  <BaseIntermediateOutputPath>$(MSBuildThisFileDirectory)..\..\..\build\native-timestamp-contract-20261006\dxgi-obj\</BaseIntermediateOutputPath>
+  <OutputPath>$(MSBuildThisFileDirectory)..\..\..\build\native-timestamp-contract-20261006\dxgi-out\</OutputPath>
+  <AppendTargetFrameworkToOutputPath>false</AppendTargetFrameworkToOutputPath>
+</PropertyGroup></Project>

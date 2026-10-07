@@ -1902,7 +1902,7 @@ function renderSettings() {
   const overlay = document.getElementById("settings-overlay-toggle");
   if (name) name.textContent = match.configuredPlayerName || "未设置 · 按画面姓名识别";
   if (profile) profile.textContent = match.observationProfile === "native-readonly-v1"
-    ? `${(match.effectiveObservationWindowMode || match.observationWindowMode) === 'background-readonly' ? '后台只读识别' : '前台只读识别'}${match.nativeObservationRunning && !match.effectiveObservationWindowMode ? '（待确认）' : ''} · 游戏输入关闭` : "观察档案待读取";
+    ? `${(match.effectiveObservationWindowMode || match.observationWindowMode) === 'background-readonly' ? '后台只读识别' : '前台只读识别'}${match.nativeObservationRunning && !match.effectiveObservationWindowMode ? '（待确认）' : ''}${match.nativeAutoWarehouseEnabled ? ' · 仅结算仓库窗口滚动消息' : ' · 自动滚动关闭'}` : "观察档案待读取";
   if (diagnostic) diagnostic.textContent = match.visionHealth
     ? `场景 ${match.scene || "UNKNOWN"} · ${match.visionHealth.status || "状态未知"} · ${match.visionHealth.reason || "无额外原因"} · 草稿 ${match.draftSaveStatus || "未知"}`
     : "尚无观察诊断；不据此推断游戏状态";
@@ -3212,6 +3212,21 @@ function syncWarehouseInstanceReviewFromMatch(currentMatch) {
 }
 
 function renderObservationWindowMode(currentMatch = {}) {
+  const deliveryControl = document.getElementById('capture-delivery-control');
+  const delivery = document.getElementById('capture-delivery-enabled');
+  const deliveryStatus = document.getElementById('capture-delivery-status');
+  const isNative = currentMatch.observationProfile === 'native-readonly-v1';
+  const observing = currentMatch.nativeObservationRunning === true;
+  const policy = observing ? currentMatch.effectiveCaptureFreshnessPolicy : currentMatch.captureFreshnessPolicy;
+  if (deliveryControl) deliveryControl.hidden = !isNative;
+  if (delivery) { delivery.checked = policy === 'wgc-delivery-v1'; delivery.disabled = observing; }
+  if (deliveryStatus) {
+    deliveryStatus.hidden = !isNative;
+    deliveryStatus.textContent = policy === 'wgc-delivery-v1'
+      ? `交付时序 · ${currentMatch.originStatus || '待交付'} · 来源绝对年龄／请求后渲染未证明`
+      : '严格来源时序 · 不自动降级';
+  }
+
   const control = document.getElementById('observation-window-mode-control');
   const checkbox = document.getElementById('observation-background-readonly');
   const status = document.getElementById('observation-window-mode-status');
@@ -3220,20 +3235,47 @@ function renderObservationWindowMode(currentMatch = {}) {
   const configured = currentMatch.observationWindowMode === 'background-readonly' ? 'background-readonly' : 'foreground';
   const effectiveConfirmed = ['foreground', 'background-readonly'].includes(currentMatch.effectiveObservationWindowMode);
   const effective = effectiveConfirmed ? currentMatch.effectiveObservationWindowMode : configured;
-  const running = typeof currentMatch.nativeObservationRunning === 'boolean'
+  const running = !health.observationStopped && (typeof currentMatch.nativeObservationRunning === 'boolean'
     ? currentMatch.nativeObservationRunning
-    : Boolean(currentMatch.visionLive || (native && (health.status === 'READY' || ['native-starting', 'native-ready', 'native-refreshing'].includes(health.stage))));
+    : Boolean(currentMatch.visionLive || (native && (health.status === 'READY' || ['native-starting', 'native-ready', 'native-refreshing'].includes(health.stage)))));
   if (control) control.hidden = !native;
+  const autoControl = document.getElementById('native-auto-warehouse-control');
+  const autoCheckbox = document.getElementById('native-auto-warehouse-enabled');
+  const autoStatus = document.getElementById('native-auto-warehouse-status');
+  if (autoControl) autoControl.hidden = !native;
+  if (autoCheckbox) {
+    autoCheckbox.checked = currentMatch.nativeAutoWarehouseConfigured === true;
+    autoCheckbox.disabled = !native || dashboard.pendingNativeAutoWarehouse || (running && !autoCheckbox.checked);
+    autoCheckbox.title = '启动前启用；合格结算仓库本局一次自动保存并向指定异环窗口发送滚动消息，不激活窗口、不使用全局输入。取消后停止当前收页并关闭后续自动触发；只读观察继续。';
+  }
+  if (autoStatus) {
+    autoStatus.hidden = !native;
+    autoStatus.textContent = dashboard.pendingNativeAutoWarehouse ? '正在保存自动收页选项…'
+      : !currentMatch.nativeAutoWarehouseConfigured ? '自动收页关闭'
+      : !running ? '下次开始观察：结算自动收页 · 仅指定窗口消息'
+      : !currentMatch.nativeAutoWarehouseCapability ? '等待 Host 自动收页能力确认'
+      : `结算自动收页已启用 · ${(currentMatch.nativeAutoWarehouseTrigger || {}).reasonText || '等待合格结算仓库'} · 仅指定窗口滚动消息 · 跨局继续；取消关闭后续触发`;
+  }
   if (checkbox) {
     checkbox.checked = configured === 'background-readonly';
     checkbox.disabled = !native || running || dashboard.pendingObservationWindowMode;
-    checkbox.title = running ? '观察运行中无法更改，结束观察后再选' : '游戏窗口未最小化时，失焦后仍可只读识别';
+    checkbox.title = '后台只读识别本身不操作游戏；窗口未最小化时失焦仍可识别。结算自动收页是独立的滚动选项。' + (running ? '观察运行中无法更改，结束观察后再选。' : '');
   }
   if (status) {
     status.hidden = !native;
     status.textContent = dashboard.pendingObservationWindowMode ? '正在保存观察模式…'
       : `${running ? '当前' : '下次开始'}：${(running ? effective : configured) === 'background-readonly' ? '后台只读识别' : '前台只读识别'}${running && !effectiveConfirmed ? ' · 等待 Host 确认' : ''}${running ? ' · 结束观察后可更改' : ''}`;
   }
+}
+
+function requestNativeAutoWarehouse(enabled) {
+  if (dashboard.pendingNativeAutoWarehouse) return;
+  dashboard.pendingNativeAutoWarehouse = true;
+  postNative('set_native_auto_warehouse_capture', { enabled });
+}
+
+function requestCaptureFreshnessPolicy(policy) {
+  postNative('set_capture_freshness_policy', { policy });
 }
 
 function requestObservationWindowMode(mode) {
@@ -3244,6 +3286,18 @@ function requestObservationWindowMode(mode) {
   if (checkbox) checkbox.disabled = true;
   if (status) status.textContent = '正在保存观察模式…';
   postNative('set_observation_window_mode', { mode });
+}
+
+function nativeStoppedObservationMessage(currentMatch) {
+  const health = currentMatch.visionHealth || {};
+  if (!health.observationStopped && !['native-paused', 'native-error', 'native-stopped'].includes(health.stage)) return null;
+  const last = health.lastSuccessfulObservation || {};
+  const observedAt = last.capturedAtUtc ? new Date(last.capturedAtUtc) : null;
+  const time = observedAt && Number.isFinite(observedAt.getTime())
+    ? observedAt.toLocaleString('zh-CN', { timeZone: 'Asia/Shanghai', hour12: false }) : '尚无成功观察';
+  const exitNote = health.processExitConfirmed === false ? ' · Host退出未确认'
+    : health.exitConfirmed === false ? ' · 采集线程退出未确认' : '';
+  return `观察已停止：${health.reason || '观察结束'}${exitNote} · 最后成功观察：${time} · 局次：${last.matchId || currentMatch.matchId || '--'} · 已有材料保留；未自动重启`;
 }
 
 function renderMatch(currentMatch, overlayVisible) {
@@ -3298,7 +3352,10 @@ function renderMatch(currentMatch, overlayVisible) {
     visionHealthStatus.hidden = nativeProfile ? !(needsNativeAction || nativeWaiting || nativeTelemetry) : health.status !== 'ERROR';
     visionHealthStatus.textContent = visionHealthStatus.hidden ? '' : '识别暂时异常，正在重试；当前显示为上次结果';
     if (!visionHealthStatus.hidden && nativeProfile) {
-      if (nativeTelemetry) visionHealthStatus.textContent = `Native WGC · 新鲜度 ${Number(health.freshnessMs).toFixed(0)}ms · 帧 ${health.frameSequence ?? '--'}`;
+      const stoppedMessage = nativeStoppedObservationMessage(currentMatch);
+      if (stoppedMessage) visionHealthStatus.textContent = stoppedMessage;
+      else if (nativeProfile && health.status === 'READY' && health.captureFreshnessPolicy === 'wgc-delivery-v1') visionHealthStatus.textContent = `交付时序 · 结果延迟 ${Number(health.deliveryAgeMs).toFixed(0)}ms · ${health.originStatus || '来源绝对年龄未证明'} · 非严格新鲜度` ;
+      else if (nativeTelemetry) visionHealthStatus.textContent = `Native WGC · 新鲜度 ${Number(health.freshnessMs).toFixed(0)}ms · 帧 ${health.frameSequence ?? '--'}`;
       else if (health.stage === 'native-ready') visionHealthStatus.textContent = 'Native Host 已就绪，等待首个业务帧';
       else if (health.stage === 'native-refreshing') visionHealthStatus.textContent = `等待当前局的新观察帧：${health.reason || '实时建议暂不可用'}`;
       else if (health.stage === 'native-explicit-start' || health.stage === 'native-stopped') visionHealthStatus.textContent = 'Native 观察未启动，点击开始观察';
@@ -3338,7 +3395,9 @@ function renderMatch(currentMatch, overlayVisible) {
   if (matchIdEl) matchIdEl.textContent = currentMatch.matchId || "--";
   if (lifecycleEl) {
     const isFinalized = currentMatch.lifecycleStatus === "FINALIZED";
-    lifecycleEl.textContent = isFinalized ? "已完成" : "进行中";
+    const nativeStopped = currentMatch.observationProfile === 'native-readonly-v1'
+      && nativeStoppedObservationMessage(currentMatch);
+    lifecycleEl.textContent = isFinalized ? "已完成" : (nativeStopped ? "观察已停止 · 本局草稿" : "进行中");
     lifecycleEl.className = `badge ${isFinalized ? "badge-lifecycle is-finalized" : "badge-lifecycle"}`;
   }
   if (completeEl) {
@@ -3902,6 +3961,9 @@ function renderWarehouseCapture(capture) {
 
   button.disabled = !available && !running;
   button.textContent = running ? "停止采集" : "采集完整仓库";
+  button.title = running
+    ? "只停止当前收页并保留已有页面；本局不重试。若结算自动收页仍开启，下一局仍可自动触发。"
+    : "手动收页入口；已启用结算自动收页时，无需每局点击或重新武装。";
 
   if (message) {
     message.textContent = (capture && capture.message) || "";
@@ -5714,12 +5776,27 @@ function handleNativeMessage(event) {
   if (payload.currentMatch) {
     renderMatch(payload.currentMatch, dashboard.overlayVisible);
   }
+  if (payload.action === 'set_capture_freshness_policy' && payload.captureFreshnessPolicyResult) {
+    renderObservationWindowMode(payload.currentMatch || dashboard.lastCurrentMatch || {});
+    if (!payload.captureFreshnessPolicyResult.ok) {
+      const status = document.getElementById('capture-delivery-status');
+      if (status) status.textContent = payload.captureFreshnessPolicyResult.reason || '模式未保存';
+    }
+  }
   if (payload.action === 'set_observation_window_mode' && payload.observationWindowModeResult) {
     dashboard.pendingObservationWindowMode = false;
     renderObservationWindowMode(payload.currentMatch || dashboard.lastCurrentMatch || {});
     if (!payload.observationWindowModeResult.ok) {
       const status = document.getElementById('observation-window-mode-status');
       if (status) status.textContent = payload.observationWindowModeResult.message || payload.observationWindowModeResult.reason || '观察模式未保存，请重试';
+    }
+  }
+  if (payload.action === 'set_native_auto_warehouse_capture' && payload.nativeAutoWarehouseResult) {
+    dashboard.pendingNativeAutoWarehouse = false;
+    renderObservationWindowMode(payload.currentMatch || dashboard.lastCurrentMatch || {});
+    if (!payload.nativeAutoWarehouseResult.ok) {
+      const status = document.getElementById('native-auto-warehouse-status');
+      if (status) status.textContent = payload.nativeAutoWarehouseResult.reason || '自动收页选项未保存';
     }
   }
   if (payload.warehouseCapture) {

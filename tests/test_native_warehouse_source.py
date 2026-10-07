@@ -18,7 +18,9 @@ import cv2
 ROOT = Path(__file__).resolve().parents[1]
 sys.path[:0] = [str(ROOT / 'app'), str(ROOT / 'core'), str(ROOT / 'tests')]
 import test_native_warehouse_intake as fixture_setup
-from native_warehouse_source import NativeWarehouseSourceCoordinator, SCHEMA
+from native_warehouse_source import (NativeWarehouseSourceCoordinator, SCHEMA,
+    MAX_TRIGGER_PROBES, MIN_TRIGGER_PROBE_INTERVAL_NS)
+from native_capture_delivery import STRICT
 from native_observation import NativeObservationBridge
 
 
@@ -64,6 +66,92 @@ class NativeWarehouseSourceTests(unittest.TestCase):
         self.coordinator.on_event(event)
         return event
 
+    def test_trigger_probe_events_are_single_pending_ordered_and_scope_bound(self):
+        qpc = [time.perf_counter_ns()]
+        coordinator = NativeWarehouseSourceCoordinator(self.intake,
+            send_control=lambda cmd: self.sent.append(copy.deepcopy(cmd)) or True,
+            source_root_provider=lambda: self.root, clock=lambda: qpc[0] / 1_000_000_000,
+            qpc=lambda: qpc[0], timers=False)
+        scope = self.intake.source_contract()['scope']
+        deadline = qpc[0] + 70_000_000_000
+        armed = coordinator.arm_trigger_watch(scope, deadline_ns=deadline, client_map='1920x1080:0,0:1920x1080')
+        self.assertTrue(armed['ok'])
+        self.assertEqual(armed['probeLimit'], MAX_TRIGGER_PROBES)
+        self.assertEqual(armed['minimumIntervalNs'], MIN_TRIGGER_PROBE_INTERVAL_NS)
+        command = self.sent[-1]
+        coordinator.on_event({
+            'type': 'native_warehouse_evidence', 'schemaVersion': SCHEMA,
+            'event': 'TRIGGER_WATCH_ARMED', 'watchId': armed['watchId'],
+            'observationSessionId': scope['observationSessionId'], 'recordStableKey': scope['recordStableKey'],
+            'matchGeneration': scope['matchGeneration'], 'targetInstance': scope['targetInstance'],
+            'clientMap': command['clientMap'], 'deadlineNs': deadline,
+            'sourceKind': 'native_wgc', 'inputActions': False, 'formalHistoryWriter': False,
+        })
+        def probe(ordinal, sequence, suffix):
+            return {'type': 'native_warehouse_evidence', 'schemaVersion': SCHEMA,
+                'event': 'TRIGGER_PROBE', 'scene': 'UNCLASSIFIED_CURRENT_PROBE',
+                'watchId': armed['watchId'], 'capturePolicy': STRICT,
+                'observationSessionId': scope['observationSessionId'],
+                'recordStableKey': scope['recordStableKey'], 'matchGeneration': scope['matchGeneration'],
+                'targetInstance': copy.deepcopy(scope['targetInstance']), 'clientMap': command['clientMap'],
+                'deadlineNs': deadline, 'sourceKind': 'native_wgc', 'inputActions': False,
+                'formalHistoryWriter': False, 'details': {'probeId': suffix * 32,
+                    'probeOrdinal': ordinal, 'frameSequence': sequence}}
+        first = probe(1, 10, 'a')
+        self.assertTrue(coordinator.accept_trigger_probe(first)['ok'])
+        duplicate = coordinator.accept_trigger_probe(copy.deepcopy(first))
+        self.assertEqual(duplicate['reason'], 'TRIGGER_PROBE_DUPLICATE_OR_OUT_OF_ORDER')
+        self.assertEqual(coordinator._trigger_watch['pendingProbeId'], 'a' * 32)
+        reordered = coordinator.accept_trigger_probe(probe(2, 11, 'b'))
+        self.assertEqual(reordered['reason'], 'TRIGGER_PROBE_DUPLICATE_OR_OUT_OF_ORDER')
+        self.assertEqual(coordinator._trigger_watch['pendingProbeId'], 'a' * 32)
+        self.assertTrue(coordinator.acknowledge_trigger_probe(first, result='REJECTED',
+            reason_codes=['WAREHOUSE_NOT_TOP']))
+        self.assertEqual(self.sent[-1]['operation'], 'ACK_TRIGGER_PROBE')
+        self.assertEqual(self.sent[-1]['probeId'], 'a' * 32)
+        self.assertIsNone(coordinator._trigger_watch['pendingProbeId'])
+        second = probe(2, 11, 'b')
+        self.assertTrue(coordinator.accept_trigger_probe(second)['ok'])
+        self.assertTrue(coordinator.acknowledge_trigger_probe(second, result='REJECTED',
+            reason_codes=['WAREHOUSE_GRID_MISSING']))
+        skipped = coordinator.accept_trigger_probe(probe(4, 13, 'd'))
+        self.assertEqual(skipped['reason'], 'TRIGGER_PROBE_DUPLICATE_OR_OUT_OF_ORDER')
+        coordinator.observation_ended('STOPPED')
+        self.assertIsNone(coordinator._trigger_watch)
+        self.assertFalse(coordinator.accept_trigger_probe(probe(3, 12, 'c'))['ok'],
+            'late callback from a stopped settlement cannot restart the watch')
+
+    def test_trigger_probe_deadline_and_match_change_revoke_pending_frame(self):
+        qpc = [time.perf_counter_ns()]
+        coordinator = NativeWarehouseSourceCoordinator(self.intake,
+            send_control=lambda cmd: self.sent.append(copy.deepcopy(cmd)) or True,
+            source_root_provider=lambda: self.root, clock=lambda: qpc[0] / 1_000_000_000,
+            qpc=lambda: qpc[0], timers=False)
+        scope = self.intake.source_contract()['scope']
+        deadline = qpc[0] + 70_000_000_000
+        armed = coordinator.arm_trigger_watch(scope, deadline_ns=deadline, client_map='map')
+        self.assertTrue(armed['ok'])
+        self.scope['recordStableKey'] = 'next-match'
+        coordinator.check_business_boundary({'status': 'FRAME', 'observationSessionId': scope['observationSessionId']})
+        self.assertIsNone(coordinator._trigger_watch)
+        self.assertEqual(self.sent[-1]['operation'], 'CANCEL_TRIGGER_WATCH')
+        self.assertEqual(self.sent[-1]['reason'], 'TRIGGER_SCOPE_CHANGED')
+
+        # A separately armed fixed deadline expires even if the caller's local clock moves on.
+        self.scope['recordStableKey'] = scope['recordStableKey']
+        self.intake._scope_provider = lambda: {**copy.deepcopy(self.scope), 'scene': 'SETTLEMENT'}
+        coordinator = NativeWarehouseSourceCoordinator(self.intake,
+            send_control=lambda cmd: self.sent.append(copy.deepcopy(cmd)) or True,
+            source_root_provider=lambda: self.root, clock=lambda: qpc[0] / 1_000_000_000,
+            qpc=lambda: qpc[0], timers=False)
+        deadline = qpc[0] + 70_000_000_000
+        armed = coordinator.arm_trigger_watch(self.intake.source_contract()['scope'], deadline_ns=deadline, client_map='map')
+        self.assertTrue(armed['ok'])
+        qpc[0] = deadline + 1
+        coordinator.check_timeout()
+        self.assertIsNone(coordinator._trigger_watch)
+        self.assertEqual(coordinator.presentation_payload()['sourceReason'], 'ABSOLUTE_SETTLEMENT_BUDGET_EXPIRED')
+
     def test_scope_timeout_late_open_and_budget_are_upstream(self):
         self.assertTrue(self.coordinator.start_manual()['ok'])
         late = self.opened()
@@ -103,6 +191,37 @@ class NativeWarehouseSourceTests(unittest.TestCase):
         self.assertEqual(self.coordinator.presentation_payload()['sourceState'], 'CLOSED')
         self.assertEqual(self.intake.presentation_payload()['state'], 'CANCELLED')
         self.assertEqual(self.intake.pages_copy(), [])
+
+    def test_scope_loss_keeps_saved_original_and_partial_manifest_without_billing(self):
+        self.assertTrue(self.coordinator.start_manual()['ok'])
+        self.opened()
+        pixels = bytes(range(48))
+        raw = struct.pack('<2sIHHI', b'BM', 102, 0, 0, 54)
+        raw += struct.pack('<IiiHHIIiiII', 40, 4, -3, 1, 32, 0, 48, 0, 0, 0, 0) + pixels
+        path = self.root / 'inert-cancel.bmp'; path.write_bytes(raw)
+        # Exercise the real intake/store with inert pixels; no SOURCE publication or WGC is claimed.
+        self.intake._source_provider = lambda: {'path': str(path), 'sourceRoot': str(self.root),
+            'width': 4, 'height': 3, 'frameSequence': 1, 'capturedAt': '2026-10-04T00:00:00Z',
+            'pixelSha256': hashlib.sha256(pixels).hexdigest(), 'receivedAt': time.monotonic(),
+            'scope': copy.deepcopy(self.scope)}
+        self.intake._source_validator = None
+        self.assertTrue(self.intake.capture_manual_page()['ok'])
+        pages = self.intake.pages_copy()
+        manifest = self.base.store.root / 'warehouse-intake' / (self.intake._session_id + '.json')
+        history = self.base.store.history_path.read_bytes()
+        self.scope['recordStableKey'] = 'next-match'
+        self.coordinator.check_business_boundary({'status': 'FRAME',
+            'observationSessionId': self.scope['observationSessionId']})
+        self.assertEqual(self.coordinator.source_session_snapshot()['state'], 'CLOSED')
+        saved = json.loads(manifest.read_text(encoding='utf-8'))
+        self.assertEqual(saved['scope']['recordStableKey'], 'native_intake_development')
+        self.assertEqual(saved['terminationReason'], 'SOURCE_SCOPE_CHANGED')
+        self.assertEqual(saved['state'], 'CANCELLED')
+        self.assertEqual(self.intake.pages_copy(), pages)
+        evidence = self.base.store.read_source_image_descriptor(pages[0]['nativeSource'])
+        self.assertEqual(evidence['data'], raw)
+        self.assertEqual(self.base.store.history_path.read_bytes(), history)
+        self.assertFalse(self.intake.capture_manual_page()['ok'])
 
     def test_window_scroll_result_is_correlated_and_cannot_impersonate_a_source(self):
         self.assertTrue(self.coordinator.start_manual(allow_window_scroll=True)['ok'])
