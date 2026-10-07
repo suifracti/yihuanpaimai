@@ -65,6 +65,8 @@ $env:YIHUAN_DATA_ROOT = Join-Path $PWD 'build\paused-ui-data'
 
 恢复前先核对 Git 提交和本地材料，不执行 reset、clean、整树覆盖或删除旧候选。Git 单独不能恢复未入库的环境和原始证据。
 
-源码仓库为 [suifracti/yihuanpaimai](https://github.com/suifracti/yihuanpaimai)。按用户确认，对同一仓库执行个人标识和相关原图的历史清洗，不新建公开仓库。本机完整旧历史只作私有恢复，不能再直接推回远端；分支和标签保留名称，清洗会改变提交 SHA。GitHub 缓存与旧引用核实完成前，仓库保持私有。
+源码仓库为 [suifracti/yihuanpaimai](https://github.com/suifracti/yihuanpaimai)。按用户确认，已清洗同一仓库的 21 个分支／标签引用，不新建公开仓库，保留名称。**仓库目前仍私有**：被移除的原图仍能通过 GitHub 旧 SHA 读取，且旧 PR 引用尚存；需支持端清除服务器缓存和旧引用后才满足公开条件。
+
+本机完整旧历史只作私有恢复，不应直接推送、merge 或 mirror 回远端。主目录的 origin 推送地址已设为 `disabled://private-recovery-history`，仅改本仓库 Git 配置，不改系统权限；读取地址保留。清洗后的 Git 对象区使用明确的远端地址更新。原始与净化后的 SHA 分开保存在本机 freeze 清单中。
 
 公开历史不包含有个人标识的游戏原图和 OCR 记录，相关旧回归素材仍在本机，公开克隆不能据此宣称完整回归通过。README 使用无私人内容的助手窗口截图；个人配置和私有恢复材料不上传。没有发布运行包、完成标签、远端 Archived 操作或自动任务。保存完成后作为约定的只读基线，继续修改须有新的明确任务。

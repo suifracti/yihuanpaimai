@@ -38,6 +38,10 @@
 
 本机原始 Git 历史继续保留，不能再从该历史直接推送、merge 或 mirror 到公开远端，否则会重新引入私人数据。GitHub 上的旧 SHA 缓存及 PR 引用需单独核实；仅清洗当前分支不能证明服务器已彻底移除原图。依据见 [GitHub 官方历史清洗说明](https://docs.github.com/en/authentication/keeping-your-account-and-data-secure/removing-sensitive-data-from-a-repository)。未核实前不变更公开权限。
 
+实际结果：21 个远端分支／标签已通过逐引用旧 SHA 租约原子更新，名称均保留。净化引用的可达历史不包含被移除的图片、个人 config 或原始 OCR 目录，也未检出已知私人标识。服务器端仍可按旧 SHA 读取被移除原图，且仍有 12 个 PR 引用，因此仓库继续私有。申请材料仅含仓库名、PR 编号和清洗提交元数据，准备于 `build/public-history-cleaning/github-support-request.json`，尚未向 GitHub 支持发送。
+
+主目录 origin 的推送地址设为 `disabled://private-recovery-history`，防止把本机保留的旧数据再次推回；读取地址未改。这只是仓库级配置，不是系统权限或自动任务。净化对象区是远端维护来源，本机原始仓库与候选仍是私有恢复来源。
+
 `app/config.json` 是个人运行配置，文件不变，仅退出 Git 跟踪。模板不复制本地已启用的自动收页状态。已有历史提交不改写。
 
 以下材料原地保留，通过本机 **`build/paused-baseline-20261007/private-inventory.json`** 定位；清单与进程元数据属于私有恢复材料，均被 build 忽略规则排除：
