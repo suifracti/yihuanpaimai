@@ -1,0 +1,155 @@
+{
+  "suite": "Boundary 3 Negative Security Gate Matrix",
+  "totalCases": 19,
+  "passedCases": 19,
+  "results": [
+    {
+      "case": "not_armed",
+      "description": "Calling scroll_once when not armed",
+      "status": "PASS",
+      "sendInputCount": 0,
+      "armedAfterRelease": false,
+      "reason": "NOT_ARMED"
+    },
+    {
+      "case": "token_expired",
+      "description": "Arming token already expired",
+      "status": "PASS",
+      "sendInputCount": 0,
+      "armedAfterRelease": false,
+      "reason": "TOKEN_EXPIRED"
+    },
+    {
+      "case": "token_consumed",
+      "description": "Arming token already consumed",
+      "status": "PASS",
+      "sendInputCount": 0,
+      "armedAfterRelease": false,
+      "reason": "TOKEN_REUSED"
+    },
+    {
+      "case": "not_foreground",
+      "description": "Target window is not foreground",
+      "status": "PASS",
+      "sendInputCount": 0,
+      "armedAfterRelease": false,
+      "reason": "NOT_FOREGROUND"
+    },
+    {
+      "case": "alt_tab_focus_change",
+      "description": "Focus changes away during precheck",
+      "status": "PASS",
+      "sendInputCount": 0,
+      "armedAfterRelease": false,
+      "reason": "NOT_FOREGROUND"
+    },
+    {
+      "case": "stale_hwnd",
+      "description": "Window handle no longer exists",
+      "status": "PASS",
+      "sendInputCount": 0,
+      "armedAfterRelease": false,
+      "reason": "HWND_INVALID"
+    },
+    {
+      "case": "invalid_hwnd",
+      "description": "Window handle is null/invalid",
+      "status": "PASS",
+      "sendInputCount": 0,
+      "armedAfterRelease": false,
+      "reason": "HWND_INVALID"
+    },
+    {
+      "case": "hidden_hwnd",
+      "description": "Window is hidden",
+      "status": "PASS",
+      "sendInputCount": 0,
+      "armedAfterRelease": false,
+      "reason": "HWND_HIDDEN"
+    },
+    {
+      "case": "minimized_hwnd",
+      "description": "Window is minimized",
+      "status": "PASS",
+      "sendInputCount": 0,
+      "armedAfterRelease": false,
+      "reason": "HWND_MINIMIZED"
+    },
+    {
+      "case": "tracked_hwnd_mismatch",
+      "description": "Tracked HWND does not match window HWND",
+      "status": "PASS",
+      "sendInputCount": 0,
+      "armedAfterRelease": false,
+      "reason": "HWND_MISMATCH"
+    },
+    {
+      "case": "roi_coordinate_outside",
+      "description": "ROI / safety point outside client area",
+      "status": "PASS",
+      "sendInputCount": 0,
+      "armedAfterRelease": false,
+      "reason": "SAFETY_POINT_OUTSIDE"
+    },
+    {
+      "case": "user_key_before_action",
+      "description": "User presses key before action",
+      "status": "PASS",
+      "sendInputCount": 0,
+      "armedAfterRelease": false,
+      "reason": "CANCELLED"
+    },
+    {
+      "case": "user_click_before_action",
+      "description": "User clicks mouse button before action",
+      "status": "PASS",
+      "sendInputCount": 0,
+      "armedAfterRelease": false,
+      "reason": "CANCELLED"
+    },
+    {
+      "case": "user_wheel_before_action",
+      "description": "User rolls physical wheel before action",
+      "status": "PASS",
+      "sendInputCount": 0,
+      "armedAfterRelease": false,
+      "reason": "CANCELLED"
+    },
+    {
+      "case": "user_mouse_move_before_action",
+      "description": "User moves mouse before action",
+      "status": "PASS",
+      "sendInputCount": 0,
+      "armedAfterRelease": false,
+      "reason": "CANCELLED"
+    },
+    {
+      "case": "user_move_between_move_and_wheel",
+      "description": "User moves mouse between SetCursorPos and SendInput",
+      "status": "PASS",
+      "sendInputCount": 0,
+      "armedAfterRelease": false,
+      "reason": "CANCELLED"
+    },
+    {
+      "case": "graceful_exception",
+      "description": "Internal OS adapter exception",
+      "status": "PASS",
+      "sendInputCount": 0,
+      "armedAfterRelease": false,
+      "reason": "ADAPTER_ERROR"
+    },
+    {
+      "case": "normal_process_close",
+      "status": "PASS",
+      "sendInputCount": 0
+    },
+    {
+      "case": "marked_program_wheel_no_abort",
+      "description": "Marked program wheel does not abort",
+      "status": "PASS",
+      "sendInputCount": 0,
+      "armedAfterRelease": false
+    }
+  ]
+}

@@ -28,10 +28,21 @@ class PulseDownScrollRequester:
     def __init__(self, driver: WarehouseWheelDriver, context_factory: Callable[[], WarehouseWheelContext]):
         self._driver = driver
         self._context_factory = context_factory
+        self._input_guard = None
         self.requests = []
+
+    def attach_input_abort_guard(self, guard: Any) -> None:
+        self._input_guard = guard
+        if hasattr(self._driver, "set_input_guard"):
+            try:
+                self._driver.set_input_guard(guard)
+            except Exception:
+                pass
 
     def request_next_scroll(self) -> None:
         context = self._context_factory()
+        if getattr(context, "input_guard", None) is None and self._input_guard is not None:
+            context.input_guard = self._input_guard
         began = self._driver.begin(context)
         if not began.get("ok"):
             raise RuntimeError(str(began.get("reason") or "BEGIN_FAILED"))

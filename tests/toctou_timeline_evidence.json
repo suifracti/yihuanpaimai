@@ -1,0 +1,20 @@
+{
+  "test": "test_toctou_race_full_timeline",
+  "status": "PASS",
+  "sendInputCount": 0,
+  "armedAfterRelease": false,
+  "cursorRestoreAttempted": false,
+  "cursorRestoreSkipped": true,
+  "finalUserCursor": [
+    800,
+    800
+  ],
+  "timelineMonotonicSeconds": {
+    "programMoveRegisteredAt": 76513.875,
+    "programMoveObservedAt": 76513.875,
+    "userMoveObservedAt": 76513.875,
+    "cancelAt": 76513.875,
+    "secondPrecheckRejectedAt": 76513.875,
+    "releaseAt": 76513.875
+  }
+}

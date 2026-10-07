@@ -207,17 +207,17 @@ class WarehouseInputAbortGuardV1Tests(unittest.TestCase):
             self.assertEqual(adapter.started, 1, kind)
             self.assertEqual(adapter.stopped, 1, kind)
 
-    def test_marked_wheel_and_mouse_move_do_not_stop(self):
+    def test_marked_wheel_and_mouse_move_behavior(self):
+        # 1. Unexpected user mouse move MUST abort with USER_MOUSE_MOVE
         adapter = FakeAdapter()
         session, guard, driver, token = self._session(adapter, emit_on_idle=KIND_MOUSE_MOVE)
-        # force a short loop then natural consecutive-unchanged/safety by not changing forever
         result = session.start()
-        self.assertNotEqual(result["terminationReason"], REASON_USER_INPUT)
-        self.assertNotEqual(result["terminationReason"], REASON_ESCAPE)
-        self.assertFalse(token.is_cancelled())
-        self.assertIsNone(guard.abort_reason())
-        self.assertGreaterEqual(len(driver.requests), 1)
+        self.assertEqual(result["terminationReason"], "USER_MOUSE_MOVE")
+        self.assertTrue(token.is_cancelled())
+        self.assertEqual(token.reason(), "USER_MOUSE_MOVE")
+        self.assertEqual(guard.abort_reason(), "USER_MOUSE_MOVE")
 
+        # 2. Program marked wheel MUST NOT stop
         adapter2 = FakeAdapter()
         session2, guard2, driver2, token2 = self._session(adapter2, emit_on_idle=KIND_MARKED_WHEEL)
         result2 = session2.start()

@@ -21,6 +21,7 @@ WAREHOUSE_WHEEL_EXTRA_INFO = 0x59485057  # YH PW
 REASON_OK = "OK"
 REASON_MISSING_TOKEN = "MISSING_TOKEN"
 REASON_TOKEN_REUSED = "TOKEN_REUSED"
+REASON_TOKEN_EXPIRED = "TOKEN_EXPIRED"
 REASON_CANCELLED = "CANCELLED"
 REASON_NOT_STABLE_SETTLEMENT = "NOT_STABLE_SETTLEMENT"
 REASON_WAREHOUSE_NOT_PRESENT = "WAREHOUSE_NOT_PRESENT"
@@ -37,6 +38,20 @@ REASON_ALREADY_SCROLLED = "ALREADY_SCROLLED"
 REASON_ADAPTER_MISSING = "ADAPTER_MISSING"
 REASON_ADAPTER_ERROR = "ADAPTER_ERROR"
 REASON_ALREADY_ARMED = "ALREADY_ARMED"
+REASON_USER_TAKEOVER = "USER_TAKEOVER"
+
+USER_TAKEOVER_REASONS = frozenset({
+    "USER_MOUSE_MOVE",
+    "USER_INPUT",
+    "ESCAPE",
+    "MOUSE_BUTTON",
+    "WHEEL",
+    "HORIZONTAL_WHEEL",
+    "KEY_DOWN",
+    "NOT_FOREGROUND",
+    "USER_STOP",
+    "USER_TAKEOVER",
+})
 
 RESULT_KEYS = (
     "schemaVersion",
@@ -46,6 +61,8 @@ RESULT_KEYS = (
     "wheelSent",
     "cursorMoved",
     "cursorRestored",
+    "cursorRestoreAttempted",
+    "cursorRestoreSkipped",
 )
 
 
@@ -57,8 +74,8 @@ def is_warehouse_wheel_input(dw_extra_info: Any) -> bool:
         return False
 
 
-def issue_warehouse_wheel_session_token() -> "WarehouseWheelSessionToken":
-    return WarehouseWheelSessionToken()
+def issue_warehouse_wheel_session_token(ttl_s: float = 12.0) -> "WarehouseWheelSessionToken":
+    return WarehouseWheelSessionToken(ttl_s=ttl_s)
 
 
 def _bounded_down_delta(delta: Any) -> int:
@@ -97,16 +114,24 @@ def _cancelled(token: Any) -> bool:
 class WarehouseWheelSessionToken:
     """Explicit, single-use session token. Reuse is always rejected."""
 
-    def __init__(self):
+    def __init__(self, ttl_s: float = 12.0):
+        import time
         self.id = uuid.uuid4().hex
         self._consumed = False
+        self.created_at = time.monotonic()
+        self.ttl_s = float(ttl_s)
 
     @property
     def consumed(self) -> bool:
         return self._consumed
 
+    def expired(self, now: Optional[float] = None) -> bool:
+        import time
+        t = time.monotonic() if now is None else float(now)
+        return t - self.created_at > self.ttl_s
+
     def consume(self) -> bool:
-        if self._consumed:
+        if self._consumed or self.expired():
             return False
         self._consumed = True
         return True
@@ -127,6 +152,7 @@ class WarehouseWheelContext:
     # settlement amount/identity stability gate. None preserves legacy direct
     # test-context semantics, where settlement_stable is still the safety bit.
     warehouse_authorized: Optional[bool] = None
+    input_guard: Optional[Any] = None
 
 
 class Win32WarehouseOsAdapter:
@@ -229,13 +255,16 @@ class Win32WarehouseOsAdapter:
 class WarehouseWheelDriver:
     """begin / scroll_once / end safety shell. Adapter must be injected."""
 
-    def __init__(self, os_adapter: Any = None, wheel_delta: int = DEFAULT_WHEEL_DELTA):
+    def __init__(self, os_adapter: Any = None, wheel_delta: int = DEFAULT_WHEEL_DELTA, input_guard: Any = None):
         self._adapter = os_adapter
+        self._input_guard = input_guard
         self._wheel_delta = _bounded_down_delta(wheel_delta)
         self._armed = False
         self._wheel_sent = False
         self._cursor_moved = False
         self._cursor_restored = False
+        self._cursor_restore_attempted = False
+        self._cursor_restore_skipped = False
         self._saved_cursor: Optional[Tuple[int, int]] = None
         self._context: Optional[WarehouseWheelContext] = None
         self._safety_screen: Optional[Tuple[int, int]] = None
@@ -243,6 +272,9 @@ class WarehouseWheelDriver:
     @property
     def armed(self) -> bool:
         return self._armed
+
+    def set_input_guard(self, input_guard: Any) -> None:
+        self._input_guard = input_guard
 
     def begin(self, context: Any) -> Dict[str, Any]:
         if self._armed:
@@ -275,17 +307,23 @@ class WarehouseWheelDriver:
         try:
             reason = self._precheck(self._context, require_token_fresh=False)
             if reason:
-                self._cleanup()
+                self._cleanup(reason=reason)
                 return self._result(False, reason)
             sx, sy = self._safety_screen or (None, None)
             if sx is None or sy is None:
-                self._cleanup()
+                self._cleanup(reason=REASON_INVALID_ROI)
                 return self._result(False, REASON_INVALID_ROI)
+            guard = getattr(self._context, "input_guard", None) or self._input_guard
+            if guard is not None and hasattr(guard, "register_expected_cursor_move"):
+                try:
+                    guard.register_expected_cursor_move(int(sx), int(sy), ttl_s=0.5)
+                except Exception:
+                    pass
             self._adapter.set_cursor_pos(int(sx), int(sy))
             self._cursor_moved = True
             reason = self._precheck(self._context, require_token_fresh=False)
             if reason:
-                self._cleanup()
+                self._cleanup(reason=reason)
                 return self._result(False, reason)
             delta = _bounded_down_delta(self._wheel_delta)
             self._adapter.send_mouse_wheel(delta, WAREHOUSE_WHEEL_EXTRA_INFO)
@@ -308,22 +346,85 @@ class WarehouseWheelDriver:
         self._wheel_sent = False
         self._cursor_moved = False
         self._cursor_restored = False
+        self._cursor_restore_attempted = False
+        self._cursor_restore_skipped = False
         self._saved_cursor = None
         self._context = None
         self._safety_screen = None
 
-    def _cleanup(self) -> None:
+    def _cleanup(self, reason: Optional[str] = None) -> None:
+        context = self._context
+        abort_reason = reason
+        is_user_takeover = False
+
+        if context is not None and context.cancellation_token is not None:
+            token = context.cancellation_token
+            if _cancelled(token):
+                token_reason = None
+                if hasattr(token, "reason"):
+                    r = token.reason() if callable(token.reason) else token.reason
+                    if r:
+                        token_reason = str(r).strip().upper()
+                if token_reason in USER_TAKEOVER_REASONS or (token_reason and token_reason.startswith("USER_")):
+                    is_user_takeover = True
+                    abort_reason = abort_reason or token_reason
+
+        guard = getattr(context, "input_guard", None) or self._input_guard
+        if guard is not None and hasattr(guard, "abort_reason"):
+            try:
+                g_reason = guard.abort_reason()
+                if g_reason and (str(g_reason).strip().upper() in USER_TAKEOVER_REASONS or str(g_reason).startswith("USER_")):
+                    is_user_takeover = True
+                    abort_reason = abort_reason or str(g_reason)
+            except Exception:
+                pass
+
+        # Only explicit user input events or cancelled tokens count as user takeover for skipping cursor restore
+        explicit_takeover = frozenset({
+            "USER_MOUSE_MOVE",
+            "USER_INPUT",
+            "ESCAPE",
+            "MOUSE_BUTTON",
+            "WHEEL",
+            "HORIZONTAL_WHEEL",
+            "KEY_DOWN",
+            "USER_STOP",
+            "USER_TAKEOVER",
+        })
+        if abort_reason and (str(abort_reason).strip().upper() in explicit_takeover or str(abort_reason).startswith("USER_")):
+            is_user_takeover = True
+
         saved = self._saved_cursor
         self._armed = False
         self._context = None
         self._safety_screen = None
         self._saved_cursor = None
-        if saved is None or self._adapter is None:
+
+        if is_user_takeover:
+            self._cursor_restore_attempted = False
+            self._cursor_restore_skipped = True
+            self._cursor_restored = False
             return
+
+        if saved is None or self._adapter is None:
+            self._cursor_restore_attempted = False
+            self._cursor_restore_skipped = False
+            self._cursor_restored = False
+            return
+
         try:
+            if guard is not None and hasattr(guard, "register_expected_cursor_move"):
+                try:
+                    guard.register_expected_cursor_move(int(saved[0]), int(saved[1]), ttl_s=0.5)
+                except Exception:
+                    pass
             self._adapter.set_cursor_pos(int(saved[0]), int(saved[1]))
+            self._cursor_restore_attempted = True
+            self._cursor_restore_skipped = False
             self._cursor_restored = True
         except Exception:
+            self._cursor_restore_attempted = True
+            self._cursor_restore_skipped = False
             self._cursor_restored = False
 
     def _result(self, ok: bool, reason: str) -> Dict[str, Any]:
@@ -335,6 +436,8 @@ class WarehouseWheelDriver:
             "wheelSent": self._wheel_sent,
             "cursorMoved": self._cursor_moved,
             "cursorRestored": self._cursor_restored,
+            "cursorRestoreAttempted": self._cursor_restore_attempted,
+            "cursorRestoreSkipped": self._cursor_restore_skipped,
         }
         extra = set(payload) - set(RESULT_KEYS)
         for key in extra:
@@ -351,6 +454,8 @@ class WarehouseWheelDriver:
             return REASON_MISSING_TOKEN
         if require_token_fresh and token.consumed:
             return REASON_TOKEN_REUSED
+        if hasattr(token, "expired") and callable(token.expired) and token.expired():
+            return REASON_TOKEN_EXPIRED
         if _cancelled(context.cancellation_token):
             return REASON_CANCELLED
         if context.warehouse_authorized is None:
