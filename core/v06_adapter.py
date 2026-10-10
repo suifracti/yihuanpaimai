@@ -14,7 +14,7 @@ from __future__ import annotations
 
 import json
 from copy import deepcopy
-from typing import Any, Dict, List, Optional, Union
+from typing import Any, Dict, List, Mapping, Optional, Sequence, Tuple, Union
 
 
 VENUE_CANONICAL_TO_NAME = {
@@ -75,6 +75,100 @@ def format_known_items(items: Union[None, str, List[Any]]) -> str:
                     token = f"{token}*{count}"
                 parts.append(token)
     return "+".join(parts)
+
+
+_SOLVER_KNOWN_RARITIES = {
+    "gold": "knownGold",
+    "purple": "knownPurple",
+    "red": "knownRed",
+}
+
+
+def _slot_anchor(slot: Mapping[str, Any]) -> Optional[Tuple[int, int, int, int]]:
+    try:
+        col, row, width, height = slot.get("col"), slot.get("row"), slot.get("w"), slot.get("h")
+        if None in (col, row, width, height):
+            return None
+        return (int(col), int(row), int(width), int(height))
+    except (TypeError, ValueError):
+        return None
+
+
+def _clean_item_name(value: Any) -> Optional[str]:
+    name = str(value or "").strip()
+    if not name or "+" in name or "/" in name:
+        return None
+    return name
+
+
+def warehouse_slots_known_tokens(slots: Any) -> Dict[str, List[str]]:
+    """Map warehouse slots to solver known tokens without promoting unique candidates.
+
+    EXACT+DIRECT and human CONFIRM_CANDIDATE become confirmed names.
+    CANDIDATE slots with two or more catalog names become a single OR token `A/B`.
+    UNIQUE_IN_CATALOG / one-name candidates stay out of known*.
+    """
+    tokens = {field: [] for field in _SOLVER_KNOWN_RARITIES.values()}
+    if not isinstance(slots, list):
+        return tokens
+    seen = set()
+    for slot in slots:
+        if not isinstance(slot, dict):
+            continue
+        field = _SOLVER_KNOWN_RARITIES.get(str(slot.get("rarity") or ""))
+        if field is None:
+            continue
+        anchor = _slot_anchor(slot)
+        if anchor is None or anchor in seen:
+            continue
+        seen.add(anchor)
+
+        manual = slot.get("manualDecision") if isinstance(slot.get("manualDecision"), dict) else None
+        if manual and str(manual.get("action") or "") == "CONFIRM_CANDIDATE":
+            identity = manual.get("manualIdentity") if isinstance(manual.get("manualIdentity"), dict) else {}
+            name = _clean_item_name(identity.get("name") or manual.get("name"))
+            if name:
+                tokens[field].append(name)
+            continue
+
+        identity = str(slot.get("identityStatus") or "")
+        identified = _clean_item_name(slot.get("identifiedName"))
+        if identity == "EXACT" and identified and str(slot.get("identityReferenceKind") or "") == "DIRECT":
+            tokens[field].append(identified)
+            continue
+
+        if identity != "CANDIDATE":
+            continue
+        names: List[str] = []
+        for cand in slot.get("candidates") or []:
+            if not isinstance(cand, dict):
+                continue
+            name = _clean_item_name(cand.get("name") or cand.get("Name"))
+            if name and name not in names:
+                names.append(name)
+        if len(names) >= 2:
+            tokens[field].append("/".join(sorted(names)))
+    return tokens
+
+
+def merge_known_tokens(existing: str, extras: Sequence[str]) -> str:
+    parts = [part for part in str(existing or "").split("+") if part.strip()]
+    have = set(parts)
+    for token in extras:
+        token = str(token or "").strip()
+        if token and token not in have:
+            parts.append(token)
+            have.add(token)
+    return "+".join(parts)
+
+
+def apply_warehouse_identity_constraints(data: Mapping[str, Any], known: Mapping[str, str]) -> Dict[str, str]:
+    warehouse = data.get("warehouse") if isinstance(data.get("warehouse"), dict) else {}
+    extra = warehouse_slots_known_tokens(warehouse.get("slots"))
+    return {
+        field: merge_known_tokens(known.get(field, ""), extra.get(field) or [])
+        for field in _SOLVER_KNOWN_RARITIES.values()
+    }
 
 
 def canonicalize_venue_name(venue_val: Optional[str], fill_default: bool = True) -> Optional[str]:
@@ -298,6 +392,15 @@ def canonical_to_v06_solver_input(data: Dict[str, Any]) -> Dict[str, Any]:
             leader_bid = data.get("myBid")
         if leader_bid is None and fill_default:
             leader_bid = 0
+
+    known_bound = apply_warehouse_identity_constraints(data, {
+        "knownGold": known_gold,
+        "knownPurple": known_purple,
+        "knownRed": known_red,
+    })
+    known_gold = known_bound["knownGold"]
+    known_purple = known_bound["knownPurple"]
+    known_red = known_bound["knownRed"]
 
     # 构造标准 0.6 求解器输入字典
     solver_input: Dict[str, Any] = {
