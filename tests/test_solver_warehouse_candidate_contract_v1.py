@@ -24,6 +24,7 @@ ROOT = Path(__file__).resolve().parents[1]
 CORE = ROOT / "core"
 sys.path.insert(0, str(CORE))
 
+from current_match import CurrentMatch  # noqa: E402
 from v06_adapter import (  # noqa: E402
     canonical_to_v06_solver_input,
     known_token_entries,
@@ -89,6 +90,21 @@ def _stable_or_slot(col, row, w, h, rarity, names):
         shapeLocked=True,
         isConfirmed=True,
         candidates=[{"catalogId": f"cand-{i}", "name": name} for i, name in enumerate(names)],
+    )
+
+
+FISH_ID = "image26-1-0"
+
+
+def _exact_fish_slot(col=0, row=0):
+    return _slot(
+        col, row, 4, 1, "gold",
+        evidenceLevel="EXACT_IDENTIFIED",
+        identityStatus="EXACT",
+        identifiedName=CANDIDATE_B,
+        identifiedCatalogId=FISH_ID,
+        identityReferenceKind="DIRECT",
+        candidates=[{"catalogId": FISH_ID, "name": CANDIDATE_B}],
     )
 
 
@@ -352,6 +368,7 @@ class SolverWarehouseCandidateContractV1Tests(unittest.TestCase):
         self.assertGreaterEqual(min(s["G"] for s in two["states"]), 2)
 
     def test_same_instance_known_items_and_slot_are_not_double_counted(self):
+        """Adapter view of a delta-projected same-instance snapshot (knownItems already has that name)."""
         record = _canonical()
         record["qualities"]["gold"]["knownItems"] = [{"name": CONFIRMED_GOLD}]
         record["warehouse"]["slots"] = [
@@ -375,6 +392,54 @@ class SolverWarehouseCandidateContractV1Tests(unittest.TestCase):
         once = _run_pipeline(py)
         self.assertEqual(once["solverStatus"], "valid")
         self.assertNotEqual(once["p50"], doubled["p50"])
+
+    def test_production_canonical_entry_preserves_delta_instance_counts(self):
+        """Production solver entry already distinguishes same-instance vs second copy.
+
+        Call chain:
+          RealEngine._commit_deferred_identity puts warehouse and
+          _warehouse_known_fact_delta into one apply_facts patch.
+          Instance review uses the same delta, then
+          apply_warehouse_identity_projection.
+          build_manual_alpha_payload does CURRENT_MATCH.to_canonical()
+          -> canonical_to_v06_solver_input.
+
+        to_canonical() copies warehouse geometry/identityStatus but omits
+        identityReferenceKind, so EXACT names are not re-emitted from slots.
+        Adapter extras are empty; qualities.knownItems is the delta ledger.
+
+        A: delta wrote one 金龙鱼 (the visible slot) -> adapter keeps 1.
+        B: delta preserved a manual 金龙鱼 and appended the warehouse copy -> adapter keeps 2.
+        A raw dict with knownItems=[金龙鱼] plus one DIRECT slot is not production B.
+        """
+        fish = _exact_fish_slot()
+
+        same = CurrentMatch()
+        same.apply_facts({"warehouse": {"slots": [fish]}}, source="vision", intent="observe")
+        same.apply_warehouse_identity_projection({"knownGold": CANDIDATE_B})
+        canonical_a = same.to_canonical()
+        self.assertNotIn("identityReferenceKind", canonical_a["warehouse"]["slots"][0])
+        self.assertEqual(warehouse_slots_known_tokens(canonical_a["warehouse"]["slots"])["knownGold"], [])
+        py_a = canonical_to_v06_solver_input(canonical_a)
+        js_a = _js_adapter(canonical_a)
+        self.assertEqual(known_token_entries(py_a["knownGold"]), [CANDIDATE_B])
+        self.assertEqual(known_token_entries(js_a["knownGold"]), [CANDIDATE_B])
+
+        second = CurrentMatch()
+        second.apply_facts({"knownGold": CANDIDATE_B}, source="manual", intent="confirm")
+        second.apply_facts({"warehouse": {"slots": [fish]}}, source="vision", intent="observe")
+        second.apply_warehouse_identity_projection({"knownGold": CANDIDATE_B + "+" + CANDIDATE_B})
+        canonical_b = second.to_canonical()
+        self.assertEqual(
+            [row["name"] for row in canonical_b["qualities"]["gold"]["knownItems"]],
+            [CANDIDATE_B, CANDIDATE_B],
+        )
+        self.assertNotIn("identityReferenceKind", canonical_b["warehouse"]["slots"][0])
+        py_b = canonical_to_v06_solver_input(canonical_b)
+        js_b = _js_adapter(canonical_b)
+        self.assertEqual(known_token_entries(py_b["knownGold"]), [CANDIDATE_B, CANDIDATE_B])
+        self.assertEqual(known_token_entries(js_b["knownGold"]), [CANDIDATE_B, CANDIDATE_B])
+        self.assertNotEqual(py_a["knownGold"], py_b["knownGold"])
 
     def test_later_warehouse_slots_do_not_rewrite_frozen_round_input(self):
         """Adapter is snapshot-in/snapshot-out. Frozen round input is the pipeline authority.
