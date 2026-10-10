@@ -208,6 +208,10 @@
     return tokens;
   }
 
+  // Inverse of RealEngine._warehouse_known_fact_delta on CurrentMatch.to_canonical()
+  // snapshots. Canonical slots omit identityReferenceKind, so EXACT names are not
+  // re-emitted; this merge does not independently prove two name-equal sources are
+  // the same physical instance.
   function mergeKnownTokens(existing, extras) {
     const extraEntries = [];
     for (const raw of extras || []) {

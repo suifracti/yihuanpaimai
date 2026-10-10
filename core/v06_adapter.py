@@ -224,12 +224,14 @@ def warehouse_slots_known_tokens(slots: Any) -> Dict[str, List[str]]:
 
 
 def merge_known_tokens(existing: str, extras: Sequence[str]) -> str:
-    """Join known* with warehouse tokens by physical multiset, not unique names.
+    """Inverse of RealEngine._warehouse_known_fact_delta on a CurrentMatch snapshot.
 
-    Warehouse extras replace matching copies already present in qualities.knownItems
-    (CurrentMatch identity projection), then every remaining warehouse instance is
-    appended. Two same-name slots stay two copies; one projected instance is not
-    counted twice.
+    Production solver input is CurrentMatch.to_canonical() after that delta has
+    already written the physical multiset into qualities.*.knownItems. Canonical
+    warehouse slots do not copy identityReferenceKind, so EXACT names are not
+    re-emitted here; remaining extras (CONFIRM_CANDIDATE / stable OR) replace
+    matching copies then append. This function does not independently prove that
+    a name in knownItems and a warehouse slot are the same physical instance.
     """
     extra_entries = [token for token in (_canonicalize_known_token(raw) for raw in extras) if token]
     remove = Counter(extra_entries)
