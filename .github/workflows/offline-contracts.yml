@@ -53,6 +53,20 @@ jobs:
         continue-on-error: true
         shell: pwsh
         run: |
+          git config --local core.autocrlf true
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          git checkout-index --force -- lab/index.html assets/business_sot_v06.json
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          $autocrlf = git config --local --get core.autocrlf
+          $eol = git ls-files --eol -- lab/index.html assets/business_sot_v06.json
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          $eolLines = @($eol)
+          $eolLines | Write-Output
+          if ($autocrlf -ne 'true' -or $eolLines.Count -ne 2 -or @($eolLines | Where-Object { $_ -notmatch 'w/lf' }).Count -ne 0) {
+            'Windows checkout did not preserve both protected sources as LF with core.autocrlf=true.' | Write-Error
+            exit 1
+          }
+          "Windows checkout core.autocrlf=$autocrlf; both protected sources are LF" | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Append -Encoding utf8
           python -c "import sys; sys.path.insert(0, 'core'); import venue_box_catalog as v; catalog=v.load_catalog(); checked=v.validate_solver_compatibility(catalog, v.load_solver_compatibility()); assert checked.ok, checked.errors; mapped=v.solver_context_translation(catalog, venue_id='venue-shanhu', box_id='box-shanhu-glass'); assert mapped.get('status') == 'COMPATIBILITY_TRANSLATION', mapped; print('strict source hashes: PASS; real venue-box mapping: COMPATIBILITY_TRANSLATION')"
           $checkExitCode = $LASTEXITCODE
           if ($checkExitCode -eq 0) { $status = 'PASS' } else { $status = 'FAIL' }
