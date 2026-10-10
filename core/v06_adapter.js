@@ -91,6 +91,85 @@
     return parts.join("+");
   }
 
+  const SOLVER_KNOWN_RARITIES = { gold: "knownGold", purple: "knownPurple", red: "knownRed" };
+
+  function slotAnchor(slot) {
+    try {
+      if (slot.col == null || slot.row == null || slot.w == null || slot.h == null) return null;
+      return [Number(slot.col), Number(slot.row), Number(slot.w), Number(slot.h)].join(",");
+    } catch (_) {
+      return null;
+    }
+  }
+
+  function cleanItemName(value) {
+    const name = String(value || "").trim();
+    if (!name || name.includes("+") || name.includes("/")) return null;
+    return name;
+  }
+
+  function warehouseSlotsKnownTokens(slots) {
+    const tokens = { knownGold: [], knownPurple: [], knownRed: [] };
+    if (!Array.isArray(slots)) return tokens;
+    const seen = new Set();
+    for (const slot of slots) {
+      if (!slot || typeof slot !== "object") continue;
+      const field = SOLVER_KNOWN_RARITIES[String(slot.rarity || "")];
+      if (!field) continue;
+      const anchor = slotAnchor(slot);
+      if (anchor == null || seen.has(anchor)) continue;
+      seen.add(anchor);
+
+      const manual = slot.manualDecision && typeof slot.manualDecision === "object" ? slot.manualDecision : null;
+      if (manual && String(manual.action || "") === "CONFIRM_CANDIDATE") {
+        const identity = manual.manualIdentity && typeof manual.manualIdentity === "object" ? manual.manualIdentity : {};
+        const name = cleanItemName(identity.name || manual.name);
+        if (name) tokens[field].push(name);
+        continue;
+      }
+
+      const identity = String(slot.identityStatus || "");
+      const identified = cleanItemName(slot.identifiedName);
+      if (identity === "EXACT" && identified && String(slot.identityReferenceKind || "") === "DIRECT") {
+        tokens[field].push(identified);
+        continue;
+      }
+
+      if (identity !== "CANDIDATE") continue;
+      const names = [];
+      for (const cand of slot.candidates || []) {
+        if (!cand || typeof cand !== "object") continue;
+        const name = cleanItemName(cand.name || cand.Name);
+        if (name && !names.includes(name)) names.push(name);
+      }
+      if (names.length >= 2) tokens[field].push(names.slice().sort().join("/"));
+    }
+    return tokens;
+  }
+
+  function mergeKnownTokens(existing, extras) {
+    const parts = String(existing || "").split("+").filter((part) => part.trim());
+    const have = new Set(parts);
+    for (const raw of extras || []) {
+      const token = String(raw || "").trim();
+      if (token && !have.has(token)) {
+        parts.push(token);
+        have.add(token);
+      }
+    }
+    return parts.join("+");
+  }
+
+  function applyWarehouseIdentityConstraints(data, known) {
+    const warehouse = data && typeof data.warehouse === "object" ? data.warehouse : {};
+    const extra = warehouseSlotsKnownTokens(warehouse.slots);
+    return {
+      knownGold: mergeKnownTokens(known.knownGold, extra.knownGold),
+      knownPurple: mergeKnownTokens(known.knownPurple, extra.knownPurple),
+      knownRed: mergeKnownTokens(known.knownRed, extra.knownRed)
+    };
+  }
+
   function canonicalizeVenueName(venueVal, fillDefault = true) {
     if (!venueVal || venueVal === "未知场地" || venueVal === "unknown") {
       return fillDefault ? "中级场 · 珊瑚场" : null;
@@ -290,6 +369,11 @@
       roundNo = data.round ?? 1;
       leaderBid = data.currentLeaderBid ?? data.leaderBid ?? data.myBid ?? (fillDefault ? 0 : null);
     }
+
+    const knownBound = applyWarehouseIdentityConstraints(data, { knownGold, knownPurple, knownRed });
+    knownGold = knownBound.knownGold;
+    knownPurple = knownBound.knownPurple;
+    knownRed = knownBound.knownRed;
 
     return {
       q,
@@ -678,6 +762,9 @@
 
   return {
     formatKnownItems,
+    warehouseSlotsKnownTokens,
+    mergeKnownTokens,
+    applyWarehouseIdentityConstraints,
     canonicalizeVenueName,
     canonicalizeFieldConditionId,
     canonicalToV06SolverInput,
