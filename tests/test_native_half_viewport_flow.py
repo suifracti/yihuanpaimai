@@ -129,6 +129,7 @@ class HalfViewportFlowTests(unittest.TestCase):
     def test_not_sent_content_recheck_requires_new_support_and_original_budget(self):
         # Receipts are an explicit Host contract, not inferred from elapsed
         # time or a generic failure reason. Pixels here test scheduling only.
+        safe_receipt = json.loads(PRESEND_RECEIPTS.read_text(encoding='utf-8'))['before-send']
         for variant in ('safe', 'unknown-send', 'other-guard'):
             with self.subTest(variant=variant):
                 f = LiveRun()
@@ -137,15 +138,14 @@ class HalfViewportFlowTests(unittest.TestCase):
                     f.deliver(frame); f.tick(); f.deliver(frame.copy())
                     command = copy.deepcopy(f.source._pending)
                     deadline = f.auto._deadline
-                    details = {'classification': 'NOT_SENT_CONTENT_SUPPORT_RECHECK',
-                        'sendInterfaceInvoked': False, 'sourceLeaseId': command['sourceLeaseId'],
-                        'failedChecks': ['scrollContentQuantizationSupported']}
+                    details = copy.deepcopy(safe_receipt['details'])
+                    details['sourceLeaseId'] = command['sourceLeaseId']
                     if variant == 'unknown-send':
                         details['sendInterfaceInvoked'] = None
                     elif variant == 'other-guard':
                         details['failedChecks'].append('targetUsable')
-                    rejected = f.event('REJECTED', command,
-                        reason='SCROLL_CONTENT_CHANGED_BEFORE_SEND', details=details)
+                    rejected = f.event(safe_receipt['event'], command,
+                        reason=safe_receipt['reason'], details=details)
                     stale = copy.deepcopy(rejected); stale['nonce'] = 'previous-command'
                     f.auto.on_event(stale)
                     self.assertEqual(f.auto._phase, 'WAIT_SCROLL')
@@ -158,6 +158,17 @@ class HalfViewportFlowTests(unittest.TestCase):
                     self.assertEqual(f.auto._phase, 'WAIT_STABLE')
                     self.assertFalse(f.auto._post_scroll_frame_received)
                     self.assertEqual(f.auto._deadline, deadline)
+                    self.assertEqual(sum(c['operation'] == 'SCROLL_DOWN' for c in f.sent), 1)
+                    # A repeated coordinator advance still sees the receipt's
+                    # old reason. Once its safe recheck has been consumed it
+                    # must keep waiting for independent SOURCE, not stop.
+                    pages_before_repeat = len(f.source.pages_copy())
+                    requests_before_repeat = sum(c['operation'] == 'REQUEST_PAGE' for c in f.sent)
+                    f.auto._advance()
+                    self.assertTrue(f.auto._active)
+                    self.assertEqual(f.auto._phase, 'WAIT_STABLE')
+                    self.assertEqual(len(f.source.pages_copy()), pages_before_repeat)
+                    self.assertEqual(sum(c['operation'] == 'REQUEST_PAGE' for c in f.sent), requests_before_repeat)
                     self.assertEqual(sum(c['operation'] == 'SCROLL_DOWN' for c in f.sent), 1)
                     f.tick()  # No hints: no new SOURCE and no resend.
                     self.assertEqual(sum(c['operation'] == 'REQUEST_PAGE' for c in f.sent), 2)
