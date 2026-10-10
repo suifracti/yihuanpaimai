@@ -1325,7 +1325,7 @@
           || d.visionState?.snapshot?.mode?.informationMode || d.prediction?.mode;
         limit.textContent = scene === "SETTLEMENT" ? "本局建议已结束 · 查看结算"
           : paused ? "观察暂停 · 旧结果无当前资格"
-          : mode === "partial_shadow" ? "部分历史覆盖 · 非整仓P50 / 正式上限"
+          : mode === "partial_shadow" ? "部分候选支持 · 非整仓P50 / 正式上限"
           : mode === "structural_only" ? "结构参考 · 非正式出价上限"
           : "仅显示当前有效结果";
       }
@@ -2131,7 +2131,10 @@ function sparkleBoundsText(b) {
         || decision.degradationLevel
         || (d && d.shadowUpdating ? "SUPPORT_UPDATING" : "STRUCTURAL_ONLY");
       const infeasible = snapshot?.status?.solverStatus === "no-match" && !d?.shadowUpdating;
-      const pending = !snapshot || !(snapshot.status && snapshot.status.solverStatus === "valid");
+      const nativeProfile = d?.observationProfile === "native-readonly-v1";
+      const displayScopeCurrent = d?.scene === "IN_AUCTION" && d?.nativeInvalidated !== true
+        && (!nativeProfile || (d?.observationStatus === "FRAME" && d?.visionHealth?.status === "READY"));
+      const pending = !displayScopeCurrent || !snapshot || !(snapshot.status && snapshot.status.solverStatus === "valid");
       const calculating = pending && d?.shadowUpdating === true;
       const settling = d?.scene === "SETTLEMENT" || d?.isSettlement === true;
       const paused = d?.nativeInvalidated === true || d?.visionHealth?.stage === "native-paused";
@@ -2158,7 +2161,7 @@ function sparkleBoundsText(b) {
       const hasStructuralCenter = sCenter != null;
 
       const isPartial = mode === "partial_shadow" || mode === "PARTIAL_SHADOW";
-      const displayMode = pending ? pendingLabel : (isPartial ? "部分历史覆盖" : (isP80Null && hasStructuralCenter ? "非概率结构估值" : (modeLabels[mode] || "结构推断")));
+      const displayMode = pending ? pendingLabel : (isPartial ? "部分候选支持" : (isP80Null && hasStructuralCenter ? "非概率结构估值" : (modeLabels[mode] || "结构推断")));
       const recommendation = !pending && (mode === "full_shadow" || mode === "FULL_SHADOW")
         ? (decision.recommendedMax ?? frozen.globalLine ?? null)
         : null;
@@ -2192,6 +2195,8 @@ function sparkleBoundsText(b) {
       const pRangeEl = document.getElementById("pRange");
       if (!pending && p20 != null && p80 != null) {
         pRangeEl.textContent = `P20 ${fmtWan(p20)} · P80 ${fmtWan(p80)}`;
+      } else if (!pending && isPartial && decision.partialShadowP50 != null) {
+        pRangeEl.textContent = `条件参考 ${fmtWan(decision.partialShadowP50)}（仅部分候选，非整仓范围）`;
       } else if (!pending && isP80Null && sMin != null && sMax != null) {
         pRangeEl.textContent = `可行区间 ${fmtWan(sMin)}～${fmtWan(sMax)} · 整仓 P80 不可用`;
       } else {
@@ -2231,6 +2236,10 @@ function sparkleBoundsText(b) {
           ? `结构估值中枢 ${fmtWan(sCenter)} · 暂无正式出价建议`
           : "整仓估值待补全 · 暂无正式出价建议";
         adviceReason = decision.actionReason || "部分组合尚无可靠估值，请补充红货等已知情报";
+        if (isPartial) {
+          badgeText = "部分候选支持 · 非正式整仓估值";
+          if (Number.isInteger(d?.shadowMeta?.historyN)) adviceReason += `；本次历史记录 ${d.shadowMeta.historyN} 条`;
+        }
       }
 
       if (pending && !calculating && !waitingScene && !settling && snapshot?.status?.solverStatus === "fallback" && d?.fieldCondition === "sparkle") {
@@ -2279,7 +2288,7 @@ function sparkleBoundsText(b) {
       document.getElementById("expectedProfit").textContent = "预期盈亏（当前叫价，P50扣整局成本）：" + formatExpectedProfit(recommendation == null ? null : decision.expectedProfit);
       document.getElementById("statusHint").textContent = pending
         ? adviceReason
-        : (isPartial ? "仅部分历史覆盖，非整仓 P50 或正式出价上限"
+        : (isPartial ? "仅部分候选支持，非整仓 P50 或正式出价上限"
           : (p50 == null && sCenter == null ? "当前结果不足以估计整仓价值" : statusCopy(solverStatus, false)));
       paintDraftSaveState(d);
       paintManualCommandResult(d?.manualCommandResult || d?.nativeControlResult);
@@ -2336,14 +2345,16 @@ function sparkleBoundsText(b) {
       });
       seatsEl.innerHTML = projected.join("");
       const evidence = (d && d.auctionEvidence) || {};
-      const intel = Array.isArray(evidence.intel) ? evidence.intel : [];
+      const projectedIntel = d?.currentMatch?.publicIntel?.timeline?.observations;
+      const intel = Array.isArray(projectedIntel) ? projectedIntel : Array.isArray(evidence.intel) ? evidence.intel : [];
       if (!intel.length) {
         intelEl.textContent = "暂无情报";
         return;
       }
       intelEl.innerHTML = intel.slice(-6).map((row) => {
         const texts = (row.lines || []).map((line) => (line && line.text) || line).filter(Boolean).join("；") || row.rawText || row.text || "";
-        const round = row.round != null ? `第${row.round}回合` : "";
+        const round = (row.round != null ? `第${row.round}回合` : "")
+          + (row.readingCount > 1 ? ` · ${row.readingCount}条读数合并` : "");
         return `<p>${escapeHtml(round)} ${escapeHtml(texts)}</p>`;
       }).join("");
     }

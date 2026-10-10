@@ -172,6 +172,21 @@ class TestLiveShadowRefresh(unittest.TestCase):
         self.assertEqual(second["cache"], "miss")
         self.assertEqual(second["historyGen"], first["historyGen"] + 1)
 
+    def test_fee_correction_recomputes_reference_without_changing_valuation(self):
+        _seed_db(self.db, [])
+        load_history_snapshot(self.db)
+        context = {**CTX, "costs": {"entry": 5000}}
+        _, first = compute_live_probability_profile(context, db_path=self.db)
+        _, unchanged = compute_live_probability_profile({**context, "factsRevision": 2}, db_path=self.db)
+        self.assertEqual(unchanged["cache"], "hit")
+        _, corrected = compute_live_probability_profile(
+            {**context, "costs": {"entry": 6000}}, db_path=self.db)
+        self.assertEqual(corrected["cache"], "miss")
+        before = first["frozenPrediction"]["formalValue"]
+        after = corrected["frozenPrediction"]["formalValue"]
+        self.assertEqual(after["structuralCenter"], before["structuralCenter"])
+        self.assertEqual(after["structuralReferenceBid"], before["structuralReferenceBid"] - 1000)
+
     def test_ineligible_new_record_does_not_change_shadow(self):
         _seed_db(self.db, [_eligible_red_record("old-eli", "2026-08-16T00:00:00")])
         load_history_snapshot(self.db)

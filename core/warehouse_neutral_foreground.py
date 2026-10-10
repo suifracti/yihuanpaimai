@@ -43,14 +43,28 @@ def _correlation(a, b):
     return float(np.dot(a, b) / max(1e-8, norm))
 
 
+def prepare_pair(pair):
+    if pair is None:
+        return None
+    image, mask = pair[:2]
+    return (image, mask, cv2.resize(image, (96, 96)).astype(np.float32),
+            cv2.resize(mask, (96, 96)) > 127)
+
+
+def prepare_neutral_foreground(image):
+    return tuple(prepare_pair(_extract(image, floor)) for floor in (15, 45))
+
+
 def _compare(query, template):
-    q, qm = query
-    t, tm = template
+    q, qm = query[:2]
+    t, tm = template[:2]
     ratio = (q.shape[1] / q.shape[0]) / (t.shape[1] / t.shape[0])
     if not .75 < ratio < 1.33:
         return None
-    q, t = (cv2.resize(image, (96, 96)).astype(np.float32) for image in (q, t))
-    qm, tm = (cv2.resize(mask, (96, 96)) > 127 for mask in (qm, tm))
+    query = query if len(query) == 4 else prepare_pair(query)
+    template = template if len(template) == 4 else prepare_pair(template)
+    q, qm = query[2:]
+    t, tm = template[2:]
     overlap = qm & tm
     if overlap.sum() / max(1, (qm | tm).sum()) < .75:
         return None
@@ -80,12 +94,16 @@ def _compare(query, template):
     return best
 
 
-def match_neutral_foreground(query_image, template_body):
+def match_prepared_neutral(query_pairs, template_pairs):
     matches = []
-    for floor in (15, 45):
-        query, template = _extract(query_image, floor), _extract(template_body, floor)
+    for query, template in zip(query_pairs, template_pairs):
         if query is not None and template is not None:
             result = _compare(query, template)
             if result is not None:
                 matches.append(result)
     return max(matches, key=lambda result: result['score']) if matches else None
+
+
+def match_neutral_foreground(query_image, template_body):
+    return match_prepared_neutral(prepare_neutral_foreground(query_image),
+                                  prepare_neutral_foreground(template_body))

@@ -41,6 +41,7 @@ class TestLiveShadowPresentationPayloadV1(unittest.TestCase):
             "round": round_no,
             "factsRevision": facts_revision,
             "engineFactsRevision": engine_facts_revision,
+            "mainFactsRevision": facts_revision,
             "matchGeneration": match_generation,
             "frameSequence": 1,
             "acceptedAtMonotonicNs": time.monotonic_ns(),
@@ -252,6 +253,7 @@ class TestLiveShadowPresentationPayloadV1(unittest.TestCase):
             "schemaVersion": 7,
             "lifecycleStatus": "DRAFT",
             "factsRevision": facts_revision,
+            "roundNo": round_no,
         })
         if leader_bid is not None:
             snapshot["leaderBid"] = leader_bid
@@ -908,7 +910,7 @@ class TestLiveShadowPresentationPayloadV1(unittest.TestCase):
                 "matchGeneration": 1, "predictionSnapshot": None,
                 "solverStatus": "pending",
             })
-            with mock.patch.object(app_main, "CURRENT_MATCH", mock.Mock(id=match_id)), \
+            with mock.patch.object(app_main, "CURRENT_MATCH", mock.Mock(id=match_id, facts_revision=26, lifecycle_status="DRAFT", facts={"roundNo": 3})), \
                  mock.patch.object(app_main, "get_current_match_presentation_summary", return_value={"id": match_id}), \
                  mock.patch.object(app_main, "ACTIVE_SNAPSHOT_HOLDER"), \
                  self._native_lease_patch(
@@ -965,7 +967,7 @@ class TestLiveShadowPresentationPayloadV1(unittest.TestCase):
             app_main._SHADOW_PRESENTATION_KEYS.clear()
             app_main.LATEST_PAYLOAD.clear()
             app_main.LATEST_PAYLOAD.update(payload)
-            with mock.patch.object(app_main, "CURRENT_MATCH", mock.Mock(id=match_id)), \
+            with mock.patch.object(app_main, "CURRENT_MATCH", mock.Mock(id=match_id, facts_revision=26, lifecycle_status="DRAFT", facts={"roundNo": 5})), \
                  mock.patch.object(app_main, "get_current_match_presentation_summary", return_value={"id": match_id}), \
                  mock.patch.object(app_main, "ACTIVE_SNAPSHOT_HOLDER"), \
                  self._native_lease_patch(

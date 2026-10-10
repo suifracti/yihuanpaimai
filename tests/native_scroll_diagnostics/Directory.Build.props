@@ -1,0 +1,7 @@
+<Project>
+  <PropertyGroup>
+    <BaseIntermediateOutputPath>$(MSBuildThisFileDirectory)..\..\build\native-content-evidence-20261009\checks-obj\</BaseIntermediateOutputPath>
+    <OutputPath>$(MSBuildThisFileDirectory)..\..\build\native-content-evidence-20261009\checks-out\</OutputPath>
+    <AppendTargetFrameworkToOutputPath>false</AppendTargetFrameworkToOutputPath>
+  </PropertyGroup>
+</Project>

@@ -7,5 +7,6 @@ internal sealed record CapturedBgraFrame(
     byte[] Pixels,
     long CaptureTimestampNs,
     string CapturedAtUtc,
-    long SourceTimestampNs, long AcquisitionSequence = 0, CaptureDeliveryProof? DeliveryProof = null, string? DeliveryDiagnosticJson = null);
+    long SourceTimestampNs, long AcquisitionSequence = 0, CaptureDeliveryProof? DeliveryProof = null, string? DeliveryDiagnosticJson = null,
+    long CaptureScopeEpoch = 0);
 

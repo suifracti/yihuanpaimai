@@ -3,7 +3,17 @@ using NteHost.Protocol;
 using WgcLiveHarness;
 
 // No real HWND or native send. Test the actual adapter/lease through injected OS outcomes.
-var root = args.Single();
+var root = args[0];
+if (args.Contains("--ordinary-expiry-only")) { OrdinaryFrameExpiryChecks.Run(root, FixtureProof); return; }
+if (args.Contains("--refusal-diagnostic-only")) { ContentRecheckChecks.Run(root, FixtureProof, diagnosticOnly: true); return; }
+if (args.Contains("--content-recheck-only")) { ContentRecheckChecks.Run(root, FixtureProof); return; }
+if (args.Contains("--adapter-presend-only")) { ContentRecheckChecks.RunAdapter(root, FixtureProof); return; }
+if (args.Contains("--hint-slot-only")) { ContentHintSlotChecks.Run(root, FixtureProof); return; }
+if (args.Contains("--step-only")) { StepOnlyChecks.Run(root, FixtureProof); return; }
+if (args.Length == 2 && args[1] == "--content-evidence") {
+    ContentEvidenceChecks.Run(root, FixtureProof);
+    return;
+}
 Directory.CreateDirectory(root);
 var target = new JsonObject { ["targetHwnd"] = 123L, ["targetPid"] = 456,
     ["processInstanceToken"] = 789L, ["generation"] = 1L };
@@ -69,7 +79,7 @@ foreach (var scenario in new[] { "warehouse-changed", "latest-stale", "summary-m
     for (var seq = 1; seq <= 2; seq++) {
         lease.Handle(Command("REQUEST_PAGE", seq)); var request = lease.PendingRequestGateNs!.Value;
         var p = FixtureProof(seq, request); proofs.Add(p); now = p.ReadbackCompletedNs + 100;
-        latest = new(p.CaptureId, 1, p.ReadbackCompletedNs, "scene", "warehouse", true);
+        latest = new(p.CaptureId, 1, p.ReadbackCompletedNs, "scene", "warehouse", true, ScrollContentRoiSha256: "content");
         var pixels = Enumerable.Range(0, 48).Select(i => (byte)(i + seq)).ToArray();
         Check(lease.TryPublish(new(4, 3, 16, pixels, p.SourceNs, p.ReadbackCompletedNs,
             "2026-10-07T00:00:00Z", seq, "", seq, p, latest, request, 1), () => true), scenario + " saves source " + seq);
@@ -78,7 +88,7 @@ foreach (var scenario in new[] { "warehouse-changed", "latest-stale", "summary-m
         foreach (var key in new[] { "sourceLeaseId", "bmpSha256", "pixelSha256" }) ack[key] = source[key]!.DeepClone();
         ack["result"] = "SAVED"; lease.Handle(ack); now += 500_000_000;
     }
-    if (scenario == "warehouse-changed") latest = latest! with { WarehouseRoiSha256 = "animated" };
+    if (scenario == "warehouse-changed") latest = latest! with { ScrollContentRoiSha256 = "animated" };
     if (scenario == "latest-stale") now += 3_000_000_000;
     if (scenario == "summary-missing") latest = null;
     var scroll = Command("SCROLL_DOWN", 2);
@@ -90,7 +100,7 @@ foreach (var scenario in new[] { "warehouse-changed", "latest-stale", "summary-m
         Check(qualification["qualified"]!.GetValue<bool>() && adapterCalls == 1, scenario + " reaches adapter only after lease checks");
         Check(fake.Sends == (scenario == "qualified" ? 1 : 0), scenario + " target/mapping guard separates native send");
     } else {
-        var expected = scenario == "warehouse-changed" ? "warehouseRoiMatches"
+        var expected = scenario == "warehouse-changed" ? "scrollContentRoiMatches"
             : scenario == "latest-stale" ? "latestReadbackWithinDeadline" : "latestSummaryPresent";
         Check(adapterCalls == 0 && fake.Sends == 0
             && ((JsonArray)qualification["failedChecks"]!).Any(n => (string?)n == expected), scenario + " reports exact failed check without sending");
@@ -120,9 +130,10 @@ sealed class FakePlatform : WarehouseWindowScroll.IPlatform {
     public WarehouseWindowScroll.ScreenPoint Point = new(true, 100, 100);
     public WarehouseWindowScroll.SendResult Result = new(1, 0, 0);
     public int Sends; public bool Throws;
+    public Action? BeforeCoordinates, AfterSend;
     public WarehouseWindowScroll.TargetState ReadTarget(long hwnd) => Target;
-    public WarehouseWindowScroll.ScreenPoint ToScreen(long hwnd, int x, int y) => Point;
+    public WarehouseWindowScroll.ScreenPoint ToScreen(long hwnd, int x, int y) { BeforeCoordinates?.Invoke(); return Point; }
     public WarehouseWindowScroll.SendResult Send(long hwnd, uint wheel, uint coordinates) {
-        Sends++; if (Throws) throw new InvalidOperationException("injected-send-error"); return Result;
+        Sends++; if (Throws) throw new InvalidOperationException("injected-send-error"); AfterSend?.Invoke(); return Result;
     }
 }

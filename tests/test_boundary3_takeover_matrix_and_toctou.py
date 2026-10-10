@@ -424,7 +424,8 @@ class TestBoundary3TakeoverMatrixAndToctou(unittest.TestCase):
         self.assertLessEqual(rej_at, rel_at)
 
         # Output timeline JSON for audit record
-        timeline_path = PROJECT_ROOT / "tests" / "toctou_timeline_evidence.json"
+        timeline_path = PROJECT_ROOT / "build" / "source-alignment-20261009" / "toctou_timeline_evidence.json"
+        timeline_path.parent.mkdir(parents=True, exist_ok=True)
         with open(timeline_path, "w", encoding="utf-8") as f:
             json.dump(
                 {
@@ -569,7 +570,8 @@ class TestBoundary3TakeoverMatrixAndToctou(unittest.TestCase):
         })
 
         # Persist negative matrix evidence
-        matrix_path = PROJECT_ROOT / "tests" / "negative_matrix_evidence.json"
+        matrix_path = PROJECT_ROOT / "build" / "source-alignment-20261009" / "negative_matrix_evidence.json"
+        matrix_path.parent.mkdir(parents=True, exist_ok=True)
         with open(matrix_path, "w", encoding="utf-8") as f:
             json.dump(
                 {

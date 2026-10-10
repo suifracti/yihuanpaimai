@@ -427,6 +427,11 @@ from native_trial_drafts import NativeTrialDraftStore, resolve_native_trial_hist
 from settlement_inventory_archive import SettlementInventoryArchive
 
 NATIVE_TRIAL_HISTORY_PATH = resolve_native_trial_history_path(PROJECT_ROOT)
+if os.environ.get('NTE_CONTENT_EVIDENCE_ONLY') == '1':
+    evidence_root = Path(os.environ['NTE_CONTENT_EVIDENCE_ROOT']).resolve()
+    if not evidence_root.is_relative_to((Path(PROJECT_ROOT) / 'build').resolve()):
+        raise ValueError('Content evidence data must stay inside project build/')
+    NATIVE_TRIAL_HISTORY_PATH = evidence_root / 'canonical-history.json'
 NATIVE_TRIAL_DRAFT_STORE = NativeTrialDraftStore(NATIVE_TRIAL_HISTORY_PATH)
 SETTLEMENT_INVENTORY_ARCHIVE = SettlementInventoryArchive(NATIVE_TRIAL_DRAFT_STORE)
 
@@ -716,6 +721,7 @@ _NATIVE_DRAFT_SAVE_ERROR_MATCH_ID: Optional[str] = None
 _NATIVE_SOLVER_INVALIDATION_GENERATION = 0
 _NATIVE_WAREHOUSE_FRAME_LEASE = None
 _NATIVE_WAREHOUSE_SOURCE_COORDINATOR = None
+_NATIVE_CONTENT_EVIDENCE_SESSION = None
 _NATIVE_SOLVER_LEASE: Optional[Dict[str, Any]] = None
 _NATIVE_FRAME_WATCHDOG_THREAD: Optional[threading.Thread] = None
 _NATIVE_FRAME_TIMEOUT_SECONDS = 31.0  # Host's SendFrame deadline is 30 seconds.
@@ -1554,6 +1560,8 @@ def native_observation_window_mode() -> str:
 
 def handle_native_auto_warehouse_capture(enabled: Any) -> Dict[str, Any]:
     global _NATIVE_AUTO_WAREHOUSE_ENABLED
+    if os.environ.get('NTE_CONTENT_EVIDENCE_ONLY') == '1':
+        return {'ok': False, 'reason': '一次取证运行不修改自动收页配置'}
     if type(enabled) is not bool:
         return {'ok': False, 'reason': '自动收页选项无效'}
     with _VISION_PROCESS_LOCK, _NATIVE_OBSERVATION_LOCK:
@@ -1837,6 +1845,8 @@ def _maybe_trigger_native_warehouse_capture(ctx, host, *, trigger_probe_event=No
 
 
 def native_capture_policy():
+    if os.environ.get('NTE_CONTENT_EVIDENCE_ONLY') == '1':
+        return DELIVERY
     return CONFIG.get('app', {}).get('captureFreshnessPolicy', STRICT)
 
 
@@ -1932,7 +1942,7 @@ def _native_health_from_event(event: Dict[str, Any], *, frame: Optional[Dict[str
     """Translate the Host's safety vocabulary into the existing HUD health shape."""
     raw_status = str(event.get("status") or "ERROR").upper()
     reason = str(event.get("reason") or "").strip()
-    if raw_status in {"STARTING", "READY", "STOPPED"}:
+    if raw_status in {"STARTING", "READY", "SUSPENDED", "STOPPED"}:
         status = "WAITING"
     elif raw_status == "FRAME":
         status = "READY"
@@ -1943,6 +1953,7 @@ def _native_health_from_event(event: Dict[str, Any], *, frame: Optional[Dict[str
         "READY": "native-ready",
         "FRAME": "native-frame",
         "PAUSED": "native-paused",
+        "SUSPENDED": "native-mapping-wait",
         "ERROR": "native-error",
         "STOPPED": "native-stopped",
         "CONTROL": "native-control",
@@ -1960,6 +1971,9 @@ def _native_health_from_event(event: Dict[str, Any], *, frame: Optional[Dict[str
     }
     details = event.get("details")
     if isinstance(details, dict):
+        for mapping_field in ("firstProbe", "lastProbe", "captureScopeEpoch", "retryWindowMs", "maxProbeAttempts"):
+            if mapping_field in details:
+                health[mapping_field] = copy.deepcopy(details[mapping_field])
         for exit_field in ("processExitConfirmed", "exitConfirmed", "hostExitCode", "outputClosed"):
             if exit_field in details:
                 health[exit_field] = details[exit_field]
@@ -2002,6 +2016,7 @@ def _native_health_from_event(event: Dict[str, Any], *, frame: Optional[Dict[str
         if isinstance(previous, dict):
             health["lastSuccessfulObservation"] = copy.deepcopy(previous)
     health["observationStopped"] = raw_status in {"PAUSED", "ERROR", "STOPPED"}
+    health["observationSuspended"] = raw_status == "SUSPENDED"
     return health
 
 
@@ -2422,14 +2437,17 @@ def _native_solver_lease_matches_locked(context: Dict[str, Any]) -> bool:
     return bool(
         lease.get("generation") == _NATIVE_SOLVER_INVALIDATION_GENERATION
         and context.get("nativeSolverGeneration") == lease.get("generation")
-        and lease.get("sessionId") == _NATIVE_EXPECTED_SESSION == _NATIVE_OBSERVATION_SESSION
+        and lease.get("sessionId") == context.get("observationSessionId") == _NATIVE_EXPECTED_SESSION == _NATIVE_OBSERVATION_SESSION
         and lease.get("matchId") == CURRENT_MATCH.id == context.get("matchId")
         and lease.get("round") == context.get("round")
         and lease.get("factsRevision") == context.get("factsRevision")
         and lease.get("engineFactsRevision") == context.get("engineFactsRevision")
+        and lease.get("mainFactsRevision") == CURRENT_MATCH.facts_revision
         and lease.get("matchGeneration") == context.get("matchGeneration")
         and lease.get("targetInstance") == target
         and context.get("scene") == "IN_AUCTION"
+        and CURRENT_MATCH.lifecycle_status == "DRAFT"
+        and lease.get("round") == CURRENT_MATCH.facts.get("roundNo")
         and context.get("nativeInvalidated") is not True
         and _LIVE_VISION_ACTIVE
         and _LIVE_VISION_MATCH_ID == CURRENT_MATCH.id
@@ -2441,6 +2459,34 @@ def _native_solver_lease_matches(context: Dict[str, Any]) -> bool:
         return _native_solver_lease_matches_locked(context)
 
 
+def _native_fact_computation_rejection(data: Dict[str, Any]) -> Optional[str]:
+    """Check a delivered fact snapshot; no claim about producer absolute age."""
+    proof = data.get("deliveryProof") or {}
+    rejection = validate_delivery(proof, time.perf_counter_ns(), session=_NATIVE_EXPECTED_SESSION,
+        max_age_ns=31_000_000_000, require_progress=True)
+    if rejection:
+        return rejection
+    qualification = data.get("currentAdviceQualification") or {}
+    if (data.get("currentAdviceQualified") is not True
+            or qualification.get("schemaVersion") != "delivery-facts-computation.v1"
+            or qualification.get("qualified") is not True
+            or qualification.get("originalCaptureId") != proof.get("captureId")
+            or qualification.get("originalReadbackNs") != proof.get("readbackCompletedNs")):
+        return "FACT_COMPUTATION_DELIVERY_UNQUALIFIED"
+    binding = data.get("observationFrameBinding") or {}
+    bound_proof = (binding.get("captureProof") or {}).get("deliveryProof") or {}
+    pixel_hash = binding.get("pixelSha256")
+    if (binding.get("frameSequence") != data.get("frameSequence")
+            or binding.get("captureTimestampNs") != proof.get("readbackCompletedNs")
+            or bound_proof != proof
+            or binding.get("stateMatchId") != data.get("matchId")
+            or binding.get("stateFactsRevision") != data.get("engineFactsRevision")
+            or binding.get("scene") != "IN_AUCTION"
+            or not isinstance(pixel_hash, str) or len(pixel_hash) != 64):
+        return "FACT_SOURCE_FRAME_BINDING_MISMATCH"
+    return None
+
+
 def _native_accept_observation_locked(data: Dict[str, Any]) -> Optional[Dict[str, Any]]:
     global _NATIVE_SOLVER_LEASE
     target_instance = _native_observation_target_instance(data.get("target"))
@@ -2448,13 +2494,22 @@ def _native_accept_observation_locked(data: Dict[str, Any]) -> Optional[Dict[str
         freshness_ms = float(_native_use_age_ms(data))
     except (TypeError, ValueError):
         return None
+    if _NATIVE_CAPTURE_POLICY == DELIVERY:
+        rejection = _native_fact_computation_rejection(data)
+        if rejection:
+            data["computationRejection"] = rejection
+            return None
     if (
-        (_NATIVE_CAPTURE_POLICY == DELIVERY and (data.get("currentAdviceQualified") is not True
-            or (data.get('deliveryProof') or {}).get('sourceMarkerProgress') is not True))
-        or data.get("scene") != "IN_AUCTION"
+        data.get("scene") != "IN_AUCTION"
         or data.get("inAuction") is not True
         or data.get("isSettlement") is True
         or target_instance is None
+        or data.get("matchId") != CURRENT_MATCH.id
+        or data.get("observationSessionId") != _NATIVE_EXPECTED_SESSION or _NATIVE_EXPECTED_SESSION != _NATIVE_OBSERVATION_SESSION
+        or type(data.get("round")) is not int or data.get("round") <= 0
+        or data.get("round") != CURRENT_MATCH.facts.get("roundNo")
+        or type(data.get("factsRevision")) is not int or type(data.get("engineFactsRevision")) is not int
+        or CURRENT_MATCH.lifecycle_status != "DRAFT"
         or not 0 <= freshness_ms < _NATIVE_FRAME_TIMEOUT_SECONDS * 1000
     ):
         return None
@@ -2476,6 +2531,7 @@ def _native_accept_observation_locked(data: Dict[str, Any]) -> Optional[Dict[str
         "round": data.get("round"),
         "factsRevision": data.get("factsRevision"),
         "engineFactsRevision": data.get("engineFactsRevision"),
+        "mainFactsRevision": CURRENT_MATCH.facts_revision,
         "matchGeneration": data.get("matchGeneration"),
         "frameSequence": data.get("frameSequence"),
         "acceptedAtMonotonicNs": accepted_ns,
@@ -2483,6 +2539,12 @@ def _native_accept_observation_locked(data: Dict[str, Any]) -> Optional[Dict[str
     }
     _NATIVE_SOLVER_LEASE = lease
     data["nativeSolverGeneration"] = lease["generation"]
+    data["computationQualification"] = {
+        "purpose": "compute-and-display-versioned-facts",
+        "lease": copy.deepcopy(lease),
+        "sourceAbsoluteAgeMs": None if _NATIVE_CAPTURE_POLICY == DELIVERY else data.get("freshnessMs"),
+        "automaticBidExecutionQualified": False,
+    }
     _native_start_frame_watchdog_locked()
     return lease
 
@@ -2604,13 +2666,15 @@ def _native_capture_intel_source_locked(frame: Dict[str, Any], event: Dict[str, 
 
 def _native_publish_health(event: Dict[str, Any], *, force_main: bool = False) -> Dict[str, Any]:
     global _NATIVE_INSTANCE_DECISION_GENERATION, _NATIVE_INSTANCE_DECISION_SCOPE
+    global _NATIVE_WAREHOUSE_FRAME_LEASE
     health = _native_health_from_event(event)
     raw_status = str(event.get("status") or "").upper()
-    invalidating = raw_status in {"STARTING", "READY", "PAUSED", "ERROR", "STOPPED"}
+    invalidating = raw_status in {"STARTING", "READY", "SUSPENDED", "PAUSED", "ERROR", "STOPPED"}
     with _MANUAL_STATE_LOCK:
         if raw_status == "PAUSED":
             health["pausedMatchId"] = CURRENT_MATCH.id
         if invalidating:
+            _NATIVE_WAREHOUSE_FRAME_LEASE = None
             _native_invalidate_solver_locked(str(event.get("reason") or f"native-{raw_status.lower()}"))
             _native_reject_pending_instance_decisions_locked(
                 str(event.get("reason") or f"native-{raw_status.lower()}")
@@ -2625,7 +2689,7 @@ def _native_publish_health(event: Dict[str, Any], *, force_main: bool = False) -
         if invalidating:
             LATEST_PAYLOAD["nativeInvalidated"] = True
     PRESENTATION_RUNTIME.set_vision_process_state(
-        "running" if raw_status in {"STARTING", "READY", "FRAME", "CONTROL"} else "stopped"
+        "running" if raw_status in {"STARTING", "READY", "SUSPENDED", "FRAME", "CONTROL"} else "stopped"
     )
     envelope = {
         "type": "vision_health",
@@ -2834,7 +2898,7 @@ def _native_observation_event(event: Dict[str, Any]) -> Optional[Dict[str, Any]]
         return
     if status == "READY":
         _NATIVE_SOURCE_CAPTURE_CAPABILITY = (event.get("details") or {}).get("warehouseSourceBeforeBillFrozen") is True
-    if status in {"STARTING", "PAUSED", "ERROR", "STOPPED"}:
+    if status in {"STARTING", "SUSPENDED", "PAUSED", "ERROR", "STOPPED"}:
         _NATIVE_SOURCE_CAPTURE_CAPABILITY = False
     if status in {"PAUSED", "ERROR", "STOPPED"}:
         if _NATIVE_WINDOW_MODE == "background-readonly" and status != "STOPPED":
@@ -3134,7 +3198,7 @@ def _native_observation_event(event: Dict[str, Any]) -> Optional[Dict[str, Any]]
                     "observationSessionId": incoming_session,
                     "targetInstance": _native_observation_target_instance(details.get("target")),
                 }, boundary=True)
-        _native_publish_health(event, force_main=status in {"STARTING", "READY", "PAUSED", "ERROR", "STOPPED"})
+        _native_publish_health(event, force_main=status in {"STARTING", "READY", "SUSPENDED", "PAUSED", "ERROR", "STOPPED"})
         if status in {"PAUSED", "ERROR", "STOPPED"}:
             _LIVE_VISION_ACTIVE = False
             _LIVE_VISION_MATCH_ID = None
@@ -3334,6 +3398,7 @@ def _native_observation_event(event: Dict[str, Any]) -> Optional[Dict[str, Any]]
                 "sourceAbsoluteAgeMs": None if _NATIVE_CAPTURE_POLICY == DELIVERY else frame.get('freshnessMs'),
                 "currentAdviceQualified": frame.get('currentAdviceQualified', True),
                 "currentAdviceQualification": copy.deepcopy(frame.get('currentAdviceQualification')),
+                "observationFrameBinding": copy.deepcopy(event.get("lastFrame")),
                 "sourceMatchGeneration": (event.get('lastFrame') or {}).get('matchGeneration', CURRENT_MATCH._seq),
                 "sourceKind": "native_wgc",
                 "source": "native_wgc",
@@ -3363,6 +3428,10 @@ def _native_observation_event(event: Dict[str, Any]) -> Optional[Dict[str, Any]]
                 "capturedAtNs": capture_ns,
                 "sourceTimestampNs": frame.get("sourceTimestampNs"),
                 "capturedAtUtc": frame.get("capturedAtUtc"),
+                # Native bypasses process_vision_context's match-time binding.
+                # Keep historical support cutoff at this saved match boundary,
+                # including offline replay, never at a later solve's wall time.
+                "playedAt": snapshot.get("createdAt") or frame.get("capturedAtUtc"),
                 "freshnessMs": frame.get("freshnessMs"),
                 "target": event.get("target"),
                 "gameHwnd": (event.get("target") or {}).get("targetHwnd") if isinstance(event.get("target"), dict) else None,
@@ -3427,7 +3496,7 @@ def _native_observation_event(event: Dict[str, Any]) -> Optional[Dict[str, Any]]
                     nativeInvalidated=True,
                     observationStatus="WAITING_FOR_FRESH_FRAME",
                     solverStatus="paused",
-                    solverMissingReason="等待当前有效的局内观察帧",
+                    solverMissingReason=data.get("computationRejection") or "当前局、回合、窗口或观察时效不满足求解资格",
                 )
                 _native_invalidate_solver_locked("observation-not-current-auction")
             elif preparation_waiting:
@@ -4216,6 +4285,10 @@ def _publish_live_shadow_event(event: Dict[str, Any]) -> None:
         if merged.get("observationProfile") == "native-readonly-v1":
             merged["currentMatch"] = get_current_match_presentation_summary()
         LATEST_PAYLOAD.update(merged)
+        if merged.get("observationProfile") == "native-readonly-v1":
+            LATEST_VISION_PAYLOAD.clear()
+            LATEST_VISION_PAYLOAD.update(merged)
+            PRESENTATION_RUNTIME.observe_transport(merged)
     loop = WS_EVENT_LOOP
     if loop is not None and loop.is_running():
         try:
@@ -4364,6 +4437,14 @@ async def ws_handler(websocket):
                         start_vision_worker()
                 elif msg_type == "force_refresh":
                     request_force_refresh(data.get("refreshRequestId") or data.get("requestId"))
+                elif msg_type == 'native_content_evidence':
+                    if (os.environ.get('NTE_CONTENT_EVIDENCE_ONLY') != '1'
+                            or _NATIVE_CONTENT_EVIDENCE_SESSION is None):
+                        result = {'ok': False, 'reason': 'EVIDENCE_LAUNCH_REQUIRED'}
+                    else:
+                        result = _NATIVE_CONTENT_EVIDENCE_SESSION.handle(data.get('operation'))
+                    await websocket.send(json.dumps({'type': 'native_content_evidence_receipt',
+                        'requestId': data.get('requestId'), **result}, ensure_ascii=False))
                 elif msg_type == "start_live_vision":
                     # Starting from the existing UI is a new observation
                     # boundary by default.  A transient pause may be resumed
@@ -8022,7 +8103,8 @@ def _start_native_observation_locked(*, resume_same_match: bool = False):
                 if NATIVE_OBSERVATION_BRIDGE is bridge else None,
         )
         NATIVE_OBSERVATION_BRIDGE = bridge
-        _NATIVE_AUTO_WAREHOUSE_ENABLED = CONFIG.get("app", {}).get("nativeAutoWarehouseCapture") is True
+        _NATIVE_AUTO_WAREHOUSE_ENABLED = (CONFIG.get("app", {}).get("nativeAutoWarehouseCapture") is True
+            and os.environ.get('NTE_CONTENT_EVIDENCE_ONLY') != '1')
         _NATIVE_SOURCE_CAPTURE_CAPABILITY = False
         _NATIVE_CAPTURE_POLICY = native_capture_policy()
         _NATIVE_DELIVERY_ANCHORED_MATCH = None
@@ -8309,6 +8391,7 @@ def run_hud_app():
     def _gui_thread():
         global WAREHOUSE_CAPTURE_HOST, WAREHOUSE_IDENTITY_REVIEW, WAREHOUSE_IDENTITY_HISTORY
         global _NATIVE_WAREHOUSE_SOURCE_COORDINATOR
+        global _NATIVE_CONTENT_EVIDENCE_SESSION
         MainWindow = create_main_window_type(WinForms, Drawing)
         main_window = MainWindow()
         _MAIN_WINDOW_HOLDER.clear()
@@ -8518,18 +8601,27 @@ def run_hud_app():
             )
             from native_warehouse_source import NativeWarehouseSourceCoordinator
             from native_warehouse_auto_capture import NativeWarehouseAutoCapture
+            from native_warehouse_visible_content_gate import VisibleContentGate
             native_intake = NativeWarehouseIntake(
                 draft_store=NATIVE_TRIAL_DRAFT_STORE,
                 scope_provider=_native_warehouse_source_scope,
                 source_provider=lambda: copy.deepcopy(_NATIVE_WAREHOUSE_FRAME_LEASE),
                 scope_lock=_MANUAL_STATE_LOCK,
+                auto_refine=os.environ.get('NTE_CONTENT_EVIDENCE_ONLY') != '1',
             )
             native_source = NativeWarehouseSourceCoordinator(
                 native_intake, send_control=_native_source_send_control,
-                source_root_provider=_native_source_root)
+                source_root_provider=_native_source_root,
+                evidence_only=os.environ.get('NTE_CONTENT_EVIDENCE_ONLY') == '1')
+            if os.environ.get('NTE_CONTENT_EVIDENCE_ONLY') != '1':
+                native_intake.resume_pending()
             _NATIVE_WAREHOUSE_SOURCE_COORDINATOR = NativeWarehouseAutoCapture(native_source,
                 diagnostic_log=lambda message: log_stage('WAREHOUSE:NATIVE_AUTO', message),
-                claim_attempt=_native_claim_warehouse_attempt)
+                claim_attempt=_native_claim_warehouse_attempt,
+                content_gate=VisibleContentGate())
+            if os.environ.get('NTE_CONTENT_EVIDENCE_ONLY') == '1':
+                from native_content_evidence import NativeContentEvidenceSession
+                _NATIVE_CONTENT_EVIDENCE_SESSION = NativeContentEvidenceSession(native_source)
             WAREHOUSE_CAPTURE_HOST = WarehouseCaptureRouter(
                 WAREHOUSE_CAPTURE_HOST, _NATIVE_WAREHOUSE_SOURCE_COORDINATOR, native_observation_enabled)
             set_warehouse_capture_host(WAREHOUSE_CAPTURE_HOST)

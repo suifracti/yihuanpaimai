@@ -22,13 +22,14 @@ MIN_TRIGGER_PROBE_INTERVAL_NS = 600_000_000
 
 class NativeWarehouseSourceCoordinator:
     def __init__(self, intake, *, send_control, source_root_provider,
-                 clock=None, qpc=None, timers=True):
+                 clock=None, qpc=None, timers=True, evidence_only=False):
         self.intake = intake
         self._send_control = send_control
         self._root_provider = source_root_provider
         self._clock = clock or time.monotonic
         self._qpc = qpc or time.perf_counter_ns
         self._timers = timers
+        self._evidence_only = evidence_only is True
         self._lock = threading.RLock()
         self._source = None
         self._binding = self._lease = self._pending = self._last_closed = None
@@ -39,6 +40,7 @@ class NativeWarehouseSourceCoordinator:
         self._timer = None
         self._host_limits = {}
         self._saved_source = self._duplicate_proof = None
+        self._scroll_recheck = None
         self._trigger_watch = None
         # The evidence callback is the only producer. Ordinary business FRAME leases are not consulted.
         intake._source_provider = self.source_copy
@@ -109,9 +111,14 @@ class NativeWarehouseSourceCoordinator:
             self._timer.cancel()
             self._timer = None
 
-    def start_manual(self, record_key=None, *, allow_window_scroll=False):
+    def start_manual(self, record_key=None, *, allow_window_scroll=False, retain_independent_originals=False):
         with self.intake._scope_lock, self._lock:
-            result = self.intake.start_manual(record_key)
+            if self._evidence_only and (allow_window_scroll or not retain_independent_originals):
+                return self._reply(False, 'EVIDENCE_ONLY_SOURCE_REQUIRED')
+            if retain_independent_originals and self.intake.source_contract()['scope'].get('capturePolicy') != DELIVERY:
+                return self._reply(False, 'EVIDENCE_ONLY_SOURCE_REQUIRED')
+            result = self.intake.start_manual(record_key,
+                **({'retain_independent_originals': True} if retain_independent_originals else {}))
             if not result['ok']:
                 return result
             self._binding = self.intake.source_contract()
@@ -123,9 +130,11 @@ class NativeWarehouseSourceCoordinator:
             self._last_scroll_ns = 0
             self._host_limits = {}
             self._saved_source = self._duplicate_proof = None
+            self._scroll_recheck = None
             self._state = 'OPEN_PENDING'
             command = self._command('OPEN')
             command['allowWindowScroll'] = allow_window_scroll is True
+            command['retainIndependentOriginals'] = retain_independent_originals is True
             self._pending = command
             self._pending_until = self._clock() + 2
             if not self._send(command):
@@ -137,6 +146,9 @@ class NativeWarehouseSourceCoordinator:
     def capture_manual_page(self):
         with self.intake._scope_lock, self._lock:
             self.check_timeout()
+            if self._evidence_only and self._ordinal >= 14:
+                self._close('EVIDENCE_REQUEST_LIMIT_REACHED')
+                return self._reply(False, 'EVIDENCE_REQUEST_LIMIT_REACHED')
             if self._state != 'OPEN' or self._pending is not None:
                 return self._reply(False, 'SOURCE_REQUEST_PENDING' if self._pending else 'NO_ACTIVE_SOURCE_LEASE')
             contract = self.intake.source_contract()
@@ -157,6 +169,7 @@ class NativeWarehouseSourceCoordinator:
                 return self._reply(False, 'PNG_BUDGET_INSUFFICIENT')
             self._ordinal += 1
             self._duplicate_proof = None
+            self._scroll_recheck = None
             command = self._command('REQUEST_PAGE')
             command.update(remainingPages=min(contract['remainingPages'], self._host_limits['remainingSourcePages']),
                 remainingPngBytes=min(contract['remainingPngBytes'], self._host_limits['maxPngBytes']),
@@ -176,7 +189,8 @@ class NativeWarehouseSourceCoordinator:
             return {'state': self._state, 'reason': self._reason, 'deadline': self._deadline,
                 'requestAttempts': self._ordinal,
                 'binding': copy.deepcopy(self._binding), 'savedSource': copy.deepcopy(self._saved_source),
-                'duplicateProof': copy.deepcopy(self._duplicate_proof), 'limits': copy.deepcopy(self._host_limits)}
+                'duplicateProof': copy.deepcopy(self._duplicate_proof),
+                'scrollRecheck': copy.deepcopy(self._scroll_recheck), 'limits': copy.deepcopy(self._host_limits)}
 
     def lease_scope_is_current(self, scope):
         """Independent active SOURCE authority; never renew ordinary FRAME health."""
@@ -348,7 +362,11 @@ class NativeWarehouseSourceCoordinator:
             self._reason = reason
             return True
 
-    def request_scroll_down(self, *, stable_proof=None, base_proof=None):
+    def request_scroll_down(self, *, stable_proof=None, base_proof=None, wheel_delta=-120):
+        if type(wheel_delta) is not int or not -1440 <= wheel_delta <= -120 or wheel_delta % 120:
+            return self._reply(False, 'WINDOW_SCROLL_DELTA_REJECTED')
+        if self._evidence_only:
+            return self._reply(False, 'EVIDENCE_ONLY_INPUT_DISABLED')
         with self.intake._scope_lock, self._lock:
             self.check_timeout()
             if (self._state != 'OPEN' or self._pending or not self._saved_source
@@ -358,12 +376,14 @@ class NativeWarehouseSourceCoordinator:
                 self._close('SOURCE_SCOPE_CHANGED', cancel_intake=True)
                 return self._reply(False, self._reason)
             command = self._command('SCROLL_DOWN')
+            command['wheelDelta'] = wheel_delta
             command.update(sourceLeaseId=self._saved_source['sourceLeaseId'], pixelSha256=self._saved_source['pixelSha256'])
             if self._delivery():
                 saved_proof = base_proof or self._saved_source.get('deliveryProof')
                 if not independent_support(saved_proof, stable_proof):
                     return self._reply(False, 'INDEPENDENT_STABILITY_UNPROVEN')
                 command.update(savedCaptureId=saved_proof['captureId'], stableCaptureId=stable_proof['captureId'])
+            self._scroll_recheck = None
             self._pending, self._state = command, 'SCROLL_PENDING'
             self._pending_until = min(self._clock() + 2, self._deadline)
             if not self._send(command):
@@ -371,6 +391,43 @@ class NativeWarehouseSourceCoordinator:
                 return self._reply(False, self._reason)
             self._schedule(max(0, self._pending_until - self._clock()))
             return self._reply(True, 'WINDOW_SCROLL_REQUESTED')
+
+    def read_content_hint(self, event):
+        """Read one volatile observation ROI; never append a source or grant scroll."""
+        import cv2
+        import numpy as np
+        from warehouse_scrollbar_observation import warehouse_search_roi
+        with self.intake._scope_lock, self._lock:
+            d = event.get('details') or {}
+            if (self._evidence_only or self._state != 'OPEN' or not self._delivery()
+                    or event.get('type') != EVENT_TYPE or event.get('event') != 'CONTENT_HINT'
+                    or not self._matches(event, self._binding) or event.get('leaseToken') != self._lease
+                    or event.get('schemaVersion') != SCHEMA_V2 or event.get('capturePolicy') != DELIVERY
+                    or event.get('matchGeneration') != self._binding['scope']['matchGeneration']
+                    or event.get('inputActions') is not False or d.get('sourceAuthority') is not False
+                    or d.get('formalFactsQualified') is not False or d.get('clientMap') != self._host_limits.get('clientMap')
+                    or not self._same_contract(self.intake.source_contract())
+                    or not isinstance(d.get('captureId'),str)
+                    or not d['captureId'].startswith(self._binding['scope']['observationSessionId']+'/')
+                    or type(d.get('readbackNs')) is not int or not 0 <= self._qpc()-d['readbackNs'] <= 2_000_000_000):
+                return None
+            try:
+                root = Path(self._root_provider()).resolve()
+                path = Path(d['path']).resolve(strict=True)
+                if path != root / 'warehouse-sources' / 'content-observation.bmp':
+                    return None
+                box = warehouse_search_roi(self._host_limits['clientWidth'], self._host_limits['clientHeight'])
+                w, h = box[2]-box[0], box[3]-box[1]
+                if (d.get('width'),d.get('height')) != (w,h):
+                    return None
+                with path.open('rb') as stream:
+                    raw = stream.read(54 + 4*w*h + 1)
+                if len(raw) != 54+4*w*h or hashlib.sha256(raw).hexdigest() != d['sha256']:
+                    return None  # Slot changed while queued/read: discard, never use as an original.
+                image = cv2.imdecode(np.frombuffer(raw,np.uint8),cv2.IMREAD_COLOR)
+                return image if image is not None and image.shape[:2] == (h,w) else None
+            except (OSError, KeyError, ValueError, TypeError):
+                return None
 
     def _same_contract(self, contract):
         return bool(self._binding and contract['sessionId'] == self._binding['sessionId']
@@ -444,6 +501,9 @@ class NativeWarehouseSourceCoordinator:
                     return
                 self._lease = token
                 self._host_limits = copy.deepcopy(details)
+                if self._pending.get('retainIndependentOriginals') and details.get('retainIndependentOriginals') is not True:
+                    self._close('INDEPENDENT_ORIGINAL_RETENTION_UNSUPPORTED', cancel_intake=True)
+                    return
                 self._deadline = self._clock() + remaining
                 self._pending = None
                 self._state, self._reason = 'OPEN', 'SOURCE_READY'
@@ -461,6 +521,15 @@ class NativeWarehouseSourceCoordinator:
             if not self._request_matches(event):
                 return
             if kind == 'REJECTED':
+                self._scroll_recheck = None
+                if (event.get('reason') == 'SCROLL_CONTENT_CHANGED_BEFORE_SEND'
+                    and self._delivery() and self._state == 'SCROLL_PENDING'
+                    and self._pending.get('operation') == 'SCROLL_DOWN'
+                    and counters.get('classification') == 'NOT_SENT_CONTENT_SUPPORT_RECHECK'
+                    and counters.get('sendInterfaceInvoked') is False
+                    and counters.get('failedChecks') == ['scrollContentQuantizationSupported']
+                    and counters.get('sourceLeaseId') == self._pending.get('sourceLeaseId')):
+                    self._scroll_recheck = copy.deepcopy(counters)
                 self._pending = None
                 self._state, self._reason = 'OPEN', event.get('reason') or 'SOURCE_REJECTED'
                 self._schedule(max(0, self._deadline - self._clock()))
@@ -495,7 +564,8 @@ class NativeWarehouseSourceCoordinator:
                         or not 0 < counters['messageCompletedNs'] <= self._qpc())):
                     self._close('WINDOW_SCROLL_COMPLETION_CLOCK_REJECTED')
                     return
-                if (counters.get('direction') != 'DOWN' or counters.get('delta') != -120
+                if (counters.get('direction') != 'DOWN' or type(counters.get('delta')) is not int
+                    or counters.get('delta') != self._pending.get('wheelDelta', -120)
                     or not self._saved_source or counters.get('sourceLeaseId') != self._saved_source['sourceLeaseId']):
                     self._close('WINDOW_SCROLL_PROOF_REJECTED')
                     return
@@ -509,6 +579,10 @@ class NativeWarehouseSourceCoordinator:
             return False
         if event.get('event') not in {'TRIGGER_WATCH_ARMED', 'TRIGGER_WATCH_ENDED',
                                       'TRIGGER_PROBE_ACKED', 'REJECTED'}:
+            return False
+        # SOURCE/SCROLL rejections have no watchId. They belong to the
+        # command-bound lease path below, even when no trigger watch exists.
+        if event.get('event') == 'REJECTED' and not event.get('watchId'):
             return False
         watch = self._trigger_watch
         if not watch or event.get('watchId') != watch['watchId']:
@@ -635,7 +709,7 @@ class NativeWarehouseSourceCoordinator:
         self._pending = self._source = None
         self._state, self._reason = 'CLOSED', reason
         if cancel_intake:
-            self.intake.cancel_manual_capture(reason=reason)
+            self.intake.end_collection(reason)
 
     def check_timeout(self):
         with self.intake._scope_lock, self._lock:
@@ -655,8 +729,14 @@ class NativeWarehouseSourceCoordinator:
 
     def finish_manual_capture(self, *, termination_reason='COMPLETE', qualified_evidence_ids=None):
         with self.intake._scope_lock, self._lock:
+            if self._evidence_only:
+                return self._reply(False, 'EVIDENCE_ONLY_PROCESSING_DISABLED')
             if qualified_evidence_ids is not None and not getattr(self, 'offline_test_adapter', False):
-                return self._reply(False, 'OFFLINE_CONTENT_ADAPTER_REQUIRED')
+                supported = {p['descriptor']['evidenceId'] for p in self.intake.pages_copy()
+                    if p.get('contentRole') == 'STABLE_SUPPORT'
+                    and (p.get('contentCertificate') or {}).get('schema') == 'visible-content-support.v1'}
+                if any(eid not in supported for eid in qualified_evidence_ids):
+                    return self._reply(False, 'QUALIFIED_PAGE_SELECTION_UNPROVEN')
             if self._pending is not None:
                 return self._reply(False, 'SOURCE_REQUEST_PENDING')
             self._close('MANUAL_FINISHED')

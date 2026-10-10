@@ -802,6 +802,7 @@ class WarehouseCaptureHost:
         history_store: Optional[Any] = None,
         already_cropped: bool = False,
         finalization_reason: str = 'COMPLETE',
+        resolve_placements: bool = True,
     ) -> Dict[str, Any]:
         """Consume Store originals; coverage and physical identity have separate proofs."""
         import cv2
@@ -811,7 +812,7 @@ class WarehouseCaptureHost:
         from warehouse_coverage_ledger import WarehouseCoverageLedger
         from warehouse_reconstruction import WarehouseReconstructionProcessor
         from warehouse_scrollbar_observation import WarehouseScrollbarObserver, warehouse_search_roi
-        from warehouse_segment_overlap import align_warehouse_segments, DIR_DOWN
+        from warehouse_segment_overlap import align_warehouse_segments, DIR_DOWN, TerminalContinuity
         from warehouse_support_frame import stationary_support_proof
         from warehouse_auto_confirmation import evaluate_auto_confirmation
         from warehouse_identity_review import CatalogAuthority, build_auto_identity_review_artifact
@@ -824,7 +825,7 @@ class WarehouseCaptureHost:
         catalog_data = json.loads(catalog_path.read_text(encoding="utf-8"))
         proc = WarehouseReconstructionProcessor(
             record_key, catalog_index=CatalogGeometryIndex(catalog_data),
-            placement_resolver=get_production_placement_resolver(),
+            placement_resolver=get_production_placement_resolver() if resolve_placements else None,
         )
         ledger = WarehouseCoverageLedger(record_key)
         observer = WarehouseScrollbarObserver()
@@ -832,6 +833,7 @@ class WarehouseCaptureHost:
         seen_hashes, seen_pixels = set(), set()
         ids = {}
         previous = None
+        terminal_continuity = TerminalContinuity()
         for supplied in pages:
             desc = dict(supplied)
             valid, reasons = validate_settlement_evidence_original_v2(desc)
@@ -865,6 +867,7 @@ class WarehouseCaptureHost:
                 alignment = align_warehouse_segments(
                     prev_crop, crop, prev_id=prev_desc["evidenceId"],
                     next_id=seg_id, required_direction=DIR_DOWN,
+                    terminal_continuity=terminal_continuity,
                 )
                 offset = alignment.get("verticalOffsetPx")
                 verified_motion = (alignment.get("status") == "VERIFIED"
@@ -901,7 +904,7 @@ class WarehouseCaptureHost:
         if packet is None:
             raise RuntimeError("BUILD_PACKET_FAILED")
         units = evaluate_auto_confirmation(packet.get("reviewUnits", []), segments=accepted_pages)
-        identity_review = build_auto_identity_review_artifact(packet, units, catalog=CatalogAuthority(catalog_data))
+        identity_review = build_auto_identity_review_artifact(packet, units, catalog=CatalogAuthority())
         persisted, persist_error = None, None
         try:
             store = history_store if history_store is not None else (

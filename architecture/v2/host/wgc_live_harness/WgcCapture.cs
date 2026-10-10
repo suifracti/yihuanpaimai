@@ -274,20 +274,14 @@ internal sealed class WgcWindowCapture : IDisposable
     {
 
         var size = frame.ContentSize;
-        ValidateCaptureSourceGeometry(size.Width, size.Height);
+        var mapping = ProbeClientAreaMapping();
+        if (mapping.State != MappingState.Current) throw new MappingProbeException(mapping);
         if (size.Width != CaptureItemWidth || size.Height != CaptureItemHeight)
         {
-            throw new InvalidOperationException(
-                $"WGC capture item size changed from {CaptureItemWidth}x{CaptureItemHeight} " +
-                $"to {size.Width}x{size.Height}; client-area map is no longer stable");
+            throw new MappingProbeException(mapping with { State = MappingState.Changed, Stage = "frame-content-size",
+                Observed = mapping.Observed! with { ItemWidth = size.Width, ItemHeight = size.Height } });
         }
-        var currentClientArea = ResolveClientAreaMapping(_hwnd, size.Width, size.Height);
-        if (currentClientArea != _clientArea)
-        {
-            throw new InvalidOperationException(
-                $"WGC client-area map changed from {_clientArea} to {currentClientArea}; " +
-                "fail-closed instead of publishing a frame with uncertain coordinates");
-        }
+        ValidateCaptureSourceGeometry(size.Width, size.Height);
 
         using var sourceTexture = GetTexture(frame.Surface);
         var sourceDescription = sourceTexture.Description;
@@ -361,20 +355,50 @@ internal sealed class WgcWindowCapture : IDisposable
     }
 
     // Source-only gate: the business Capture/FRAME path keeps its existing mapping policy.
-    public bool IsClientAreaMappingCurrent()
+    public bool IsClientAreaMappingCurrent() => ProbeClientAreaMapping().State == MappingState.Current;
+
+    public MappingProbe ProbeClientAreaMapping()
     {
-        if (_disposed || _warehouseBoundsSource == WarehouseBoundsSource.Unproven) return false;
+        var expected = new MappingGeometry(CaptureItemWidth, CaptureItemHeight, Width, Height, ClientOffsetX, ClientOffsetY);
+        var observed = new MappingMeasurement();
+        var stage = "capture-item";
+        var boundsSource = _warehouseBoundsSource.ToString();
         try
         {
+            if (_disposed) return new(MappingState.Stopped, "disposed", expected, observed, boundsSource);
             var size = _item.Size;
-            return size.Width == CaptureItemWidth && size.Height == CaptureItemHeight
-                && WarehouseMappingMatches(_clientArea, CaptureItemWidth, CaptureItemHeight,
-                    ReadWarehouseMappingObservation(_warehouseBoundsSource));
+            observed = observed with { ItemWidth = size.Width, ItemHeight = size.Height };
+            MappingProbe Unavailable(string error) => new(MappingState.Unavailable, stage, expected, observed, boundsSource, error);
+            if (size.Width != CaptureItemWidth || size.Height != CaptureItemHeight)
+                return new(MappingState.Changed, stage, expected, observed, boundsSource);
+            if (_warehouseBoundsSource == WarehouseBoundsSource.Unproven) return Unavailable("bounds-source-unproven");
+            stage = "GetClientRect";
+            if (!GetClientRect(_hwnd, out var client)) return Unavailable($"win32:{Marshal.GetLastWin32Error()}");
+            observed = observed with { ClientWidth = checked(client.Right - client.Left), ClientHeight = checked(client.Bottom - client.Top) };
+            if (observed.ClientWidth != Width || observed.ClientHeight != Height)
+                return new(MappingState.Changed, stage, expected, observed, boundsSource);
+            stage = "ClientToScreen";
+            var origin = new Point32();
+            if (!ClientToScreen(_hwnd, ref origin)) return Unavailable($"win32:{Marshal.GetLastWin32Error()}");
+            observed = observed with { ClientOriginX = origin.X, ClientOriginY = origin.Y };
+            Rect32 bounds;
+            stage = boundsSource;
+            if (_warehouseBoundsSource == WarehouseBoundsSource.WindowRect)
+            {
+                if (!GetWindowRect(_hwnd, out bounds)) return Unavailable($"win32:{Marshal.GetLastWin32Error()}");
+            }
+            else
+            {
+                var hr = DwmGetWindowAttribute(_hwnd, DwmExtendedFrameBounds, out bounds, (uint)Marshal.SizeOf<Rect32>());
+                if (hr != 0) return Unavailable($"hresult:0x{hr:x8}");
+            }
+            observed = observed with { BoundsLeft = bounds.Left, BoundsTop = bounds.Top,
+                BoundsWidth = checked(bounds.Right - bounds.Left), BoundsHeight = checked(bounds.Bottom - bounds.Top) };
+            return MappingProbe.Compare(expected, observed, boundsSource);
         }
-        catch (Exception)
+        catch (Exception ex)
         {
-            // An unavailable mapping cannot authorise an original-frame publication.
-            return false;
+            return new(MappingState.Unavailable, stage, expected, observed, boundsSource, $"{ex.GetType().Name}: {ex.Message}");
         }
     }
 

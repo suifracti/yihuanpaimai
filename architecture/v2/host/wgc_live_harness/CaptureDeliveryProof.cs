@@ -38,6 +38,10 @@ internal sealed record CaptureDeliveryProof(string ObservationSessionId, long Po
         && Comparison.Nanoseconds == ProtocolClock.TicksToNs(Comparison.RawTicks);
     public string? Rejection(long now, long maxAge = 2_000_000_000) => !Qualified ? "DELIVERY_PROOF_INVALID"
         : now < ReadbackCompletedNs || now - ReadbackCompletedNs > maxAge ? "DELIVERY_LOCAL_USE_EXPIRED" : null;
+    // Ordinary FRAME retry only. Future/invalid proofs keep the existing
+    // rejection path; SOURCE still uses Rejection without any retry promotion.
+    public bool IsLocalAgeExpired(long now) => Qualified && now >= ReadbackCompletedNs
+        && now - ReadbackCompletedNs > 2_000_000_000;
     public JsonObject ToJson() => new()
     {
         ["schemaVersion"] = "capture-delivery-proof.v2", ["capturePolicy"] = CapturePolicy.Delivery,

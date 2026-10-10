@@ -79,6 +79,12 @@ def delivery_observation(fixture, sequence, scene, *, advice=True, close=False, 
         event['currentMatch']['id'] = match
     if target is not None:
         event['target'] = target
+    event['frame']['currentAdviceQualification'].update(
+        schemaVersion='delivery-facts-computation.v1', originalCaptureId=delivery_proof['captureId'],
+        originalReadbackNs=delivery_proof['readbackCompletedNs'])
+    event['lastFrame'].update(captureTimestampNs=delivery_proof['readbackCompletedNs'],
+        captureProof={'deliveryProof': copy.deepcopy(delivery_proof)},
+        stateMatchId=event['currentMatch']['id'], stateFactsRevision=sequence, scene=scene)
     return event
 
 
@@ -99,6 +105,43 @@ def prepare_delivery_fixture(test_case):
 
 
 class DeliveryTests(unittest.TestCase):
+    def test_computation_lease_binds_fact_version_and_preserves_manual_correction(self):
+        fixture = prepare_delivery_fixture(self)
+        ns = fixture.ns
+        first = delivery_observation(fixture, 1, 'IN_AUCTION')
+        first['frame']['currentAdviceQualification'].update(
+            sceneRoiMatches=False, observationRoiMatches=False, warehouseRoiMatches=False)
+        ns['_native_observation_event'](first)
+        payload = copy.deepcopy(ns['LATEST_PAYLOAD'])
+        self.assertEqual(payload['observationStatus'], 'FRAME')
+        self.assertTrue(ns['_native_solver_lease_matches'](payload))
+        self.assertIsNone(payload['computationQualification']['sourceAbsoluteAgeMs'])
+        self.assertFalse(payload['computationQualification']['automaticBidExecutionQualified'])
+        for mismatch in ({'round': 2}, {'factsRevision': 0}, {'engineFactsRevision': 0},
+                         {'matchId': 'other-match'}, {'observationSessionId': 'old-session'},
+                         {'target': {**payload['target'], 'targetPid': 999}}):
+            self.assertFalse(ns['_native_solver_lease_matches']({**payload, **mismatch}), mismatch)
+        wrong_original = copy.deepcopy(payload)
+        wrong_original['observationFrameBinding']['stateFactsRevision'] = 0
+        self.assertIsNone(ns['_native_accept_observation_locked'](wrong_original))
+        self.assertEqual(wrong_original['computationRejection'], 'FACT_SOURCE_FRAME_BINDING_MISMATCH')
+        false_qualification = copy.deepcopy(payload)
+        false_qualification['currentAdviceQualification']['qualified'] = False
+        self.assertIsNone(ns['_native_accept_observation_locked'](false_qualification))
+
+        ns['CURRENT_MATCH'].apply_facts({'q': 19}, source='manual', intent='confirm')
+        self.assertFalse(ns['_native_solver_lease_matches'](payload), 'manual change must retire old result')
+        corrected = delivery_observation(fixture, 2, 'IN_AUCTION')
+        corrected['currentMatch']['q'] = 17  # Worker OCR cannot overwrite Main's confirmed correction.
+        ns['_native_observation_event'](corrected)
+        self.assertEqual(ns['CURRENT_MATCH'].facts['q'], 19)
+        newest = copy.deepcopy(ns['LATEST_PAYLOAD'])
+        self.assertTrue(ns['_native_solver_lease_matches'](newest))
+        self.assertFalse(ns['_native_solver_lease_matches'](payload))
+        fixture.clock[0] += 31_000_000_000
+        self.assertFalse(ns['_native_solver_lease_matches'](newest))
+        self.assertIsNone(ns['_native_accept_observation_locked'](copy.deepcopy(newest)))
+
     def test_main_delivery_lifecycle_auction_scroll_observation_settlement_once_and_next_match(self):
         fixture = prepare_delivery_fixture(self)
         ns = fixture.ns

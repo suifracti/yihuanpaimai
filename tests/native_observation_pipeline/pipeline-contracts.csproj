@@ -4,12 +4,15 @@
     <Compile Include="Program.cs" />
     <Compile Include="DeliveryContracts.cs" />
     <Compile Include="RetainedBoundaryContracts.cs" />
+    <Compile Include="MappingRecoveryChecks.cs" />
+    <Compile Include="../../architecture/v2/host/wgc_live_harness/MappingRecovery.cs" />
     <Compile Include="../../architecture/v2/host/wgc_live_harness/DeliverySourcePump.cs" />
     <Compile Include="../../architecture/v2/host/wgc_live_harness/CaptureDeliveryProof.cs" />
     <Compile Include="../../architecture/v2/host/wgc_live_harness/DeliveredFrameSelector.cs" />
     <Compile Include="../../architecture/v2/host/wgc_live_harness/DeliveryVisualSummary.cs" />
     <Compile Include="../../architecture/v2/host/wgc_live_harness/CapturedBgraFrame.cs" />
     <Compile Include="../../architecture/v2/host/wgc_live_harness/LatestCapturePump.cs" />
+    <Compile Include="../../architecture/v2/host/wgc_live_harness/OrdinaryFrameRecovery.cs" />
     <Compile Include="../../architecture/v2/host/wgc_live_harness/RequestClockDiagnostics.cs" />
     <Compile Include="../../architecture/v2/host/wgc_live_harness/RequestFrameSelector.cs" />
     <Compile Include="../../architecture/v2/host/wgc_live_harness/CaptureFailure.cs" />

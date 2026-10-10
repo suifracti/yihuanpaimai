@@ -342,6 +342,7 @@ class MainWindowBridge:
             "capture_warehouse_manual_page",
             "finish_warehouse_manual_capture",
             "cancel_warehouse_manual_capture",
+            "resume_warehouse_refinement", "cancel_warehouse_refinement",
             "warehouse_identity_review",
             "export_history_records",
             "export_reviewed_labels",
@@ -636,6 +637,9 @@ class MainWindowBridge:
             review["warehouseIdentitySummary"] = summary
             settlement = (record or {}).get("settlement") or {}
             review["warehouseReviewAvailable"] = bool(settlement.get("warehouseReviewPacket"))
+            host = self._warehouse_capture_host
+            if host is not None and hasattr(host, 'refinement_payload'):
+                review['warehouseRefinement'] = host.refinement_payload(record_id)
             review["warehouseReviewRevisions"] = [
                 {"reviewedAt": item.get("reviewedAt"), "reviewerType": item.get("reviewerType"),
                  "resolvedCount": len(item.get("resolvedItems") or [])}
@@ -1153,6 +1157,15 @@ class MainWindowBridge:
             else:
                 response["warehouseCaptureCommand"] = host.cancel_manual_capture() if hasattr(host, "cancel_manual_capture") else {"ok": True}
             response["warehouseCapture"] = self.warehouse_capture_payload()
+
+        if action in {"resume_warehouse_refinement", "cancel_warehouse_refinement"}:
+            host = self._warehouse_capture_host
+            operation = 'resume_refinement' if action == 'resume_warehouse_refinement' else 'cancel_refinement'
+            try:
+                response['warehouseCaptureCommand'] = getattr(host,operation)(str(payload.get('sessionId') or ''))
+                response['warehouseRefinement'] = host.refinement_payload(str(payload.get('recordId') or ''))
+            except (AttributeError, OSError, ValueError) as exc:
+                response['warehouseCaptureCommand'] = {'ok':False,'reason':str(exc)[:160]}
 
         if action == "warehouse_identity_review":
             session = self._warehouse_identity_review_session

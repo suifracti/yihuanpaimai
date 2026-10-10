@@ -5,8 +5,12 @@ using System.Security.Cryptography;
 using NteHost;
 using WgcLiveHarness;
 
+if (args.Contains("--mapping-only")) { MappingRecoveryChecks.Run(args[0]); return; }
+
 if (args.Contains("--retained-boundary-only")) { RetainedBoundaryContracts.Run(); return; }
 if (args.Contains("--advice-qualification-only")) { DeliveryContracts.AdviceQualificationOnly(); return; }
+if (args.Contains("--advice-replay")) { DeliveryContracts.ReplayAdvice(args[0]); return; }
+if (args.Contains("--visible-content-replay")) { DeliveryContracts.ReplayVisibleContent(args[0]); return; }
 if (args.Contains("--delivery-only")) { DeliveryContracts.Run(args[0]); return; }
 
 static void Require(bool value, string reason) { if (!value) throw new Exception(reason); }

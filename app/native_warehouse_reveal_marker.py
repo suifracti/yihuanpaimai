@@ -34,5 +34,6 @@ class RevealMarker:
         if not np.isfinite(score):
             raise ValueError('REVEAL_MARKER_READ_UNPROVEN')
         return {'status': 'PRESENT' if score >= .88 else 'NOT_DETECTED', 'score': score,
+            'animationState': 'UNKNOWN', 'completionState': 'UNKNOWN',
             'templateSha256': self.hash, 'roi': [x1, y1, x2, y2],
             'meaning': 'positive skip-animation text shape only; absence is not completion proof'}

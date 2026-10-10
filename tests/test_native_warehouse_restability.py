@@ -116,7 +116,7 @@ class RecheckTests(unittest.TestCase):
         self.assertFalse(any(a[0] == 'PROCESS' for a in self.source.actions))
         self.assertFalse(any(r['kind'] == 'stable-page' for r in self.logs))
 
-    def test_animation_ends_requires_new_independent_visible_support(self):
+    def test_text_and_independent_pixels_do_not_prove_completion(self):
         self.start(); image = silhouette()
         self.frame(image, 'PRESENT')
         self.tick_request(); self.frame(image, 'PRESENT', duplicate=True)
@@ -126,8 +126,8 @@ class RecheckTests(unittest.TestCase):
         self.tick_request(); self.frame(visible_content(), 'NOT_DETECTED'); self.invariant_wait()
         requests_before = self.auto._request_attempts
         self.tick_request(); self.frame(visible_content(), 'NOT_DETECTED', duplicate=True)
-        self.assertEqual(self.wheels(), 1)
-        self.assertEqual(self.auto._phase, 'WAIT_SCROLL')
+        self.invariant_wait()
+        self.assertEqual(self.auto._observation['contentCompletionState'], 'UNKNOWN')
         self.assertEqual(self.auto._deadline, 170.0)
         self.assertEqual(self.auto._request_attempts, requests_before + 1)
         self.assertEqual(self.auto._generation, 1, 'rechecks are the same task, not rearming')
@@ -140,7 +140,8 @@ class RecheckTests(unittest.TestCase):
         self.tick_request(); self.frame(image, 'NOT_DETECTED')
         self.invariant_wait()
         self.tick_request(); self.frame(image, duplicate=True)
-        self.assertEqual(self.wheels(), 1)
+        self.invariant_wait()
+        self.assertEqual(self.auto._observation['contentCompletionState'], 'UNKNOWN')
 
     def test_perpetual_paused_reveal_stops_at_32_requests_no_counter_reset(self):
         self.start(); image = silhouette(); self.frame(image, 'PRESENT')
@@ -210,7 +211,7 @@ class RecheckTests(unittest.TestCase):
                 self.assertEqual(self.source.pages, saved)
                 self.assertEqual(self.wheels(), 0)
 
-    def test_unknown_error_or_static_unknown_shapes_are_not_retryable(self):
+    def test_errors_stop_but_static_unknown_content_stays_unknown(self):
         for reason in ('SOURCE_WRITE_FAILED', 'PAGE_PROOF_REJECTED:SOURCE_HASH_CHANGED', 'UNKNOWN_FAILURE'):
             with self.subTest(reason=reason):
                 self.start(); self.frame(silhouette(), 'PRESENT')
@@ -219,8 +220,7 @@ class RecheckTests(unittest.TestCase):
                 self.assertFalse(self.auto._active)
                 self.assertEqual(self.wheels(), 0)
         self.start(); self.frame(silhouette()); self.tick_request(); self.frame(silhouette(), duplicate=True)
-        self.assertEqual(self.auto._reason, 'CONTENT_UNREVEALED_OR_UNKNOWN')
-        self.assertFalse(self.auto._active)
+        self.invariant_wait()
 
     def test_replayed_support_and_failed_requests_never_retry_or_rearm(self):
         self.start(); image = silhouette(); self.frame(image, 'PRESENT')
@@ -284,12 +284,12 @@ class RecheckTests(unittest.TestCase):
     def test_final_support_receipt_cannot_issue_two_scroll_requests(self):
         self.start(); image = visible_content(); self.frame(image)
         self.tick_request(); previous = self.frame(image, duplicate=True)
-        self.assertEqual(self.wheels(), 1)
-        self.auto.on_event({'state': 'OPEN', 'reason': 'WINDOW_WHEEL_MESSAGE_SENT'})
+        self.invariant_wait()
+        due = self.auto._due
         self.auto.on_event({'state': 'OPEN', 'reason': 'DUPLICATE_PAGE',
             'proof': {'pixelSha256': 'hash', 'deliveryProof': previous}})
-        self.assertEqual(self.wheels(), 1)
-        self.assertEqual(self.auto._phase, 'WAIT_MOVED')
+        self.invariant_wait()
+        self.assertEqual(self.auto._due, due)
 
 
 class CoordinatorIntegrationTests(unittest.TestCase):

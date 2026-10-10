@@ -8,6 +8,10 @@ temporal multi-frame consistency, and global non-overlapping selection.
 from __future__ import annotations
 
 import json
+import copy
+import hashlib
+import time
+from collections import OrderedDict
 import sys
 from pathlib import Path
 from typing import Any, Dict, List, Mapping, Optional, Sequence, Set, Tuple
@@ -123,6 +127,9 @@ class WarehousePlacementResolver:
         self._ref_cache: Dict[str, Dict[str, Any]] = {}
         self._small_icon_sift = cv2.SIFT_create(sigma=0.8)
         self._small_icon_reference_features = {}
+        self._foreground_cache = OrderedDict()
+        self._match_cache = OrderedDict()
+        self.match_metrics = {'queries': 0, 'exactCacheHits': 0, 'foregroundPreprocess': 0}
         self._load_reference_cache()
 
     def _load_reference_cache(self) -> None:
@@ -330,12 +337,50 @@ class WarehousePlacementResolver:
     def _compute_foreground_alignment(
         self, roi: np.ndarray, ref_img: np.ndarray,
     ) -> Optional[Dict[str, Any]]:
-        result = self._compute_legacy_foreground_alignment(roi, ref_img)
+        from visual_catalog import _catalog_reference_body
+        from warehouse_neutral_foreground import match_prepared_neutral
+        query = self._prepared_foreground(roi)
+        template = self._prepared_foreground(_catalog_reference_body(ref_img))
+        result = self._match_prepared_legacy(query, template)
         if result is not None:
             return result
-        from visual_catalog import _catalog_reference_body
-        from warehouse_neutral_foreground import match_neutral_foreground
-        return match_neutral_foreground(roi, _catalog_reference_body(ref_img))
+        return match_prepared_neutral(query['neutral'], template['neutral'])
+
+    def _prepared_foreground(self, image):
+        key = (image.shape, hashlib.sha256(image.tobytes()).digest())
+        if key in self._foreground_cache:
+            self._foreground_cache.move_to_end(key)
+            return self._foreground_cache[key]
+        from warehouse_neutral_foreground import prepare_pair, prepare_neutral_foreground
+        pair = self._extract_foreground(image)
+        prepared = {'legacy': prepare_pair(pair), 'neutral': prepare_neutral_foreground(image),
+                    'axis': None, 'axisPrepared': False, 'pair': pair}
+        self._foreground_cache[key] = prepared
+        self.match_metrics['foregroundPreprocess'] += 1
+        if len(self._foreground_cache) > 512:
+            self._foreground_cache.popitem(last=False)
+        return prepared
+
+    def _match_prepared_legacy(self, query, template):
+        if query['legacy'] is None or template['legacy'] is None:
+            return None
+        direct = self._compare_foreground_pairs(query['legacy'], template['legacy'])
+        if direct is not None:
+            return direct
+        from warehouse_neutral_foreground import prepare_pair
+        for entry in (query, template):
+            if not entry['axisPrepared']:
+                axis = self._normalize_foreground_axis(entry['pair'])
+                entry['axis'] = (prepare_pair(axis), prepare_pair((axis[0][::-1,::-1],axis[1][::-1,::-1]))) if axis else None
+                entry['axisPrepared'] = True
+        if query['axis'] is None or template['axis'] is None:
+            return None
+        matches = []
+        for candidate in template['axis']:
+            result = self._compare_foreground_pairs(query['axis'][0], candidate)
+            if result is not None:
+                matches.append({**result, 'axisNormalized': True})
+        return max(matches, key=lambda result: result['score']) if matches else None
 
     def _compute_legacy_foreground_alignment(
         self,
@@ -364,13 +409,16 @@ class WarehousePlacementResolver:
 
     @staticmethod
     def _compare_foreground_pairs(query, template):
-        q, qm = query
-        t, tm = template
+        q, qm = query[:2]
+        t, tm = template[:2]
         ratio = (q.shape[1] / q.shape[0]) / (t.shape[1] / t.shape[0])
         if not 0.75 < ratio < 1.33:
             return None
-        q96, t96 = (cv2.resize(i, (96, 96)).astype(np.float32) for i in (q, t))
-        qm96, tm96 = (cv2.resize(i, (96, 96)) > 127 for i in (qm, tm))
+        from warehouse_neutral_foreground import prepare_pair
+        query = query if len(query) == 4 else prepare_pair(query)
+        template = template if len(template) == 4 else prepare_pair(template)
+        q96, qm96 = query[2:]
+        t96, tm96 = template[2:]
         overlap = qm96 & tm96
         iou = float(overlap.sum() / max(1, (qm96 | tm96).sum()))
         # Note on threshold calibration:
@@ -398,7 +446,41 @@ class WarehousePlacementResolver:
             "error": error,
         }
 
+    def _query_key(self, roi, w, h):
+        refs = tuple((k, id(v), v['widthCells'], v['heightCells'],
+                      tuple(id(v.get(field)) for field in ('img','body','kp','des','kp_body','des_body')))
+                     for k,v in self._ref_cache.items())
+        methods = tuple(id(getattr(fn, '__func__', fn)) for fn in (
+            self._compute_sift_inliers, self._compute_foreground_alignment,
+            self._match_small_icon, self._match_footprint_normalized_icon))
+        return (refs, methods, w, h, roi.shape, hashlib.sha256(roi.tobytes()).digest())
+
+    def query_diagnostic(self, roi, w, h):
+        cached = self._match_cache.get(self._query_key(roi,w,h))
+        return copy.deepcopy(cached[1]) if cached else {'reason':'QUERY_NOT_RETAINED'}
+
     def match_catalog_candidates(
+        self, roi, w, h, is_empty=False,
+    ):
+        self.match_metrics['queries'] += 1
+        if roi is None or roi.size == 0 or is_empty:
+            return 0.0, [], 0
+        key = self._query_key(roi,w,h)
+        if key in self._match_cache:
+            self.match_metrics['exactCacheHits'] += 1
+            self._match_cache.move_to_end(key)
+            return copy.deepcopy(self._match_cache[key][0])
+        started = time.perf_counter()
+        self._last_match_diagnostic = {}
+        result = self._match_catalog_candidates(roi, w, h, is_empty)
+        diagnostic = {**self._last_match_diagnostic, 'seconds':time.perf_counter()-started,
+            'reason': 'ADMITTED_CANDIDATE' if result[1] else self._last_match_diagnostic.get('reason','NO_ADMITTED_IDENTITY')}
+        self._match_cache[key] = (copy.deepcopy(result), diagnostic)
+        if len(self._match_cache) > 2048:
+            self._match_cache.popitem(last=False)
+        return result
+
+    def _match_catalog_candidates(
         self,
         roi: Optional[np.ndarray],
         w: int,
@@ -420,7 +502,9 @@ class WarehousePlacementResolver:
             if entry["widthCells"] == w and entry["heightCells"] == h
         ]
         if not matching_refs:
+            self._last_match_diagnostic['reason'] = 'NO_REFERENCE_FOR_FOOTPRINT'
             return 0.0, [], 0
+        self._last_match_diagnostic['referenceCount'] = len(matching_refs)
 
         best_inliers = 0
         best_ref = None
@@ -439,6 +523,7 @@ class WarehousePlacementResolver:
 
         catalog_score = 0.0
         margin = best_inliers - second_inliers
+        self._last_match_diagnostic.update(bestInliers=best_inliers, siftMargin=margin)
         candidates_list = []
 
         if best_ref is not None and best_inliers >= 5 and margin >= 4:
@@ -482,6 +567,7 @@ class WarehousePlacementResolver:
                 if fg_margin >= 0.03:
                     rec = best_fg_ref["entry"]
                     if candidates_list and candidates_list[0]["catalogId"] != rec["catalogId"]:
+                        self._last_match_diagnostic['reason'] = 'ADMITTED_IDENTITIES_DISAGREE'
                         return 0.0, [], best_inliers
                     catalog_score = 0.80
                     cand = {
@@ -506,6 +592,8 @@ class WarehousePlacementResolver:
                         cand["margin"] = previous["margin"]
                         cand["matchReasons"] = previous["matchReasons"] + cand["matchReasons"]
                     candidates_list = [cand]
+            self._last_match_diagnostic.update(bestForegroundScore=best_fg_score,
+                foregroundMargin=best_fg_score-second_fg_score)
 
         admitted = bool(candidates_list and (
             (candidates_list[0].get("inliers", 0) >= 7 and candidates_list[0].get("margin", 0) >= 5)
@@ -514,11 +602,13 @@ class WarehousePlacementResolver:
             normalized = self._match_footprint_normalized_icon(roi, w, h, matching_refs)
             if normalized is not None:
                 if candidates_list and candidates_list[0]["catalogId"] != normalized["catalogId"]:
+                    self._last_match_diagnostic['reason'] = 'ADMITTED_IDENTITIES_DISAGREE'
                     return 0.0, [], best_inliers
                 return normalized["score"], [normalized], normalized["inliers"]
             small = self._match_small_icon(roi, w, h, matching_refs)
             if small is not None:
                 if candidates_list and candidates_list[0]["catalogId"] != small["catalogId"]:
+                    self._last_match_diagnostic['reason'] = 'ADMITTED_IDENTITIES_DISAGREE'
                     return 0.0, [], best_inliers
                 return small["score"], [small], small["inliers"]
         return catalog_score, candidates_list, best_inliers

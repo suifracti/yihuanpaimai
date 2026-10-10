@@ -78,6 +78,10 @@ internal sealed class LatestCapturePump<TSource, TFrame> : IDisposable
                             if (_job is null && !IsStopped) Monitor.Wait(_gate, intervalMs);
                         }
                     }
+                    catch (CaptureScopeInvalidatedException) { }
+                    // Only the ordinary producer throws this typed, age-only
+                    // discard. Explicit SOURCE jobs retain their original errors.
+                    catch (OrdinaryFrameExpiredException) { }
                     catch (OperationCanceledException) when (IsStopped || HasJob) { }
                 }
             }
@@ -100,6 +104,7 @@ internal sealed class LatestCapturePump<TSource, TFrame> : IDisposable
     public bool IsStopped { get { lock (_gate) return _stopped || _externalStop(); } }
     public string? Failure { get { lock (_gate) return _failure?.ToString(); } }
     public Exception? FailureException { get { lock (_gate) return _failure; } }
+    public void DiscardLatest() { lock (_gate) { _latest = null; Monitor.PulseAll(_gate); } }
     private void CheckAvailable()
     {
         if (_failure is not null) throw new InvalidOperationException("capture-owner-failed", _failure);
