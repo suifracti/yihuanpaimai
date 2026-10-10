@@ -1,11 +1,13 @@
 """Affected live collector paths with inert delivery/input; no identity work.
 
-The synthetic continuous canvas checks control rules, not real-game accuracy.
-Retained real pixels are exercised separately by check_half_viewport_collection.
+The default continuous-canvas cases use deterministic synthetic pixels and
+check control rules, not real-game accuracy. Retained SOURCE images are only
+read by the explicit tools/native_qa/check_real_terminal_continuity.py command.
 """
 import copy
 import hashlib
 import json
+import os
 import threading
 from pathlib import Path
 from unittest.mock import Mock, patch
@@ -23,6 +25,7 @@ from warehouse_scrollbar_observation import warehouse_search_roi
 from warehouse_capture_host import WarehouseCaptureHost
 
 OUT = ROOT / 'build/native-half-viewport-20261009'
+PRESEND_RECEIPTS = ROOT / 'tests/fixtures/native_adapter_presend_receipts.json'
 
 
 class LiveRun(Run):
@@ -70,13 +73,13 @@ def viewport(offset):
 
 class HalfViewportFlowTests(unittest.TestCase):
     def test_adapter_receipts_recheck_or_stop_without_resending(self):
-        # First run native_scroll_diagnostics --adapter-presend-only. These are
-        # actual production adapter/lease receipts with an inert OS platform.
-        receipts = ROOT / 'build/native-adapter-presend-20261010/checks'
+        # These sanitized production Host contract examples are committed so a
+        # clean checkout never depends on ignored build/ output or local logs.
+        receipts = json.loads(PRESEND_RECEIPTS.read_text(encoding='utf-8'))
         for kind in ('before-target', 'before-send', 'send-exception', 'send-unknown', 'post-send'):
             with self.subTest(kind=kind):
-                receipt = json.loads((receipts / kind / 'first-receipt.json').read_text(encoding='utf-8'))
-                f = LiveRun(output=receipts / 'python')
+                receipt = receipts[kind]
+                f = LiveRun(output=OUT / 'adapter-receipt-python')
                 try:
                     frame = viewport(0)
                     f.deliver(frame); f.tick(); f.deliver(frame.copy())
@@ -291,7 +294,9 @@ class HalfViewportFlowTests(unittest.TestCase):
         self.assertNotEqual(result['status'], 'VERIFIED', result)
 
 
-class TerminalContinuityTests(unittest.TestCase):
+@unittest.skipUnless(os.environ.get('YIHUAN_REAL_SOURCE_QA') == '1',
+    'uses retained local SOURCE images; run tools/native_qa/check_real_terminal_continuity.py explicitly')
+class RealSourceTerminalContinuityQATests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         result = json.loads((ROOT / 'build/native-auto-pages-20261010/real-once-08/run-result.json')
