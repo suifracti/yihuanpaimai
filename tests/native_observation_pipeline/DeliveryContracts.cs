@@ -10,12 +10,17 @@ internal static class DeliveryContracts
     public static void AdviceQualificationOnly()
     {
         void Check(bool value, string reason) { if (!value) throw new Exception(reason); }
-        const long publicationNs = 10_000;
-        var sample = new QpcClockSample(1, 1, 0, 1, 100);
-        var delivered = new CaptureDeliveryProof("session", 1, 1, 1, 100_000, 1, 1, 1,
-            sample, sample, 1, 1, 0, 2, 3);
-        var original = new DeliveryVisualSummary("original", 1, 9_900, "scene", "warehouse", true, "observation");
-        var support = new DeliveryVisualSummary("support", 1, 9_900, "scene", "warehouse", true, "observation");
+        var sample = QpcClockSample.Read();
+        var request = sample.Nanoseconds - 400;
+        var publicationNs = sample.Nanoseconds + 1000;
+        var sourceTicks = sample.Nanoseconds / 100 + 100_000;
+        var delivered = new CaptureDeliveryProof("session", 1, 1, request, publicationNs + 100_000,
+            request, request, request, sample, sample, sourceTicks, sourceTicks, 0,
+            sample.Nanoseconds + 50, sample.Nanoseconds + 100)
+            { ReleaseCompletedNs = request, DrainTakeCount = 1, BoundaryHeldCount = 0 };
+        var original = new DeliveryVisualSummary(delivered.CaptureId, 1, delivered.ReadbackCompletedNs,
+            "scene", "warehouse", true, "observation");
+        var support = original with { CaptureId = "session/1/2" };
         var accepted = DeliveryAdviceQualification.Evaluate(delivered, support, original, publicationNs);
         Check(accepted.Qualified && accepted.FailureReasons.Length == 0, "all advice conditions did not qualify");
 
@@ -27,14 +32,110 @@ internal static class DeliveryContracts
             ("pool-epoch", DeliveryAdviceQualification.Evaluate(delivered, support with { Epoch = 2 }, original, publicationNs), "SUPPORT_POOL_EPOCH_MISMATCH"),
             ("readback-future", DeliveryAdviceQualification.Evaluate(delivered, support with { ReadbackNs = publicationNs + 1 }, original, publicationNs), "SUPPORT_READBACK_FROM_FUTURE"),
             ("readback-stale", DeliveryAdviceQualification.Evaluate(delivered, support with { ReadbackNs = publicationNs - 2_000_000_001 }, original, publicationNs), "SUPPORT_READBACK_STALE"),
-            ("scene-roi", DeliveryAdviceQualification.Evaluate(delivered, support with { SceneRoiSha256 = "changed" }, original, publicationNs), "SUPPORT_SCENE_ROI_MISMATCH"),
-            ("observation-roi", DeliveryAdviceQualification.Evaluate(delivered, support with { ObservationRoiSha256 = "changed" }, original, publicationNs), "SUPPORT_OBSERVATION_ROI_MISMATCH"),
-            ("warehouse-roi", DeliveryAdviceQualification.Evaluate(delivered, support with { WarehouseRoiSha256 = "changed" }, original, publicationNs), "SUPPORT_WAREHOUSE_ROI_MISMATCH"),
+            ("session", DeliveryAdviceQualification.Evaluate(delivered, support with { CaptureId = "old-session/1/2" }, original, publicationNs), "SUPPORT_SESSION_MISMATCH"),
+            ("original-binding", DeliveryAdviceQualification.Evaluate(delivered, support, original with { CaptureId = "wrong" }, publicationNs), "ORIGINAL_FRAME_BINDING_MISMATCH"),
+            ("original-expired", DeliveryAdviceQualification.Evaluate(delivered, support, original, publicationNs + 31_000_000_000), "ORIGINAL_DELIVERY_INVALID_OR_EXPIRED"),
         };
         foreach (var (name, qualification, reason) in failures)
             Check(!qualification.Qualified && qualification.FailureReasons.Contains(reason), name + " failure was not reported");
+        var dynamic = DeliveryAdviceQualification.Evaluate(delivered, support with {
+            SceneRoiSha256 = "new-scene-pixels", ObservationRoiSha256 = "new-timer-pixels",
+            WarehouseRoiSha256 = "new-warehouse-pixels" }, original, publicationNs);
+        Check(dynamic.Qualified && !dynamic.SceneRoiMatches && !dynamic.ObservationRoiMatches
+            && !dynamic.WarehouseRoiMatches, "dynamic pixels vetoed computing the bound fact version");
+        long clock = publicationNs;
+        var concurrent = DeliveryAdviceQualification.EvaluateCurrent(delivered, original,
+            () => { clock += 100; return support with { ReadbackNs = clock }; }, () => clock + 1);
+        Check(concurrent.Qualified && concurrent.EvaluationNs > concurrent.SupportReadbackNs,
+            "summary compared against a time preceding its read");
+        Check(dynamic.ToJson()["sourceAbsoluteAgeMs"] is null
+            && dynamic.ToJson()["automaticBidExecutionQualified"]!.GetValue<bool>() == false,
+            "delivery calculation was upgraded to absolute freshness or bid permission");
         Console.WriteLine(JsonSerializer.Serialize(new { passed = true, test = "advice-qualification-breakdown",
             baseline = accepted.ToJson(), failedComponents = failures.Select(x => x.Case).ToArray() }));
+    }
+
+    public static void ReplayAdvice(string path)
+    {
+        // An offline retained original is the only available summary in this
+        // replay timeline. Never claim it is the currently running game.
+        var input = JsonNode.Parse(File.ReadAllText(path))!;
+        var delivered = input["proof"]!.Deserialize<CaptureDeliveryProof>(
+            new JsonSerializerOptions { PropertyNameCaseInsensitive = true })!;
+        var original = new DeliveryVisualSummary(delivered.CaptureId, delivered.PoolEpoch,
+            delivered.ReadbackCompletedNs, (string)input["sceneHash"]!, (string)input["warehouseHash"]!,
+            delivered.Qualified && delivered.SourceMarkerProgress, (string)input["observationHash"]!);
+        var qualification = DeliveryAdviceQualification.EvaluateCurrent(delivered, original,
+            () => original, () => (long)input["evaluationNs"]!);
+        Console.WriteLine(qualification.ToJson().ToJsonString());
+    }
+
+    public static void ReplayVisibleContent(string path)
+    {
+        void Check(bool value, string reason) { if (!value) throw new Exception(reason); }
+        var input = JsonNode.Parse(File.ReadAllText(path))!;
+        CapturedBgraFrame Frame(JsonNode row)
+        {
+            var raw = File.ReadAllBytes((string)row["bmpPath"]!);
+            var hash = Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(raw)).ToLowerInvariant();
+            Check(hash == (string)row["bmpSha256"]!, "retained BMP changed");
+            var proof = row["deliveryProof"]!.Deserialize<CaptureDeliveryProof>(new JsonSerializerOptions { PropertyNameCaseInsensitive = true })!;
+            return new(1920, 1080, 7680, raw[54..], proof.ReadbackCompletedNs, "retained-offline", proof.SourceNs,
+                proof.AcquisitionSequence, proof);
+        }
+        var frames = input["originals"]!.AsArray().Select(row => Frame(row!)).ToArray();
+        var summaries = frames.Select(DeliveryVisualSummary.From).ToArray();
+        var pairs = new[] { (4,5), (5,6), (6,7), (7,8), (8,9), (10,11), (11,12), (12,13) };
+        foreach (var (a,b) in pairs) Check(summaries[a].ContentSupportedBy(summaries[b])
+            && summaries[a].SceneSupportedBy(summaries[b]), $"real normal pair {a+1}:{b+1} refused");
+        Check(!summaries[1].ContentSupportedBy(summaries[2]), "real blue reveal accepted");
+        Check(!summaries[3].ContentSupportedBy(summaries[4]), "real mass reveal accepted");
+        foreach (var index in new[] { 0, 3 * (560 * 600 + 20), 3 * (70 * 600 + 26), summaries[4].ScrollContentBgr!.Length-1 })
+        {
+            var bytes = summaries[4].ScrollContentBgr!.ToArray(); bytes[index] = (byte)(bytes[index] <= 253 ? bytes[index]+2 : bytes[index]-2);
+            Check(!summaries[4].ContentSupportedBy(summaries[4] with { ScrollContentRoiSha256 = "changed", ScrollContentBgr = bytes }), "two-code protected edit accepted");
+        }
+        Check(!summaries[4].SceneSupportedBy(summaries[4] with { SceneRoiSha256 = "erased", SceneBgr = new byte[summaries[4].SceneBgr!.Length] }), "scene title loss accepted");
+        var scope = input["scope"]!; var target = (JsonObject)scope["targetInstance"]!.DeepClone();
+        long now = frames[4].DeliveryProof!.RequestNs - 100, deadline = (long)input["deadlineNs"]!;
+        var events = new List<JsonObject>(); var diagnostics = new List<JsonObject>(); var sends = 0;
+        DeliveryVisualSummary? latest = summaries[4];
+        var root = Path.Combine(Path.GetDirectoryName(Path.GetFullPath(path))!, "host-source-replay");
+        using var lease = new WarehouseEvidenceLease(root, (string)scope["observationSessionId"]!, events.Add, () => now,
+            (_, current) => { Check(current(), "lease revoked at inert send"); sends++; return true; },
+            CapturePolicy.Delivery, () => latest, diagnostics.Add);
+        lease.UpdateContext(new((string)scope["recordStableKey"]!, target, (string)input["originals"]![0]!["clientMap"]!,
+            1920,1080,true,true,deadline,(long)scope["matchGeneration"]!));
+        JsonObject Command(string operation, int ordinal=0) => new() {
+            ["type"]=WarehouseEvidenceLease.ControlType,["schemaVersion"]=WarehouseEvidenceLease.SchemaV2,
+            ["operation"]=operation,["commandId"]=Guid.NewGuid().ToString("N"),["nonce"]=Guid.NewGuid().ToString("N"),
+            ["observationSessionId"]=scope["observationSessionId"]!.DeepClone(),["reviewSessionId"]="visible-replay",["reviewGeneration"]=1,
+            ["recordStableKey"]=scope["recordStableKey"]!.DeepClone(),["matchGeneration"]=scope["matchGeneration"]!.DeepClone(),
+            ["expectedTargetInstance"]=target.DeepClone(),["leaseToken"]=lease.LeaseToken,["requestOrdinal"]=ordinal,
+            ["allowWindowScroll"]=true,["retainIndependentOriginals"]=true,["remainingPages"]=16,["remainingPngBytes"]=64*1024*1024,
+            ["pngEncoding"]=WarehouseEvidenceLease.PngEncoding };
+        lease.Handle(Command("OPEN")); Check(lease.IsOpen, "armed independent retention could not open");
+        JsonObject? saved = null;
+        foreach (var (index,ordinal) in new[] { (4,1), (6,2) })
+        {
+            var f = frames[index]; var p = f.DeliveryProof!; now = p.RequestNs;
+            lease.Handle(Command("REQUEST_PAGE",ordinal));
+            var snapshot = lease.RequestSnapshot() ?? throw new Exception(JsonSerializer.Serialize(events));
+            now = p.ReadbackCompletedNs + 100; latest = summaries[index];
+            Check(lease.TryPublish(new(1920,1080,7680,f.Pixels,p.SourceNs,p.ReadbackCompletedNs,f.CapturedAtUtc,
+                p.AcquisitionSequence,"",0,p,latest,snapshot.Gate,(long)scope["matchGeneration"]!),()=>true), "SOURCE publication rejected");
+            var sourceEvent = events.Last(e=>(string?)e["event"]=="SOURCE"); saved=(JsonObject)sourceEvent["source"]!;
+            var ack = Command("ACK_SOURCE",ordinal); ack["nonce"]=sourceEvent["nonce"]?.DeepClone();
+            ack["sourceLeaseId"]=saved["sourceLeaseId"]!.DeepClone(); ack["bmpSha256"]=saved["bmpSha256"]!.DeepClone();
+            ack["pixelSha256"]=saved["pixelSha256"]!.DeepClone(); ack["result"]="SAVED"; lease.Handle(ack);
+        }
+        latest=summaries[8]; now=latest.ReadbackNs+100;
+        var scroll=Command("SCROLL_DOWN",2); scroll["sourceLeaseId"]=saved!["sourceLeaseId"]!.DeepClone();
+        scroll["pixelSha256"]=saved["pixelSha256"]!.DeepClone(); scroll["savedCaptureId"]=summaries[4].CaptureId;
+        scroll["stableCaptureId"]=summaries[6].CaptureId; lease.Handle(scroll);
+        Check(sends==1 && events.Any(e=>(string?)e["event"]=="SCROLLED"), "real supported page did not reach Host inert send");
+        Console.WriteLine(JsonSerializer.Serialize(new { passed=true, normalPairs=pairs.Length, protectedEditsRejected=4,
+            actualHostLeaseReachedInertSend=true, gameCapture=false, gameInput=false, diagnostics }));
     }
 
     public static void Run(string root)
@@ -129,7 +230,7 @@ internal static class DeliveryContracts
                     ownerIds[Environment.CurrentManagedThreadId] = true;
                     if (cancelled() || stopped()) throw new OperationCanceledException();
                     var proof = Proof(request.Gate, ++sequence);
-                    latest = new(proof.CaptureId, 1, proof.ReadbackCompletedNs, "scene", "warehouse", true);
+                    latest = new(proof.CaptureId, 1, proof.ReadbackCompletedNs, "scene", "warehouse", true, ScrollContentRoiSha256: "content");
                     return new WarehouseSourceFrame(32, 32, 128, pixels, proof.SourceNs, proof.ReadbackCompletedNs, "offline",
                         sequence, "", 0, proof, latest, request.Gate, request.Match);
                 }, 1000, discardLatest: true);
@@ -229,7 +330,7 @@ internal static class DeliveryContracts
             var open = Command("OPEN"); open["leaseToken"] = null; stable.Handle(open);
             var request = Command("REQUEST_PAGE"); request["leaseToken"] = stable.LeaseToken; request["requestOrdinal"] = 1; stable.Handle(request);
             var snapshot = stable.RequestSnapshot()!.Value; var first = Proof(snapshot.Gate, 1);
-            summary = new(first.CaptureId, 1, first.ReadbackCompletedNs, "scene", "warehouse", true);
+            summary = new(first.CaptureId, 1, first.ReadbackCompletedNs, "scene", "warehouse", true, ScrollContentRoiSha256: "content");
             Check(stable.TryPublish(new(32, 32, 128, pixels, first.SourceNs, first.ReadbackCompletedNs, "offline", 1,
                 "", 0, first, summary, snapshot.Gate, 1), () => true), "first original not saved");
             var originalReceipt = (JsonObject)records.Single(e => (string?)e["event"] == "SOURCE")["source"]!;
@@ -238,7 +339,7 @@ internal static class DeliveryContracts
             stable.Handle(ack); Thread.Sleep(260);
             request = Command("REQUEST_PAGE"); request["leaseToken"] = stable.LeaseToken; request["requestOrdinal"] = 2; stable.Handle(request);
             snapshot = stable.RequestSnapshot()!.Value; var second = Proof(snapshot.Gate, 2, first.SourceNs);
-            summary = new(second.CaptureId, 1, second.ReadbackCompletedNs, changedRoi ? "different-scene" : "scene", "warehouse", true);
+            summary = new(second.CaptureId, 1, second.ReadbackCompletedNs, changedRoi ? "different-scene" : "scene", "warehouse", true, ScrollContentRoiSha256: "content");
             Check(!stable.TryPublish(new(32, 32, 128, pixels, second.SourceNs, second.ReadbackCompletedNs, "offline", 2,
                 "", 0, second, summary, snapshot.Gate, 1), () => true), "duplicate original saved twice");
             Check(records.Any(e => (string?)e["reason"] == "DUPLICATE_PAGE"), "separate equal support not recorded");

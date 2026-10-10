@@ -13,6 +13,50 @@ vm.createContext(sandbox);
 const helperStart = html.indexOf("    function formatExpectedProfit(value)");
 vm.runInContext(html.slice(helperStart, html.indexOf("\n    function ", helperStart + 10)), sandbox);
 vm.runInContext(html.slice(start,end),sandbox);
+if (process.argv.includes('--saved-advice')) {
+  const formatStart = html.indexOf('    function fmtWan(');
+  vm.runInContext(html.slice(formatStart, html.indexOf('\n    function ', formatStart + 10)), sandbox);
+  const file = process.argv[process.argv.indexOf('--saved-advice') + 1];
+  const replay = JSON.parse(fs.readFileSync(file, 'utf8'));
+  const payload = replay.mainPayload;
+  sandbox.payload = payload;
+  vm.runInContext('paintTrustedLiveResult(payload)', sandbox);
+  assert.equal(payload.solverStatus, 'valid');
+  assert.equal(payload.frozenPrediction.decision.recommendedMax, null);
+  assert.equal(elements.get('topRecommendedMax').textContent, '580,238');
+  assert.match(elements.get('topCapLabel').textContent, /结构参考/);
+  assert.match(elements.get('recommendedMax').textContent, /非正式上限/);
+  assert.match(elements.get('actionReason').textContent, /历史记录 0 条/);
+  assert.match(elements.get('pRange').textContent, /仅部分候选，非整仓范围/);
+  assert.equal(payload.predictionSnapshot.forecast.quantiles, null);
+  const hud = Object.fromEntries(['topActionBadge','topCapLabel','topRecommendedMax','p50Label','pRange','actionReason']
+    .map(id => [id, elements.get(id).textContent]));
+  const mainSource = fs.readFileSync('core/main_window.js', 'utf8');
+  const mainSandbox = { document:sandbox.document, dashboard:{} };
+  vm.createContext(mainSandbox);
+  for (const name of ['escapeHtml', 'formatCurrency', 'renderMatchFocus']) {
+    const begin = mainSource.indexOf(`function ${name}(`);
+    const next = mainSource.indexOf('\nfunction ', begin + 10);
+    vm.runInContext(mainSource.slice(begin, next), mainSandbox);
+  }
+  mainSandbox.currentMatch = payload.currentMatch;
+  vm.runInContext('renderMatchFocus(currentMatch)', mainSandbox);
+  assert.equal(elements.get('match-focus-amount').textContent, '580,238');
+  assert.match(elements.get('match-focus-result-type').textContent, /非正式上限/);
+  const main = Object.fromEntries(['match-focus-amount','match-focus-result-type','match-focus-secondary','match-focus-reason']
+    .map(id => [id, elements.get(id).textContent]));
+  // Even a valid cached snapshot cannot revive the display after revocation.
+  sandbox.payload = {...payload, nativeInvalidated:true};
+  vm.runInContext('paintTrustedLiveResult(payload)', sandbox);
+  assert.equal(elements.get('topRecommendedMax').textContent, '—');
+  assert.match(elements.get('topActionBadge').textContent, /暂停/);
+  const receipt = {passed:true, verificationMode:'saved-offline-render', desktopAcceptance:false,
+    gameCapture:false, gameInput:false, main, hud, revokedSnapshotHidden:true};
+  fs.writeFileSync(pathForReceipt(file), JSON.stringify(receipt, null, 2));
+  console.log(JSON.stringify(receipt));
+  process.exit(0);
+}
+function pathForReceipt(file) { return require('path').join(require('path').dirname(file), 'display-result.json'); }
 for(const [payload,label] of [
   [{scene:'OPEN_WORLD',shadowUpdating:false},'等待进入拍卖'],
   [{scene:'IN_AUCTION',shadowUpdating:false},'情报不足'],

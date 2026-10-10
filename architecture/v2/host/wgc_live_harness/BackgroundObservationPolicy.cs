@@ -16,6 +16,10 @@ internal static class BackgroundObservationPolicy
 
     public static bool IsObservationTargetUsable(string mode, WindowMonitorSnapshot snapshot,
         bool minimized, bool clientAreaAvailable, int width, int height)
+        => IsObservationIdentityUsable(mode, snapshot, minimized)
+            && (mode == Foreground || (clientAreaAvailable && width > 0 && height > 0 && width <= 1920 && height <= 1080));
+
+    public static bool IsObservationIdentityUsable(string mode, WindowMonitorSnapshot snapshot, bool minimized)
     {
         if (mode is not (Foreground or BackgroundReadOnly)) return false;
         if (mode == Foreground)
@@ -27,7 +31,7 @@ internal static class BackgroundObservationPolicy
             && identity.Hwnd == snapshot.TargetHwnd && identity.Pid == snapshot.TargetPid
             && TargetWindowSpec.Default.Matches(identity.ProcessImageName, identity.ClassName)
             && (mode == BackgroundReadOnly || snapshot.IsTargetForeground)
-            && !minimized && clientAreaAvailable && width > 0 && height > 0 && width <= 1920 && height <= 1080;
+            && !minimized;
     }
 
     public static bool IsSameObservationTarget(WindowMonitorSnapshot active, WindowMonitorSnapshot sessionTarget)

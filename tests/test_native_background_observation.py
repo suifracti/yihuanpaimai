@@ -29,6 +29,7 @@ _MAIN_FUNCTIONS = {
     "_native_source_frame_rejection", "_native_observation_event",
     "_native_background_source_current", "handle_observation_window_mode",
     "_native_accept_observation_locked", "_native_solver_lease_matches_locked",
+    "_native_fact_computation_rejection",
     "_native_solver_lease_matches", "_native_health_from_event",
     "_native_publish_health", "_native_warehouse_intake_scope",
     "_native_report_ui_ready",
@@ -152,6 +153,40 @@ def _frame(ns, *, session="background-session", sequence=1):
 
 
 class NativeBackgroundObservationTests(unittest.TestCase):
+    def test_mapping_suspension_revokes_old_admission_without_stopping_host(self):
+        ns, _, bridge = _isolated_main("background-readonly")
+        _confirmed_start(ns)
+        ns["_native_observation_event"](_frame(ns))
+        old_lease = copy.deepcopy(ns["_NATIVE_SOLVER_LEASE"])
+        ns["_NATIVE_WAREHOUSE_FRAME_LEASE"] = {"captureId": "old"}
+        # Execute the actual revocation, without configuration/history/GUI initialization.
+        tree = ast.parse((ROOT / "app/main.py").read_text(encoding="utf-8"))
+        revoke = next(node for node in tree.body if isinstance(node, ast.FunctionDef)
+                      and node.name == "_native_invalidate_solver_locked")
+        ns.update({"ACTIVE_SNAPSHOT_HOLDER": Mock(), "_SHADOW_PRESENTATION_LOCK": threading.RLock(),
+                   "_SHADOW_PRESENTATION_KEYS": {}, "_native_reject_pending_controls_locked": Mock()})
+        exec(compile(ast.fix_missing_locations(ast.Module(body=[revoke], type_ignores=[])),
+                     str(ROOT / "app/main.py"), "exec"), ns)
+        before = copy.deepcopy(ns["CURRENT_MATCH"].snapshot())
+        with patch.dict(sys.modules, {"live_shadow": SimpleNamespace(invalidate_match_shadow=Mock())}):
+            _status(ns, "SUSPENDED")
+        self.assertIsNone(ns["_NATIVE_SOLVER_LEASE"])
+        self.assertIsNone(ns["_NATIVE_WAREHOUSE_FRAME_LEASE"])
+        self.assertFalse(ns["_native_solver_lease_matches"](old_lease or {}))
+        self.assertEqual(ns["_NATIVE_EXPECTED_SESSION"], "background-session")
+        self.assertTrue(ns["LATEST_PAYLOAD"]["visionHealth"]["observationSuspended"])
+        self.assertFalse(ns["LATEST_PAYLOAD"]["visionHealth"]["observationStopped"])
+        bridge.send_control.assert_not_called()
+        with patch.dict(sys.modules, {"live_shadow": SimpleNamespace(invalidate_match_shadow=Mock())}):
+            _status(ns, "READY")
+        self.assertIsNone(ns["_NATIVE_WAREHOUSE_FRAME_LEASE"])
+        self.assertIsNone(ns["_NATIVE_SOLVER_LEASE"])
+        fresh = _frame(ns, sequence=2)
+        fresh["frame"].update(sourceTimestampNs=99_600_000_000, capturedAtNs=99_800_000_000)
+        ns["_native_observation_event"](fresh)
+        self.assertEqual(ns["LATEST_PAYLOAD"]["observationStatus"], "FRAME")
+        self.assertEqual(ns["CURRENT_MATCH"].id, before["id"])
+
     def test_stop_retains_host_ownership_until_exit_is_confirmed(self):
         ns, _, bridge = _isolated_main("background-readonly")
         ns.update({"VISION_PROCESS": None, "log_stage": Mock()})

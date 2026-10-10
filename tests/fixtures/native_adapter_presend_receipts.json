@@ -1,0 +1,39 @@
+{
+  "before-target": {
+    "event": "REJECTED",
+    "reason": "SCROLL_CONTENT_CHANGED_BEFORE_SEND",
+    "details": {
+      "classification": "NOT_SENT_CONTENT_SUPPORT_RECHECK",
+      "sendInterfaceInvoked": false,
+      "sourceLeaseId": null,
+      "adapterStage": "CURRENT_GUARD_REJECTED_BEFORE_TARGET_READ",
+      "failedChecks": ["scrollContentQuantizationSupported"]
+    }
+  },
+  "before-send": {
+    "event": "REJECTED",
+    "reason": "SCROLL_CONTENT_CHANGED_BEFORE_SEND",
+    "details": {
+      "classification": "NOT_SENT_CONTENT_SUPPORT_RECHECK",
+      "sendInterfaceInvoked": false,
+      "sourceLeaseId": null,
+      "adapterStage": "CURRENT_GUARD_REJECTED_BEFORE_SEND",
+      "failedChecks": ["scrollContentQuantizationSupported"]
+    }
+  },
+  "send-exception": {
+    "event": "REJECTED",
+    "reason": "injected-send-error",
+    "details": null
+  },
+  "send-unknown": {
+    "event": "CLOSED",
+    "reason": "WINDOW_SCROLL_FAILED_OR_TARGET_CHANGED",
+    "details": null
+  },
+  "post-send": {
+    "event": "CLOSED",
+    "reason": "WINDOW_SCROLL_FAILED_OR_TARGET_CHANGED",
+    "details": null
+  }
+}

@@ -50,9 +50,24 @@ class TestP2SeatsIntelProjection(unittest.TestCase):
                 "lines": [{"text": "随机展示5件藏品。"}, {"text": "金色均价 64836"}],
             }]
         }
+        from copy import deepcopy
+        first = deepcopy(evidence["intel"][0])
+        evidence["intel"].extend([
+            {**deepcopy(first), "capturedAt": "2026-09-09T21:00:01", "timer": 24},
+            {**deepcopy(first), "round": 3},
+            {"round": 2, "lines": [{"text": "随机展示6件藏品。"}, {"text": "金色均价 64836"}]},
+        ])
+        original = deepcopy(evidence)
         intel = project_intel(evidence, {"q": {"status": "OBSERVED", "value": 21}})
         self.assertIn("随机展示5件藏品。", intel["observations"][0]["text"])
         self.assertEqual(intel["structured"][0]["participation"], "valuation")
+        self.assertEqual(evidence, original)
+        self.assertEqual(intel["observationCount"], 4)
+        self.assertEqual(len(intel["observations"]), 3)
+        self.assertEqual(intel["observations"][0]["readingCount"], 2)
+        self.assertEqual(intel["observations"][0]["lastCapturedAt"], "2026-09-09T21:00:01")
+        self.assertEqual(intel["observations"][1]["round"], 3)
+        self.assertIn("随机展示6件藏品。", intel["observations"][2]["text"])
 
     def test_transient_card_text_survives_blank_followup_into_draft(self):
         first = {"round": 4, "frameId": "capture-1", "rawText": "本局内所有蓝色品质藏品的总数量为2件。", "is_physical_ocr": True}

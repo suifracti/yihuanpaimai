@@ -2848,7 +2848,8 @@ function renderCurrentAuctionDetails(currentMatch) {
       } else {
         intelEl.innerHTML = rows.map(row => {
           const mark = row.participation === "valuation" ? "已参与估价" : row.participation === "pending" ? "待解析" : "仅记录";
-          const round = row.round != null ? `第 ${row.round} 回合` : "";
+          const round = (row.round != null ? `第 ${row.round} 回合` : "")
+            + (row.readingCount > 1 ? ` · ${row.readingCount}条读数合并` : "");
           return `<p class="intel-line">${escapeHtml(round)} · ${mark} · ${escapeHtml(row.text || row.rawText || "")}</p>`;
         }).join("");
       }
@@ -2926,7 +2927,7 @@ function renderMatchFocus(currentMatch) {
       return `<div class="match-focus-seat"><span>${escapeHtml(seat.name || `座位 ${seat.slot ?? seat.seat ?? "?"}`)}${seat.isMe ? " · 本人" : ""}</span><strong>${currentMatch.bidding?.hiddenBids ? "金额隐藏" : bid == null ? "— · 未观察" : formatCurrency(bid)}</strong></div>`;
     }).join("");
   const intel = currentMatch.publicIntel?.timeline?.observations || [];
-  document.getElementById("match-focus-intel-count").textContent = `${intel.length} 条读数`;
+  document.getElementById("match-focus-intel-count").textContent = `${intel.length} 条原文`;
   document.getElementById("match-focus-intel").innerHTML = !intel.length ? "尚无情报原文"
     : intel.slice(-3).map(row => `<p><small>${row.round == null ? "回合未定" : `第 ${row.round} 回合`} · ${row.participation === "valuation" ? "参与估值" : row.participation === "pending" ? "待解析" : "仅记录"}</small><span>${escapeHtml(row.text || row.rawText || "原文未解析")}</span></p>`).join("");
   const slots = currentMatch.warehouse?.slots || [];
@@ -4516,6 +4517,29 @@ function renderReviewSection(review) {
   renderWarehouseIdentitySummary(review.warehouseIdentitySummary);
   const resumeWarehouse = document.getElementById("history-warehouse-review-btn");
   if (resumeWarehouse) resumeWarehouse.hidden = !review.warehouseReviewAvailable;
+  let refinementPanel = document.getElementById("history-warehouse-refinement");
+  if (!refinementPanel) {
+    refinementPanel = document.createElement("div");
+    refinementPanel.id = "history-warehouse-refinement";
+    section.appendChild(refinementPanel);
+  }
+  refinementPanel.replaceChildren();
+  const refinement = review.warehouseRefinement;
+  if (refinement && refinement.sessionId) {
+    const status = document.createElement("p");
+    const labels = { QUEUED: "等待目录细化", RUNNING: "目录细化中", COMPLETE: "目录细化已保存", CANCELLED: "目录细化已取消，可恢复", FAILED: "目录细化失败，可恢复", PENDING: "目录细化待接续" };
+    status.textContent = (labels[refinement.state] || refinement.state) + (refinement.reason ? ` · ${refinement.reason}` : "");
+    refinementPanel.appendChild(status);
+    if (["QUEUED", "RUNNING", "CANCELLED", "FAILED", "PENDING"].includes(refinement.state)) {
+      const active = ["QUEUED", "RUNNING"].includes(refinement.state);
+      const button = document.createElement("button");
+      button.type = "button"; button.className = "btn-review-action";
+      button.textContent = active ? "取消目录细化" : "恢复目录细化";
+      button.onclick = () => postNative(active ? "cancel_warehouse_refinement" : "resume_warehouse_refinement", {
+        sessionId: refinement.sessionId, recordId: review.recordId });
+      refinementPanel.appendChild(button);
+    }
+  }
   let revisions = document.getElementById("history-warehouse-revisions");
   if (!revisions) {
     revisions = document.createElement("div");
@@ -5798,6 +5822,10 @@ function handleNativeMessage(event) {
       const status = document.getElementById('native-auto-warehouse-status');
       if (status) status.textContent = payload.nativeAutoWarehouseResult.reason || '自动收页选项未保存';
     }
+  }
+  if (payload.warehouseRefinement && dashboard.review) {
+    dashboard.review.warehouseRefinement = payload.warehouseRefinement;
+    renderReviewSection(dashboard.review);
   }
   if (payload.warehouseCapture) {
     renderWarehouseCapture(payload.warehouseCapture);

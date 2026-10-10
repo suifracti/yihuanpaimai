@@ -35,9 +35,9 @@ LAYOUT = ContentLayout(GRID, REFERENCES, 'independent procedural scene; full rec
 
 
 class Run:
-    def __init__(self):
-        OUT.mkdir(parents=True, exist_ok=True)
-        self.root = Path(tempfile.mkdtemp(dir=OUT, prefix='flow-'))
+    def __init__(self, *, content_gate=None, output=OUT):
+        output.mkdir(parents=True, exist_ok=True)
+        self.root = Path(tempfile.mkdtemp(dir=output, prefix='flow-'))
         self.now, self.sent, self.logs, self.sequence = 100., [], [], 0
         self.scope = {'recordStableKey': 'match', 'observationSessionId': 'fixture',
                       'targetInstance': {'targetHwnd': 12, 'processId': 123}, 'matchGeneration': 1,
@@ -49,20 +49,22 @@ class Run:
         self.store.save_draft(record)
         self.intake = NativeWarehouseIntake(draft_store=self.store,
                       scope_provider=lambda: copy.deepcopy(self.scope), source_provider=lambda: None,
-                      clock=lambda: self.now)
+                      clock=lambda: self.now, auto_refine=False)
         self.source = NativeWarehouseSourceCoordinator(self.intake,
                       send_control=lambda c: self.sent.append(copy.deepcopy(c)) or True,
                       source_root_provider=lambda: self.root, timers=False,
                       clock=lambda: self.now, qpc=lambda: round(self.now*1e9))
         self.source.offline_test_adapter = True
-        self.gate = OfflineContentGate(LAYOUT)
+        self.gate = content_gate or OfflineContentGate(LAYOUT)
+        gate_option = {'content_gate': self.gate} if content_gate is not None else {'offline_content_gate': self.gate}
         self.auto = NativeWarehouseAutoCapture(self.source, clock=lambda: self.now, timers=False,
-                      diagnostic_log=lambda s: self.logs.append(json.loads(s)), offline_content_gate=self.gate)
+                      diagnostic_log=lambda s: self.logs.append(json.loads(s)), **gate_option)
         assert self.auto.confirm(self.auto.prepare()['armingToken'])['ok']
         self.auto.on_event(self.event('OPENED', details={'deadlineNs': 170_000_000_000,
             'clientWidth': 1920, 'clientHeight': 1080, 'remainingSourcePages': 16,
             'remainingRawBytes': 128*1024*1024, 'maxPngBytes': 64*1024*1024,
-            'pngEncoding': 'opencv-bgr8-png-bound.v1', 'clientMap': 'map', 'windowScrollSupported': True}))
+            'pngEncoding': 'opencv-bgr8-png-bound.v1', 'clientMap': 'map', 'windowScrollSupported': True,
+            'retainIndependentOriginals': content_gate is not None}))
 
     def event(self, kind, command=None, **extras):
         cmd = command or self.sent[-1]
@@ -105,7 +107,7 @@ class Run:
         cmd = copy.deepcopy(self.source._pending)
         assert cmd['operation'] == 'SCROLL_DOWN', cmd
         self.auto.on_event(self.event('SCROLLED', cmd, inputActions=True, details={
-             'direction': 'DOWN', 'delta': -120, 'sourceLeaseId': cmd['sourceLeaseId'],
+             'direction': 'DOWN', 'delta': cmd.get('wheelDelta', -120), 'sourceLeaseId': cmd['sourceLeaseId'],
              'messageCompletedNs': round(self.now*1e9)}))
 
     def stable(self, view=0):

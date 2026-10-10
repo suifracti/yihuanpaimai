@@ -91,7 +91,80 @@ def _overlap_ratio(mask_a: np.ndarray, mask_b: np.ndarray, dy: int) -> float:
     return float(inter.sum()) / float(union.sum())
 
 
-def align_warehouse_segments(
+def _band_alignment(view_a: np.ndarray, view_b: np.ndarray,
+                    mask_a: np.ndarray, mask_b: np.ndarray, max_shift_px: int) -> Dict[str, Any]:
+    """Match disjoint content bands anywhere in the other viewport.
+
+    A fixed upper strip cannot survive a half-viewport downward scroll. Short
+    bands distributed over the content retain lower overlaps in either
+    direction. Two distinct bands must agree, and the entire shared area must
+    support that displacement; repeated grid/background alone is insufficient.
+    """
+    height, width = view_a.shape[:2]
+    band_h = max(12, height // 8)
+    x = width // 10
+    band_w = width - 2 * x
+    if height < 2 * band_h or band_w < 12:
+        return {}
+    votes = []
+    for y in range(0, height - band_h + 1, band_h):
+        template = view_a[y:y + band_h, x:x + band_w]
+        occupied = mask_a[y:y + band_h, x:x + band_w]
+        if float(template.std()) < 8 or np.count_nonzero(occupied) < .05 * occupied.size:
+            continue
+        scores = cv2.matchTemplate(view_b, template, cv2.TM_CCOEFF_NORMED)
+        _, score, _, loc = cv2.minMaxLoc(scores)
+        if score < .80:
+            continue
+        dy, dx = loc[1] - y, loc[0] - x
+        if abs(dx) > MAX_H_DRIFT or abs(dy) > max_shift_px:
+            continue
+        # Reject a second plausible location, including horizontal aliases.
+        competitors = scores.copy()
+        radius = max(CLUSTER_BIN, band_h // 4)
+        competitors[max(0, loc[1] - radius):loc[1] + radius + 1,
+                    max(0, loc[0] - MAX_H_DRIFT):loc[0] + MAX_H_DRIFT + 1] = -1
+        if float(competitors.max()) >= score - .05:
+            continue
+        votes.append((int(dy), float(score), y))
+    if len(votes) < 2:
+        return {}
+    clusters = _cluster_offsets(votes)
+    candidates = []
+    for _, supporting in clusters:
+        if len(supporting) < 2:
+            continue
+        offset = int(round(float(np.mean([dy for dy, _, _ in supporting]))))
+        if offset < 0:
+            shared_a, shared_b = view_a[-offset:], view_b[:height + offset]
+        else:
+            shared_a, shared_b = view_a[:height - offset], view_b[offset:]
+        overlap = 1 - abs(offset) / float(height)
+        if overlap < .12 or _overlap_ratio(mask_a, mask_b, offset) < .12:
+            continue
+        shared_score = float(cv2.matchTemplate(shared_a, shared_b, cv2.TM_CCOEFF_NORMED)[0, 0])
+        if shared_score >= .80:
+            candidates.append((shared_score, offset, overlap, len(supporting)))
+    if not candidates:
+        return {}  # Matched fragments do not certify the rest of the overlap.
+    candidates.sort(reverse=True)
+    shared_score, offset, overlap, support = candidates[0]
+    # Adjacent quantization buckets can split votes differing by one pixel.
+    # They support the same displacement, not competing physical locations.
+    support = sum(count for _, dy, _, count in candidates if abs(dy - offset) <= CLUSTER_BIN)
+    if any(abs(dy - offset) > CLUSTER_BIN and score >= shared_score - .05
+           for score, dy, _, _ in candidates[1:]):
+        return {"reason": REASON_AMBIGUOUS_OFFSET}
+    if abs(offset) <= 3:
+        return {"direction": DIR_NONE, "verticalOffsetPx": 0, "reason": REASON_NO_MOVEMENT}
+    return {"status": STATUS_VERIFIED, "direction": DIR_DOWN if offset < 0 else DIR_UP,
+            "verticalOffsetPx": offset, "normalizedOffset": round(offset / float(height), 4),
+            "overlapRatio": round(overlap, 4), "confidence": round(shared_score, 3),
+            "reason": "DISJOINT_CONTENT_BANDS", "supportCount": support,
+            "progressionVerified": True}
+
+
+def _align_warehouse_segments(
     prev_img: Optional[np.ndarray],
     next_img: Optional[np.ndarray],
     *,
@@ -159,7 +232,8 @@ def align_warehouse_segments(
         clusters = _cluster_offsets(votes)
         best_key, best_votes = clusters[0]
         second_count = len(clusters[1][1]) if len(clusters) > 1 else 0
-        if not (second_count >= max(2, int(0.7 * len(best_votes))) and len(clusters) > 1):
+        if len(best_votes) >= MIN_BLOBS and not (
+                second_count >= max(2, int(0.7 * len(best_votes))) and len(clusters) > 1):
             offset = int(round(float(np.mean([dy for dy, _s, _a in best_votes]))))
             support = len(best_votes)
             mean_score = float(np.mean([score for _dy, score, _a in best_votes]))
@@ -224,31 +298,17 @@ def align_warehouse_segments(
                 })
                 return result
 
-    # 2. Try Strip Image Match on grid image
-    h_img, w_img = prev_img.shape[:2]
-    strip_h = int(h_img * 0.5)
-    strip_w = int(w_img * 0.7)
-    strip_x0 = int(w_img * 0.1)
-    strip_y0 = int(h_img * 0.2)
-    tmpl = prev_img[strip_y0 : strip_y0 + strip_h, strip_x0 : strip_x0 + strip_w]
-    scores = cv2.matchTemplate(next_img, tmpl, cv2.TM_CCOEFF_NORMED)
-    _, max_score, _, max_loc = cv2.minMaxLoc(scores)
-    dy = int(max_loc[1] - strip_y0)
-    dx = int(max_loc[0] - strip_x0)
-
-    if max_score >= 0.80 and abs(dx) <= MAX_H_DRIFT and -max_shift_px <= dy <= -6:
-        result.update({
-            "status": STATUS_VERIFIED,
-            "direction": DIR_DOWN,
-            "verticalOffsetPx": dy,
-            "normalizedOffset": round(dy / float(height), 4),
-            "overlapRatio": round(max(0.0, min(1.0, 1.0 - abs(dy) / float(height))), 4),
-            "confidence": round(max_score * 0.9, 3),
-            "reason": "STRIP_IMAGE_MATCH",
-            "supportCount": 2,
-            "progressionVerified": True,
-            "progressionProofId": f"overlap-down:{prev_id}:{next_id}:{dy}",
-        })
+    # 2. Actual shared content at either edge, independent of scrollbar scale.
+    bands = _band_alignment(view_a, view_b, mask_a, mask_b, max_shift_px)
+    if bands:
+        result.update(bands)
+        direction = bands.get("direction")
+        if bands.get("status") == STATUS_VERIFIED:
+            if required_direction in {DIR_DOWN, DIR_UP} and direction != required_direction:
+                result.update(status=STATUS_CONFLICT, reason=REASON_DIRECTION_MISMATCH,
+                              progressionVerified=False)
+            else:
+                result["progressionProofId"] = f"overlap-{direction.lower()}:{prev_id}:{next_id}:{bands['verticalOffsetPx']}"
         return result
 
     # 3. Sparse / Empty Progression Fallback (No fake verticalOffsetPx)
@@ -297,4 +357,133 @@ def align_warehouse_segments(
         "progressionVerified": True,
         "progressionProofId": f"progression-down:{prev_id}:{next_id}:{pos_prev:.4f}->{pos_next:.4f}",
     })
+    return result
+
+
+class TerminalContinuity:
+    """Same-chain pixel/scrollbar calibration; never learns from grid aliases.
+
+    Two content matches starting at TOP bound the scale. Integer pixel and
+    thumb localization each have one-pixel uncertainty. A sparse terminal
+    step may interpolate within both observed steps, but cannot extrapolate,
+    reconnect a skipped viewport, or establish the physical bottom.
+    """
+    def __init__(self):
+        self.samples = []
+        self.end = None
+        self.shape = None
+
+    @staticmethod
+    def _observations(a, b):
+        from warehouse_scrollbar_observation import observe_warehouse_scrollbar
+        return (observe_warehouse_scrollbar(a, already_cropped=True),
+                observe_warehouse_scrollbar(b, already_cropped=True))
+
+    @staticmethod
+    def _same_geometry(a, b):
+        return (a.get('trackBox') is not None and a.get('trackBox') == b.get('trackBox')
+                and a.get('thumbBox') is not None and b.get('thumbBox') is not None
+                and a['thumbBox'][0::2] == b['thumbBox'][0::2]
+                and abs((a['thumbBox'][3] - a['thumbBox'][1])
+                        - (b['thumbBox'][3] - b['thumbBox'][1])) <= 1)
+
+    def record(self, a, b, motion):
+        before, after = self._observations(a, b)
+        if (not self._same_geometry(before, after)
+                or not motion.get('prevId') or not motion.get('nextId')
+                or motion['prevId'] == motion['nextId']):
+            self.samples, self.end = [], None
+            return
+        if (self.end is None or self.shape != a.shape
+                or not self._same_geometry(self.end, before)
+                or self.end['thumbBox'] != before['thumbBox']):
+            self.samples, self.end = [], None
+            if before['scrollState'] != 'TOP':
+                return
+        delta = after['thumbBox'][1] - before['thumbBox'][1]
+        offset = abs(motion['verticalOffsetPx'])
+        if delta <= 1 or offset <= 3:
+            return
+        self.samples = (self.samples + [{'thumbDelta': delta, 'offset': offset,
+            'proofId': motion['progressionProofId']}])[-2:]
+        self.end, self.shape = after, a.shape
+
+    def terminal(self, a, b, max_shift_px):
+        if len(self.samples) < 2 or a.shape != self.shape or b.shape != a.shape:
+            return {}
+        before, after = self._observations(a, b)
+        if (after.get('scrollState') != 'BOTTOM' or before.get('scrollState') not in {'MIDDLE', 'BOTTOM'}
+                or not self._same_geometry(before, after)
+                or not self._same_geometry(self.end, before)
+                or before['thumbBox'] != self.end['thumbBox']):
+            return {}
+        delta = after['thumbBox'][1] - before['thumbBox'][1]
+        if delta <= 0 or delta > min(s['thumbDelta'] for s in self.samples) + 1:
+            return {}  # A larger/skipped step needs actual content correspondences.
+        from warehouse_grid_geometry import observe_warehouse_grid
+        ga, gb = (observe_warehouse_grid(im, already_cropped=True) for im in (a, b))
+        g0, g1 = ga['grid'], gb['grid']
+        if (g0['status'] != 'OK' or g1['status'] != 'OK' or gb['components']
+                or g0['columnCount'] != g1['columnCount']
+                or abs(g0['cellWidth'] - g1['cellWidth']) > 1
+                or abs(g0['cellHeight'] - g1['cellHeight']) > 1
+                or len(g0['xLines']) != len(g1['xLines'])
+                or max(abs(x - y) for x, y in zip(g0['xLines'], g1['xLines'])) > 1):
+            return {}
+        low = max((s['offset'] - 1) / (s['thumbDelta'] + 1) for s in self.samples)
+        high = min((s['offset'] + 1) / (s['thumbDelta'] - 1) for s in self.samples)
+        lo, hi = int(np.ceil(low * max(0, delta - 1))), int(np.floor(high * (delta + 1)))
+        va, _ = _content_view(a); vb, _ = _content_view(b)
+        height = va.shape[0]
+        if (low > high or lo <= 3 or hi > min(max_shift_px, .88 * height)
+                or hi - lo >= .5 * g0['cellHeight']):
+            return {}  # The calibrated interval must exclude grid-period aliases.
+        gradients = [cv2.Sobel(cv2.cvtColor(im, cv2.COLOR_BGR2GRAY),
+                              cv2.CV_32F, 0, 1, ksize=3) for im in (va, vb)]
+        candidates = []
+        for offset in range(lo, hi + 1):
+            shared_a, shared_b = gradients[0][offset:], gradients[1][:-offset]
+            halves = [(shared_a, shared_b), *zip(np.array_split(shared_a, 2), np.array_split(shared_b, 2))]
+            if any(float(x.std()) < 8 or float(y.std()) < 8 for x, y in halves):
+                continue
+            scores = [float(cv2.matchTemplate(x, y, cv2.TM_CCOEFF_NORMED)[0, 0]) for x, y in halves]
+            # Same .80 correspondence floor as content bands; require both
+            # disjoint grid portions as well as the complete shared gradient.
+            if min(scores) >= .80:
+                candidates.append((min(scores), offset, scores))
+        if not candidates:
+            return {}
+        candidates.sort(reverse=True)
+        score, offset, scores = candidates[0]
+        if any(abs(dy - offset) > CLUSTER_BIN for _, dy, _ in candidates[1:]):
+            return {}
+        self.end = after  # Advance the cursor, never train the scale on this inference.
+        return {'status': STATUS_VERIFIED, 'direction': DIR_DOWN,
+                'verticalOffsetPx': -offset, 'normalizedOffset': round(-offset / height, 4),
+                'overlapRatio': round(1 - offset / height, 4), 'confidence': round(score, 3),
+                'reason': 'TERMINAL_SCROLLBAR_GRID_CONTINUITY', 'supportCount': 2,
+                'progressionVerified': True, 'bottomConfirmed': False,
+                'offsetBasis': 'content-calibrated scrollbar interval plus registered grid gradients',
+                'terminalContinuity': {'calibration': self.samples.copy(),
+                    'thumbDelta': delta, 'displacementIntervalPx': [lo, hi],
+                    'gridPeriodPx': g0['cellHeight'], 'sharedGradientScores': scores}}
+
+
+def align_warehouse_segments(prev_img, next_img, *, prev_id='', next_id='',
+                             required_direction=None, max_shift_px=320, terminal_continuity=None):
+    result = _align_warehouse_segments(prev_img, next_img, prev_id=prev_id, next_id=next_id,
+        required_direction=required_direction, max_shift_px=max_shift_px)
+    if terminal_continuity is None or prev_img is None or next_img is None:
+        return result
+    if (result['status'] == STATUS_VERIFIED and result['direction'] == DIR_DOWN
+            and result['reason'] in {REASON_ALIGNED, 'DISJOINT_CONTENT_BANDS'}):
+        terminal_continuity.record(prev_img, next_img, result)
+    elif (required_direction == DIR_DOWN and result['status'] == STATUS_UNVERIFIED
+            and result['reason'] in {REASON_LARGE_GAP, REASON_INSUFFICIENT_FEATURES,
+                                    REASON_LOW_OVERLAP, 'SPARSE_PROGRESSION_VERIFIED'}
+            and prev_id and next_id and prev_id != next_id):
+        terminal = terminal_continuity.terminal(prev_img, next_img, max_shift_px)
+        if terminal:
+            result.update(terminal)
+            result['progressionProofId'] = f'terminal-grid:{prev_id}:{next_id}:{terminal["verticalOffsetPx"]}'
     return result

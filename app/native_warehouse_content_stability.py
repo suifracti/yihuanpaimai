@@ -33,6 +33,7 @@ def content_observation(crop):
             unresolved.add((x, y, w, h))
     boxes = sorted(unresolved)
     return {'qualified': not boxes,
+            'completionState': 'UNKNOWN',
             'reason': 'CONTENT_UNREVEALED_OR_UNKNOWN' if boxes else 'NO_UNRESOLVED_OUTLINE_DETECTED',
             'unresolvedRegionCount': len(boxes), 'unresolvedBoxes': [list(b) for b in boxes[:64]],
             'contentSha256': hashlib.sha256(crop.tobytes()).hexdigest(),
@@ -46,7 +47,17 @@ def content_stability(previous, current):
                 'previous': a, 'current': b}
     if previous.shape != current.shape:
         return {'qualified': False, 'reason': 'CONTENT_GEOMETRY_UNPROVEN', 'previous': a, 'current': b}
-    equal = np.array_equal(previous, current)
-    return {'qualified': equal, 'reason': 'CONTENT_PIXELS_EQUAL' if equal else 'CONTENT_CHANGING',
+    # Two adjacent 8-bit rounded codes have touching quantization intervals.
+    # This is a visible-support resolution contract, not a GPU/render model.
+    # No averaging, fitted phase, ignored pixels, or area budget: ANY channel
+    # differing by two codes vetoes support, including dark/badge/clipped pixels.
+    if previous.dtype != np.uint8 or current.dtype != np.uint8:
+        return {'qualified': False, 'reason': 'CONTENT_FORMAT_UNPROVEN'}
+    delta = np.abs(previous.astype(np.int16) - current.astype(np.int16))
+    supported = not np.any(delta > 1)
+    return {'qualified': supported, 'reason': 'VISIBLE_QUANTIZATION_SUPPORT' if supported else 'CONTENT_CHANGING',
+            'schema': 'visible-content-support.v1', 'maxChannelDelta': int(delta.max()),
+            'beyondQuantizationPixels': int(np.any(delta > 1, axis=2).sum()),
             'changedPixels': int(np.any(previous != current, axis=2).sum()), 'previous': a, 'current': b,
-            'meaning': 'pixel equality plus unresolved-outline rejection; independent delivery/time/viewport gates still required'}
+            'completionState': 'UNKNOWN', 'formalFactsQualified': False,
+            'meaning': 'visible content support at 8-bit adjacent-code resolution; not identity/count/reveal completion; independent source/viewport/scene gates required'}

@@ -6,6 +6,7 @@ zero is a visible bid, not “未识别”.
 """
 from __future__ import annotations
 
+import json
 from typing import Any, Dict, List, Optional
 
 
@@ -166,9 +167,11 @@ def project_intel(
     evidence: Optional[Dict[str, Any]] = None,
     intel_facts: Optional[Dict[str, Any]] = None,
 ) -> Dict[str, Any]:
-    """Full visible intel: raw board lines plus structured card fields."""
+    """Visible intel grouped for display; the input evidence stays intact."""
     blob = evidence if isinstance(evidence, dict) else {}
     observations: List[Dict[str, Any]] = []
+    grouped = {}
+    reading_count = 0
     for row in blob.get("intel") or []:
         if not isinstance(row, dict):
             continue
@@ -178,17 +181,36 @@ def project_intel(
         texts = [text for text in (_intel_line_text(line) for line in lines) if text]
         if not texts:
             continue
-        observations.append({
+        reading_count += 1
+        text = "；".join(texts)
+        # Same-round identical content is one display entry, regardless of
+        # frame/timer/card movement. Keep OCR variants and changed values apart;
+        # display grouping neither confirms a fact nor adds independent support.
+        key = json.dumps([
+            row.get("round"), " ".join(text.split()), row.get("cardSource"),
+            row.get("field"), row.get("value"),
+        ], sort_keys=True, ensure_ascii=False)
+        captured_at = row.get("capturedAt") or row.get("frameId")
+        if key in grouped:
+            previous = grouped[key]
+            previous["readingCount"] += 1
+            previous["lastCapturedAt"] = captured_at
+            continue
+        observation = {
             "round": row.get("round"),
-            "capturedAt": row.get("capturedAt") or row.get("frameId"),
-            "text": "；".join(texts),
+            "capturedAt": captured_at,
+            "lastCapturedAt": captured_at,
+            "readingCount": 1,
+            "text": text,
             "lines": lines,
             "rawText": row.get("rawText") or "；".join(texts),
             "cardSource": row.get("cardSource"),
             "field": row.get("field"),
             "value": row.get("value"),
             "participation": "recorded",
-        })
+        }
+        observations.append(observation)
+        grouped[key] = observation
     structured: List[Dict[str, Any]] = []
     if isinstance(intel_facts, dict):
         for field, entry in intel_facts.items():
@@ -213,7 +235,8 @@ def project_intel(
     return {
         "observations": observations,
         "structured": structured,
-        "observationCount": len(observations),
+        "observationCount": reading_count,
+        "displayCount": len(observations),
     }
 
 

@@ -159,15 +159,40 @@ internal static class NativeObservationService
                     processInstanceToken = target.TargetIdentity!.ProcessInstanceToken,
                     observationWindowMode, captureFreshnessPolicy = capturePolicy,
                 }, JsonLineOptions));
+            int observationReady = 0;
             using var capture = new ContinuousWgcCapture(new IntPtr(target.TargetHwnd), frameWaitMs, intervalMs,
                 observationWindowMode, () => stop.IsCancellationRequested,
-                () => IsObservationTargetUsable(monitor.Snapshot(), observationWindowMode)
+                () => IsObservationIdentityUsable(monitor.Snapshot(), observationWindowMode)
                     && BackgroundObservationPolicy.IsSameObservationTarget(monitor.Snapshot(), target),
-                reason => EmitStatus(sessionId, "ERROR", reason, new { exitConfirmed = false }), capturePolicy, sessionId);
+                reason => EmitStatus(sessionId, "ERROR", reason, new { exitConfirmed = false }), capturePolicy, sessionId,
+                mappingRevoked: evidenceLease.SignalMappingPause,
+                mappingTransition: (stage, first, last, epoch) => {
+                    if (stage == "recovered") evidenceLease.SignalMappingRecovered();
+                    var measuredTarget = JsonSerializer.SerializeToNode(TargetEvidence(monitor.Snapshot()))!;
+                    if (stage == "recovered" && last.Observed is { } measurement)
+                    {
+                        measuredTarget["clientAreaAvailable"] = true;
+                        measuredTarget["clientWidth"] = measurement.ClientWidth;
+                        measuredTarget["clientHeight"] = measurement.ClientHeight;
+                    }
+                    var details = new { stage, firstProbe = first, lastProbe = last, captureScopeEpoch = epoch,
+                        target = measuredTarget,
+                        retryWindowMs = MappingRecovery.RetryWindowMs, maxProbeAttempts = MappingRecovery.MaxProbeAttempts,
+                        warehouseSourceBeforeBillFrozen = Volatile.Read(ref observationReady) != 0 };
+                    try
+                    {
+                        var mappingLog = Path.Combine(workDir, "mapping-transitions.jsonl");
+                        if (!File.Exists(mappingLog) || new FileInfo(mappingLog).Length < 1_048_576)
+                            File.AppendAllText(mappingLog, JsonSerializer.Serialize(new { observedAtNs = ProtocolClock.NowNs(), details }, JsonLineOptions) + "\n");
+                    }
+                    catch (IOException) { } catch (UnauthorizedAccessException) { }
+                    EmitStatus(sessionId, stage == "recovered" ? (Volatile.Read(ref observationReady) != 0 ? "READY" : "STARTING") : "SUSPENDED",
+                        stage == "recovered" ? "client-area-mapping-revalidated" : (stage == "suspended" ? first.Reason : stage), details);
+                });
             var launchMetadata = ReadJsonObject(Path.Combine(workDir, "observation-target.json"))!;
             launchMetadata["clientMap"] = $"{capture.CaptureItemWidth}x{capture.CaptureItemHeight}:{capture.ClientOffsetX},{capture.ClientOffsetY}:{capture.Width}x{capture.Height}";
             File.WriteAllText(Path.Combine(workDir, "observation-target.json"), launchMetadata.ToJsonString());
-            latestSummary = () => capture.LatestSummary;
+            latestSummary = () => capture.LatestScrollSummary;
             scrollWindow = (context, current) => WarehouseWindowScroll.SendDown(context, () => {
                 var leaseCurrent = current();
                 var observed = leaseCurrent ? monitor.Snapshot() : null;
@@ -181,7 +206,7 @@ internal static class NativeObservationService
                     ["clientMapCurrent"] = mappingCurrent, ["expectedClientMap"] = context.ClientMap,
                     ["mappingFailureMeaning"] = "changed or cannot prove current mapping",
                     ["targetSnapshot"] = observed is null ? null : JsonSerializer.SerializeToNode(TargetEvidence(observed)) });
-                return leaseCurrent && identityCurrent && mappingCurrent == true;
+                return leaseCurrent && identityCurrent && mappingCurrent == true && current();
             }, WriteScrollDiagnostic);
             if (observationWindowMode == BackgroundObservationPolicy.BackgroundReadOnly
                 && !capture.IsClientAreaMappingCurrent())
@@ -237,12 +262,13 @@ internal static class NativeObservationService
                     return new WarehouseSourceFrame(original.Width, original.Height, original.Stride, original.Pixels,
                         original.SourceTimestampNs, original.CaptureTimestampNs, original.CapturedAtUtc,
                         original.AcquisitionSequence, "", 0, original.DeliveryProof, DeliveryVisualSummary.From(original),
-                        request.Gate, request.Match);
+                        request.Gate, request.Match, original.CaptureScopeEpoch);
                 }, () => IsObservationTargetUsable(monitor.Snapshot(), observationWindowMode)
                     && BackgroundObservationPolicy.IsSameObservationTarget(monitor.Snapshot(), target)
                     && capture.IsClientAreaMappingCurrent(),
                 ex => trace.Event("warehouse.source.v2.failed", session.GenerationId, new { error = ex.ToString(), diagnostic = capture.LastRequestClockDiagnosticsJson }),
                 reason => EmitStatus(sessionId, "ERROR", reason, new { exitConfirmed = false })) : null;
+            Volatile.Write(ref observationReady, 1);
             EmitStatus(sessionId, "READY", "engine-ready", new
             {
                 target = TargetEvidence(target),
@@ -276,6 +302,34 @@ internal static class NativeObservationService
             var settlementCollectionClosed = false;
             string? settlementMatchId = null;
             string? deliveryRecordKey = null;
+            var ordinaryRecovery = new OrdinaryFrameRecovery(frameWaitMs);
+            void EndOrdinaryRecovery()
+            {
+                // Timeout is not authority to reinterpret an owner/target/
+                // mapping fault as ordinary aging. Preserve the first discard
+                // while still reporting the current safety boundary.
+                capture.ThrowIfFailed();
+                var endTarget = monitor.Snapshot();
+                var endReason = ordinaryRecovery.First!.Reason;
+                if (!IsObservationIdentityUsable(endTarget, observationWindowMode)
+                    || !BackgroundObservationPolicy.IsSameObservationTarget(endTarget, target))
+                    endReason = PauseReason(endTarget, observationWindowMode);
+                else if (observationWindowMode == BackgroundObservationPolicy.BackgroundReadOnly
+                    && !capture.IsClientAreaMappingCurrent()) endReason = "client-area-mapping-changed";
+                evidenceLease.SignalStop();
+                EmitStatus(sessionId, "PAUSED", endReason, new {
+                    terminationReason = "ORDINARY_FRAME_RECOVERY_TIMEOUT", firstFault = ordinaryRecovery.First.ToJson(),
+                    deadlineNs = ordinaryRecovery.DeadlineNs, comparedAtNs = ProtocolClock.NowNs() });
+                ShutdownObservation();
+            }
+            void DiscardOrdinary(CapturedBgraFrame stale, long comparedAtNs)
+            {
+                ordinaryRecovery.Discard(stale, comparedAtNs);
+                trace.Event("ordinary-frame.discarded", session.GenerationId, new {
+                    captureId = stale.DeliveryProof!.CaptureId, readbackTimestampNs = stale.CaptureTimestampNs,
+                    comparedAtNs, firstFault = ordinaryRecovery.First!.ToJson(),
+                    deadlineNs = ordinaryRecovery.DeadlineNs, businessSubmitted = false, inputActions = false });
+            }
             while (maxFrames <= 0 || acceptedFrames < maxFrames)
             {
                 if (stop.IsCancellationRequested || DrainControls(controlQueue, session, sessionId, monitor, target, observationWindowMode))
@@ -284,13 +338,15 @@ internal static class NativeObservationService
                     EmitStatus(sessionId, "STOPPED", string.IsNullOrEmpty(stopReason) ? "explicit-stop" : Volatile.Read(ref stopReason), new { acceptedFrames });
                     return 0;
                 }
+                if (capture.PendingOrdinaryExpiry is { } ownerDiscard) ordinaryRecovery.Begin(ownerDiscard);
+                if (ordinaryRecovery.Expired(ProtocolClock.NowNs())) { EndOrdinaryRecovery(); return 3; }
                 // Admit queued SOURCE/wheel commands only after the next
                 // serial business result has refreshed the existing lifecycle
                 // context below. An old settlement context cannot send a wheel
                 // ahead of a newly acquired lobby/auction observation.
                 evidenceLease.Tick();
                 var beforeCapture = monitor.Snapshot();
-                if (!IsObservationTargetUsable(beforeCapture, observationWindowMode)
+                if (!IsObservationIdentityUsable(beforeCapture, observationWindowMode)
                     || !BackgroundObservationPolicy.IsSameObservationTarget(beforeCapture, target))
                 {
                     evidenceLease.SignalStop();
@@ -328,7 +384,7 @@ internal static class NativeObservationService
                     frame = sourceRequestGate is long requestGate
                         ? capture.CaptureAfterRequest(frameWaitMs, requestGate,
                             evidenceLease.PendingRequestDeadlineNs, () => !evidenceLease.IsOpen)
-                        : capture.Capture(frameWaitMs);
+                        : capture.Capture(ordinaryRecovery.RemainingWaitMs(ProtocolClock.NowNs(), frameWaitMs));
                 }
                 catch (OperationCanceledException) when (sourceRequestGate is not null && !evidenceLease.IsOpen)
                 {
@@ -337,11 +393,19 @@ internal static class NativeObservationService
                     // A native_stop is processed at the beginning of the next iteration.
                     continue;
                 }
+                catch (CaptureScopeInvalidatedException) when (ordinaryRecovery.First is null) { continue; }
                 catch (TimeoutException) when (sourceRequestGate is not null)
                 {
                     WriteRequestClock();
                     evidenceLease.Close("SOURCE_REQUEST_TIMEOUT");
                     continue;
+                }
+                catch (TimeoutException) when ((ordinaryRecovery.First ?? capture.PendingOrdinaryExpiry) is { } firstOrdinaryFault)
+                {
+                    ordinaryRecovery.Begin(firstOrdinaryFault);
+                    trace.Event("ordinary-frame.recovery-timeout", session.GenerationId, new {
+                        firstFault = firstOrdinaryFault.ToJson(), deadlineNs = ordinaryRecovery.DeadlineNs });
+                    EndOrdinaryRecovery(); return 3;
                 }
                 catch (Exception ex)
                 {
@@ -353,6 +417,7 @@ internal static class NativeObservationService
                         error = ex.ToString(),
                         stackTrace = ex.StackTrace,
                         target = TargetEvidence(beforeCapture),
+                        ordinaryFrameFirstFault = ordinaryRecovery.First?.ToJson(),
                     });
                     ShutdownObservation();
                     return 4;
@@ -365,7 +430,7 @@ internal static class NativeObservationService
                 }
 
                 var afterCapture = monitor.Snapshot();
-                if (!IsObservationTargetUsable(afterCapture, observationWindowMode)
+                if (!IsObservationIdentityUsable(afterCapture, observationWindowMode)
                     || !BackgroundObservationPolicy.IsSameObservationTarget(afterCapture, target))
                 {
                     evidenceLease.SignalStop();
@@ -373,14 +438,25 @@ internal static class NativeObservationService
                     ShutdownObservation();
                     return 3;
                 }
-                var sourceReadbackRejection = capturePolicy == CapturePolicy.Delivery ? frame.DeliveryProof?.Rejection(ProtocolClock.NowNs()) : BackgroundObservationPolicy.BackgroundReadbackRejection(
+                // A retry stays in the same target/mapping context. Check mapping
+                // even when an ordinary payload has aged out; never reuse coordinates.
+                var afterCaptureMappingCurrent = observationWindowMode != BackgroundObservationPolicy.BackgroundReadOnly
+                    || capture.IsClientAreaMappingCurrent();
+                var readbackComparedAtNs = ProtocolClock.NowNs();
+                var sourceReadbackRejection = capturePolicy == CapturePolicy.Delivery ? frame.DeliveryProof?.Rejection(readbackComparedAtNs) : BackgroundObservationPolicy.BackgroundReadbackRejection(
                     observationWindowMode, frame.SourceTimestampNs, frame.CaptureTimestampNs, lastSourceTimestampNs);
+                var recoveryScopeRejection = ordinaryRecovery.ContextRejection(frame);
+                if (afterCaptureMappingCurrent && recoveryScopeRejection is null && sourceRequestGate is null
+                    && capturePolicy == CapturePolicy.Delivery && OrdinaryFrameRecovery.Recoverable(frame, readbackComparedAtNs))
+                {
+                    DiscardOrdinary(frame, readbackComparedAtNs); continue;
+                }
                 if (sourceReadbackRejection is not null
-                    || (observationWindowMode == BackgroundObservationPolicy.BackgroundReadOnly
-                        && !capture.IsClientAreaMappingCurrent()))
+                    || !afterCaptureMappingCurrent || recoveryScopeRejection is not null)
                 {
                     evidenceLease.SignalStop();
-                    EmitStatus(sessionId, "PAUSED", sourceReadbackRejection ?? "client-area-mapping-changed", new
+                    EmitStatus(sessionId, "PAUSED", !afterCaptureMappingCurrent ? "client-area-mapping-changed"
+                        : recoveryScopeRejection ?? sourceReadbackRejection ?? "DELIVERY_ADMISSION_UNPROVEN", new
                     {
                         sourceTimestampNs = frame.SourceTimestampNs, readbackTimestampNs = frame.CaptureTimestampNs,
                         lastSourceTimestampNs, target = TargetEvidence(afterCapture),
@@ -388,10 +464,19 @@ internal static class NativeObservationService
                     ShutdownObservation();
                     return 3;
                 }
-                lastSourceTimestampNs = frame.SourceTimestampNs;
+                if (!capture.IsFrameCurrent(frame)) {
+                    if (ordinaryRecovery.First is not null) throw new InvalidOperationException("ORDINARY_FRAME_RECOVERY_SCOPE_CHANGED");
+                    continue;
+                }
 
-                var dequeueRejection = capturePolicy == CapturePolicy.Delivery ? frame.DeliveryProof?.Rejection(ProtocolClock.NowNs()) : BackgroundObservationPolicy.BackgroundReadbackRejection(
+                var dequeueComparedAtNs = ProtocolClock.NowNs();
+                var dequeueRejection = capturePolicy == CapturePolicy.Delivery ? frame.DeliveryProof?.Rejection(dequeueComparedAtNs) : BackgroundObservationPolicy.BackgroundReadbackRejection(
                     observationWindowMode, frame.SourceTimestampNs, ProtocolClock.NowNs(), 0);
+                if (sourceRequestGate is null && capturePolicy == CapturePolicy.Delivery
+                    && OrdinaryFrameRecovery.Recoverable(frame, dequeueComparedAtNs))
+                {
+                    DiscardOrdinary(frame, dequeueComparedAtNs); continue;
+                }
                 if (dequeueRejection is not null)
                 {
                     evidenceLease.SignalStop();
@@ -400,6 +485,13 @@ internal static class NativeObservationService
                     ShutdownObservation();
                     return 3;
                 }
+                if (ordinaryRecovery.Expired(dequeueComparedAtNs)) { EndOrdinaryRecovery(); return 3; }
+                if (ordinaryRecovery.First is { } recovered)
+                    trace.Event("ordinary-frame.recovered", session.GenerationId, new {
+                        firstFault = recovered.ToJson(), captureId = frame.DeliveryProof!.CaptureId,
+                        deadlineNs = ordinaryRecovery.DeadlineNs, comparedAtNs = dequeueComparedAtNs });
+                ordinaryRecovery.Accepted();
+                lastSourceTimestampNs = frame.SourceTimestampNs;
                 var businessStartedNs = ProtocolClock.NowNs();
                 Dictionary<string, object?> transfer;
                 try
@@ -424,7 +516,7 @@ internal static class NativeObservationService
                     var requestedStop = stop.IsCancellationRequested;
                     evidenceLease.SignalStop();
                     EmitStatus(sessionId, stop.IsCancellationRequested ? "STOPPED" : "PAUSED",
-                        stop.IsCancellationRequested ? Volatile.Read(ref stopReason) : "capture-owner-stopped",
+                        stop.IsCancellationRequested ? Volatile.Read(ref stopReason) : capture.FailureReason("capture-owner-stopped"),
                         new { capture = capture.Statistics(), error = capture.Failure, acceptedFrames });
                     ShutdownObservation();
                     return requestedStop ? 0 : 4;
@@ -450,7 +542,10 @@ internal static class NativeObservationService
                     return 6;
                 }
 
-                if (stop.IsCancellationRequested || capture.IsStopped) throw new OperationCanceledException("observation stopped before publication");
+                if (stop.IsCancellationRequested) throw new OperationCanceledException("observation stopped before publication");
+                capture.ThrowIfFailed();
+                if (capture.IsStopped) throw new OperationCanceledException("observation stopped before publication");
+                if (!capture.IsFrameCurrent(frame)) continue;
                 processedFrames++;
                 trace.Event("observation.capture.statistics", session.GenerationId,
                     new { capture = capture.Statistics(), processedFrames, acceptedFrames,
@@ -460,7 +555,7 @@ internal static class NativeObservationService
                         sourceTimestampNs = frame.SourceTimestampNs,
                         processingMs = (transfer.GetValueOrDefault("perceptionPayload") as JsonObject)?["processingMs"]?.DeepClone() });
                 var afterEngine = monitor.Snapshot();
-                if (!IsObservationTargetUsable(afterEngine, observationWindowMode)
+                if (!IsObservationIdentityUsable(afterEngine, observationWindowMode)
                     || !BackgroundObservationPolicy.IsSameObservationTarget(afterEngine, target))
                 {
                     // A result that completed after a target boundary is not
@@ -485,6 +580,7 @@ internal static class NativeObservationService
                     ShutdownObservation();
                     return 3;
                 }
+                if (!capture.IsFrameCurrent(frame)) continue;
 
                 var state = ReadJsonObject(Path.Combine(workDir, "engine_state.json"));
                 var perception = transfer.TryGetValue("perceptionPayload", out var payload)
@@ -531,12 +627,13 @@ internal static class NativeObservationService
                 evidenceLease.UpdateContext(new WarehouseSourceContext(
                     (string?)state?["currentMatch"]?["id"] ?? "", evidenceTarget, evidenceMap,
                     frame.Width, frame.Height, scene == "SETTLEMENT",
-                    IsObservationTargetUsable(afterEngine, observationWindowMode), settlementSourceDeadlineNs ?? ProtocolClock.NowNs(), (long?)state?["lastFrame"]?["matchGeneration"] ?? 0));
+                    IsObservationTargetUsable(afterEngine, observationWindowMode), settlementSourceDeadlineNs ?? ProtocolClock.NowNs(),
+                    (long?)state?["lastFrame"]?["matchGeneration"] ?? 0, CaptureScopeEpoch: frame.CaptureScopeEpoch));
                 if (capturePolicy != CapturePolicy.Delivery) DrainEvidenceControls(evidenceQueue, evidenceLease, monitor, target, observationWindowMode);
                 var sourcePublished = capturePolicy != CapturePolicy.Delivery && evidenceLease.TryPublish(new WarehouseSourceFrame(frame.Width, frame.Height, frame.Stride,
                     frame.Pixels, frame.SourceTimestampNs, frame.CaptureTimestampNs, frame.CapturedAtUtc,
                     frameSequence, (string?)state?["lastFrame"]?["pixelSha256"] ?? "",
-                    (long?)state?["lastFrame"]?["frameSequence"] ?? -1L),
+                    (long?)state?["lastFrame"]?["frameSequence"] ?? -1L, CaptureScopeEpoch: frame.CaptureScopeEpoch),
                     () => MatchesObservationTargetIdentity(evidenceTarget, monitor.Snapshot(), target, observationWindowMode)
                         && capture.IsClientAreaMappingCurrent());
                 if (sourceRequestGate is long attemptedGate && !sourcePublished
@@ -677,7 +774,7 @@ internal static class NativeObservationService
                 if (observationWindowMode == BackgroundObservationPolicy.BackgroundReadOnly)
                 {
                     var publicationTarget = monitor.Snapshot();
-                    var publicationTargetUsable = IsObservationTargetUsable(publicationTarget, observationWindowMode)
+                    var publicationTargetUsable = IsObservationIdentityUsable(publicationTarget, observationWindowMode)
                         && BackgroundObservationPolicy.IsSameObservationTarget(publicationTarget, target);
                     var publicationMappingCurrent = capture.IsClientAreaMappingCurrent();
                     var publicationReason = capturePolicy == CapturePolicy.Delivery ? frame.DeliveryProof?.Rejection(ProtocolClock.NowNs(), 31_000_000_000) : BackgroundObservationPolicy.BackgroundPublicationRejection(
@@ -708,6 +805,7 @@ internal static class NativeObservationService
                     settlementDeadlineNs: settlementSourceDeadlineNs);
                 if (observationRejection is not null)
                 {
+                    if (observationRejection == "capture-scope-invalidated") continue;
                     evidenceLease.SignalStop();
                     EmitStatus(sessionId, "PAUSED", observationRejection, new
                     {
@@ -760,7 +858,10 @@ internal static class NativeObservationService
         long? settlementDeadlineNs)
     {
         var targetEvidence = JsonSerializer.SerializeToNode(TargetEvidence(target), JsonLineOptions);
-        var publicationAtNs = ProtocolClock.NowNs();
+        var adviceQualification = frame.DeliveryProof is { } delivery
+            ? DeliveryAdviceQualification.EvaluateCurrent(delivery, DeliveryVisualSummary.From(frame),
+                () => capture.LatestSummary, ProtocolClock.NowNs) : null;
+        var publicationAtNs = adviceQualification?.EvaluationNs ?? ProtocolClock.NowNs();
         var sourceRejection = frame.DeliveryProof is { } proof ? proof.Rejection(publicationAtNs, 31_000_000_000) : BackgroundObservationPolicy.BackgroundPublicationRejection(
             observationWindowMode, frame.SourceTimestampNs, publicationAtNs);
         if (sourceRejection is not null) return sourceRejection;
@@ -815,15 +916,12 @@ internal static class NativeObservationService
             metadata["deliveryAgeMs"] = (publicationAtNs - frame.CaptureTimestampNs) / 1_000_000.0;
             metadata["resultLagMs"] = metadata["deliveryAgeMs"]!.DeepClone();
             metadata["sourceAbsoluteAgeMs"] = null;
-            var originalSummary = DeliveryVisualSummary.From(frame);
-            var latest = capture.LatestSummary;
-            var adviceQualification = DeliveryAdviceQualification.Evaluate(delivered, latest, originalSummary, publicationAtNs);
-            metadata["currentAdviceQualified"] = adviceQualification.Qualified;
+            metadata["currentAdviceQualified"] = adviceQualification!.Qualified;
             metadata["currentAdviceQualification"] = adviceQualification.ToJson();
-            metadata["currentSupportCaptureId"] = latest?.CaptureId;
+            metadata["currentSupportCaptureId"] = adviceQualification.SupportCaptureId;
         }
         if (capture.IsStopped) return "observation-stopped-before-publication";
-        EmitLine(line);
+        if (!capture.PublishCurrent(frame, () => EmitLine(line))) return "capture-scope-invalidated";
         return null;
     }
 
@@ -1074,9 +1172,12 @@ internal static class NativeObservationService
     private static bool MatchesObservationTargetIdentity(JsonObject? expected,
         WindowMonitorSnapshot active, WindowMonitorSnapshot sessionTarget, string observationWindowMode)
     {
-        var window = ReadObservationWindowState(active.TargetHwnd);
-        return BackgroundObservationPolicy.MatchesObservationTargetIdentity(observationWindowMode, expected,
-            active, sessionTarget, window.Minimized, window.ClientAreaAvailable, window.Width, window.Height);
+        return expected is not null && IsObservationIdentityUsable(active, observationWindowMode)
+            && BackgroundObservationPolicy.IsSameObservationTarget(active, sessionTarget)
+            && (long?)expected["targetHwnd"] == sessionTarget.TargetHwnd
+            && (int?)expected["targetPid"] == sessionTarget.TargetPid
+            && (long?)expected["generation"] == sessionTarget.Generation
+            && (long?)expected["processInstanceToken"] == sessionTarget.TargetIdentity?.ProcessInstanceToken;
     }
 
     private static void EmitStatus(string sessionId, string status, string reason, object? details,
@@ -1133,6 +1234,10 @@ internal static class NativeObservationService
         return BackgroundObservationPolicy.IsObservationTargetUsable(observationWindowMode, snapshot,
             window.Minimized, window.ClientAreaAvailable, window.Width, window.Height);
     }
+
+    private static bool IsObservationIdentityUsable(WindowMonitorSnapshot snapshot, string mode)
+        => BackgroundObservationPolicy.IsObservationIdentityUsable(mode, snapshot,
+            snapshot.TargetHwnd == 0 || IsIconic(new IntPtr(snapshot.TargetHwnd)));
 
     private static string PauseReason(WindowMonitorSnapshot snapshot, string observationWindowMode)
     {

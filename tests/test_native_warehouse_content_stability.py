@@ -99,20 +99,17 @@ class ContentStabilityTests(unittest.TestCase):
             with self.subTest(duplicate=duplicate):
                 self.start([image, image.copy()]); self.support(duplicate)
                 self.assertEqual(self.wheels(), 0)
-                self.assertEqual(self.auto._reason, 'CONTENT_UNREVEALED_OR_UNKNOWN')
+                self.assertTrue(self.auto._active)
+                self.assertEqual(self.auto._phase, 'WAIT_STABLE')
 
-    def test_visible_stable_page_can_request_wheel_but_duplicate_after_wheel_is_no_progress(self):
+    def test_visible_equal_pixels_do_not_establish_completion(self):
         image = visible_content()
         self.start([image, image.copy()]); self.support()
-        self.assertEqual(self.wheels(), 1)
-        self.auto.on_event({'state': 'OPEN', 'reason': 'WINDOW_WHEEL_MESSAGE_SENT'})
-        self.now[0] += .4; self.auto.poll()
-        self.auto.on_event({'state': 'OPEN', 'reason': 'DUPLICATE_PAGE',
-            'proof': {'pixelSha256': 'hash', 'deliveryProof': proof(3, request=11_000_000_000)}})
-        self.assertEqual(self.auto._reason, 'WINDOW_SCROLL_NO_PROGRESS')
-        self.assertEqual(self.wheels(), 1, 'no retry of an uncertain wheel')
-        self.assertTrue(self.auto._post_scroll_frame_received)
-        self.assertEqual(self.source.actions[-1], ('PROCESS', 'INCOMPLETE'))
+        self.assertEqual(self.wheels(), 0)
+        self.assertTrue(self.auto._active)
+        self.assertEqual(self.auto._observation['contentCompletionState'], 'UNKNOWN')
+        self.assertFalse(self.auto._post_scroll_frame_received)
+        self.assertFalse(any(a[0] == 'PROCESS' for a in self.source.actions))
 
 
 if __name__ == '__main__':

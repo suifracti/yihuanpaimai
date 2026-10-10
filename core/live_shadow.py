@@ -361,6 +361,7 @@ def _profile_cache_key(ctx: Dict[str, Any], history_gen: int) -> str:
         "knownPurple": ctx.get("knownPurple") or [],
         "knownRed": ctx.get("knownRed") or [],
         "playedAt": ctx.get("playedAt"),
+        "costs": ctx.get("costs"),
         **_profile_detail_context(ctx),
         "roundingMode": ctx.get("roundingMode") or "floor",
         "matchGeneration": ctx.get("matchGeneration") or 0,

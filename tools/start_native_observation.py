@@ -64,7 +64,7 @@ async def request_once(ws, record, timeout=10):
     raise TimeoutError("Host startup acknowledgement deadline")
 
 
-async def start(prepared, output):
+async def start(prepared, output, *, environment=None):
     import websockets
     # Refuse an occupied bus: do not start or command an unknown old process.
     with socket.socket() as probe:
@@ -85,6 +85,7 @@ async def start(prepared, output):
     env = {**os.environ, "NTE_LOG_FILE": str(output / "main.log"),
            "YIHUAN_DATA_ROOT": str(output / "runtime-data"), "NTE_OBSERVATION_PROFILE": "native-readonly-v1",
            "NTE_NATIVE_HOST_EXE": prepared["hostExe"]}
+    env.update(environment or {})
     with (output / "stdout.log").open("w", encoding="utf-8") as out, (output / "stderr.log").open("w", encoding="utf-8") as err:
         child = subprocess.Popen([sys.executable, str(ROOT / "app/main.py")], cwd=ROOT,
                                  env=env, stdout=out, stderr=err,

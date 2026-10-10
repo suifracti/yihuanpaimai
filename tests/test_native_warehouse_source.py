@@ -208,19 +208,22 @@ class NativeWarehouseSourceTests(unittest.TestCase):
         self.assertTrue(self.intake.capture_manual_page()['ok'])
         pages = self.intake.pages_copy()
         manifest = self.base.store.root / 'warehouse-intake' / (self.intake._session_id + '.json')
-        history = self.base.store.history_path.read_bytes()
         self.scope['recordStableKey'] = 'next-match'
         self.coordinator.check_business_boundary({'status': 'FRAME',
             'observationSessionId': self.scope['observationSessionId']})
+        self.intake.wait_processing(15)
         self.assertEqual(self.coordinator.source_session_snapshot()['state'], 'CLOSED')
         saved = json.loads(manifest.read_text(encoding='utf-8'))
         self.assertEqual(saved['scope']['recordStableKey'], 'native_intake_development')
-        self.assertEqual(saved['terminationReason'], 'SOURCE_SCOPE_CHANGED')
-        self.assertEqual(saved['state'], 'CANCELLED')
+        self.assertEqual(saved['terminationReason'], 'INCOMPLETE')
+        self.assertEqual(saved['state'], 'PARTIAL')
         self.assertEqual(self.intake.pages_copy(), pages)
         evidence = self.base.store.read_source_image_descriptor(pages[0]['nativeSource'])
         self.assertEqual(evidence['data'], raw)
-        self.assertEqual(self.base.store.history_path.read_bytes(), history)
+        record = self.base.store.lookup('native_intake_development')
+        self.assertEqual(record['lifecycleStatus'], 'DRAFT')
+        self.assertEqual(record['settlement']['warehouseReviewPacket']['recordStableKey'], 'native_intake_development')
+        self.assertIsNone(self.base.store.lookup('next-match'))
         self.assertFalse(self.intake.capture_manual_page()['ok'])
 
     def test_window_scroll_result_is_correlated_and_cannot_impersonate_a_source(self):
@@ -231,11 +234,13 @@ class NativeWarehouseSourceTests(unittest.TestCase):
         self.assertFalse(self.coordinator.request_scroll_down()['ok'])  # no saved-source grant yet
         self.coordinator._saved_source = {'sourceLeaseId': 'b' * 32, 'pixelSha256': 'c' * 64,
                                           'frameSequence': 1}
-        self.assertTrue(self.coordinator.request_scroll_down()['ok'])
+        for delta in (0,120,-121,-1560,True):
+            self.assertFalse(self.coordinator.request_scroll_down(wheel_delta=delta)['ok'])
+        self.assertTrue(self.coordinator.request_scroll_down(wheel_delta=-1080)['ok'])
         cmd = self.sent[-1]
         event.update({key: copy.deepcopy(cmd[key]) for key in ('commandId', 'nonce', 'requestOrdinal')})
         event.update(event='SCROLLED', reason='WINDOW_WHEEL_MESSAGE_SENT', inputActions=True,
-                     details={'direction': 'DOWN', 'delta': -120, 'sourceLeaseId': 'b' * 32})
+                     details={'direction': 'DOWN', 'delta': -1080, 'sourceLeaseId': 'b' * 32})
         wrong = copy.deepcopy(event); wrong['nonce'] = 'stale'
         self.coordinator.on_event(wrong)
         self.assertEqual(self.coordinator.source_session_snapshot()['state'], 'SCROLL_PENDING')
@@ -246,6 +251,13 @@ class NativeWarehouseSourceTests(unittest.TestCase):
         self.assertEqual(self.coordinator.source_session_snapshot()['reason'], 'WINDOW_WHEEL_MESSAGE_SENT')
         self.assertEqual(self.coordinator.source_session_snapshot()['state'], 'OPEN')
         self.assertEqual(self.intake.pages_copy(), [])
+
+        self.assertTrue(self.coordinator.request_scroll_down(wheel_delta=-720)['ok'])
+        bad = copy.deepcopy(event)
+        bad.update({key:copy.deepcopy(self.sent[-1][key]) for key in ('commandId','nonce','requestOrdinal')})
+        bad['details']['delta'] = -120
+        self.coordinator.on_event(bad)
+        self.assertEqual(self.coordinator.source_session_snapshot()['reason'], 'WINDOW_SCROLL_PROOF_REJECTED')
 
     def wait_for(self, condition, seconds=8):
         end = time.monotonic() + seconds

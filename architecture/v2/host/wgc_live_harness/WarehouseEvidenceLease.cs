@@ -7,12 +7,40 @@ using NteHost.Protocol;
 namespace WgcLiveHarness;
 
 internal sealed record WarehouseSourceContext(string RecordKey, JsonObject Target, string ClientMap,
-    int Width, int Height, bool SettlementCaptureEligible, bool TargetUsable, long AbsoluteDeadlineNs, long MatchGeneration = 0);
+    int Width, int Height, bool SettlementCaptureEligible, bool TargetUsable, long AbsoluteDeadlineNs,
+    long MatchGeneration = 0, int WheelDelta = -120, long CaptureScopeEpoch = 0)
+{
+    // Local to a single scroll command. Never serialized or inherited by later SOURCE requests.
+    internal WarehouseScrollAttempt? ScrollAttempt { get; init; }
+}
+
+// The lease must never infer NOT_SENT from a failed callback alone: the adapter
+// confirms its precise rejection stage or conservatively records API invocation.
+internal sealed class WarehouseScrollAttempt
+{
+    internal bool SendInterfaceInvoked { get; private set; }
+    internal string? PreSendCurrentGuardRejection { get; private set; }
+    internal void RejectCurrentGuardBeforeSend(string reason)
+    {
+        if (!SendInterfaceInvoked && reason is
+            ("CURRENT_GUARD_REJECTED_BEFORE_TARGET_READ" or "CURRENT_GUARD_REJECTED_BEFORE_SEND"))
+            PreSendCurrentGuardRejection = reason;
+    }
+    internal void MarkSendInterfaceInvoked()
+    {
+        // Mark *before* entering the native/abstracted send: exception means UNKNOWN.
+        SendInterfaceInvoked = true;
+        PreSendCurrentGuardRejection = null;
+    }
+    internal bool ConfirmedNotSentByCurrentGuard =>
+        !SendInterfaceInvoked && PreSendCurrentGuardRejection is
+            ("CURRENT_GUARD_REJECTED_BEFORE_TARGET_READ" or "CURRENT_GUARD_REJECTED_BEFORE_SEND");
+}
 
 internal sealed record WarehouseSourceFrame(int Width, int Height, int Stride, byte[] Pixels,
     long SourceTimestampNs, long ReadbackTimestampNs, string CapturedAtUtc, long Sequence,
     string WorkerPixelSha256, long WorkerSequence, CaptureDeliveryProof? DeliveryProof = null,
-    DeliveryVisualSummary? VisualSummary = null, long RequestGateNs = 0, long MatchGeneration = 0);
+    DeliveryVisualSummary? VisualSummary = null, long RequestGateNs = 0, long MatchGeneration = 0, long CaptureScopeEpoch = 0);
 
 /// <summary>Host-local, explicitly requested source leases. No business/worker mutations.</summary>
 internal sealed class WarehouseEvidenceLease : IDisposable
@@ -24,9 +52,12 @@ internal sealed class WarehouseEvidenceLease : IDisposable
     private readonly string _policy;
     private readonly object _gate = new();
     private DeliveryVisualSummary? _savedSummary;
+    private DeliveryVisualSummary? _priorSavedSummary;
     private CaptureDeliveryProof? _lastProof, _savedProof, _priorSavedProof;
     private readonly Func<DeliveryVisualSummary?>? _latestSummary;
     private long _lastReadbackTime, _lastScrollCompletedNs;
+    private long _lastContentHintNs;
+    private string? _lastContentHintCapture;
     private QpcClockSample? _requestClock;
     private readonly bool _realClock;
     public QpcClockSample? PendingRequestClockSample { get { lock (_gate) return _requestClock; } }
@@ -43,7 +74,10 @@ internal sealed class WarehouseEvidenceLease : IDisposable
     private readonly Func<long> _clock;
     private readonly Func<WarehouseSourceContext, Func<bool>, bool>? _scrollDown;
     private readonly Action<JsonObject>? _scrollDiagnosticLog;
+    private bool _scrollRefusalDiagnosticAttempted;
     private int _transportStopped;
+    private int _mappingSuspended, _mappingNeedsContext;
+    private long _mappingEpochFloor;
     private WarehouseSourceContext? _context;
     private JsonObject? _open, _request, _source;
     private Signal? _signal;
@@ -54,6 +88,7 @@ internal sealed class WarehouseEvidenceLease : IDisposable
     private readonly HashSet<string> _scrolledSources = new(StringComparer.Ordinal);
     private string? _lastSavedSource, _lastSavedHash;
     private bool _windowScrollAllowed;
+    private bool _retainIndependentOriginals;
     private TriggerWatch? _triggerWatch;
     private string? _probeBudgetRecord, _probeBudgetWatchId;
     private long _probeBudgetMatchGeneration = long.MinValue, _probeBudgetDeadlineNs;
@@ -74,7 +109,9 @@ internal sealed class WarehouseEvidenceLease : IDisposable
 
     private sealed record Signal(string Review, int Generation, string Token) { public int Cancelled; }
     public string? LeaseToken { get; private set; }
-    public bool IsOpen => Volatile.Read(ref _transportStopped) == 0 && _open is not null
+    public bool IsOpen => Volatile.Read(ref _transportStopped) == 0 && Volatile.Read(ref _mappingSuspended) == 0
+        && Volatile.Read(ref _mappingNeedsContext) == 0 && _open is not null
+        && _context is { } context && context.CaptureScopeEpoch >= Volatile.Read(ref _mappingEpochFloor)
         && Volatile.Read(ref _signal) is { } signal && Volatile.Read(ref signal.Cancelled) == 0;
     public int WrittenSources => _written;
     public long? PendingRequestGateNs => IsOpen && _request is not null && _source is null ? _requestGate : null;
@@ -101,6 +138,8 @@ internal sealed class WarehouseEvidenceLease : IDisposable
 
     public void UpdateContext(WarehouseSourceContext context)
     {
+        if (context.CaptureScopeEpoch < Volatile.Read(ref _mappingEpochFloor))
+            context = context with { TargetUsable = false };
         // Revoke before waiting for in-flight save/message IO.
         var previous = Volatile.Read(ref _context);
         if (previous is not null && (previous.RecordKey != context.RecordKey
@@ -136,6 +175,9 @@ internal sealed class WarehouseEvidenceLease : IDisposable
             _probeBudgetWatchId = null;
         }
         _context = context;
+        if (Volatile.Read(ref _mappingSuspended) == 0 && context.TargetUsable
+            && context.CaptureScopeEpoch >= Volatile.Read(ref _mappingEpochFloor))
+            Interlocked.Exchange(ref _mappingNeedsContext, 0);
         Tick();
 
         }
@@ -160,6 +202,17 @@ internal sealed class WarehouseEvidenceLease : IDisposable
         if (Volatile.Read(ref _signal) is { } signal) Interlocked.Exchange(ref signal.Cancelled, 1);
         if (Volatile.Read(ref _triggerWatch) is { } watch) Interlocked.Exchange(ref watch.Cancelled, 1);
     }
+
+    // Called by the capture owner: never wait for lease IO/revalidation holding _gate.
+    public void SignalMappingPause(long epoch)
+    {
+        Interlocked.Exchange(ref _mappingSuspended, 1);
+        Interlocked.Exchange(ref _mappingNeedsContext, 1);
+        Interlocked.Exchange(ref _mappingEpochFloor, epoch);
+        if (Volatile.Read(ref _signal) is { } signal) Interlocked.Exchange(ref signal.Cancelled, 1);
+        if (Volatile.Read(ref _triggerWatch) is { } watch) Interlocked.Exchange(ref watch.Cancelled, 1);
+    }
+    public void SignalMappingRecovered() => Interlocked.Exchange(ref _mappingSuspended, 0);
 
     public void Dispose() => Close("HOST_SOURCE_STOPPED");
 
@@ -191,6 +244,10 @@ internal sealed class WarehouseEvidenceLease : IDisposable
             }
             if (!SameLease(command)) throw new InvalidOperationException("STALE_SOURCE_LEASE");
             if (op == "CLOSE") { Close("MANUAL_SOURCE_CLOSED"); return; }
+            if (Volatile.Read(ref _mappingSuspended) != 0 || Volatile.Read(ref _mappingNeedsContext) != 0)
+                throw new InvalidOperationException("SOURCE_MAPPING_REVALIDATION_REQUIRED");
+            if (_context is { } mappingContext && mappingContext.CaptureScopeEpoch < Volatile.Read(ref _mappingEpochFloor))
+                throw new InvalidOperationException("SOURCE_MAPPING_CONTEXT_RETIRED");
             Tick();
             if (!IsOpen) throw new InvalidOperationException("SOURCE_LEASE_EXPIRED");
             if (op == "REQUEST_PAGE") Request(command);
@@ -228,8 +285,14 @@ internal sealed class WarehouseEvidenceLease : IDisposable
         _open = (JsonObject)command.DeepClone(); _request = _source = null; _ordinal = 0;
         _windowScrollAllowed = command["allowWindowScroll"] is JsonValue flag
             && flag.TryGetValue<bool>(out var allow) && allow;
+        _retainIndependentOriginals = command["retainIndependentOriginals"] is JsonValue retain
+            && retain.TryGetValue<bool>(out var keep) && keep;
+        // Retaining independent equal originals is also necessary for visible
+        // support during collection. Input still requires its separate arming flag.
+        if (_retainIndependentOriginals && _policy != CapturePolicy.Delivery)
+        { _open = null; throw new InvalidOperationException("EVIDENCE_ONLY_SOURCE_REQUIRED"); }
         _lastSavedSource = _lastSavedHash = null; _scrolledSources.Clear();
-        _lastProof = _savedProof = _priorSavedProof = null; _savedSummary = null;
+        _lastProof = _savedProof = _priorSavedProof = null; _savedSummary = _priorSavedSummary = null;
         LeaseToken = Guid.NewGuid().ToString("N");
         Volatile.Write(ref _signal, new Signal(Required(command, "reviewSessionId"), (int)Number(command, "reviewGeneration"), LeaseToken));
         _leaseDeadline = Math.Min(c.AbsoluteDeadlineNs, checked(_clock() + 70_000_000_000));
@@ -239,6 +302,7 @@ internal sealed class WarehouseEvidenceLease : IDisposable
             ["remainingRawBytes"] = MaxRawBytes - _rawBytes, ["maxPngBytes"] = MaxPngBytes,
             ["pngEncoding"] = PngEncoding, ["clientMap"] = c.ClientMap,
             ["windowScrollSupported"] = _windowScrollAllowed && _scrollDown is not null,
+            ["retainIndependentOriginals"] = _retainIndependentOriginals,
             ["clientWidth"] = c.Width, ["clientHeight"] = c.Height });
     }
 
@@ -283,7 +347,52 @@ internal sealed class WarehouseEvidenceLease : IDisposable
         if ((_request is not null && _clock() >= _requestDeadline)
             || (_source is not null && _clock() >= _requestDeadline))
         { var failed = _request ?? _open; _request = _source = null; Emit(failed, "REJECTED", "SOURCE_REQUEST_TIMEOUT"); }
+        PublishContentHint();
+        }
+    }
 
+    private void PublishContentHint()
+    {
+        // Observe the already-running capture; no explicit acquisition or saved SOURCE.
+        // One overwriteable ROI slot only. Hints can schedule requests, never authorize input.
+        if (_policy != CapturePolicy.Delivery || _context is not { } c || !_windowScrollAllowed
+            || !c.TargetUsable || !c.SettlementCaptureEligible || _request is not null || _source is not null) return;
+        var summary = _latestSummary?.Invoke(); var now = _clock();
+        if (summary is null || !summary.ActionQualified || summary.ScrollContentBgr is not { } bgr
+            || !summary.CaptureId.StartsWith(_observation + "/", StringComparison.Ordinal)
+            || summary.ReadbackNs > now || now - summary.ReadbackNs > FreshnessNs
+            || now - _lastContentHintNs < MinTriggerProbeIntervalNs || summary.CaptureId == _lastContentHintCapture) return;
+        _lastContentHintNs = now; _lastContentHintCapture = summary.CaptureId;
+        var box = DeliveryVisualSummary.ScrollContentBox(c.Width, c.Height);
+        var width = box.Right - box.Left; var height = box.Bottom - box.Top;
+        if (bgr.Length != width * height * 3) return;
+        var pixels = new byte[width * height * 4];
+        for (var i = 0; i < width * height; i++) {
+            pixels[i*4] = bgr[i*3]; pixels[i*4+1] = bgr[i*3+1]; pixels[i*4+2] = bgr[i*3+2]; pixels[i*4+3] = 255;
+        }
+        var path = Path.Combine(_root, "content-observation.bmp"); var temp = path + ".tmp";
+        var publicationStage = "create-directory";
+        try {
+            Directory.CreateDirectory(_root); TryDelete(temp);
+            publicationStage = "write-temporary";
+            WriteNewBmp(temp, new WarehouseSourceFrame(width, height, width*4, pixels, 0, summary.ReadbackNs, "", 0, "", 0));
+            publicationStage = "replace-slot";
+            File.Move(temp, path, overwrite:true);
+            publicationStage = "verify-and-emit";
+            Emit(_open!, "CONTENT_HINT", "OBSERVATION_ONLY", new JsonObject {
+                ["path"] = path, ["sha256"] = HashFile(path), ["width"] = width, ["height"] = height,
+                ["clientMap"] = c.ClientMap, ["captureId"] = summary.CaptureId, ["readbackNs"] = summary.ReadbackNs,
+                ["sourceAuthority"] = false, ["formalFactsQualified"] = false });
+        } catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) {
+            // A queued Python reader can hold this volatile slot without delete
+            // sharing. Windows may report its replacement as access denied.
+            // Dropping a scheduling hint never grants a SOURCE or input action;
+            // the next independent summary may retry under the same deadline.
+            TryDelete(temp);
+            Emit(_open!, "CONTENT_HINT_SKIPPED", "CONTENT_HINT_FILE_UNAVAILABLE", new JsonObject {
+                ["publicationStage"] = publicationStage, ["path"] = path,
+                ["exceptionType"] = ex.GetType().Name, ["error"] = ex.Message,
+                ["sourceAuthority"] = false, ["formalFactsQualified"] = false });
         }
     }
 
@@ -501,6 +610,7 @@ internal sealed class WarehouseEvidenceLease : IDisposable
         Tick();
         var request = _request; var c = _context;
         if (request is null || c is null || !IsOpen || _source is not null) return false;
+        if (frame.CaptureScopeEpoch < Volatile.Read(ref _mappingEpochFloor)) return false;
         if (!revalidateTarget()) { Close("SOURCE_TARGET_CHANGED"); return false; }
         var now = _clock();
         if (_policy == CapturePolicy.Delivery)
@@ -525,7 +635,7 @@ internal sealed class WarehouseEvidenceLease : IDisposable
         // Hashing/target checks may race with a reader cancellation. Recheck at file admission.
         Tick();
         if (!IsOpen || _request is null) return false;
-        if (_savedHashes.Contains(pixelHash))
+        if (!_retainIndependentOriginals && _savedHashes.Contains(pixelHash))
         {
             if (!revalidateTarget() || !IsOpen) { Close("SOURCE_TARGET_CHANGED"); return false; }
             _request = null;
@@ -541,7 +651,8 @@ internal sealed class WarehouseEvidenceLease : IDisposable
         // Charge potential files before IO, including failed/partially written originals; never silently delete.
         _written++; _rawBytes += 54L + frame.Pixels.LongLength;
         _lastSequence = frame.Sequence; _lastSourceTime = frame.SourceTimestampNs; _lastReadbackTime = frame.ReadbackTimestampNs;
-        _savedSummary = frame.VisualSummary; _priorSavedProof = _savedProof; _savedProof = frame.DeliveryProof;
+        _priorSavedSummary = _savedSummary; _savedSummary = frame.VisualSummary;
+        _priorSavedProof = _savedProof; _savedProof = frame.DeliveryProof;
         try
         {
             Directory.CreateDirectory(_root);
@@ -606,9 +717,57 @@ internal sealed class WarehouseEvidenceLease : IDisposable
         try { _scrollDiagnosticLog(details); } catch { } // logging never grants authority
     }
 
-    private bool DeliveryScrollCurrent(JsonObject command, long now, JsonObject checks, JsonObject details)
+    private void PreserveScrollRefusal(JsonObject command, DeliveryVisualSummary? latest, JsonObject details)
     {
-        var latest = _latestSummary?.Invoke(); var saved = _savedSummary;
+        if (_scrollRefusalDiagnosticAttempted) return;
+        _scrollRefusalDiagnosticAttempted = true; // first refusal only; no IO retry loop
+        var meta = (JsonObject)details.DeepClone();
+        meta["schemaVersion"] = "scroll-refusal-diagnostic.v1";
+        meta["sourceAuthority"] = false; meta["formalFactsQualified"] = false;
+        meta["diagnosticOnly"] = true; meta["inputActions"] = false;
+        meta["clientMap"] = _context?.ClientMap;
+        meta["targetInstance"] = _context?.Target.DeepClone();
+        var frame = latest?.DiagnosticFrame;
+        try
+        {
+            // Use the exact immutable payload frozen with the guard summary,
+            // never a later capture or a new WGC/SOURCE request.
+            if (latest is null || frame is null || frame.DeliveryProof?.CaptureId != latest.CaptureId
+                || frame.CaptureTimestampNs != latest.ReadbackNs || frame.Stride != frame.Width * 4
+                || frame.Pixels.Length != frame.Stride * frame.Height)
+                throw new InvalidOperationException("GUARD_DIAGNOSTIC_FRAME_UNAVAILABLE");
+            var dir = Path.Combine(_workRoot, "warehouse-scroll-refusal");
+            Directory.CreateDirectory(dir);
+            var path = Path.Combine(dir, "first-refusal.bmp");
+            WriteNewBmp(path, new(frame.Width, frame.Height, frame.Stride, frame.Pixels,
+                frame.SourceTimestampNs, frame.CaptureTimestampNs, frame.CapturedAtUtc, frame.AcquisitionSequence,
+                "", 0));
+            meta["framePath"] = path;
+            meta["captureId"] = frame.DeliveryProof.CaptureId;
+            meta["sourceTimestampNs"] = frame.SourceTimestampNs;
+            meta["readbackTimestampNs"] = frame.CaptureTimestampNs;
+            meta["capturedAtUtc"] = frame.CapturedAtUtc;
+            meta["width"] = frame.Width; meta["height"] = frame.Height; meta["stride"] = frame.Stride;
+            meta["pixelSha256"] = Convert.ToHexString(SHA256.HashData(frame.Pixels)).ToLowerInvariant();
+            meta["bmpSha256"] = Convert.ToHexString(SHA256.HashData(File.ReadAllBytes(path))).ToLowerInvariant();
+            meta["deliveryProof"] = frame.DeliveryProof.ToJson();
+            meta["metadataPath"] = Path.Combine(dir, "first-refusal.json");
+            meta["saved"] = true;
+            meta["commandId"] = command["commandId"]?.DeepClone();
+            meta["recordStableKey"] = _context?.RecordKey; meta["matchGeneration"] = _context?.MatchGeneration;
+            meta["observationSessionId"] = _observation;
+            File.WriteAllText(meta["metadataPath"]!.GetValue<string>(), meta.ToJsonString());
+        }
+        catch (Exception ex) { meta["saved"] = false; meta["error"] = ex.Message; meta["exceptionType"] = ex.GetType().Name; }
+        // A diagnostic write failure cannot close/renew a SOURCE lease or grant input.
+        details["refusalDiagnostic"] = meta.DeepClone();
+        LogScroll(command, "refusal-evidence", meta);
+    }
+
+    private bool DeliveryScrollCurrent(JsonObject command, long now, JsonObject checks, JsonObject details,
+        DeliveryVisualSummary? latest)
+    {
+        var saved = _savedSummary;
         checks["lastProofPresent"] = _lastProof is not null;
         checks["savedProofPresent"] = _savedProof is not null;
         checks["latestSummaryPresent"] = latest is not null;
@@ -617,6 +776,8 @@ internal sealed class WarehouseEvidenceLease : IDisposable
         var baseProof = Text(command, "savedCaptureId") == _savedProof.CaptureId ? _savedProof : _priorSavedProof;
         checks["baseProofPresent"] = baseProof is not null;
         if (baseProof is null) return false;
+        var baseSummary = baseProof == _savedProof ? _savedSummary : _priorSavedSummary;
+        checks["baseSummaryPresent"] = baseSummary is not null && baseSummary.CaptureId == baseProof.CaptureId;
         checks["savedCaptureIdMatches"] = Text(command, "savedCaptureId") == baseProof.CaptureId;
         checks["differentCaptureIds"] = _lastProof.CaptureId != baseProof.CaptureId;
         checks["sourceMarkerProgress"] = _lastProof.SourceMarkerProgress;
@@ -630,14 +791,21 @@ internal sealed class WarehouseEvidenceLease : IDisposable
         checks["latestPoolEpochMatches"] = latest.Epoch == _lastProof.PoolEpoch;
         checks["latestReadbackNotFuture"] = now >= latest.ReadbackNs;
         checks["latestReadbackWithinDeadline"] = now - latest.ReadbackNs <= FreshnessNs;
-        checks["sceneRoiMatches"] = latest.SceneRoiSha256 == saved.SceneRoiSha256;
-        checks["warehouseRoiMatches"] = latest.WarehouseRoiSha256 == saved.WarehouseRoiSha256;
+        checks["savedSummaryCaptureIdMatches"] = saved.CaptureId == _lastProof.CaptureId;
+        checks["latestSessionMatches"] = latest.CaptureId.StartsWith(_observation + "/", StringComparison.Ordinal);
+        checks["sceneShapeSupported"] = latest.SceneSupportedBy(saved)
+            && baseSummary is not null && latest.SceneSupportedBy(baseSummary);
+        checks["scrollContentRoiPresent"] = !string.IsNullOrEmpty(latest.ScrollContentRoiSha256)
+            && !string.IsNullOrEmpty(saved.ScrollContentRoiSha256);
+        checks["scrollContentQuantizationSupported"] = latest.ContentSupportedBy(saved)
+            && baseSummary is not null && latest.ContentSupportedBy(baseSummary);
         details["deliveryProofRejection"] = rejection;
         details["baseCaptureId"] = baseProof.CaptureId; details["supportCaptureId"] = _lastProof.CaptureId;
         details["latestCaptureId"] = latest.CaptureId; details["latestReadbackNs"] = latest.ReadbackNs;
         details["supportReadbackNs"] = _lastProof.ReadbackCompletedNs;
         details["latestSceneHash"] = latest.SceneRoiSha256; details["savedSceneHash"] = saved.SceneRoiSha256;
         details["latestWarehouseHash"] = latest.WarehouseRoiSha256; details["savedWarehouseHash"] = saved.WarehouseRoiSha256;
+        details["latestScrollContentHash"] = latest.ScrollContentRoiSha256; details["savedScrollContentHash"] = saved.ScrollContentRoiSha256;
         return checks.All(pair => pair.Value!.GetValue<bool>());
     }
 
@@ -651,6 +819,9 @@ internal sealed class WarehouseEvidenceLease : IDisposable
 
     private void ScrollDown(JsonObject command)
     {
+        var delta = command["wheelDelta"] is null ? -120 : checked((int)Number(command, "wheelDelta"));
+        if (delta > -120 || delta < -1440 || delta % 120 != 0)
+            throw new InvalidOperationException("WINDOW_SCROLL_DELTA_REJECTED");
         if (!_windowScrollAllowed || _scrollDown is null) throw new InvalidOperationException("WINDOW_SCROLL_NOT_AUTHORIZED");
         if (_request is not null || _source is not null) throw new InvalidOperationException("SOURCE_REQUEST_PENDING");
         var source = Required(command, "sourceLeaseId");
@@ -661,14 +832,17 @@ internal sealed class WarehouseEvidenceLease : IDisposable
         if (_scrolledSources.Count >= MaxSources || _written >= MaxSources || _attempts >= 32)
             throw new InvalidOperationException("SOURCE_LIMIT_REACHED");
         var c = _context!;
+        string[] currentFailures = [];
         bool Current()
         {
+            // Freeze latest first; use a comparison time that follows that read.
+            var latest = _policy == CapturePolicy.Delivery ? _latestSummary?.Invoke() : null;
             var now = _clock();
             var checks = new JsonObject { ["leaseOpen"] = IsOpen, ["contextMatches"] = _context == c,
                 ["settlementEligible"] = c.SettlementCaptureEligible, ["targetUsable"] = c.TargetUsable,
                 ["beforeLeaseDeadline"] = now < _leaseDeadline };
             var details = new JsonObject { ["comparisonNs"] = now, ["leaseDeadlineNs"] = _leaseDeadline };
-            if (_policy == CapturePolicy.Delivery) DeliveryScrollCurrent(command, now, checks, details);
+            if (_policy == CapturePolicy.Delivery) DeliveryScrollCurrent(command, now, checks, details, latest);
             else {
                 checks["strictSourcePresent"] = _lastSourceTime > 0;
                 var futureComparison = _clock();
@@ -679,26 +853,58 @@ internal sealed class WarehouseEvidenceLease : IDisposable
                 details["strictAgeComparisonNs"] = ageComparison;
             }
             var failures = checks.Where(pair => !pair.Value!.GetValue<bool>()).Select(pair => pair.Key).ToArray();
+            currentFailures = failures;
             details["checks"] = checks;
             details["failedChecks"] = new JsonArray(failures.Select(name => JsonValue.Create(name)).ToArray());
             details["qualified"] = failures.Length == 0;
+            if (failures.Contains("scrollContentQuantizationSupported")) PreserveScrollRefusal(command, latest, details);
             LogScroll(command, "lease-qualification", details);
             return failures.Length == 0;
         }
         if (!Current())
         {
+            // Only this pre-adapter failure is known not to have sent input.
+            // Consume the old source pulse and require new independent SOURCE
+            // support; keep the original lease, deadline and counters.
+            if (_policy == CapturePolicy.Delivery && currentFailures.SequenceEqual(new[] { "scrollContentQuantizationSupported" }))
+            {
+                var recheck = new JsonObject { ["classification"] = "NOT_SENT_CONTENT_SUPPORT_RECHECK",
+                    ["sendInterfaceInvoked"] = false, ["sourceLeaseId"] = source,
+                    ["failedChecks"] = new JsonArray("scrollContentQuantizationSupported") };
+                LogScroll(command, "scroll-ended", (JsonObject)recheck.DeepClone());
+                Emit(command, "REJECTED", "SCROLL_CONTENT_CHANGED_BEFORE_SEND", recheck);
+                return;
+            }
             LogScroll(command, "scroll-ended", new JsonObject { ["classification"] = "NOT_SENT_QUALIFICATION_REJECTED", ["sendInterfaceInvoked"] = false });
             Close("WINDOW_SCROLL_FAILED_OR_TARGET_CHANGED"); return;
         }
-        if (!_scrollDown(c, Current))
+        var scrollAttempt = new WarehouseScrollAttempt();
+        if (!_scrollDown(c with { WheelDelta = delta, ScrollAttempt = scrollAttempt }, Current))
         {
-            // Adapter diagnostics record whether it reached the native API.
-            LogScroll(command, "scroll-ended", new JsonObject { ["classification"] = "ADAPTER_REJECTED_OR_SEND_FAILED", ["sendInterfaceInvoked"] = null });
+            // This is the *same* content-only pre-send recovery as the outer guard,
+            // but only the adapter can prove it never reached the input API.
+            // Rejecting at its post-send guard must remain terminal even if the
+            // observed check happened to be content quantization.
+            if (_policy == CapturePolicy.Delivery && scrollAttempt.ConfirmedNotSentByCurrentGuard
+                && currentFailures.SequenceEqual(new[] { "scrollContentQuantizationSupported" })
+                && IsOpen && ReferenceEquals(_context, c) && _clock() < _leaseDeadline)
+            {
+                var recheck = new JsonObject { ["classification"] = "NOT_SENT_CONTENT_SUPPORT_RECHECK",
+                    ["sendInterfaceInvoked"] = false, ["sourceLeaseId"] = source,
+                    ["adapterStage"] = scrollAttempt.PreSendCurrentGuardRejection,
+                    ["failedChecks"] = new JsonArray("scrollContentQuantizationSupported") };
+                LogScroll(command, "scroll-ended", (JsonObject)recheck.DeepClone());
+                Emit(command, "REJECTED", "SCROLL_CONTENT_CHANGED_BEFORE_SEND", recheck);
+                return;
+            }
+            LogScroll(command, "scroll-ended", new JsonObject {
+                ["classification"] = "ADAPTER_REJECTED_OR_SEND_FAILED",
+                ["sendInterfaceInvoked"] = scrollAttempt.SendInterfaceInvoked ? true : null });
             Close("WINDOW_SCROLL_FAILED_OR_TARGET_CHANGED"); return;
         }
         _lastScrollCompletedNs = _clock();
         Emit(command, "SCROLLED", "WINDOW_WHEEL_MESSAGE_SENT", new JsonObject {
-            ["direction"] = "DOWN", ["delta"] = -120, ["sourceLeaseId"] = source,
+            ["direction"] = "DOWN", ["delta"] = delta, ["sourceLeaseId"] = source,
             ["scrollRequestCount"] = _scrolledSources.Count, ["messageCompletedNs"] = _lastScrollCompletedNs }, inputActions: true);
     }
 

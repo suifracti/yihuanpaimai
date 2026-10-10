@@ -7,6 +7,9 @@
     <Compile Include="../../architecture/v2/host/wgc_live_harness/CaptureDeliveryProof.cs" />
     <Compile Include="../../architecture/v2/host/wgc_live_harness/DeliveryVisualSummary.cs" />
     <Compile Include="../../architecture/v2/host/wgc_live_harness/CapturedBgraFrame.cs" />
+    <Compile Include="../../architecture/v2/host/wgc_live_harness/OrdinaryFrameRecovery.cs" />
+    <Compile Include="../../architecture/v2/host/wgc_live_harness/LatestCapturePump.cs" />
+    <Compile Include="../../architecture/v2/host/wgc_live_harness/MappingRecovery.cs" />
     <Compile Include="../../architecture/v2/host/wgc_live_harness/WarehouseEvidenceLease.cs" />
     <Compile Include="../../architecture/v2/host/wgc_live_harness/WarehouseWindowScroll.cs" />
   </ItemGroup>

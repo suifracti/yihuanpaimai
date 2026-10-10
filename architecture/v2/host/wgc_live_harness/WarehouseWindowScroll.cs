@@ -65,11 +65,16 @@ internal static class WarehouseWindowScroll
         }
         bool Reject(string reason, JsonObject? checks = null)
         {
+            // Only these two current-guard stages are eligible for the lease's
+            // content-only re-acquisition path. Other NOT_SENT reasons still stop.
+            context.ScrollAttempt?.RejectCurrentGuardBeforeSend(reason);
             Log("adapter-rejected", new JsonObject { ["reason"] = reason, ["checks"] = checks,
                 ["classification"] = "NOT_SENT", ["sendInterfaceInvoked"] = false });
             return false;
         }
         var hwnd = (long?)context.Target["targetHwnd"] ?? 0;
+        var delta = context.WheelDelta;
+        if (delta > -120 || delta < -1440 || delta % 120 != 0) return Reject("WINDOW_SCROLL_DELTA_REJECTED");
         var pid = (int?)context.Target["targetPid"] ?? 0;
         var token = (long?)context.Target["processInstanceToken"] ?? 0;
         if (hwnd <= 0 || hwnd == 0xffff || pid <= 0 || token <= 0) return Reject("INVALID_TARGET_IDENTITY");
@@ -104,8 +109,11 @@ internal static class WarehouseWindowScroll
             return Reject("SCREEN_SCROLL_POINT_OUT_OF_RANGE");
         if (!current()) return Reject("CURRENT_GUARD_REJECTED_BEFORE_SEND");
         var coordinates = unchecked((uint)(ushort)(short)point.X | ((uint)(ushort)(short)point.Y << 16));
-        var wheel = unchecked((uint)(ushort)(short)-120 << 16);
+        var wheel = unchecked((uint)(ushort)(short)delta << 16);
         var before = ProtocolClock.NowNs();
+        // Conservatively mark an attempted input before calling the platform.
+        // Neither a failed return nor a post-send Current() rejection can retry.
+        context.ScrollAttempt?.MarkSendInterfaceInvoked();
         SendResult sent;
         try { sent = platform.Send(hwnd, wheel, coordinates); }
         catch (Exception ex)
@@ -118,7 +126,7 @@ internal static class WarehouseWindowScroll
         }
         var after = ProtocolClock.NowNs();
         Log("send-interface-returned", new JsonObject { ["sendInterfaceInvoked"] = true,
-            ["api"] = "SendMessageTimeoutW", ["hwnd"] = hwnd, ["message"] = 0x020A, ["wheelDelta"] = -120,
+            ["api"] = "SendMessageTimeoutW", ["hwnd"] = hwnd, ["message"] = 0x020A, ["wheelDelta"] = delta,
             ["flags"] = 0x23, ["timeoutMs"] = 100, ["callBeforeNs"] = before, ["callAfterNs"] = after,
             ["returnValue"] = sent.ReturnValue, ["messageResult"] = sent.MessageResult, ["lastErrorRaw"] = sent.Error,
             ["classification"] = sent.ReturnValue == 0 ? "SEND_FAILED_OR_TIMED_OUT" : "SENT_DISPLACEMENT_UNPROVEN",

@@ -40,7 +40,7 @@ class NativeWarehouseIntakeTests(unittest.TestCase):
         self.source = None
         self.intake = NativeWarehouseIntake(draft_store=self.store,
             scope_provider=lambda: copy.deepcopy(self.scope),
-            source_provider=lambda: copy.deepcopy(self.source))
+            source_provider=lambda: copy.deepcopy(self.source), auto_refine=False)
 
     def frame(self, seconds, sequence):
         directory = ROOT / 'tests/fixtures/native_intake_pages_v1'
@@ -131,6 +131,164 @@ class NativeWarehouseIntakeTests(unittest.TestCase):
         self.assertEqual(self.intake.presentation_payload()['state'], 'CANCELLED')
         self.assertTrue(self.intake.start_manual()['ok'])
         self.assertEqual(self.intake.presentation_payload()['segmentCount'], 0)
+
+    def test_saved_processing_survives_stop_and_new_match_without_misattribution(self):
+        self.frame(163, 1); self.intake.start_manual(); self.intake.capture_manual_page()
+        old_key = self.scope['recordStableKey']
+        next_record = build_canonical_match_record_v7(match_id='next_intake_match',
+            played_at='2026-10-09T10:00:00Z', lifecycle_status='DRAFT', source='manual')
+        next_record['dataOrigin'] = 'live-trial'
+        self.store.save_draft(next_record)
+        next_before = self.store.lookup('next_intake_match')
+        entered, release = threading.Event(), threading.Event()
+        real = WarehouseCaptureHost._process_saved_pages
+        def delayed(host, *args, **kwargs):
+            entered.set(); self.assertTrue(release.wait(5))
+            return real(host, *args, **kwargs)
+        with patch('warehouse_capture_production.get_production_placement_resolver', return_value=None), \
+             patch.object(WarehouseCaptureHost, '_process_saved_pages', delayed):
+            self.assertTrue(self.intake.finish_manual_capture(termination_reason='INCOMPLETE')['ok'])
+            self.assertTrue(entered.wait(2))
+            self.intake._scope_provider = lambda:None
+            self.assertTrue(self.intake.end_collection('OBSERVATION_ENDED')['ok'])
+            self.intake._scope_provider = lambda:{**self.scope, 'recordStableKey':'next_intake_match'}
+            release.set(); self.intake.wait_processing(15)
+        self.assertEqual(self.intake.presentation_payload()['state'],'PARTIAL')
+        self.assertEqual(self.store.lookup('next_intake_match'),next_before)
+        self.assertEqual(self.store.lookup(old_key)['settlement']['warehouseReviewPacket']['recordStableKey'],old_key)
+        manifest = json.loads((self.store.root/'warehouse-intake'/f'{self.intake._session_id}.json').read_text())
+        self.assertEqual(manifest['state'],'PARTIAL')
+
+    def test_processing_exception_after_stop_has_durable_error(self):
+        self.frame(163,1); self.intake.start_manual(); self.intake.capture_manual_page()
+        with patch.object(WarehouseCaptureHost,'_process_saved_pages',side_effect=ValueError('broken original')):
+            self.intake._scope_provider=lambda:None
+            self.assertTrue(self.intake.finish_manual_capture()['ok'])
+            self.intake.wait_processing(10)
+        manifest=json.loads((self.store.root/'warehouse-intake'/f'{self.intake._session_id}.json').read_text())
+        self.assertEqual(manifest['state'],'ERROR')
+        self.assertIn('broken original',manifest['terminationReason'])
+
+    def test_processing_timeout_revokes_worker_and_keeps_saved_session_recoverable(self):
+        self.frame(163,1); self.intake.start_manual(); self.intake.capture_manual_page()
+        entered, release = threading.Event(), threading.Event()
+        real = WarehouseCaptureHost._process_saved_pages
+        def delayed(host,*args,**kwargs):
+            entered.set(); self.assertTrue(release.wait(5))
+            return real(host,*args,**kwargs)
+        before = self.store.history_path.read_bytes()
+        session, generation = self.intake._session_id, self.intake._generation
+        with patch.object(WarehouseCaptureHost,'_process_saved_pages',delayed):
+            self.intake.finish_manual_capture(termination_reason='INCOMPLETE')
+            self.assertTrue(entered.wait(2))
+            self.intake.fail_processing('PROCESSING_TIMEOUT')
+            release.set(); self.intake.wait_processing(10)
+        path = self.store.root/'warehouse-intake'/f'{session}.json'
+        manifest = json.loads(path.read_text())
+        self.assertEqual(manifest['state'],'ERROR')
+        self.assertEqual(manifest['terminationReason'],'PROCESSING_TIMEOUT')
+        self.assertEqual(manifest['generation'],generation)
+        self.assertEqual(self.store.history_path.read_bytes(),before)
+        raw = path.read_bytes()
+        self.assertFalse(self.intake.recover_saved_capture('invalid')['ok'])
+        self.assertEqual(path.read_bytes(),raw)
+        self.assertTrue(self.intake.recover_saved_capture(session)['ok'])
+        self.intake.wait_processing(15)
+        self.assertEqual(self.intake._state,'PARTIAL')
+
+    def test_saved_refinement_auto_queue_cancel_and_resume_remain_on_old_match(self):
+        from native_warehouse_refinement import SavedWarehouseRefinement
+        from main_window import MainWindowBridge, OverlayVisibilityController
+        class Overlay:
+            Visible = True
+        entered = threading.Event()
+        processes = []
+        class WaitingProcess:
+            def __init__(process,*args,**kwargs):
+                process.returncode = None; processes.append(process); entered.set()
+            def poll(process): return process.returncode
+            def kill(process): process.returncode = -1
+            def wait(process): return process.returncode
+        self.intake._refiner = SavedWarehouseRefinement(self.intake)
+        bridge = MainWindowBridge(OverlayVisibilityController(Overlay()),warehouse_capture_host=self.intake)
+        self.frame(163,1); self.intake.start_manual(); self.intake.capture_manual_page()
+        session = self.intake._session_id
+        with patch('native_warehouse_refinement.subprocess.Popen',WaitingProcess):
+            self.intake.finish_manual_capture(termination_reason='INCOMPLETE')
+            self.intake.wait_processing(10)
+            self.assertTrue(entered.wait(2))  # Archive automatically queues refinement.
+            self.intake._scope_provider = lambda:None
+            self.assertTrue(self.intake.end_collection('OBSERVATION_ENDED')['ok'])
+            next_record = build_canonical_match_record_v7(match_id='next_refinement_match',
+                played_at='2026-10-09T10:00:00Z',lifecycle_status='DRAFT',source='manual')
+            next_record['dataOrigin'] = 'live-trial'; self.store.save_draft(next_record)
+            next_before = self.store.lookup('next_refinement_match')
+            self.intake._scope_provider = lambda:{**self.scope,'recordStableKey':'next_refinement_match'}
+            self.assertTrue(self.intake.start_manual()['ok'])
+            reply = bridge.dispatch({'action':'cancel_warehouse_refinement','sessionId':session,
+                'recordId':self.scope['recordStableKey']})
+            self.assertTrue(reply['warehouseCaptureCommand']['ok'])
+            self.intake.wait_refinement(3)
+            self.assertEqual(processes[0].returncode,-1)
+            self.assertEqual(self.intake.refinement_payload(self.scope['recordStableKey'])['state'],'CANCELLED')
+            # A fresh owner preserves deliberate cancellation; explicit UI resume requeues.
+            fresh = NativeWarehouseIntake(draft_store=self.store,scope_provider=lambda:None,source_provider=lambda:None)
+            fresh.resume_pending()
+            self.assertEqual(fresh.refinement_payload(self.scope['recordStableKey'])['state'],'CANCELLED')
+            with patch('native_warehouse_refinement.REFINEMENT_SECONDS',.03):
+                reply = bridge.dispatch({'action':'resume_warehouse_refinement','sessionId':session,
+                    'recordId':self.scope['recordStableKey']})
+                self.assertTrue(reply['warehouseCaptureCommand']['ok'])
+                self.intake.wait_refinement(3)
+            status = self.intake.refinement_payload(self.scope['recordStableKey'])
+            self.assertEqual(status['state'],'FAILED')
+            self.assertIn('REFINEMENT_TIME_LIMIT',status['reason'])
+            self.assertEqual(self.store.lookup('next_refinement_match'),next_before)
+            old = self.store.lookup(self.scope['recordStableKey'])
+            self.assertEqual(old['settlement']['warehouseReviewPacket']['schemaVersion'],'warehouse-review-packet.v1')
+            self.assertEqual(old['lifecycleStatus'],'DRAFT')
+            self.assertEqual(self.intake._binding['recordStableKey'],'next_refinement_match')
+            manifest = json.loads((self.store.root/'warehouse-intake'/f'{session}.json').read_text())
+            self.assertEqual(manifest['state'],'PARTIAL')
+            self.assertTrue(manifest['placementRefinementPending'])
+
+    def test_refinement_publishes_frozen_old_archive_after_new_session_starts(self):
+        from native_warehouse_refinement import SavedWarehouseRefinement, fingerprint
+        self.frame(163,1); self.intake.start_manual(); self.intake.capture_manual_page()
+        self.intake.finish_manual_capture(termination_reason='INCOMPLETE'); self.intake.wait_processing(10)
+        session = self.intake._session_id; old_key = self.scope['recordStableKey']
+        old = self.store.lookup(old_key)['settlement']
+        entered, release = threading.Event(), threading.Event()
+        class ReadyProcess:
+            def __init__(process,command,**kwargs):
+                process.returncode = None
+                root, sid, token = Path(command[-3]),command[-2],command[-1]
+                manifest = json.loads((root/'warehouse-intake'/f'{sid}.json').read_text())
+                output = root/'warehouse-refinement'/sid/(token+'.json')
+                output.write_text(json.dumps({'jobId':token,'inputFingerprint':fingerprint(manifest),
+                    'evidence':{'review_units':old['reviewUnits'],'identity_review':old['warehouseIdentityReview'],
+                                'review_packet':old['warehouseReviewPacket']},'summary':{'fixture':'no-new-identities'}}))
+                entered.set()
+            def poll(process):
+                if release.is_set(): process.returncode = 0
+                return process.returncode
+            def wait(process): return process.returncode
+            def kill(process): process.returncode = -1
+        self.intake._refiner = SavedWarehouseRefinement(self.intake)
+        with patch('native_warehouse_refinement.subprocess.Popen',ReadyProcess):
+            self.assertTrue(self.intake.resume_refinement(session)['ok']); self.assertTrue(entered.wait(2))
+            next_record = build_canonical_match_record_v7(match_id='after_refinement',
+                played_at='2026-10-09T10:00:00Z',lifecycle_status='DRAFT',source='manual')
+            next_record['dataOrigin'] = 'live-trial'; self.store.save_draft(next_record)
+            before = self.store.lookup('after_refinement')
+            self.intake._scope_provider = lambda:{**self.scope,'recordStableKey':'after_refinement'}
+            self.assertTrue(self.intake.start_manual()['ok'])
+            release.set(); self.intake.wait_refinement(10)
+        self.assertEqual(self.store.lookup('after_refinement'),before)
+        status = self.intake.refinement_payload(old_key)
+        self.assertEqual(status['state'],'COMPLETE'); self.assertFalse(status['pending'])
+        self.assertIsNone(self.intake.review_packet_copy())
+        self.assertEqual(self.intake._binding['recordStableKey'],'after_refinement')
 
     def test_two_fixture_pages_use_same_manual_pipeline_and_isolated_history(self):
         frames = [self.frame(163, 1)]
