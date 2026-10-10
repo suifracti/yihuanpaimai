@@ -1,0 +1,118 @@
+name: Offline PR contracts
+
+on:
+  pull_request:
+    branches:
+      - main
+      - codex/issue-11-current-source
+
+permissions:
+  contents: read
+
+concurrency:
+  group: offline-contracts-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  python-half-viewport:
+    name: Python offline half-viewport contract
+    runs-on: windows-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - name: Set up Python 3.11
+        id: setup-python
+        continue-on-error: true
+        uses: actions/setup-python@v7
+        with:
+          python-version: '3.11'
+
+      - name: Install locked OpenCV and NumPy
+        id: install-python-deps
+        if: steps.setup-python.outcome == 'success'
+        continue-on-error: true
+        run: python -m pip install --disable-pip-version-check --no-input numpy==2.2.6 opencv-python==5.0.0.93
+
+      - name: Run offline Python contract
+        id: python-contract
+        if: steps.install-python-deps.outcome == 'success'
+        continue-on-error: true
+        shell: pwsh
+        run: |
+          python -m unittest tests.test_native_half_viewport_flow -v
+          $testExitCode = $LASTEXITCODE
+          "test_exit_code=$testExitCode" | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Append -Encoding utf8
+          if ($testExitCode -ne 0) { exit $testExitCode }
+
+      - name: Report Python contract status
+        if: always()
+        env:
+          SETUP_OUTCOME: ${{ steps.setup-python.outcome }}
+          DEPS_OUTCOME: ${{ steps.install-python-deps.outcome }}
+          TEST_OUTCOME: ${{ steps.python-contract.outcome }}
+        shell: pwsh
+        run: |
+          if ($env:TEST_OUTCOME -eq 'success') {
+            $status = 'PASS'
+          } elseif ($env:SETUP_OUTCOME -ne 'success') {
+            $status = "NOT_RUN (Python setup outcome: $env:SETUP_OUTCOME; see setup step log)"
+          } elseif ($env:DEPS_OUTCOME -ne 'success') {
+            $status = "NOT_RUN (dependency install outcome: $env:DEPS_OUTCOME; see install step log)"
+          } else {
+            $status = "FAIL (test outcome: $env:TEST_OUTCOME; see test step exit code and log)"
+          }
+          "Python offline contract: $status" | Tee-Object -FilePath $env:GITHUB_STEP_SUMMARY -Append
+          if ($env:TEST_OUTCOME -ne 'success') { exit 1 }
+
+  dotnet-scroll-diagnostics:
+    name: .NET 8 offline scroll diagnostics
+    runs-on: windows-latest
+    timeout-minutes: 15
+    env:
+      DOTNET_NOLOGO: '1'
+      DOTNET_CLI_TELEMETRY_OPTOUT: '1'
+      DOTNET_SKIP_FIRST_TIME_EXPERIENCE: '1'
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - name: Set up .NET 8
+        id: setup-dotnet
+        continue-on-error: true
+        uses: actions/setup-dotnet@v6
+        with:
+          dotnet-version: '8.0.x'
+
+      - name: Run isolated adapter pre-send diagnostics
+        id: dotnet-contract
+        if: steps.setup-dotnet.outcome == 'success'
+        continue-on-error: true
+        shell: pwsh
+        run: |
+          $workDir = Join-Path $env:GITHUB_WORKSPACE 'build/ci-native-scroll-diagnostics'
+          New-Item -ItemType Directory -Path $workDir -Force | Out-Null
+          dotnet run --project tests/native_scroll_diagnostics/scroll-diagnostics.csproj -- $workDir --adapter-presend-only
+          $testExitCode = $LASTEXITCODE
+          "test_exit_code=$testExitCode" | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Append -Encoding utf8
+          if ($testExitCode -ne 0) { exit $testExitCode }
+
+      - name: Report .NET contract status
+        if: always()
+        env:
+          SETUP_OUTCOME: ${{ steps.setup-dotnet.outcome }}
+          TEST_OUTCOME: ${{ steps.dotnet-contract.outcome }}
+        shell: pwsh
+        run: |
+          if ($env:TEST_OUTCOME -eq 'success') {
+            $status = 'PASS'
+          } elseif ($env:SETUP_OUTCOME -ne 'success') {
+            $status = "NOT_RUN (.NET setup outcome: $env:SETUP_OUTCOME; see setup step log)"
+          } else {
+            $status = "FAIL (diagnostics outcome: $env:TEST_OUTCOME; see test step exit code and log)"
+          }
+          ".NET offline contract: $status" | Tee-Object -FilePath $env:GITHUB_STEP_SUMMARY -Append
+          if ($env:TEST_OUTCOME -ne 'success') { exit 1 }
