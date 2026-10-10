@@ -47,12 +47,56 @@ jobs:
           "test_exit_code=$testExitCode" | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Append -Encoding utf8
           if ($testExitCode -ne 0) { exit $testExitCode }
 
+      - name: Verify strict solver source gate on Windows checkout
+        id: solver-source-compatibility
+        if: steps.install-python-deps.outcome == 'success'
+        continue-on-error: true
+        shell: pwsh
+        run: |
+          python -c "import sys; sys.path.insert(0, 'core'); import venue_box_catalog as v; catalog=v.load_catalog(); checked=v.validate_solver_compatibility(catalog, v.load_solver_compatibility()); assert checked.ok, checked.errors; mapped=v.solver_context_translation(catalog, venue_id='venue-shanhu', box_id='box-shanhu-glass'); assert mapped.get('status') == 'COMPATIBILITY_TRANSLATION', mapped; print('strict source hashes: PASS; real venue-box mapping: COMPATIBILITY_TRANSLATION')"
+          $checkExitCode = $LASTEXITCODE
+          if ($checkExitCode -eq 0) { $status = 'PASS' } else { $status = 'FAIL' }
+          "status=$status" | Out-File -FilePath $env:GITHUB_OUTPUT -Append -Encoding utf8
+          "Strict solver source gate: $status" | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Append -Encoding utf8
+          if ($checkExitCode -ne 0) { exit $checkExitCode }
+
+      - name: Run Native Main Solver HUD consumer contract
+        id: native-consumer-contract
+        if: steps.install-python-deps.outcome == 'success'
+        continue-on-error: true
+        shell: pwsh
+        run: |
+          $output = python -m unittest tests.test_native_main_solver_hud_consumption_v1 -v 2>&1
+          $testExitCode = $LASTEXITCODE
+          $output | Write-Output
+          $combinedOutput = $output -join "`n"
+          $runMatch = [regex]::Match($combinedOutput, 'Ran\s+(\d+)\s+tests?')
+          $skipMatch = [regex]::Match($combinedOutput, 'OK\s+\(skipped=(\d+)\)')
+          if ($testExitCode -ne 0) {
+            $status = 'FAIL'
+          } elseif (-not $runMatch.Success) {
+            $status = 'NOT_RUN'
+          } elseif ([int]$runMatch.Groups[1].Value -ne 7) {
+            $status = 'SKIP'
+          } elseif ($skipMatch.Success -and [int]$skipMatch.Groups[1].Value -gt 0) {
+            $status = 'SKIP'
+          } else {
+            $status = 'PASS'
+          }
+          "status=$status" | Out-File -FilePath $env:GITHUB_OUTPUT -Append -Encoding utf8
+          "Native Main/Solver/HUD consumer contract: $status" | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Append -Encoding utf8
+          if ($status -ne 'PASS') { exit 1 }
+
       - name: Report Python contract status
         if: always()
         env:
           SETUP_OUTCOME: ${{ steps.setup-python.outcome }}
           DEPS_OUTCOME: ${{ steps.install-python-deps.outcome }}
           TEST_OUTCOME: ${{ steps.python-contract.outcome }}
+          COMPAT_OUTCOME: ${{ steps.solver-source-compatibility.outcome }}
+          COMPAT_STATUS: ${{ steps.solver-source-compatibility.outputs.status }}
+          CONSUMER_OUTCOME: ${{ steps.native-consumer-contract.outcome }}
+          CONSUMER_STATUS: ${{ steps.native-consumer-contract.outputs.status }}
         shell: pwsh
         run: |
           if ($env:TEST_OUTCOME -eq 'success') {
@@ -65,7 +109,30 @@ jobs:
             $status = "FAIL (test outcome: $env:TEST_OUTCOME; see test step exit code and log)"
           }
           "Python offline contract: $status" | Tee-Object -FilePath $env:GITHUB_STEP_SUMMARY -Append
-          if ($env:TEST_OUTCOME -ne 'success') { exit 1 }
+
+          if ($env:COMPAT_OUTCOME -eq 'success' -and $env:COMPAT_STATUS -eq 'PASS') {
+            $compatStatus = 'PASS'
+          } elseif ($env:COMPAT_STATUS -eq 'SKIP') {
+            $compatStatus = 'SKIP'
+          } elseif ($env:COMPAT_OUTCOME -eq 'skipped' -or $env:SETUP_OUTCOME -ne 'success' -or $env:DEPS_OUTCOME -ne 'success') {
+            $compatStatus = 'NOT_RUN'
+          } else {
+            $compatStatus = 'FAIL'
+          }
+          if ($env:CONSUMER_OUTCOME -eq 'success' -and $env:CONSUMER_STATUS -eq 'PASS') {
+            $consumerStatus = 'PASS'
+          } elseif ($env:CONSUMER_STATUS -eq 'SKIP') {
+            $consumerStatus = 'SKIP'
+          } elseif ($env:CONSUMER_STATUS -eq 'NOT_RUN') {
+            $consumerStatus = 'NOT_RUN'
+          } elseif ($env:CONSUMER_OUTCOME -eq 'skipped' -or $env:SETUP_OUTCOME -ne 'success' -or $env:DEPS_OUTCOME -ne 'success') {
+            $consumerStatus = 'NOT_RUN'
+          } else {
+            $consumerStatus = 'FAIL'
+          }
+          "Strict venue compatibility and mapping: $compatStatus" | Tee-Object -FilePath $env:GITHUB_STEP_SUMMARY -Append
+          "Native consumer regressions: $consumerStatus" | Tee-Object -FilePath $env:GITHUB_STEP_SUMMARY -Append
+          if ($env:TEST_OUTCOME -ne 'success' -or $compatStatus -ne 'PASS' -or $consumerStatus -ne 'PASS') { exit 1 }
 
   dotnet-scroll-diagnostics:
     name: .NET 8 offline scroll diagnostics
