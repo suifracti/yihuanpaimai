@@ -13,6 +13,7 @@ v0.6 Solver Adapter (Canonical MatchRecord v7 -> 0.6 Solver Input)
 from __future__ import annotations
 
 import json
+from collections import Counter
 from copy import deepcopy
 from typing import Any, Dict, List, Mapping, Optional, Sequence, Tuple, Union
 
@@ -84,12 +85,17 @@ _SOLVER_KNOWN_RARITIES = {
 }
 
 
-def _slot_anchor(slot: Mapping[str, Any]) -> Optional[Tuple[int, int, int, int]]:
+def _slot_instance_key(slot: Mapping[str, Any]) -> Optional[Tuple[int, int, int, int, str]]:
+    """Physical instance key used by RealEngine._warehouse_instance_footprint."""
     try:
         col, row, width, height = slot.get("col"), slot.get("row"), slot.get("w"), slot.get("h")
-        if None in (col, row, width, height):
+        rarity = str(slot.get("rarity") or "")
+        if None in (col, row, width, height) or not rarity or rarity == "unknown":
             return None
-        return (int(col), int(row), int(width), int(height))
+        width_i, height_i = int(width), int(height)
+        if width_i <= 0 or height_i <= 0:
+            return None
+        return (int(row), int(col), width_i, height_i, rarity)
     except (TypeError, ValueError):
         return None
 
@@ -101,12 +107,78 @@ def _clean_item_name(value: Any) -> Optional[str]:
     return name
 
 
+def _flag_true(value: Any) -> bool:
+    return value is True
+
+
+def _stable_candidate_set(slot: Mapping[str, Any]) -> bool:
+    """Production CANDIDATE_SET is only assigned after temporal confirm + locked shape.
+
+    TrackedSlotBlob.to_dict() still labels any non-empty candidates as identityStatus=CANDIDATE,
+    including unstable RARITY_AND_SHAPE frames. Those must not become solver OR hard facts.
+    """
+    if str(slot.get("evidenceLevel") or "") != "CANDIDATE_SET":
+        return False
+    return _flag_true(slot.get("shapeLocked")) or _flag_true(slot.get("isConfirmed"))
+
+
+def _canonicalize_known_token(value: Any) -> Optional[str]:
+    name = str(value or "").strip()
+    if not name or "+" in name:
+        return None
+    if "/" in name:
+        parts = sorted({part.strip() for part in name.split("/") if part.strip() and "+" not in part})
+        if len(parts) < 2:
+            return None
+        return "/".join(parts)
+    return name
+
+
+def known_token_entries(value: Any) -> List[str]:
+    """Expand a known* string or item list into a physical-instance multiset."""
+    raw_tokens: List[Tuple[str, int]] = []
+    if isinstance(value, list):
+        for item in value:
+            if isinstance(item, dict):
+                name = str(item.get("name") or "").strip()
+                try:
+                    count = int(item.get("count") or 1)
+                except (TypeError, ValueError):
+                    count = 1
+                if name and count > 0:
+                    raw_tokens.append((name, count))
+            else:
+                name = str(item or "").strip()
+                if name:
+                    raw_tokens.append((name, 1))
+    else:
+        for token in str(value or "").split("+"):
+            token = token.strip()
+            if not token:
+                continue
+            name, sep, count_text = token.rpartition("*")
+            if sep and name.strip() and count_text.isdigit():
+                count = int(count_text)
+                if count > 0:
+                    raw_tokens.append((name.strip(), count))
+                    continue
+            raw_tokens.append((token, 1))
+    entries: List[str] = []
+    for name, count in raw_tokens:
+        canon = _canonicalize_known_token(name)
+        if canon:
+            entries.extend([canon] * count)
+    return entries
+
+
 def warehouse_slots_known_tokens(slots: Any) -> Dict[str, List[str]]:
     """Map warehouse slots to solver known tokens without promoting unique candidates.
 
-    EXACT+DIRECT and human CONFIRM_CANDIDATE become confirmed names.
-    CANDIDATE slots with two or more catalog names become a single OR token `A/B`.
-    UNIQUE_IN_CATALOG / one-name candidates stay out of known*.
+    One physical instance (row, col, w, h, rarity) yields at most one token; two
+    same-name EXACT slots remain two copies. EXACT+DIRECT and human CONFIRM_CANDIDATE
+    become confirmed names. Stable CANDIDATE_SET slots with two or more catalog names
+    become a single OR token `A/B`. UNIQUE_IN_CATALOG / one-name / unstable
+    RARITY_AND_SHAPE candidates stay out of known*.
     """
     tokens = {field: [] for field in _SOLVER_KNOWN_RARITIES.values()}
     if not isinstance(slots, list):
@@ -118,10 +190,10 @@ def warehouse_slots_known_tokens(slots: Any) -> Dict[str, List[str]]:
         field = _SOLVER_KNOWN_RARITIES.get(str(slot.get("rarity") or ""))
         if field is None:
             continue
-        anchor = _slot_anchor(slot)
-        if anchor is None or anchor in seen:
+        instance = _slot_instance_key(slot)
+        if instance is None or instance in seen:
             continue
-        seen.add(anchor)
+        seen.add(instance)
 
         manual = slot.get("manualDecision") if isinstance(slot.get("manualDecision"), dict) else None
         if manual and str(manual.get("action") or "") == "CONFIRM_CANDIDATE":
@@ -137,7 +209,7 @@ def warehouse_slots_known_tokens(slots: Any) -> Dict[str, List[str]]:
             tokens[field].append(identified)
             continue
 
-        if identity != "CANDIDATE":
+        if identity != "CANDIDATE" or not _stable_candidate_set(slot):
             continue
         names: List[str] = []
         for cand in slot.get("candidates") or []:
@@ -152,14 +224,22 @@ def warehouse_slots_known_tokens(slots: Any) -> Dict[str, List[str]]:
 
 
 def merge_known_tokens(existing: str, extras: Sequence[str]) -> str:
-    parts = [part for part in str(existing or "").split("+") if part.strip()]
-    have = set(parts)
-    for token in extras:
-        token = str(token or "").strip()
-        if token and token not in have:
-            parts.append(token)
-            have.add(token)
-    return "+".join(parts)
+    """Join known* with warehouse tokens by physical multiset, not unique names.
+
+    Warehouse extras replace matching copies already present in qualities.knownItems
+    (CurrentMatch identity projection), then every remaining warehouse instance is
+    appended. Two same-name slots stay two copies; one projected instance is not
+    counted twice.
+    """
+    extra_entries = [token for token in (_canonicalize_known_token(raw) for raw in extras) if token]
+    remove = Counter(extra_entries)
+    preserved: List[str] = []
+    for entry in known_token_entries(existing):
+        if remove[entry] > 0:
+            remove[entry] -= 1
+        else:
+            preserved.append(entry)
+    return "+".join(preserved + extra_entries)
 
 
 def apply_warehouse_identity_constraints(data: Mapping[str, Any], known: Mapping[str, str]) -> Dict[str, str]:

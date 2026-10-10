@@ -2,9 +2,11 @@
 """Issue #15: warehouse identity candidates and limited grids into solveAuctionPipeline.
 
 Contract:
-  - CANDIDATE slots with two catalog names become one OR token (A/B), not two confirmed items.
+  - Stable CANDIDATE_SET slots with two catalog names become one OR token (A/B), not two confirmed items.
+  - Unstable RARITY_AND_SHAPE / unconfirmed CANDIDATE slots never become knownGold.
   - UNIQUE / one-name candidates never become knownGold.
   - Human-confirmed / EXACT+DIRECT names stay confirmed.
+  - Two physical instances of the same name remain two copies; one instance in knownItems and warehouse is not counted twice.
   - The same goldGrid excludes physically impossible OR members instead of relaxing the search.
   - Settlement items and later records do not rewrite the contemporaneous known expression.
   - Incomplete candidate warehouses do not mint decision.valueP50 or recommendedMax.
@@ -24,6 +26,7 @@ sys.path.insert(0, str(CORE))
 
 from v06_adapter import (  # noqa: E402
     canonical_to_v06_solver_input,
+    known_token_entries,
     warehouse_slots_known_tokens,
 )
 
@@ -75,6 +78,18 @@ def _slot(col, row, w, h, rarity, **extra):
     slot = {"col": col, "row": row, "w": w, "h": h, "rarity": rarity}
     slot.update(extra)
     return slot
+
+
+def _stable_or_slot(col, row, w, h, rarity, names):
+    return _slot(
+        col, row, w, h, rarity,
+        evidenceLevel="CANDIDATE_SET",
+        identityStatus="CANDIDATE",
+        identifiedName=None,
+        shapeLocked=True,
+        isConfirmed=True,
+        candidates=[{"catalogId": f"cand-{i}", "name": name} for i, name in enumerate(names)],
+    )
 
 
 def _run_pipeline(solver_input, records=None):
@@ -159,16 +174,7 @@ class SolverWarehouseCandidateContractV1Tests(unittest.TestCase):
                 identityReferenceKind="DIRECT",
                 candidates=[{"catalogId": "star", "name": CONFIRMED_GOLD}],
             ),
-            _slot(
-                6, 0, 4, 1, "gold",
-                evidenceLevel="CANDIDATE_SET",
-                identityStatus="CANDIDATE",
-                identifiedName=None,
-                candidates=[
-                    {"catalogId": "mud", "name": CANDIDATE_A},
-                    {"catalogId": "fish", "name": CANDIDATE_B},
-                ],
-            ),
+            _stable_or_slot(6, 0, 4, 1, "gold", [CANDIDATE_A, CANDIDATE_B]),
         ]
         py = canonical_to_v06_solver_input(record)
         js = _js_adapter(record)
@@ -205,16 +211,7 @@ class SolverWarehouseCandidateContractV1Tests(unittest.TestCase):
                 identityReferenceKind="DIRECT",
                 candidates=[{"catalogId": "bread", "name": BREAD}],
             ),
-            _slot(
-                2, 0, 4, 1, "gold",
-                evidenceLevel="CANDIDATE_SET",
-                identityStatus="CANDIDATE",
-                identifiedName=None,
-                candidates=[
-                    {"catalogId": "mud", "name": CANDIDATE_A},
-                    {"catalogId": "fish", "name": CANDIDATE_B},
-                ],
-            ),
+            _stable_or_slot(2, 0, 4, 1, "gold", [CANDIDATE_A, CANDIDATE_B]),
         ]
         py = canonical_to_v06_solver_input(record)
         self.assertEqual(py["knownGold"], BREAD + "+" + OR_TOKEN)
@@ -236,16 +233,7 @@ class SolverWarehouseCandidateContractV1Tests(unittest.TestCase):
         record = _canonical()
         record["qualities"]["gold"]["knownItems"] = [{"name": CONFIRMED_GOLD, "price": 51077}]
         record["warehouse"]["slots"] = [
-            _slot(
-                0, 0, 4, 3, "gold",
-                evidenceLevel="CANDIDATE_SET",
-                identityStatus="CANDIDATE",
-                identifiedName=None,
-                candidates=[
-                    {"catalogId": "mud", "name": CANDIDATE_A},
-                    {"catalogId": "fish", "name": CANDIDATE_B},
-                ],
-            )
+            _stable_or_slot(0, 0, 4, 3, "gold", [CANDIDATE_A, CANDIDATE_B]),
         ]
         record["settlement"] = {
             "status": "verified",
@@ -274,12 +262,7 @@ class SolverWarehouseCandidateContractV1Tests(unittest.TestCase):
         record = _canonical()
         record["qualities"]["gold"]["knownItems"] = [{"name": CONFIRMED_GOLD}]
         record["warehouse"]["slots"] = [
-            _slot(
-                1, 2, 4, 1, "gold",
-                identityStatus="CANDIDATE",
-                evidenceLevel="CANDIDATE_SET",
-                candidates=[{"name": CANDIDATE_B}, {"name": CANDIDATE_A}],
-            ),
+            _stable_or_slot(1, 2, 4, 1, "gold", [CANDIDATE_B, CANDIDATE_A]),
             _slot(
                 0, 0, 1, 1, "gold",
                 identityStatus="CANDIDATE",
@@ -291,6 +274,159 @@ class SolverWarehouseCandidateContractV1Tests(unittest.TestCase):
         js = _js_adapter(record)
         self.assertEqual(py["knownGold"], js["knownGold"])
         self.assertEqual(py["knownGold"], CONFIRMED_GOLD + "+" + OR_TOKEN)
+
+    def test_unstable_rarity_and_shape_candidate_is_not_hard_known(self):
+        """Production to_dict() sets identityStatus=CANDIDATE on any non-empty candidates."""
+        record = _canonical()
+        record["qualities"]["gold"]["knownItems"] = [{"name": CONFIRMED_GOLD}]
+        record["warehouse"]["slots"] = [
+            _slot(
+                0, 0, 4, 1, "gold",
+                evidenceLevel="RARITY_AND_SHAPE",
+                identityStatus="CANDIDATE",
+                identifiedName=None,
+                shapeLocked=True,
+                isConfirmed=False,
+                candidates=[
+                    {"catalogId": "mud", "name": CANDIDATE_A},
+                    {"catalogId": "fish", "name": CANDIDATE_B},
+                ],
+            ),
+            _slot(
+                6, 0, 4, 1, "gold",
+                evidenceLevel="CANDIDATE_SET",
+                identityStatus="CANDIDATE",
+                identifiedName=None,
+                shapeLocked=False,
+                isConfirmed=False,
+                candidates=[
+                    {"catalogId": "mud", "name": CANDIDATE_A},
+                    {"catalogId": "fish", "name": CANDIDATE_B},
+                ],
+            ),
+        ]
+        py = canonical_to_v06_solver_input(record)
+        js = _js_adapter(record)
+        self.assertEqual(py["knownGold"], CONFIRMED_GOLD)
+        self.assertEqual(js["knownGold"], CONFIRMED_GOLD)
+        self.assertEqual(warehouse_slots_known_tokens(record["warehouse"]["slots"])["knownGold"], [])
+        unconstrained = _run_pipeline(py)
+        self.assertEqual(unconstrained["solverStatus"], "valid")
+        self.assertEqual(unconstrained["stateCount"], 5)
+        self.assertEqual(unconstrained["p50"], 682905)
+        gated = _canonical()
+        gated["qualities"]["gold"]["knownItems"] = [{"name": CONFIRMED_GOLD}]
+        gated["warehouse"]["slots"] = [_stable_or_slot(0, 0, 4, 1, "gold", [CANDIDATE_A, CANDIDATE_B])]
+        stable = _run_pipeline(canonical_to_v06_solver_input(gated))
+        self.assertNotEqual(stable["p50"], unconstrained["p50"])
+
+    def test_two_same_name_exact_slots_remain_two_instances(self):
+        record = _canonical()
+        record["warehouse"]["slots"] = [
+            _slot(
+                0, 0, 5, 5, "gold",
+                evidenceLevel="EXACT_IDENTIFIED",
+                identityStatus="EXACT",
+                identifiedName=CONFIRMED_GOLD,
+                identityReferenceKind="DIRECT",
+                candidates=[{"catalogId": "star-a", "name": CONFIRMED_GOLD}],
+            ),
+            _slot(
+                6, 0, 5, 5, "gold",
+                evidenceLevel="EXACT_IDENTIFIED",
+                identityStatus="EXACT",
+                identifiedName=CONFIRMED_GOLD,
+                identityReferenceKind="DIRECT",
+                candidates=[{"catalogId": "star-b", "name": CONFIRMED_GOLD}],
+            ),
+        ]
+        py = canonical_to_v06_solver_input(record)
+        js = _js_adapter(record)
+        self.assertEqual(known_token_entries(py["knownGold"]), [CONFIRMED_GOLD, CONFIRMED_GOLD])
+        self.assertEqual(known_token_entries(js["knownGold"]), [CONFIRMED_GOLD, CONFIRMED_GOLD])
+        two = _run_pipeline(py)
+        one = _run_pipeline({**py, "knownGold": CONFIRMED_GOLD})
+        self.assertEqual(two["solverStatus"], "valid")
+        self.assertEqual(one["solverStatus"], "valid")
+        self.assertNotEqual(two["p50"], one["p50"])
+        self.assertGreaterEqual(min(s["G"] for s in two["states"]), 2)
+
+    def test_same_instance_known_items_and_slot_are_not_double_counted(self):
+        record = _canonical()
+        record["qualities"]["gold"]["knownItems"] = [{"name": CONFIRMED_GOLD}]
+        record["warehouse"]["slots"] = [
+            _slot(
+                0, 0, 5, 5, "gold",
+                evidenceLevel="EXACT_IDENTIFIED",
+                identityStatus="EXACT",
+                identifiedName=CONFIRMED_GOLD,
+                identityReferenceKind="DIRECT",
+                candidates=[{"catalogId": "star", "name": CONFIRMED_GOLD}],
+            ),
+            _stable_or_slot(6, 0, 4, 1, "gold", [CANDIDATE_A, CANDIDATE_B]),
+        ]
+        py = canonical_to_v06_solver_input(record)
+        js = _js_adapter(record)
+        expected = CONFIRMED_GOLD + "+" + OR_TOKEN
+        self.assertEqual(py["knownGold"], expected)
+        self.assertEqual(js["knownGold"], expected)
+        self.assertEqual(known_token_entries(py["knownGold"]).count(CONFIRMED_GOLD), 1)
+        doubled = _run_pipeline({**py, "knownGold": CONFIRMED_GOLD + "+" + CONFIRMED_GOLD + "+" + OR_TOKEN})
+        once = _run_pipeline(py)
+        self.assertEqual(once["solverStatus"], "valid")
+        self.assertNotEqual(once["p50"], doubled["p50"])
+
+    def test_later_warehouse_slots_do_not_rewrite_frozen_round_input(self):
+        """Adapter is snapshot-in/snapshot-out. Frozen round input is the pipeline authority.
+
+        Call chain already freezing historical evaluation, so this test does not
+        re-adapt later warehouse.slots onto the round-N input:
+          CurrentMatch snapshot -> canonical_to_v06_solver_input
+          -> solveAuctionPipeline / buildPredictionSnapshotV1(frozen=true)
+          -> evaluation_eligibility requires snapshot.frozen is True
+          -> solveAuctionPipeline(records=...) does not reread warehouse.slots
+        """
+        round_record = _canonical()
+        round_record["qualities"]["gold"]["knownItems"] = [{"name": CONFIRMED_GOLD}]
+        round_record["warehouse"]["slots"] = [
+            _slot(
+                0, 0, 5, 5, "gold",
+                evidenceLevel="EXACT_IDENTIFIED",
+                identityStatus="EXACT",
+                identifiedName=CONFIRMED_GOLD,
+                identityReferenceKind="DIRECT",
+                candidates=[{"catalogId": "star", "name": CONFIRMED_GOLD}],
+            ),
+            _stable_or_slot(6, 0, 4, 1, "gold", [CANDIDATE_A, CANDIDATE_B]),
+        ]
+        frozen_input = canonical_to_v06_solver_input(round_record)
+        frozen_known = frozen_input["knownGold"]
+        self.assertEqual(frozen_known, CONFIRMED_GOLD + "+" + OR_TOKEN)
+
+        later = _canonical()
+        later["qualities"]["gold"]["knownItems"] = [{"name": CONFIRMED_GOLD}]
+        later["warehouse"]["slots"] = round_record["warehouse"]["slots"] + [
+            _stable_or_slot(8, 8, 1, 2, "gold", [BREAD, CANDIDATE_A]),
+        ]
+        later["settlement"] = {
+            "status": "verified",
+            "actualTotal": 9999999,
+            "settlementItems": [{"name": CANDIDATE_B, "status": "exact", "price": 111111}],
+        }
+        later_input = canonical_to_v06_solver_input(later)
+        self.assertNotEqual(later_input["knownGold"], frozen_known)
+        now = _run_pipeline(frozen_input, records=[])
+        leaked = _run_pipeline(frozen_input, records=[{
+            "id": "post-settlement-warehouse",
+            "playedAt": "2099-01-01T00:00:00Z",
+            "lifecycleStatus": "FINALIZED",
+            "warehouse": later["warehouse"],
+            "settlement": later["settlement"],
+        }])
+        self.assertEqual(now["stateCount"], leaked["stateCount"])
+        self.assertEqual(now["p50"], leaked["p50"])
+        self.assertEqual(now["states"], leaked["states"])
+        self.assertEqual(frozen_input["knownGold"], frozen_known)
 
 
 if __name__ == "__main__":

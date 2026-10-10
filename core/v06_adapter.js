@@ -93,10 +93,13 @@
 
   const SOLVER_KNOWN_RARITIES = { gold: "knownGold", purple: "knownPurple", red: "knownRed" };
 
-  function slotAnchor(slot) {
+  function slotInstanceKey(slot) {
     try {
       if (slot.col == null || slot.row == null || slot.w == null || slot.h == null) return null;
-      return [Number(slot.col), Number(slot.row), Number(slot.w), Number(slot.h)].join(",");
+      const rarity = String(slot.rarity || "");
+      const width = Number(slot.w), height = Number(slot.h);
+      if (!rarity || rarity === "unknown" || !(width > 0) || !(height > 0)) return null;
+      return [Number(slot.row), Number(slot.col), width, height, rarity].join(",");
     } catch (_) {
       return null;
     }
@@ -108,6 +111,64 @@
     return name;
   }
 
+  function flagTrue(value) {
+    return value === true;
+  }
+
+  function stableCandidateSet(slot) {
+    if (String(slot.evidenceLevel || "") !== "CANDIDATE_SET") return false;
+    return flagTrue(slot.shapeLocked) || flagTrue(slot.isConfirmed);
+  }
+
+  function canonicalizeKnownToken(value) {
+    const name = String(value || "").trim();
+    if (!name || name.includes("+")) return null;
+    if (name.includes("/")) {
+      const parts = [...new Set(name.split("/").map((part) => part.trim()).filter((part) => part && !part.includes("+")))].sort();
+      if (parts.length < 2) return null;
+      return parts.join("/");
+    }
+    return name;
+  }
+
+  function knownTokenEntries(value) {
+    const rawTokens = [];
+    if (Array.isArray(value)) {
+      for (const item of value) {
+        if (item && typeof item === "object") {
+          const name = String(item.name || "").trim();
+          const count = Number(item.count || 1);
+          if (name && Number.isInteger(count) && count > 0) rawTokens.push([name, count]);
+        } else {
+          const name = String(item || "").trim();
+          if (name) rawTokens.push([name, 1]);
+        }
+      }
+    } else {
+      for (const token of String(value || "").split("+")) {
+        const trimmed = token.trim();
+        if (!trimmed) continue;
+        const star = trimmed.lastIndexOf("*");
+        if (star > 0) {
+          const name = trimmed.slice(0, star).trim();
+          const countText = trimmed.slice(star + 1);
+          const count = Number(countText);
+          if (name && Number.isInteger(count) && count > 0 && String(count) === countText) {
+            rawTokens.push([name, count]);
+            continue;
+          }
+        }
+        rawTokens.push([trimmed, 1]);
+      }
+    }
+    const entries = [];
+    for (const [name, count] of rawTokens) {
+      const canon = canonicalizeKnownToken(name);
+      if (canon) for (let i = 0; i < count; i++) entries.push(canon);
+    }
+    return entries;
+  }
+
   function warehouseSlotsKnownTokens(slots) {
     const tokens = { knownGold: [], knownPurple: [], knownRed: [] };
     if (!Array.isArray(slots)) return tokens;
@@ -116,9 +177,9 @@
       if (!slot || typeof slot !== "object") continue;
       const field = SOLVER_KNOWN_RARITIES[String(slot.rarity || "")];
       if (!field) continue;
-      const anchor = slotAnchor(slot);
-      if (anchor == null || seen.has(anchor)) continue;
-      seen.add(anchor);
+      const instance = slotInstanceKey(slot);
+      if (instance == null || seen.has(instance)) continue;
+      seen.add(instance);
 
       const manual = slot.manualDecision && typeof slot.manualDecision === "object" ? slot.manualDecision : null;
       if (manual && String(manual.action || "") === "CONFIRM_CANDIDATE") {
@@ -135,7 +196,7 @@
         continue;
       }
 
-      if (identity !== "CANDIDATE") continue;
+      if (identity !== "CANDIDATE" || !stableCandidateSet(slot)) continue;
       const names = [];
       for (const cand of slot.candidates || []) {
         if (!cand || typeof cand !== "object") continue;
@@ -148,16 +209,20 @@
   }
 
   function mergeKnownTokens(existing, extras) {
-    const parts = String(existing || "").split("+").filter((part) => part.trim());
-    const have = new Set(parts);
+    const extraEntries = [];
     for (const raw of extras || []) {
-      const token = String(raw || "").trim();
-      if (token && !have.has(token)) {
-        parts.push(token);
-        have.add(token);
-      }
+      const canon = canonicalizeKnownToken(raw);
+      if (canon) extraEntries.push(canon);
     }
-    return parts.join("+");
+    const remove = new Map();
+    for (const token of extraEntries) remove.set(token, (remove.get(token) || 0) + 1);
+    const preserved = [];
+    for (const entry of knownTokenEntries(existing)) {
+      const left = remove.get(entry) || 0;
+      if (left > 0) remove.set(entry, left - 1);
+      else preserved.push(entry);
+    }
+    return preserved.concat(extraEntries).join("+");
   }
 
   function applyWarehouseIdentityConstraints(data, known) {
@@ -763,6 +828,7 @@
   return {
     formatKnownItems,
     warehouseSlotsKnownTokens,
+    knownTokenEntries,
     mergeKnownTokens,
     applyWarehouseIdentityConstraints,
     canonicalizeVenueName,
