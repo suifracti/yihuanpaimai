@@ -3511,6 +3511,12 @@ def _native_observation_event(event: Dict[str, Any]) -> Optional[Dict[str, Any]]
             elif in_auction and mapped is not None and _native_solver_lease_matches(data):
                 from live_shadow import attach_live_shadow
                 solver_ctx = dict(data)
+                adapter_input = canonical_to_v06_solver_input(CURRENT_MATCH.to_canonical())
+                solver_ctx.update(
+                    knownGold=adapter_input.get("knownGold") or "",
+                    knownPurple=adapter_input.get("knownPurple") or "",
+                    knownRed=adapter_input.get("knownRed") or "",
+                )
                 solver_ctx.update(
                     venue=mapped.get("venue"), lobbyVenue=mapped.get("venue"),
                     box=mapped.get("box"), avg=facts.get("goldAvg"),
