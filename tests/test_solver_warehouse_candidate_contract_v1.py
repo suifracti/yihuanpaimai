@@ -108,6 +108,75 @@ def _exact_fish_slot(col=0, row=0):
     )
 
 
+def _install_optional_vision_stubs():
+    import types
+    cv2 = sys.modules.get("cv2") or types.ModuleType("cv2")
+    numpy = sys.modules.get("numpy") or types.ModuleType("numpy")
+    if not hasattr(numpy, "ndarray"):
+        numpy.ndarray = type("ndarray", (), {})
+    rapid = sys.modules.get("rapidocr_onnxruntime") or types.ModuleType("rapidocr_onnxruntime")
+    if not hasattr(rapid, "RapidOCR"):
+        rapid.RapidOCR = type("RapidOCR", (), {})
+    sys.modules["cv2"] = cv2
+    sys.modules["numpy"] = numpy
+    sys.modules["rapidocr_onnxruntime"] = rapid
+
+
+def _warehouse_fact_projection():
+    _install_optional_vision_stubs()
+    engine_dir = ROOT / "architecture" / "v2" / "host" / "engine_v22"
+    if str(engine_dir) not in sys.path:
+        sys.path.insert(0, str(engine_dir))
+    from nte_engine_v22 import RealEngine
+    return RealEngine._warehouse_fact_projection
+
+
+def _tracked_vision_slot(
+    *,
+    col,
+    row,
+    w,
+    h,
+    rarity,
+    evidence,
+    confirmed,
+    shape_locked,
+    names,
+    track_id=1,
+    identified_name=None,
+    identified_id=None,
+    identity_kind=None,
+):
+    _install_optional_vision_stubs()
+    from warehouse_vision import EvidenceLevel, TrackedSlotBlob
+    blob = TrackedSlotBlob(
+        track_id=track_id,
+        first_seen_frame=1,
+        last_seen_frame=8,
+        consecutive_stable_frames=5 if confirmed else 1,
+        is_confirmed=confirmed,
+        box=(col * 10, row * 10, w * 10, h * 10),
+        width_cells=w,
+        height_cells=h,
+        cell_count=w * h,
+        rarity=rarity,
+        evidence_level=EvidenceLevel(evidence),
+        has_glow=True,
+        shape_locked=shape_locked,
+        surround_locked=True,
+        candidates=[
+            {"catalogId": identified_id or f"cand-{i}", "name": name}
+            for i, name in enumerate(names)
+        ],
+        identified_item={"Name": identified_name} if identified_name else None,
+        identified_catalog_id=identified_id,
+        identity_reference_kind=identity_kind,
+        col=col,
+        row=row,
+    )
+    return blob.to_dict()
+
+
 def _run_pipeline(solver_input, records=None):
     payload = {"input": solver_input, "records": records or []}
     script = r"""
@@ -440,6 +509,57 @@ class SolverWarehouseCandidateContractV1Tests(unittest.TestCase):
         self.assertEqual(known_token_entries(py_b["knownGold"]), [CANDIDATE_B, CANDIDATE_B])
         self.assertEqual(known_token_entries(js_b["knownGold"]), [CANDIDATE_B, CANDIDATE_B])
         self.assertNotEqual(py_a["knownGold"], py_b["knownGold"])
+
+    def test_production_canonical_stable_candidate_or_survives_projection(self):
+        """Production solver entry must keep trusted CANDIDATE_SET evidence flags.
+
+        Call chain:
+          TrackedSlotBlob.to_dict() already emits shapeLocked/isConfirmed.
+          RealEngine._warehouse_fact_projection then CurrentMatch.apply_facts
+          then CurrentMatch.to_canonical then canonical_to_v06_solver_input
+          (build_manual_alpha_payload). Adapter _stable_candidate_set needs
+          those two booleans; dropping them skips every stable OR.
+
+        identityReferenceKind stays omitted on canonical EXACT slots so the
+        delta ledger remains the EXACT instance authority.
+        """
+        project = _warehouse_fact_projection()
+        vision = {
+            "slots": [
+                _tracked_vision_slot(
+                    col=0, row=0, w=4, h=1, rarity="gold",
+                    evidence="CANDIDATE_SET", confirmed=True, shape_locked=True,
+                    names=[CANDIDATE_A, CANDIDATE_B],
+                ),
+                _tracked_vision_slot(
+                    col=6, row=0, w=4, h=1, rarity="gold",
+                    evidence="RARITY_AND_SHAPE", confirmed=False, shape_locked=True,
+                    names=[CANDIDATE_A, CANDIDATE_B], track_id=2,
+                ),
+                _tracked_vision_slot(
+                    col=0, row=2, w=4, h=1, rarity="gold",
+                    evidence="EXACT_IDENTIFIED", confirmed=True, shape_locked=True,
+                    names=[CANDIDATE_B], identified_name=CANDIDATE_B,
+                    identified_id=FISH_ID, identity_kind="DIRECT", track_id=3,
+                ),
+            ]
+        }
+        self.assertTrue(vision["slots"][0]["shapeLocked"] is True)
+        self.assertTrue(vision["slots"][0]["isConfirmed"] is True)
+        match = CurrentMatch()
+        match.apply_facts({"warehouse": project(vision)}, source="vision", intent="observe")
+        canonical = match.to_canonical()
+        slots = canonical["warehouse"]["slots"]
+        stable = next(slot for slot in slots if slot["col"] == 0 and slot["row"] == 0)
+        exact = next(slot for slot in slots if slot["col"] == 0 and slot["row"] == 2)
+        self.assertEqual(stable["evidenceLevel"], "CANDIDATE_SET")
+        self.assertTrue(stable.get("shapeLocked") is True or stable.get("isConfirmed") is True)
+        self.assertNotIn("identityReferenceKind", exact)
+        py = canonical_to_v06_solver_input(canonical)
+        js = _js_adapter(canonical)
+        self.assertEqual(py["knownGold"], OR_TOKEN)
+        self.assertEqual(js["knownGold"], OR_TOKEN)
+        self.assertEqual(warehouse_slots_known_tokens(slots)["knownGold"], [OR_TOKEN])
 
     def test_later_warehouse_slots_do_not_rewrite_frozen_round_input(self):
         """Adapter is snapshot-in/snapshot-out. Frozen round input is the pipeline authority.
