@@ -370,22 +370,22 @@ class NativeMainSolverHudConsumptionV1Tests(unittest.TestCase):
         adapter_known = canonical_to_v06_solver_input(match.to_canonical())["knownGold"]
         self.assertEqual(adapter_known, OR_TOKEN)
         overlay = app_main.build_canonical_overlay_state(match)
-        self.assertNotIn(CANDIDATE_A, str(overlay.get("knownGold") or "").split("+"))
-        self.assertNotIn(CANDIDATE_B, str(overlay.get("knownGold") or "").split("+"))
         self.assertEqual(len(captured), 1, "native IN_AUCTION frame must schedule HUD live solver")
-        live_known = _known_gold_text(captured[0].get("knownGold"))
-        self.assertNotEqual(live_known, OR_TOKEN)
-        self.assertNotIn(CANDIDATE_A, live_known.split("+"))
-        self.assertNotIn(CANDIDATE_B, live_known.split("+"))
-        self.assertNotEqual(_known_gold_text(payload.get("knownGold")), OR_TOKEN)
+        overlay_known = str(overlay.get("knownGold") or "")
+        payload_known = _known_gold_text(payload.get("knownGold"))
+        self.assertNotIn(CANDIDATE_A, overlay_known.split("+"))
+        self.assertNotIn(CANDIDATE_B, overlay_known.split("+"))
+        self.assertNotIn(CANDIDATE_A, payload_known.split("+"))
+        self.assertNotIn(CANDIDATE_B, payload_known.split("+"))
 
-    @unittest.expectedFailure
     def test_native_observation_live_solver_ctx_receives_adapter_or(self):
-        """Desired contract: HUD attach_live_shadow ctx consumes the adapter OR.
+        """HUD attach_live_shadow ctx must consume the adapter warehouse OR.
 
-        Production today copies facts.knownGold in `_sync_payload_with_canonical_facts`
-        (`app/main.py`). Warehouse OR lives only on canonical_to_v06_solver_input.
-        File owner is app/main.py; wait for Issue #20 before changing it.
+        Target for Issue #20 `app/main.py`: after `_sync_payload_with_canonical_facts`,
+        compose solver_ctx knownGold/Purple/Red from
+        canonical_to_v06_solver_input(CURRENT_MATCH.to_canonical()) before
+        attach_live_shadow. Overlay/payload presentation must still not unique-promote
+        the two names. This assertion FAILs on PR #18 HEAD until that patch lands.
         """
         app_main = _load_main()
         slots = _engine_projected_slots(stable=True, unstable=True)
