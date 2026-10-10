@@ -91,6 +91,154 @@
     return parts.join("+");
   }
 
+  const SOLVER_KNOWN_RARITIES = { gold: "knownGold", purple: "knownPurple", red: "knownRed" };
+
+  function slotInstanceKey(slot) {
+    try {
+      if (slot.col == null || slot.row == null || slot.w == null || slot.h == null) return null;
+      const rarity = String(slot.rarity || "");
+      const width = Number(slot.w), height = Number(slot.h);
+      if (!rarity || rarity === "unknown" || !(width > 0) || !(height > 0)) return null;
+      return [Number(slot.row), Number(slot.col), width, height, rarity].join(",");
+    } catch (_) {
+      return null;
+    }
+  }
+
+  function cleanItemName(value) {
+    const name = String(value || "").trim();
+    if (!name || name.includes("+") || name.includes("/")) return null;
+    return name;
+  }
+
+  function flagTrue(value) {
+    return value === true;
+  }
+
+  function stableCandidateSet(slot) {
+    if (String(slot.evidenceLevel || "") !== "CANDIDATE_SET") return false;
+    return flagTrue(slot.shapeLocked) || flagTrue(slot.isConfirmed);
+  }
+
+  function canonicalizeKnownToken(value) {
+    const name = String(value || "").trim();
+    if (!name || name.includes("+")) return null;
+    if (name.includes("/")) {
+      const parts = [...new Set(name.split("/").map((part) => part.trim()).filter((part) => part && !part.includes("+")))].sort();
+      if (parts.length < 2) return null;
+      return parts.join("/");
+    }
+    return name;
+  }
+
+  function knownTokenEntries(value) {
+    const rawTokens = [];
+    if (Array.isArray(value)) {
+      for (const item of value) {
+        if (item && typeof item === "object") {
+          const name = String(item.name || "").trim();
+          const count = Number(item.count || 1);
+          if (name && Number.isInteger(count) && count > 0) rawTokens.push([name, count]);
+        } else {
+          const name = String(item || "").trim();
+          if (name) rawTokens.push([name, 1]);
+        }
+      }
+    } else {
+      for (const token of String(value || "").split("+")) {
+        const trimmed = token.trim();
+        if (!trimmed) continue;
+        const star = trimmed.lastIndexOf("*");
+        if (star > 0) {
+          const name = trimmed.slice(0, star).trim();
+          const countText = trimmed.slice(star + 1);
+          const count = Number(countText);
+          if (name && Number.isInteger(count) && count > 0 && String(count) === countText) {
+            rawTokens.push([name, count]);
+            continue;
+          }
+        }
+        rawTokens.push([trimmed, 1]);
+      }
+    }
+    const entries = [];
+    for (const [name, count] of rawTokens) {
+      const canon = canonicalizeKnownToken(name);
+      if (canon) for (let i = 0; i < count; i++) entries.push(canon);
+    }
+    return entries;
+  }
+
+  function warehouseSlotsKnownTokens(slots) {
+    const tokens = { knownGold: [], knownPurple: [], knownRed: [] };
+    if (!Array.isArray(slots)) return tokens;
+    const seen = new Set();
+    for (const slot of slots) {
+      if (!slot || typeof slot !== "object") continue;
+      const field = SOLVER_KNOWN_RARITIES[String(slot.rarity || "")];
+      if (!field) continue;
+      const instance = slotInstanceKey(slot);
+      if (instance == null || seen.has(instance)) continue;
+      seen.add(instance);
+
+      const manual = slot.manualDecision && typeof slot.manualDecision === "object" ? slot.manualDecision : null;
+      if (manual && String(manual.action || "") === "CONFIRM_CANDIDATE") {
+        const identity = manual.manualIdentity && typeof manual.manualIdentity === "object" ? manual.manualIdentity : {};
+        const name = cleanItemName(identity.name || manual.name);
+        if (name) tokens[field].push(name);
+        continue;
+      }
+
+      const identity = String(slot.identityStatus || "");
+      const identified = cleanItemName(slot.identifiedName);
+      if (identity === "EXACT" && identified && String(slot.identityReferenceKind || "") === "DIRECT") {
+        tokens[field].push(identified);
+        continue;
+      }
+
+      if (identity !== "CANDIDATE" || !stableCandidateSet(slot)) continue;
+      const names = [];
+      for (const cand of slot.candidates || []) {
+        if (!cand || typeof cand !== "object") continue;
+        const name = cleanItemName(cand.name || cand.Name);
+        if (name && !names.includes(name)) names.push(name);
+      }
+      if (names.length >= 2) tokens[field].push(names.slice().sort().join("/"));
+    }
+    return tokens;
+  }
+
+  // Inverse of RealEngine._warehouse_known_fact_delta on CurrentMatch.to_canonical()
+  // snapshots. Canonical slots omit identityReferenceKind, so EXACT names are not
+  // re-emitted; this merge does not independently prove two name-equal sources are
+  // the same physical instance.
+  function mergeKnownTokens(existing, extras) {
+    const extraEntries = [];
+    for (const raw of extras || []) {
+      const canon = canonicalizeKnownToken(raw);
+      if (canon) extraEntries.push(canon);
+    }
+    const remove = new Map();
+    for (const token of extraEntries) remove.set(token, (remove.get(token) || 0) + 1);
+    const preserved = [];
+    for (const entry of knownTokenEntries(existing)) {
+      const left = remove.get(entry) || 0;
+      if (left > 0) remove.set(entry, left - 1);
+      else preserved.push(entry);
+    }
+    return preserved.concat(extraEntries).join("+");
+  }
+
+  function applyWarehouseIdentityConstraints(data, known) {
+    const warehouse = data && typeof data.warehouse === "object" ? data.warehouse : {};
+    const extra = warehouseSlotsKnownTokens(warehouse.slots);
+    return {
+      knownGold: mergeKnownTokens(known.knownGold, extra.knownGold),
+      knownPurple: mergeKnownTokens(known.knownPurple, extra.knownPurple),
+      knownRed: mergeKnownTokens(known.knownRed, extra.knownRed)
+    };
+  }
+
   function canonicalizeVenueName(venueVal, fillDefault = true) {
     if (!venueVal || venueVal === "未知场地" || venueVal === "unknown") {
       return fillDefault ? "中级场 · 珊瑚场" : null;
@@ -290,6 +438,11 @@
       roundNo = data.round ?? 1;
       leaderBid = data.currentLeaderBid ?? data.leaderBid ?? data.myBid ?? (fillDefault ? 0 : null);
     }
+
+    const knownBound = applyWarehouseIdentityConstraints(data, { knownGold, knownPurple, knownRed });
+    knownGold = knownBound.knownGold;
+    knownPurple = knownBound.knownPurple;
+    knownRed = knownBound.knownRed;
 
     return {
       q,
@@ -678,6 +831,10 @@
 
   return {
     formatKnownItems,
+    warehouseSlotsKnownTokens,
+    knownTokenEntries,
+    mergeKnownTokens,
+    applyWarehouseIdentityConstraints,
     canonicalizeVenueName,
     canonicalizeFieldConditionId,
     canonicalToV06SolverInput,
