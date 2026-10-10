@@ -13,8 +13,9 @@ v0.6 Solver Adapter (Canonical MatchRecord v7 -> 0.6 Solver Input)
 from __future__ import annotations
 
 import json
+from collections import Counter
 from copy import deepcopy
-from typing import Any, Dict, List, Optional, Union
+from typing import Any, Dict, List, Mapping, Optional, Sequence, Tuple, Union
 
 
 VENUE_CANONICAL_TO_NAME = {
@@ -75,6 +76,181 @@ def format_known_items(items: Union[None, str, List[Any]]) -> str:
                     token = f"{token}*{count}"
                 parts.append(token)
     return "+".join(parts)
+
+
+_SOLVER_KNOWN_RARITIES = {
+    "gold": "knownGold",
+    "purple": "knownPurple",
+    "red": "knownRed",
+}
+
+
+def _slot_instance_key(slot: Mapping[str, Any]) -> Optional[Tuple[int, int, int, int, str]]:
+    """Physical instance key used by RealEngine._warehouse_instance_footprint."""
+    try:
+        col, row, width, height = slot.get("col"), slot.get("row"), slot.get("w"), slot.get("h")
+        rarity = str(slot.get("rarity") or "")
+        if None in (col, row, width, height) or not rarity or rarity == "unknown":
+            return None
+        width_i, height_i = int(width), int(height)
+        if width_i <= 0 or height_i <= 0:
+            return None
+        return (int(row), int(col), width_i, height_i, rarity)
+    except (TypeError, ValueError):
+        return None
+
+
+def _clean_item_name(value: Any) -> Optional[str]:
+    name = str(value or "").strip()
+    if not name or "+" in name or "/" in name:
+        return None
+    return name
+
+
+def _flag_true(value: Any) -> bool:
+    return value is True
+
+
+def _stable_candidate_set(slot: Mapping[str, Any]) -> bool:
+    """Production CANDIDATE_SET is only assigned after temporal confirm + locked shape.
+
+    TrackedSlotBlob.to_dict() still labels any non-empty candidates as identityStatus=CANDIDATE,
+    including unstable RARITY_AND_SHAPE frames. Those must not become solver OR hard facts.
+    """
+    if str(slot.get("evidenceLevel") or "") != "CANDIDATE_SET":
+        return False
+    return _flag_true(slot.get("shapeLocked")) or _flag_true(slot.get("isConfirmed"))
+
+
+def _canonicalize_known_token(value: Any) -> Optional[str]:
+    name = str(value or "").strip()
+    if not name or "+" in name:
+        return None
+    if "/" in name:
+        parts = sorted({part.strip() for part in name.split("/") if part.strip() and "+" not in part})
+        if len(parts) < 2:
+            return None
+        return "/".join(parts)
+    return name
+
+
+def known_token_entries(value: Any) -> List[str]:
+    """Expand a known* string or item list into a physical-instance multiset."""
+    raw_tokens: List[Tuple[str, int]] = []
+    if isinstance(value, list):
+        for item in value:
+            if isinstance(item, dict):
+                name = str(item.get("name") or "").strip()
+                try:
+                    count = int(item.get("count") or 1)
+                except (TypeError, ValueError):
+                    count = 1
+                if name and count > 0:
+                    raw_tokens.append((name, count))
+            else:
+                name = str(item or "").strip()
+                if name:
+                    raw_tokens.append((name, 1))
+    else:
+        for token in str(value or "").split("+"):
+            token = token.strip()
+            if not token:
+                continue
+            name, sep, count_text = token.rpartition("*")
+            if sep and name.strip() and count_text.isdigit():
+                count = int(count_text)
+                if count > 0:
+                    raw_tokens.append((name.strip(), count))
+                    continue
+            raw_tokens.append((token, 1))
+    entries: List[str] = []
+    for name, count in raw_tokens:
+        canon = _canonicalize_known_token(name)
+        if canon:
+            entries.extend([canon] * count)
+    return entries
+
+
+def warehouse_slots_known_tokens(slots: Any) -> Dict[str, List[str]]:
+    """Map warehouse slots to solver known tokens without promoting unique candidates.
+
+    One physical instance (row, col, w, h, rarity) yields at most one token; two
+    same-name EXACT slots remain two copies. EXACT+DIRECT and human CONFIRM_CANDIDATE
+    become confirmed names. Stable CANDIDATE_SET slots with two or more catalog names
+    become a single OR token `A/B`. UNIQUE_IN_CATALOG / one-name / unstable
+    RARITY_AND_SHAPE candidates stay out of known*.
+    """
+    tokens = {field: [] for field in _SOLVER_KNOWN_RARITIES.values()}
+    if not isinstance(slots, list):
+        return tokens
+    seen = set()
+    for slot in slots:
+        if not isinstance(slot, dict):
+            continue
+        field = _SOLVER_KNOWN_RARITIES.get(str(slot.get("rarity") or ""))
+        if field is None:
+            continue
+        instance = _slot_instance_key(slot)
+        if instance is None or instance in seen:
+            continue
+        seen.add(instance)
+
+        manual = slot.get("manualDecision") if isinstance(slot.get("manualDecision"), dict) else None
+        if manual and str(manual.get("action") or "") == "CONFIRM_CANDIDATE":
+            identity = manual.get("manualIdentity") if isinstance(manual.get("manualIdentity"), dict) else {}
+            name = _clean_item_name(identity.get("name") or manual.get("name"))
+            if name:
+                tokens[field].append(name)
+            continue
+
+        identity = str(slot.get("identityStatus") or "")
+        identified = _clean_item_name(slot.get("identifiedName"))
+        if identity == "EXACT" and identified and str(slot.get("identityReferenceKind") or "") == "DIRECT":
+            tokens[field].append(identified)
+            continue
+
+        if identity != "CANDIDATE" or not _stable_candidate_set(slot):
+            continue
+        names: List[str] = []
+        for cand in slot.get("candidates") or []:
+            if not isinstance(cand, dict):
+                continue
+            name = _clean_item_name(cand.get("name") or cand.get("Name"))
+            if name and name not in names:
+                names.append(name)
+        if len(names) >= 2:
+            tokens[field].append("/".join(sorted(names)))
+    return tokens
+
+
+def merge_known_tokens(existing: str, extras: Sequence[str]) -> str:
+    """Inverse of RealEngine._warehouse_known_fact_delta on a CurrentMatch snapshot.
+
+    Production solver input is CurrentMatch.to_canonical() after that delta has
+    already written the physical multiset into qualities.*.knownItems. Canonical
+    warehouse slots do not copy identityReferenceKind, so EXACT names are not
+    re-emitted here; remaining extras (CONFIRM_CANDIDATE / stable OR) replace
+    matching copies then append. This function does not independently prove that
+    a name in knownItems and a warehouse slot are the same physical instance.
+    """
+    extra_entries = [token for token in (_canonicalize_known_token(raw) for raw in extras) if token]
+    remove = Counter(extra_entries)
+    preserved: List[str] = []
+    for entry in known_token_entries(existing):
+        if remove[entry] > 0:
+            remove[entry] -= 1
+        else:
+            preserved.append(entry)
+    return "+".join(preserved + extra_entries)
+
+
+def apply_warehouse_identity_constraints(data: Mapping[str, Any], known: Mapping[str, str]) -> Dict[str, str]:
+    warehouse = data.get("warehouse") if isinstance(data.get("warehouse"), dict) else {}
+    extra = warehouse_slots_known_tokens(warehouse.get("slots"))
+    return {
+        field: merge_known_tokens(known.get(field, ""), extra.get(field) or [])
+        for field in _SOLVER_KNOWN_RARITIES.values()
+    }
 
 
 def canonicalize_venue_name(venue_val: Optional[str], fill_default: bool = True) -> Optional[str]:
@@ -298,6 +474,15 @@ def canonical_to_v06_solver_input(data: Dict[str, Any]) -> Dict[str, Any]:
             leader_bid = data.get("myBid")
         if leader_bid is None and fill_default:
             leader_bid = 0
+
+    known_bound = apply_warehouse_identity_constraints(data, {
+        "knownGold": known_gold,
+        "knownPurple": known_purple,
+        "knownRed": known_red,
+    })
+    known_gold = known_bound["knownGold"]
+    known_purple = known_bound["knownPurple"]
+    known_red = known_bound["knownRed"]
 
     # 构造标准 0.6 求解器输入字典
     solver_input: Dict[str, Any] = {

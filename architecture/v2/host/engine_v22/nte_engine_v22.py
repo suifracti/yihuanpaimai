@@ -2084,6 +2084,10 @@ class RealEngine:
                     "identityStatus": str(raw.get("identityStatus") or "UNKNOWN"),
                     "candidates": candidates,
                 }
+                if raw.get("shapeLocked") is True:
+                    slot["shapeLocked"] = True
+                if raw.get("isConfirmed") is True:
+                    slot["isConfirmed"] = True
                 if best_candidate_id:
                     slot["bestCandidateId"] = best_candidate_id
                 if raw.get("bestCandidateName"):
