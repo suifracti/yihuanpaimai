@@ -56,7 +56,7 @@ jobs:
               $status = 'FAIL'
             } elseif ($result.skipped.Count -gt 0) {
               $status = 'SKIP'
-            } elseif ($result.tests -eq 16) {
+            } elseif ($result.tests -eq 23) {
               $status = 'PASS'
             }
             "M1 contracts: $status; tests=$($result.tests); skipped=$($result.skipped.Count)" | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Append -Encoding utf8
@@ -74,6 +74,48 @@ jobs:
           $testExitCode = $LASTEXITCODE
           "test_exit_code=$testExitCode" | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Append -Encoding utf8
           if ($testExitCode -ne 0) { exit $testExitCode }
+
+      - name: Run integrated overlap and composite feasibility contracts
+        id: integrated-python-contracts
+        if: steps.install-python-deps.outcome == 'success'
+        shell: pwsh
+        run: |
+          python tools/run_tests.py test_native_sparse_overlap test_solver_composite_feasibility_v1 --output build/ci-issue24-integrated-python.json
+          $testExitCode = $LASTEXITCODE
+          if (-not (Test-Path build/ci-issue24-integrated-python.json)) {
+            'Integrated Python contracts: NOT_RUN (no result file)' | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Append -Encoding utf8
+            exit 1
+          }
+          $result = Get-Content build/ci-issue24-integrated-python.json -Raw | ConvertFrom-Json
+          $expectedPrivateSkip = 'test_native_sparse_overlap.SparseOverlapTests.test_identity_checked_real_sequence_has_pixel_continuity'
+          $unexpectedSkips = @($result.skipped | Where-Object { $_[0] -ne $expectedPrivateSkip })
+          if ($testExitCode -ne 0 -or $result.failures.Count -gt 0 -or $result.errors.Count -gt 0 -or $result.tests -ne 7 -or $unexpectedSkips.Count -gt 0 -or $result.skipped.Count -gt 1) {
+            $status = 'FAIL'
+          } elseif ($result.skipped.Count -eq 1) {
+            $status = 'PASS (private Issue #31 replay SKIP)'
+          } else {
+            $status = 'PASS'
+          }
+          "Integrated overlap/composite contracts: $status; tests=$($result.tests); skipped=$($result.skipped.Count)" | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Append -Encoding utf8
+          if ($status -eq 'FAIL') { exit 1 }
+
+      - name: Set up Node.js for v06 engine self-tests
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Run v06 engine reliability self-tests
+        id: v06-engine-self-tests
+        shell: pwsh
+        run: |
+          node -e "const e=require('./core/auction_engine_v06.js');const r=e.runV06ReliabilitySelfTests();console.log(JSON.stringify(r));if(!r.passed||r.tested!==8)process.exit(1)"
+          $testExitCode = $LASTEXITCODE
+          if ($testExitCode -eq 0) {
+            'v06 engine reliability self-tests: 8/8 PASS' | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Append -Encoding utf8
+          } else {
+            'v06 engine reliability self-tests: FAIL' | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Append -Encoding utf8
+            exit $testExitCode
+          }
 
       - name: Verify strict solver source gate on Windows checkout
         id: solver-source-compatibility
