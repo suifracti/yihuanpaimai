@@ -171,7 +171,14 @@ public sealed class NativeDomainActionRuntime
         {
             try { committed = obligations?.CommitReceipt(receipt) == true; } catch { committed = false; }
             if (!committed)
-                receipt = coordinator.MarkUnknown(receipt.IntentId, "DURABLE_RECEIPT_COMMIT_FAILED");
+            {
+                try { receipt = coordinator.MarkUnknown(receipt.IntentId, "DURABLE_RECEIPT_COMMIT_FAILED"); }
+                catch (ArgumentException) when (receipt.Status == ReceiptStatus.NOT_SENT)
+                {
+                    // A preflight rejection may have no coordinator receipt row;
+                    // keep it NOT_SENT while suppressing its uncommitted projection.
+                }
+            }
         }
         var node = JsonSerializer.SerializeToNode(receipt, Json)!.AsObject();
         var message = new JsonObject
