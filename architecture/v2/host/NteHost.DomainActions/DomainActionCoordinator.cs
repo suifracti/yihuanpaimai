@@ -1,0 +1,206 @@
+namespace NteHost.DomainActions;
+
+public enum DomainActionKind { Bid, ReturnLobby, StartNextMatch }
+public enum ReceiptStatus { NOT_SENT, SENT_PENDING_CONFIRMATION, CONFIRMED, UNKNOWN }
+public sealed record WindowBinding(long Hwnd, int Pid, long ProcessInstanceToken, long FocusEpoch);
+public sealed record DomainIntent(string IntentId, DomainActionKind Kind, string MatchId, int Round,
+    long FactsRevision, long? Amount, long Budget, long DeadlineNs, long TakeoverGeneration,
+    string LeaseId, WindowBinding Window)
+{
+    public long MatchGeneration { get; init; }
+    public string ObservationSessionId { get; init; } = "";
+    public long MaxSafeBid { get; init; }
+}
+
+// Produced from the current qualified Native/Engine state, never from the intent itself.
+public sealed record ActionScope(string MatchId, int Round, long FactsRevision, long Budget,
+    long ApprovedAmountLimit, string Scene, string LeaseId, long LeaseExpiresNs,
+    WindowBinding Window, long TakeoverGeneration, long SourceSequence, long CapturedNs,
+    bool SourceQualified, bool Connected, bool ForegroundMatches, bool ExecutionAuthorized,
+    bool SettlementArchived, bool NewMatchAdmission)
+{
+    public long MatchGeneration { get; init; }
+    public string ObservationSessionId { get; init; } = "";
+}
+
+public sealed record VisibleResult(string IntentId, DomainActionKind Kind, string OriginMatchId,
+    int OriginRound, long OriginFactsRevision, long? AcceptedOwnAmount, string? NewMatchId,
+    string Scene, long SourceSequence, long CapturedNs, bool SourceQualified,
+    WindowBinding Window, long TakeoverGeneration)
+{
+    public long OriginMatchGeneration { get; init; }
+    public string ObservationSessionId { get; init; } = "";
+    public long NewMatchGeneration { get; init; }
+}
+public sealed record DomainReceipt(string IntentId, DomainActionKind Kind, string MatchId, int Round,
+    long FactsRevision, ReceiptStatus Status, string Reason, long? Amount,
+    long SentNs = 0, long EvidenceSequence = 0, string? NewMatchId = null)
+{
+    public long MatchGeneration { get; init; }
+    public string ObservationSessionId { get; init; } = "";
+    public long NewMatchGeneration { get; init; }
+}
+
+public sealed record PortOutcome(bool SideEffectAttempted, bool Completed, string Reason);
+public interface IRestrictedDomainInputPort
+{
+    // A closed domain operation, not coordinates/text/key scripts. Implementations must
+    // use existing Native identity + one-shot input ticket checks for EVERY primitive,
+    // call current immediately before each side effect (including cursor preparation),
+    // and report any attempted side effect even when the backend fails. No retries.
+    PortOutcome TrySend(DomainIntent intent, Func<bool> current);
+}
+
+/// <summary>Offline-ready policy/receipt owner. No port means execution OFF.</summary>
+public sealed class DomainActionCoordinator
+{
+    private readonly object gate = new();
+    private readonly Func<ActionScope?> readScope;
+    private readonly Func<long> clock;
+    private readonly IRestrictedDomainInputPort? port;
+    private readonly Dictionary<string, (DomainIntent Intent, DomainReceipt Receipt, long Sequence)> receipts = new();
+    private readonly HashSet<(string, int, DomainActionKind)> attempted = new();
+    private readonly long maxSourceAgeNs;
+    private string? pending;
+    private bool stopped;
+
+    public DomainActionCoordinator(Func<ActionScope?> readScope, Func<long> clock,
+        IRestrictedDomainInputPort? port = null, long maxSourceAgeNs = 500_000_000)
+    {
+        this.readScope = readScope; this.clock = clock; this.port = port;
+        if (maxSourceAgeNs <= 0) throw new ArgumentOutOfRangeException(nameof(maxSourceAgeNs));
+        this.maxSourceAgeNs = maxSourceAgeNs;
+    }
+
+    public DomainReceipt Dispatch(DomainIntent intent)
+    {
+        lock (gate)
+        {
+            if (receipts.TryGetValue(intent.IntentId, out var prior))
+            {
+                // IDs are immutable; return the original receipt, never send twice.
+                return prior.Intent == intent ? prior.Receipt : prior.Receipt with { Reason = "INTENT_ID_CONFLICT" };
+            }
+            DomainReceipt NotSent(string reason) => new(intent.IntentId, intent.Kind, intent.MatchId,
+                intent.Round, intent.FactsRevision, ReceiptStatus.NOT_SENT, reason, intent.Amount)
+                { MatchGeneration = intent.MatchGeneration, ObservationSessionId = intent.ObservationSessionId };
+            if (stopped) return NotSent("SESSION_STOPPED_UNKNOWN");
+            if (pending != null) return NotSent("CONFIRMATION_PENDING");
+            if (receipts.Count >= 512) return NotSent("RECEIPT_CAPACITY_STOP");
+            if (attempted.Contains((intent.MatchId, intent.Round, intent.Kind))) return NotSent("ACTION_ALREADY_ATTEMPTED");
+            var scope = SafeRead();
+            string reason = Validate(intent, scope);
+            if (reason != "OK") return NotSent(reason);
+            if (port == null) return NotSent("EXECUTION_OFF_NO_TICKET_PORT");
+            // Anchor the receipt before crossing the backend. Confirmation must be later
+            // than BOTH this source and this monotonic boundary.
+            long sentNs = clock();
+            PortOutcome outcome;
+            try { outcome = port.TrySend(intent, () => Validate(intent, SafeRead()) == "OK"); }
+            catch { outcome = new(true, false, "PORT_EXCEPTION_DELIVERY_UNKNOWN"); }
+            var status = !outcome.SideEffectAttempted ? ReceiptStatus.NOT_SENT
+                : outcome.Completed ? ReceiptStatus.SENT_PENDING_CONFIRMATION : ReceiptStatus.UNKNOWN;
+            var receipt = new DomainReceipt(intent.IntentId, intent.Kind, intent.MatchId, intent.Round,
+                intent.FactsRevision, status, outcome.Reason, intent.Amount, sentNs)
+                { MatchGeneration = intent.MatchGeneration, ObservationSessionId = intent.ObservationSessionId };
+            receipts.Add(intent.IntentId, (intent, receipt, scope!.SourceSequence));
+            if (outcome.SideEffectAttempted) attempted.Add((intent.MatchId, intent.Round, intent.Kind));
+            if (status == ReceiptStatus.SENT_PENDING_CONFIRMATION) pending = intent.IntentId;
+            if (status == ReceiptStatus.UNKNOWN) stopped = true;
+            return receipt;
+        }
+    }
+
+    public DomainReceipt Confirm(VisibleResult evidence)
+    {
+        lock (gate)
+        {
+            if (!receipts.TryGetValue(evidence.IntentId, out var entry))
+                throw new ArgumentException("UNKNOWN_INTENT", nameof(evidence));
+            if (entry.Receipt.Status != ReceiptStatus.SENT_PENDING_CONFIRMATION) return entry.Receipt;
+            var i = entry.Intent;
+            long now = clock();
+            var current = SafeRead();
+            if (!LiveContinuity(i, current, now) || now >= i.DeadlineNs)
+                return Stop(entry, "CONTINUITY_OR_CONFIRMATION_DEADLINE_LOST");
+            bool matches = evidence.Kind == i.Kind && evidence.OriginMatchId == i.MatchId
+                && evidence.OriginRound == i.Round && evidence.OriginFactsRevision == i.FactsRevision
+                && evidence.OriginMatchGeneration == i.MatchGeneration && evidence.ObservationSessionId == i.ObservationSessionId
+                && evidence.Window == i.Window && evidence.TakeoverGeneration == i.TakeoverGeneration
+                && evidence.SourceQualified && evidence.SourceSequence > entry.Sequence
+                && evidence.CapturedNs > entry.Receipt.SentNs && Fresh(evidence.CapturedNs, now)
+                && current!.SourceQualified && Fresh(current.CapturedNs, now)
+                && evidence.SourceSequence <= current.SourceSequence && evidence.CapturedNs <= current.CapturedNs;
+            matches &= i.Kind switch
+            {
+                DomainActionKind.Bid => evidence.Scene == "AUCTION" && evidence.AcceptedOwnAmount == i.Amount,
+                DomainActionKind.ReturnLobby => evidence.Scene == "LOBBY",
+                DomainActionKind.StartNextMatch => evidence.Scene == "AUCTION_R1"
+                    && !string.IsNullOrWhiteSpace(evidence.NewMatchId) && evidence.NewMatchId != i.MatchId
+                    && evidence.NewMatchGeneration > i.MatchGeneration,
+                _ => false,
+            };
+            if (!matches) return entry.Receipt; // Neither OS success nor unrelated/stale frames confirm.
+            var confirmed = entry.Receipt with { Status = ReceiptStatus.CONFIRMED, Reason = "VISIBLE_RESULT_CONFIRMED",
+                EvidenceSequence = evidence.SourceSequence, NewMatchId = evidence.NewMatchId,
+                NewMatchGeneration = evidence.NewMatchGeneration };
+            receipts[i.IntentId] = (i, confirmed, entry.Sequence); pending = null;
+            return confirmed;
+        }
+    }
+
+    // Called on timer, disconnect and takeover; UNKNOWN cannot be cleared by a resend.
+    public DomainReceipt? Poll()
+    {
+        lock (gate)
+        {
+            if (pending == null) return null;
+            var entry = receipts[pending];
+            long now = clock();
+            return now >= entry.Intent.DeadlineNs || !LiveContinuity(entry.Intent, SafeRead(), now)
+                ? Stop(entry, "CONTINUITY_OR_CONFIRMATION_DEADLINE_LOST") : entry.Receipt;
+        }
+    }
+
+    private DomainReceipt Stop((DomainIntent Intent, DomainReceipt Receipt, long Sequence) entry, string reason)
+    {
+        var result = entry.Receipt with { Status = ReceiptStatus.UNKNOWN, Reason = reason };
+        receipts[entry.Intent.IntentId] = (entry.Intent, result, entry.Sequence);
+        stopped = true; pending = null; return result;
+    }
+    private ActionScope? SafeRead() { try { return readScope(); } catch { return null; } }
+    private bool Fresh(long captured, long now) => captured > 0 && captured <= now && now - captured <= maxSourceAgeNs;
+    private static bool Continuity(DomainIntent i, ActionScope? s) => s != null && s.Connected
+        && s.ForegroundMatches && s.ExecutionAuthorized && s.Window == i.Window
+        && s.TakeoverGeneration == i.TakeoverGeneration && s.LeaseId == i.LeaseId;
+    private static bool LiveContinuity(DomainIntent i, ActionScope? s, long now) => Continuity(i, s)
+        && s!.Budget > 0 && now < s.LeaseExpiresNs
+        && s.ObservationSessionId == i.ObservationSessionId
+        && (i.Kind != DomainActionKind.Bid || (s.MatchId == i.MatchId && s.Round == i.Round && s.MatchGeneration == i.MatchGeneration));
+    private string Validate(DomainIntent i, ActionScope? s)
+    {
+        long now = clock();
+        if (string.IsNullOrWhiteSpace(i.IntentId) || string.IsNullOrWhiteSpace(i.MatchId)
+            || string.IsNullOrWhiteSpace(i.LeaseId) || i.FactsRevision < 0 || i.Budget <= 0
+            || i.MatchGeneration <= 0 || string.IsNullOrWhiteSpace(i.ObservationSessionId)
+            || i.Window.Hwnd <= 0 || i.Window.Pid <= 0 || i.Window.ProcessInstanceToken <= 0)
+            return "INVALID_INTENT";
+        if (!Continuity(i, s)) return "TARGET_LEASE_AUTHORIZATION_OR_TAKEOVER_REJECTED";
+        if (now >= i.DeadlineNs || now >= s!.LeaseExpiresNs || i.DeadlineNs > s.LeaseExpiresNs)
+            return "DEADLINE_OR_LEASE_EXPIRED";
+        if (!s.SourceQualified || s.SourceSequence <= 0 || !Fresh(s.CapturedNs, now)) return "SOURCE_UNQUALIFIED_OR_STALE";
+        if (s.MatchId != i.MatchId || s.MatchGeneration != i.MatchGeneration || s.ObservationSessionId != i.ObservationSessionId
+            || s.Round != i.Round || s.FactsRevision != i.FactsRevision || s.Budget != i.Budget)
+            return "MATCH_ROUND_REVISION_OR_BUDGET_CHANGED";
+        return i.Kind switch
+        {
+            DomainActionKind.Bid when s.Scene == "AUCTION" && i.Round is >= 1 and <= 5
+                && i.Amount is > 0 and <= 9_999_999 && i.Amount <= i.Budget
+                && i.Amount <= s.ApprovedAmountLimit && i.Amount <= i.MaxSafeBid => "OK",
+            DomainActionKind.ReturnLobby when s.Scene == "SETTLEMENT" && s.SettlementArchived && i.Amount == null => "OK",
+            DomainActionKind.StartNextMatch when s.Scene == "LOBBY" && s.SettlementArchived
+                && s.NewMatchAdmission && i.Round == 0 && i.Amount == null => "OK",
+            _ => "DOMAIN_SCENE_AMOUNT_OR_ADMISSION_REJECTED",
+        };
+    }
+}
