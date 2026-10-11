@@ -8,12 +8,14 @@ from __future__ import annotations
 
 import argparse
 import asyncio
+from decimal import Decimal
 import hashlib
 import importlib.util
 import json
 import os
 from pathlib import Path
 import socket
+import tempfile
 import time
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -66,23 +68,84 @@ def select_options(manifest, candidate=CANDIDATE):
     pending = candidate.resolve().parent / 'selected-launch-options.json'
     pending.write_text(selected, encoding='utf-8')
     if path.read_bytes() != original:
+        pending.unlink()
         raise RuntimeError('Concurrent configuration edit; refusing overwrite')
     os.replace(pending, path)
     return original, path.read_bytes()
 
 
-def restore_options(original, selected, candidate=CANDIDATE):
-    """Restore only our unchanged selection; never overwrite a concurrent edit."""
+def _unique_json_object(pairs):
+    result = {}
+    for key, value in pairs:
+        if key in result:
+            raise ValueError('Duplicate JSON object key')
+        result[key] = value
+    return result
+
+
+def _reject_json_constant(value):
+    raise ValueError(f'Non-JSON numeric constant: {value}')
+
+
+def _json_semantically_equal_values(left, right):
+    if isinstance(left, bool) or isinstance(right, bool):
+        return type(left) is type(right) and left == right
+    if isinstance(left, Decimal) and isinstance(right, Decimal):
+        return left.is_finite() and right.is_finite() and left == right
+    if isinstance(left, dict) and isinstance(right, dict):
+        return left.keys() == right.keys() and all(
+            _json_semantically_equal_values(left[key], right[key]) for key in left)
+    if isinstance(left, list) and isinstance(right, list):
+        return len(left) == len(right) and all(
+            _json_semantically_equal_values(a, b) for a, b in zip(left, right))
+    if type(left) is not type(right):
+        return False
+    return left == right
+
+
+def _json_semantically_equal(left, right):
+    try:
+        options = {'parse_int': Decimal, 'parse_float': Decimal,
+                   'object_pairs_hook': _unique_json_object, 'parse_constant': _reject_json_constant}
+        left_value = json.loads(left.decode('utf-8'), **options)
+        right_value = json.loads(right.decode('utf-8'), **options)
+        return _json_semantically_equal_values(left_value, right_value)
+    except (UnicodeDecodeError, json.JSONDecodeError, ValueError, TypeError):
+        return False
+
+
+def restore_options(original, selected, candidate=CANDIDATE, *, process_exit_confirmed=False):
+    """Restore original bytes only after owned-process exit and a stable semantic match."""
+    if process_exit_confirmed is not True:
+        return False
     path = ROOT / 'app/config.json'
-    if path.read_bytes() != selected:
+    pending = None
+    try:
+        current = path.read_bytes()
+        if current == original:
+            return True
+        if not _json_semantically_equal(current, selected):
+            return False
+        with tempfile.NamedTemporaryFile(mode='wb', prefix='restore-launch-options-', suffix='.tmp',
+                                         dir=candidate.resolve().parent, delete=False) as stream:
+            pending = Path(stream.name)
+            stream.write(original)
+            stream.flush()
+            os.fsync(stream.fileno())
+        latest = path.read_bytes()
+        if latest != current or not _json_semantically_equal(latest, selected):
+            return False
+        os.replace(pending, path)
+        pending = None
+        return path.read_bytes() == original
+    except OSError:
         return False
-    pending = candidate.resolve().parent / 'restore-launch-options.json'
-    pending.write_bytes(original)
-    if path.read_bytes() != selected:
-        pending.unlink()
-        return False
-    os.replace(pending, path)
-    return True
+    finally:
+        if pending is not None:
+            try:
+                pending.unlink(missing_ok=True)
+            except OSError:
+                pass
 
 
 class Recorder:
@@ -208,9 +271,10 @@ async def close_owned_assistant(child, prepared, record, *, timeout=10):
         try:
             async with websockets.connect(f"ws://127.0.0.1:{prepared['port']}", open_timeout=2,
                                           close_timeout=1) as ws:
-                # Existing Main WebView action invokes ShutdownCoordinator (no game input).
-                await asyncio.wait_for(ws.send(json.dumps({'type': 'eval_main_js',
-                    'script': 'window.chrome.webview.postMessage(JSON.stringify({action:"exit_app"}));'})), 2)
+                # Use Overlay's existing exit bridge and ShutdownCoordinator. Main's
+                # narrower WebView action allowlist intentionally excludes exit_app.
+                await asyncio.wait_for(ws.send(json.dumps({'type': 'eval_overlay_js',
+                    'script': 'window.pywebview.api.exit_app();'})), 2)
         except Exception as exc:
             safe_record(record, 'assistant-shutdown-request-failed', reason=type(exc).__name__)
     while child.poll() is None and time.monotonic() < deadline:
@@ -331,8 +395,9 @@ async def start(entry, prepared, manifest, receipt, output):
             assistant_confirmed = await close_owned_assistant(owned[0] if owned else None, prepared, record)
         finally:
             try:
-                if not owned or assistant_confirmed:
-                    restored = restore_options(original, selected, candidate)
+                if owned and assistant_confirmed:
+                    restored = restore_options(original, selected, candidate,
+                                               process_exit_confirmed=True)
                 released = port_released(prepared['port'])
             except OSError as exc:
                 safe_record(record, 'cleanup-error', reason=type(exc).__name__)
