@@ -29,10 +29,17 @@ internal static class NativeObservationService
         WriteIndented = false,
         Encoder = System.Text.Encodings.Web.JavaScriptEncoder.UnsafeRelaxedJsonEscaping,
     };
+    private static readonly JsonSerializerOptions DomainActionJsonOptions = new()
+    {
+        PropertyNameCaseInsensitive = true,
+        PropertyNamingPolicy = System.Text.Json.JsonNamingPolicy.CamelCase,
+        Converters = { new System.Text.Json.Serialization.JsonStringEnumConverter() },
+    };
 
     public static int Run(string[] args)
     {
         var sessionId = $"native-live-{Guid.NewGuid():N}";
+        var domainActionBootId = Guid.NewGuid().ToString("N");
         var modeOptionIndex = Array.IndexOf(args, "--observation-window-mode");
         var rawObservationWindowMode = modeOptionIndex >= 0 && (modeOptionIndex + 1 >= args.Length
                 || args[modeOptionIndex + 1].StartsWith("--", StringComparison.Ordinal))
@@ -78,6 +85,7 @@ internal static class NativeObservationService
         var stopReason = string.Empty;
         var controlQueue = new BlockingCollection<JsonObject>(32);
         var evidenceQueue = new BlockingCollection<JsonObject>(8);
+        var actionAcknowledgements = new DomainActionAcknowledgementRouter();
         Func<WarehouseSourceContext, Func<bool>, bool>? scrollWindow = null;
         Func<DeliveryVisualSummary?> latestSummary = () => null;
         var scrollDiagnosticLock = new object();
@@ -107,11 +115,15 @@ internal static class NativeObservationService
             evidenceLease.SignalStop();
             stop.Cancel();
         }
-        StartControlReader(controlQueue, evidenceQueue, evidenceLease, StopTransport);
+        StartControlReader(controlQueue, evidenceQueue, evidenceLease, StopTransport,
+            actionAcknowledgements);
 
         EmitStatus(sessionId, "STARTING", "explicit-start", new
         {
             profile = "native-readonly-v1",
+            domainActionBootId,
+            domainActionDecoder = "NOT_CONNECTED",
+            domainActionExecution = "OFF",
             hostPid = Environment.ProcessId,
             hostExecutable = Environment.ProcessPath,
             workDir,
@@ -289,6 +301,9 @@ internal static class NativeObservationService
             Volatile.Write(ref observationReady, 1);
             EmitStatus(sessionId, "READY", "engine-ready", new
             {
+                domainActionBootId,
+                domainActionDecoder = "NOT_CONNECTED",
+                domainActionExecution = "OFF",
                 target = TargetEvidence(target),
                 engineReadiness = handshake.EngineReadiness,
                 engineBusinessReady = handshake.EngineBusinessReady,
@@ -350,7 +365,8 @@ internal static class NativeObservationService
             }
             while (maxFrames <= 0 || acceptedFrames < maxFrames)
             {
-                if (stop.IsCancellationRequested || DrainControls(controlQueue, session, sessionId, monitor, target, observationWindowMode))
+                if (stop.IsCancellationRequested || DrainControls(controlQueue, session, sessionId,
+                    monitor, target, observationWindowMode, domainActionBootId, actionAcknowledgements))
                 {
                     ShutdownObservation();
                     EmitStatus(sessionId, "STOPPED", string.IsNullOrEmpty(stopReason) ? "explicit-stop" : Volatile.Read(ref stopReason), new { acceptedFrames });
@@ -961,7 +977,8 @@ internal static class NativeObservationService
     }
 
     private static void StartControlReader(BlockingCollection<JsonObject> queue,
-        BlockingCollection<JsonObject> evidenceQueue, WarehouseEvidenceLease evidenceLease, Action<string> stopTransport)
+        BlockingCollection<JsonObject> evidenceQueue, WarehouseEvidenceLease evidenceLease,
+        Action<string> stopTransport, DomainActionAcknowledgementRouter actionAcknowledgements)
     {
         var reader = new Thread(() =>
         {
@@ -984,6 +1001,13 @@ internal static class NativeObservationService
                     try { message = JsonNode.Parse(raw) as JsonObject; }
                     catch (System.Text.Json.JsonException) { continue; }
                     if (message is null) continue;
+                    if ((string?)message["type"] is "domain.action.obligation.ack" or "domain.action.receipt.ack")
+                    {
+                        // ACKs unblock the single restricted-action transaction directly;
+                        // they never enter the ordinary Supervisor control queue.
+                        actionAcknowledgements.Accept(message);
+                        continue;
+                    }
                     if ((string?)message["type"] == WarehouseEvidenceLease.ControlType)
                     {
                         if (Encoding.UTF8.GetByteCount(raw) > 16 * 1024)
@@ -1117,13 +1141,21 @@ internal static class NativeObservationService
         string sessionId,
         WindowMonitor monitor,
         WindowMonitorSnapshot sessionTarget,
-        string observationWindowMode)
+        string observationWindowMode,
+        string domainActionBootId,
+        DomainActionAcknowledgementRouter actionAcknowledgements)
     {
         void EmitStatus(string id, string status, string reason, object? details) =>
             NativeObservationService.EmitStatus(id, status, reason, details, observationWindowMode);
         while (queue.TryTake(out var message))
         {
             var type = (string?)message["type"];
+            if (string.Equals(type, "domain.action.dispatch", StringComparison.Ordinal))
+            {
+                RejectUnconnectedDomainDispatch(message, sessionId, sessionTarget,
+                    domainActionBootId, actionAcknowledgements);
+                continue;
+            }
             if (string.Equals(type, "native_stop", StringComparison.Ordinal))
             {
                 return true;
@@ -1233,6 +1265,81 @@ internal static class NativeObservationService
             }
         }
         return false;
+    }
+
+    private static void RejectUnconnectedDomainDispatch(JsonObject message, string sessionId,
+        WindowMonitorSnapshot sessionTarget, string domainActionBootId,
+        DomainActionAcknowledgementRouter actionAcknowledgements)
+    {
+        var rawIntent = message["intent"] as JsonObject;
+        DomainIntent? intent = null;
+        try { intent = rawIntent?.Deserialize<DomainIntent>(DomainActionJsonOptions); }
+        catch (System.Text.Json.JsonException) { }
+        var identity = sessionTarget.TargetIdentity;
+        bool bound = intent is not null
+            && (int?)message["protocolVersion"] == 1
+            && !string.IsNullOrWhiteSpace((string?)message["requestId"])
+            && (string?)message["bootId"] == domainActionBootId
+            && !string.IsNullOrWhiteSpace((string?)message["ledgerId"])
+            && (long?)message["ledgerRevision"] is >= 0
+            && (string?)message["observationSessionId"] == sessionId
+            && intent.Kind == DomainActionKind.Bid
+            && intent.ObservationSessionId == sessionId
+            && intent.MatchGeneration > 0 && intent.Round is >= 1 and <= 5
+            && intent.FactsRevision >= 0 && intent.Amount is > 0 and <= 9_999_999
+            && intent.Amount <= intent.MaxSafeBid && intent.Amount <= intent.Budget
+            && !string.IsNullOrWhiteSpace(intent.ApprovalId)
+            && identity is { IsPresent: true }
+            && intent.Window.Hwnd == sessionTarget.TargetHwnd
+            && intent.Window.Pid == sessionTarget.TargetPid
+            && intent.Window.ProcessInstanceToken == identity.ProcessInstanceToken;
+        if (!bound)
+        {
+            EmitLine(new JsonObject { ["type"] = "domain.action.dispatch.rejected",
+                ["observationSessionId"] = sessionId, ["reason"] = "DISPATCH_SCOPE_INVALID",
+                ["inputActions"] = false, ["decoder"] = "NOT_CONNECTED" });
+            return;
+        }
+
+        // Live WGC still has no qualified game decoder/action scope. This is a
+        // real Main -> Host dispatch and durable no-send receipt, never input.
+        var receipt = new DomainReceipt(intent!.IntentId, DomainActionKind.Bid,
+            intent.MatchId, intent.Round, intent.FactsRevision, ReceiptStatus.NOT_SENT,
+            "GAME_DECODER_NOT_CONNECTED", intent.Amount, SentNs: 0, EvidenceSequence: 0)
+        {
+            MatchGeneration = intent.MatchGeneration,
+            ObservationSessionId = intent.ObservationSessionId,
+            ApprovalId = intent.ApprovalId,
+        };
+        try
+        {
+            var port = new MainProcessExecutionObligationPort(actionAcknowledgements, EmitLine,
+                domainActionBootId, (string)message["ledgerId"]!,
+                (long)message["ledgerRevision"]!, sessionId, intent);
+            if (!port.CommitReceipt(receipt))
+            {
+                EmitLine(new JsonObject { ["type"] = "domain.action.dispatch.rejected",
+                    ["observationSessionId"] = sessionId,
+                    ["intentId"] = intent.IntentId,
+                    ["reason"] = "DURABLE_NOT_SENT_RECEIPT_NOT_ACKNOWLEDGED",
+                    ["inputActions"] = false, ["decoder"] = "NOT_CONNECTED" });
+                return;
+            }
+            EmitLine(new JsonObject {
+                ["type"] = "domain.action.receipt",
+                ["observationSessionId"] = sessionId,
+                ["receiptChannel"] = "bid",
+                ["receipt"] = JsonSerializer.SerializeToNode(receipt, DomainActionJsonOptions),
+            });
+        }
+        catch (Exception ex)
+        {
+            EmitLine(new JsonObject { ["type"] = "domain.action.dispatch.rejected",
+                ["observationSessionId"] = sessionId,
+                ["intentId"] = intent.IntentId,
+                ["reason"] = "DURABLE_NOT_SENT_RECEIPT_FAILED:" + ex.GetType().Name,
+                ["inputActions"] = false, ["decoder"] = "NOT_CONNECTED" });
+        }
     }
 
     private static bool MatchesCommandTarget(

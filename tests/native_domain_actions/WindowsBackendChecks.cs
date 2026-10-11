@@ -1,6 +1,7 @@
 using NteHost.DomainActions;
 using NteHost.Input;
 using NteHost.WindowMonitor;
+using System.Text.Json;
 using System.Text.Json.Nodes;
 
 static class WindowsBackendChecks
@@ -36,7 +37,9 @@ static class WindowsBackendChecks
         public bool CommitAllowed = true, ReceiptAllowed = true;
         public NativeDomainFrame? Latest;
         readonly IExecutionObligationPort obligations;
-        public Fixture(Win32DummyWindow window, bool partial = false, bool enable = true, bool fakeObserver = false, bool noPort = false, bool unknownAnchor = false)
+        public Fixture(Win32DummyWindow window, bool partial = false, bool enable = true,
+            bool fakeObserver = false, bool noPort = false, bool unknownAnchor = false,
+            IExecutionObligationPort? obligationsOverride = null, Action<JsonObject>? publishOverride = null)
         {
             Window = window; window.Activate();
             window.ResetFieldForTest();
@@ -59,7 +62,7 @@ static class WindowsBackendChecks
             // Observer was bootstrapped before guard construction; bind its actual hook witness now.
             Observer.Stop(); Require(Observer.Start(e => Guard.OnObservedInput(e)).Ok, "GUARD_OBSERVER_FAILED");
             Require(Guard.Arm(new(binding.Hwnd)).Ok, "ARM_FAILED");
-            obligations = new DelegatedExecutionObligationPort(i => {
+            var testObligations = new DelegatedExecutionObligationPort(i => {
                 AttemptCommits++;
                 if (!CommitAllowed) return false;
                 // Test-only ACK record, NOT another budget book. Prove disk acknowledgement
@@ -68,11 +71,25 @@ static class WindowsBackendChecks
                 using var file = new FileStream("build/native-domain-actions/dummy-attempt-ack.json", FileMode.Create, FileAccess.Write);
                 System.Text.Json.JsonSerializer.Serialize(file, i); file.Flush(true); return true;
             }, r => { ReceiptCommits++; return ReceiptAllowed; });
+            obligations = obligationsOverride ?? testObligations;
             var control = new CapturedDomainControlEvidence(Capture, unknownAnchor ? new UnconnectedGameDomainDecoder() : Decoder);
             var backend = new WindowsTicketedDomainBackend(Guard, control, noPort ? null : obligations, TraceClock.NowNs, binding.Hwnd);
             Backend = backend;
             Coordinator = new(Current, TraceClock.NowNs, new RestrictedDomainInputPort(backend, TraceClock.NowNs));
-            Runtime = new(Coordinator, new(Decoder, TraceClock.NowNs), obligations, Events.Add);
+            Runtime = new(Coordinator, new(Decoder, TraceClock.NowNs), obligations, publishOverride ?? Events.Add);
+        }
+        public void AdoptIntent(DomainIntent intent)
+        {
+            Intent = intent;
+            Scope = Scope with { MatchId = intent.MatchId, Round = intent.Round,
+                FactsRevision = intent.FactsRevision, Budget = intent.Budget,
+                ApprovedAmountLimit = intent.MaxSafeBid, Scene = "AUCTION",
+                LeaseId = intent.LeaseId, LeaseExpiresNs = intent.DeadlineNs + 5_000_000_000,
+                Window = intent.Window, TakeoverGeneration = intent.TakeoverGeneration,
+                MatchGeneration = intent.MatchGeneration,
+                ObservationSessionId = intent.ObservationSessionId,
+                ApprovalId = intent.ApprovalId, Connected = true,
+                ForegroundMatches = true, ExecutionAuthorized = true, SourceQualified = true };
         }
         public NativeDomainFrame Capture()
         {
@@ -154,5 +171,101 @@ static class WindowsBackendChecks
             Console.WriteLine("PASS pending durability failure UNKNOWN/no resend");
         }
         Console.WriteLine("PASS Windows dummy adapter; HTGame never constructed/discovered/authorized");
+    }
+
+    sealed class DeferredObligations : IExecutionObligationPort
+    {
+        IExecutionObligationPort? inner;
+        public void Configure(IExecutionObligationPort value) => inner = value;
+        public bool CommitBeforeInput(DomainIntent intent) => inner?.CommitBeforeInput(intent) == true;
+        public bool CommitReceipt(DomainReceipt receipt) => inner?.CommitReceipt(receipt) == true;
+    }
+
+    static readonly System.Text.Json.JsonSerializerOptions ProtocolJson = new()
+    { PropertyNamingPolicy = System.Text.Json.JsonNamingPolicy.CamelCase,
+      Converters = { new System.Text.Json.Serialization.JsonStringEnumConverter() } };
+    static void EmitProtocolLine(JsonObject line)
+    {
+        lock (ProtocolJson) { Console.WriteLine(line.ToJsonString(ProtocolJson)); Console.Out.Flush(); }
+    }
+
+    public static void RunCrossProcessHost()
+    {
+        if (!OperatingSystem.IsWindows()) throw new Exception("CROSS_PROCESS_DUMMY_REQUIRES_WINDOWS");
+        Console.InputEncoding = new System.Text.UTF8Encoding(false);
+        Console.OutputEncoding = new System.Text.UTF8Encoding(false);
+        var bootId = Guid.NewGuid().ToString("N");
+        const string sessionId = "obs-1";
+        using var window = new Win32DummyWindow();
+        var deferred = new DeferredObligations();
+        using var f = new Fixture(window, obligationsOverride: deferred,
+            publishOverride: EmitProtocolLine);
+        var identity = new WindowIdentityReader().Read(f.Scope.Window.Hwnd);
+        EmitProtocolLine(new JsonObject {
+            ["type"] = "domain.action.host_ready", ["protocolVersion"] = 1,
+            ["bootId"] = bootId, ["observationSessionId"] = sessionId,
+            ["window"] = new JsonObject {
+                ["hwnd"] = identity.Hwnd, ["pid"] = identity.Pid,
+                ["processInstanceToken"] = identity.ProcessInstanceToken, ["focusEpoch"] = 0,
+            },
+        });
+        var raw = Console.In.ReadLine();
+        var dispatch = JsonNode.Parse(raw ?? "") as JsonObject
+            ?? throw new Exception("MAIN_DISPATCH_REQUIRED");
+        if ((string?)dispatch["type"] != "domain.action.dispatch"
+            || (int?)dispatch["protocolVersion"] != 1
+            || (string?)dispatch["bootId"] != bootId
+            || (string?)dispatch["observationSessionId"] != sessionId
+            || dispatch["intent"] is not JsonObject intentNode)
+            throw new Exception("MAIN_DISPATCH_BINDING_REJECTED");
+        var ledgerId = (string?)dispatch["ledgerId"] ?? "";
+        var intent = intentNode.Deserialize<DomainIntent>(ProtocolJson)
+            ?? throw new Exception("MAIN_INTENT_INVALID");
+        if (intent.Kind != DomainActionKind.Bid || intent.ObservationSessionId != sessionId
+            || intent.Window.Hwnd != identity.Hwnd || intent.Window.Pid != identity.Pid
+            || intent.Window.ProcessInstanceToken != identity.ProcessInstanceToken)
+            throw new Exception("DUMMY_INTENT_SCOPE_MISMATCH");
+        f.AdoptIntent(intent);
+        var acknowledgements = new DomainActionAcknowledgementRouter(TimeSpan.FromSeconds(3));
+        var ackReader = new Thread(() => {
+            while (Console.In.ReadLine() is { } line)
+            {
+                try { if (JsonNode.Parse(line) is JsonObject ack) acknowledgements.Accept(ack); }
+                catch (System.Text.Json.JsonException) { }
+            }
+        }) { IsBackground = true, Name = "dummy-main-ack-reader" };
+        ackReader.Start();
+        var port = new MainProcessExecutionObligationPort(acknowledgements, EmitProtocolLine,
+            bootId, ledgerId, (long?)dispatch["ledgerRevision"] ?? -1, sessionId, intent);
+        deferred.Configure(port);
+
+        var sent = f.Runtime.Dispatch(intent);
+        if (sent.Status != ReceiptStatus.SENT_PENDING_CONFIRMATION)
+            throw new Exception("DUMMY_SEND_NOT_PENDING:" + sent.Status + ":" + sent.Reason);
+        var captured = f.Capture();
+        var confirmed = f.Runtime.OnIndependentCapture(intent.IntentId, captured,
+            new OwnSeatBinding(1, "dummy-self"));
+        if (confirmed?.Status != ReceiptStatus.CONFIRMED || window.Accepted != intent.Amount)
+            throw new Exception("DUMMY_INDEPENDENT_RECEIPT_FAILED:" + confirmed?.Status);
+        EmitProtocolLine(new JsonObject { ["type"] = "domain.action.host_complete",
+            ["inputActions"] = false, ["dummyInputCount"] = f.Raw.SendCallCount,
+            ["acceptedAmount"] = window.Accepted, ["receiptStatus"] = confirmed.Status.ToString() });
+    }
+
+    public static void RunAckTimeoutDummy()
+    {
+        if (!OperatingSystem.IsWindows()) throw new Exception("ACK_TIMEOUT_DUMMY_REQUIRES_WINDOWS");
+        Directory.CreateDirectory("build/native-domain-actions");
+        using var window = new Win32DummyWindow();
+        var deferred = new DeferredObligations();
+        using var f = new Fixture(window, obligationsOverride: deferred);
+        deferred.Configure(new MainProcessExecutionObligationPort(
+            new DomainActionAcknowledgementRouter(TimeSpan.FromMilliseconds(50)),
+            _ => { }, "dummy-boot", "dummy-ledger", 1,
+            f.Intent.ObservationSessionId, f.Intent));
+        var timedOut = f.Runtime.Dispatch(f.Intent);
+        Require(timedOut.Status == ReceiptStatus.UNKNOWN && f.Raw.SendCallCount == 0
+            && f.Events.Count == 0, "MISSING_MAIN_ACK_MUST_TIMEOUT_WITH_ZERO_INPUT_AND_NO_VISIBLE_RECEIPT");
+        Console.WriteLine("PASS Main ACK timeout blocks first primitive and receipt projection");
     }
 }

@@ -69,6 +69,8 @@ static class Program
     static void Case(string name, Action action) { action(); cases++; Console.WriteLine("PASS " + name); }
     static void Main(string[] args)
     {
+        if (args.Contains("--cross-process-dummy-host")) { WindowsBackendChecks.RunCrossProcessHost(); return; }
+        if (args.Contains("--ack-timeout-dummy")) { WindowsBackendChecks.RunAckTimeoutDummy(); return; }
         if (args.Contains("--dummy-window")) { WindowsBackendChecks.Run(); return; }
         Case("default execution OFF", () => {
             var f = new Fixture(false); Require(f.Coordinator.Dispatch(f.Intent()).Status == ReceiptStatus.NOT_SENT, "OFF");

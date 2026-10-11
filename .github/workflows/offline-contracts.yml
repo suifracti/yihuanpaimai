@@ -625,3 +625,34 @@ jobs:
           else { $status = 'PASS (isolated dummy window only)' }
           "Windows ticketed input dummy: $status" | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Append -Encoding utf8
           if ($status -notlike 'PASS*') { exit 1 }
+
+      - name: Run Main Host durable obligation round trip on owned dummy
+        id: domain-action-cross-process
+        shell: pwsh
+        run: |
+          $outputPath = 'build/ci-issue46-main-host-durable-dummy.json'
+          python tools/run_tests.py test_native_domain_action_cross_process test_native_domain_action_obligations --output $outputPath
+          $testExitCode = $LASTEXITCODE
+          if (-not (Test-Path $outputPath)) {
+            $status = 'NOT_RUN'
+            'Main/Host durable dummy round trip: NOT_RUN (no result file)' | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Append -Encoding utf8
+          } else {
+            $result = Get-Content $outputPath -Raw | ConvertFrom-Json
+            if ($testExitCode -ne 0 -or $result.tests -ne 3 -or $result.failures.Count -gt 0 -or $result.errors.Count -gt 0 -or $result.skipped.Count -gt 0) { $status = 'FAIL' }
+            else { $status = 'PASS' }
+            "Main/Host durable dummy round trip: $status; tests=$($result.tests); failures=$($result.failures.Count); errors=$($result.errors.Count); skipped=$($result.skipped.Count)" | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Append -Encoding utf8
+          }
+          if ($status -ne 'PASS') { exit 1 }
+
+      - name: Verify missing Main ACK leaves owned dummy untouched
+        id: domain-action-ack-timeout
+        shell: pwsh
+        run: |
+          $output = dotnet run --project tests/native_domain_actions/domain-actions.csproj -- --ack-timeout-dummy 2>&1
+          $testExitCode = $LASTEXITCODE
+          $output | Write-Output
+          $summaryLine = @($output | Where-Object { $_ -match '^PASS Main ACK timeout blocks first primitive and receipt projection$' })
+          if ($testExitCode -ne 0 -or $summaryLine.Count -ne 1) { $status = 'FAIL' }
+          else { $status = 'PASS (zero dummy input without Main ACK)' }
+          "Main ACK timeout gate: $status" | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Append -Encoding utf8
+          if ($status -notlike 'PASS*') { exit 1 }

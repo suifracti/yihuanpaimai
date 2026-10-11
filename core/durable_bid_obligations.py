@@ -206,9 +206,11 @@ class DurableBidIntentBook:
             return result
         return self._transaction(mutate)
 
-    def attempted(self, intent_id, current, *, now_ms):
+    def attempted(self, intent_id, current, *, now_ms, expected_revision=None):
         """Commit once immediately BEFORE first primitive. No retry token."""
         def mutate(state):
+            if expected_revision is not None and state['revision'] != expected_revision:
+                return self._deny('LEDGER_REVISION_MISMATCH')
             e = state['entries'].get(intent_id)
             if not e or e['state'] != 'CLAIMED' or e['instanceId'] != self.instance_id:
                 return self._deny('ALREADY_ATTEMPTED_OR_RECOVERED')
@@ -231,13 +233,15 @@ class DurableBidIntentBook:
                                'available': self.budget['remaining'] - state['spent'] - self._held(state)}}
         return self._transaction(mutate)
 
-    def receipt(self, receipt, *, qualified=False, now_ms=None):
+    def receipt(self, receipt, *, qualified=False, now_ms=None, expected_revision=None):
         """Sol-C four-state wire receipt. qualified is independent evidence gate.
 
         Missing/mismatched binding never settles money. UNKNOWN stays frozen;
         only correctly attributed, qualified CONFIRMED can reconcile it.
         """
         def mutate(state):
+            if expected_revision is not None and state['revision'] != expected_revision:
+                return self._deny('LEDGER_REVISION_MISMATCH')
             e = state['entries'].get(receipt.get('intentId'))
             if (not e or not scope_valid(receipt) or receipt.get('kind') != 'Bid'
                     or receipt.get('approvalId') != e['approvalId']
