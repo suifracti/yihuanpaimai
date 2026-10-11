@@ -313,6 +313,27 @@ jobs:
           "status=$status" | Out-File -FilePath $env:GITHUB_OUTPUT -Append -Encoding utf8
           if ($status -ne 'PASS') { exit 1 }
 
+      - name: Run Main domain action receipt routing contract
+        id: main-domain-action-receipts
+        if: steps.install-python-deps.outcome == 'success'
+        continue-on-error: true
+        shell: pwsh
+        run: |
+          $outputPath = 'build/ci-issue46-main-domain-action-receipts.json'
+          python tools/run_tests.py test_main_domain_action_receipts --output $outputPath
+          $testExitCode = $LASTEXITCODE
+          if (-not (Test-Path $outputPath)) {
+            $status = 'NOT_RUN'
+            'Main domain action receipt routing: NOT_RUN (no result file)' | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Append -Encoding utf8
+          } else {
+            $result = Get-Content $outputPath -Raw | ConvertFrom-Json
+            if ($testExitCode -ne 0 -or $result.tests -ne 2 -or $result.failures.Count -gt 0 -or $result.errors.Count -gt 0 -or $result.skipped.Count -gt 0) { $status = 'FAIL' }
+            else { $status = 'PASS' }
+            "Main domain action receipt routing: $status; tests=$($result.tests); failures=$($result.failures.Count); errors=$($result.errors.Count); skipped=$($result.skipped.Count)" | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Append -Encoding utf8
+          }
+          "status=$status" | Out-File -FilePath $env:GITHUB_OUTPUT -Append -Encoding utf8
+          if ($status -ne 'PASS') { exit 1 }
+
       - name: Run sparse warehouse content-step budget contract
         id: content-step-budget
         if: steps.install-python-deps.outcome == 'success'
@@ -378,6 +399,8 @@ jobs:
           BID_STATUS: ${{ steps.bid-intent-contract.outputs.status }}
           DURABLE_OUTCOME: ${{ steps.durable-bid-obligations.outcome }}
           DURABLE_STATUS: ${{ steps.durable-bid-obligations.outputs.status }}
+          RECEIPT_OUTCOME: ${{ steps.main-domain-action-receipts.outcome }}
+          RECEIPT_STATUS: ${{ steps.main-domain-action-receipts.outputs.status }}
           STEP_BUDGET_OUTCOME: ${{ steps.content-step-budget.outcome }}
           STEP_BUDGET_STATUS: ${{ steps.content-step-budget.outputs.status }}
           RAW_PARTIAL_OUTCOME: ${{ steps.raw-partial-archive.outcome }}
@@ -438,6 +461,14 @@ jobs:
             $durableStatus = 'FAIL'
           }
           "Durable bid obligation contracts: $durableStatus" | Tee-Object -FilePath $env:GITHUB_STEP_SUMMARY -Append
+          if ($env:RECEIPT_OUTCOME -eq 'success' -and $env:RECEIPT_STATUS -eq 'PASS') {
+            $receiptStatus = 'PASS'
+          } elseif ($env:RECEIPT_OUTCOME -eq 'skipped' -or $env:SETUP_OUTCOME -ne 'success' -or $env:DEPS_OUTCOME -ne 'success') {
+            $receiptStatus = 'NOT_RUN'
+          } else {
+            $receiptStatus = 'FAIL'
+          }
+          "Main domain action receipt routing: $receiptStatus" | Tee-Object -FilePath $env:GITHUB_STEP_SUMMARY -Append
           "Sparse content-step budget contract: $env:STEP_BUDGET_STATUS" | Tee-Object -FilePath $env:GITHUB_STEP_SUMMARY -Append
           "Raw PARTIAL archive recovery: $env:RAW_PARTIAL_STATUS" | Tee-Object -FilePath $env:GITHUB_STEP_SUMMARY -Append
           if ($env:M1_OUTCOME -eq 'skipped' -or $env:SETUP_OUTCOME -ne 'success' -or $env:DEPS_OUTCOME -ne 'success') {
@@ -464,7 +495,7 @@ jobs:
             $deliveryStatus = 'FAIL'
           }
           "Full Native DELIVERY contract: $deliveryStatus; tests=$env:DELIVERY_TESTS; failures=$env:DELIVERY_FAILURES; errors=$env:DELIVERY_ERRORS; skipped=$env:DELIVERY_SKIPPED" | Tee-Object -FilePath $env:GITHUB_STEP_SUMMARY -Append
-          if ($env:TEST_OUTCOME -ne 'success' -or $compatStatus -ne 'PASS' -or $consumerStatus -ne 'PASS' -or $env:NATIVE_ARCHIVE_STATUS -ne 'PASS' -or $env:UI_STATUS -ne 'PASS' -or $env:BID_STATUS -ne 'PASS' -or $durableStatus -ne 'PASS' -or $env:STEP_BUDGET_STATUS -notlike 'PASS*' -or $env:RAW_PARTIAL_STATUS -ne 'PASS' -or $m1Status -ne 'PASS' -or $observeStatus -ne 'PASS' -or $deliveryStatus -ne 'PASS') { exit 1 }
+          if ($env:TEST_OUTCOME -ne 'success' -or $compatStatus -ne 'PASS' -or $consumerStatus -ne 'PASS' -or $env:NATIVE_ARCHIVE_STATUS -ne 'PASS' -or $env:UI_STATUS -ne 'PASS' -or $env:BID_STATUS -ne 'PASS' -or $durableStatus -ne 'PASS' -or $receiptStatus -ne 'PASS' -or $env:STEP_BUDGET_STATUS -notlike 'PASS*' -or $env:RAW_PARTIAL_STATUS -ne 'PASS' -or $m1Status -ne 'PASS' -or $observeStatus -ne 'PASS' -or $deliveryStatus -ne 'PASS') { exit 1 }
 
   dotnet-scroll-diagnostics:
     name: .NET 8 offline scroll diagnostics
@@ -580,26 +611,6 @@ jobs:
             "Domain action session contracts: $status; tests=$($result.tests); failures=$($result.failures.Count); errors=$($result.errors.Count); skipped=$($result.skipped.Count)" | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Append -Encoding utf8
           }
           "status=$status" | Out-File -FilePath $env:GITHUB_OUTPUT -Append -Encoding utf8
-          if ($status -ne 'PASS') { exit 1 }
-
-      - name: Run Main receipt channel bridge contracts
-        id: main-domain-action-receipts
-        shell: pwsh
-        run: |
-          $outputPath = 'build/ci-issue46-main-domain-action-receipts.json'
-          python tools/run_tests.py test_main_domain_action_receipts --output $outputPath
-          $testExitCode = $LASTEXITCODE
-          if (-not (Test-Path $outputPath)) {
-            'Main receipt channel bridge: NOT_RUN (no result file)' | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Append -Encoding utf8
-            exit 1
-          }
-          $result = Get-Content $outputPath -Raw | ConvertFrom-Json
-          $failures = @($result.failures).Count
-          $errors = @($result.errors).Count
-          $skipped = @($result.skipped).Count
-          if ($testExitCode -ne 0 -or $result.tests -ne 2 -or $failures -ne 0 -or $errors -ne 0 -or $skipped -ne 0) { $status = 'FAIL' }
-          else { $status = 'PASS' }
-          "Main receipt channel bridge: $status; tests=$($result.tests); failures=$failures; errors=$errors; skipped=$skipped" | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Append -Encoding utf8
           if ($status -ne 'PASS') { exit 1 }
 
       - name: Run isolated Windows ticketed input dummy
