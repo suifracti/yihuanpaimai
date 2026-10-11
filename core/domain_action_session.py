@@ -162,8 +162,10 @@ def claimed_bid_to_domain_intent(claim: dict, native_scope: dict, *, now_ms: int
     The caller pairs current monotonic readings, persists the claimed obligation
     BEFORE handing this result to Native, and supplies independent Native scope.
     """
+    durable_preparation = (claim.get("executionEnabled") is False
+                           and claim.get("commitBeforeSendRequired") is True)
     if (claim.get("ok") is not True or claim.get("state") != "CLAIMED"
-            or claim.get("executionEnabled") is not True):
+            or (claim.get("executionEnabled") is not True and not durable_preparation)):
         raise ValueError("ONCE_ONLY_CLAIM_REQUIRED")
     proposal = claim.get("intent") or {}
     budget = claim.get("budget") or {}
@@ -194,6 +196,46 @@ def claimed_bid_to_domain_intent(claim: dict, native_scope: dict, *, now_ms: int
     if deadline_ns > native_scope.get("leaseExpiresNs", 0):
         raise ValueError("CLAIM_EXCEEDS_NATIVE_LEASE")
     return dict(intentId=proposal["intentId"], kind="Bid", **binding, amount=amount, maxSafeBid=cap,
-                budget=remaining, deadlineNs=deadline_ns,
+                budget=remaining, deadlineNs=deadline_ns, approvalId=claim["approvalId"],
                 takeoverGeneration=native_scope["takeoverGeneration"],
                 leaseId=native_scope["leaseId"], window=dict(native_scope["window"]))
+
+
+def commit_domain_attempt(book, intent: dict, current: dict, native_scope: dict, *,
+                          now_ms: int, now_ns: int) -> bool:
+    """Native commit-before-input callback into Sol-B's sole durable book.
+
+    Luna-B owns transport. The prepared intent grants no send permission. Never
+    call attempted() during preparation or call it a second time on its ACK.
+    """
+    permit = book.attempted(intent.get("intentId"), current, now_ms=now_ms)
+    if permit.get("ok") is not True or permit.get("durableState") != "ATTEMPTED":
+        return False
+    try:
+        verified = claimed_bid_to_domain_intent(permit, native_scope, now_ms=now_ms, now_ns=now_ns)
+        intact = all(intent.get(key) == verified.get(key) for key in verified if key != "deadlineNs")
+        # A conversion cannot extend the deadline of the earlier prepared intent.
+        intact = intact and now_ns < intent["deadlineNs"] <= verified["deadlineNs"]
+    except (KeyError, TypeError, ValueError):
+        intact = False
+    if not intact:
+        unknown = {key: intent.get(key) for key in ("intentId", "kind", "matchId", "matchGeneration",
+            "observationSessionId", "round", "factsRevision", "amount", "approvalId")}
+        unknown["status"] = "UNKNOWN"
+        book.receipt(unknown, qualified=False, now_ms=now_ms)
+    return intact
+
+
+def commit_domain_receipt(book, receipt: dict, *, independently_qualified: bool,
+                          now_ms: int) -> bool:
+    """Forward exact Native wire (including approvalId/evidenceRef) to Sol-B.
+
+    independently_qualified must come from Native receipt/source provenance,
+    never from a UI status or OS send result. No second budget store is created.
+    """
+    expected = {"NOT_SENT": "NOT_SENT", "SENT_PENDING_CONFIRMATION": "PENDING",
+                "CONFIRMED": "EFFECTIVE", "UNKNOWN": "UNKNOWN"}.get(receipt.get("status"))
+    if expected is None:
+        return False
+    result = book.receipt(receipt, qualified=independently_qualified, now_ms=now_ms)
+    return result.get("ok") is True and result.get("state") == expected

@@ -47,8 +47,9 @@ public enum InputEventOrigin
 
 /// <summary>
 /// A single observed input event, reduced to the minimum needed for the safety
-/// decision. No key codes, no scan codes, no typed text, no input history, and
-/// no unbounded coordinate stream are retained anywhere in this module.
+/// decision. Only the closed transient domain key/button discriminator is
+/// forwarded; no scan codes, typed text, input history or unbounded coordinate
+/// stream are retained anywhere in this module.
 /// </summary>
 public readonly record struct ObservedInputEvent(
     InputEventKind Kind,
@@ -67,19 +68,22 @@ public readonly record struct ObservedInputEvent(
     /// supplies flags.
     /// </summary>
     public uint NativeFlags { get; init; }
+    // Only the closed domain key set and left-button identity, not typed text/history.
+    public uint DomainCode { get; init; }
 }
 
 /// <summary>
 /// The only actions this module is allowed to perform on the OS input stream.
-/// Keyboard injection is intentionally absent: V2-2B never injects keys, and the
-/// self-exemption ledger refuses to register key intents, so a key event can
-/// never be exempted and therefore can never be hidden from the user.
+/// Legacy public actions never inject keys. Internal, OFF-by-default domain
+/// capabilities permit only an exact left click or bounded amount replacement.
 /// </summary>
 public enum InputActionKind
 {
     MouseWheel,
     MouseHorizontalWheel,
     CursorMove,
+    RestrictedLeftClick,
+    RestrictedAmountDigits,
 }
 
 /// <summary>
@@ -96,12 +100,36 @@ public sealed record InputAction
     public int X { get; init; }
     public int Y { get; init; }
     public CursorPrepare? Prepare { get; init; }
+    internal string? AmountDigits { get; init; }
+    internal CursorPrepare? DomainPoint { get; init; }
+    internal int DomainAbsoluteX { get; init; }
+    internal int DomainAbsoluteY { get; init; }
+    internal Func<bool>? DomainCurrent { get; init; }
+    internal bool IsDomain => Kind is InputActionKind.RestrictedLeftClick or InputActionKind.RestrictedAmountDigits;
+    internal bool DomainValid => !IsDomain || (DomainCurrent != null &&
+        (Kind == InputActionKind.RestrictedLeftClick ? DomainPoint.HasValue && DomainAbsoluteX is >= 0 and <= 65535
+            && DomainAbsoluteY is >= 0 and <= 65535 :
+            AmountDigits is { Length: >= 1 and <= 7 } d && d.All(c => c is >= '0' and <= '9') && d[0] != '0'));
+    internal bool CheckDomainCurrent()
+    {
+        if (!IsDomain) return true;
+        try { return DomainValid && DomainCurrent!(); } catch { return false; }
+    }
+    // Accessible solely to the domain assembly; there is no public coordinate/key API.
+    internal static InputAction DomainClick(int x, int y, int absoluteX, int absoluteY, Func<bool> current) => new()
+        { Kind = InputActionKind.RestrictedLeftClick, DomainPoint = new(x, y),
+          DomainAbsoluteX = absoluteX, DomainAbsoluteY = absoluteY, DomainCurrent = current };
+    internal static InputAction DomainAmount(long amount, Func<bool> current) => new()
+        { Kind = InputActionKind.RestrictedAmountDigits,
+          AmountDigits = amount.ToString(System.Globalization.CultureInfo.InvariantCulture), DomainCurrent = current };
 
     public string Fingerprint => Kind switch
     {
         InputActionKind.MouseWheel => Prepare is { } p ? $"WHEEL:{WheelDelta}|PREPARE:{p.X},{p.Y}" : $"WHEEL:{WheelDelta}",
         InputActionKind.MouseHorizontalWheel => Prepare is { } q ? $"HWHEEL:{WheelDelta}|PREPARE:{q.X},{q.Y}" : $"HWHEEL:{WheelDelta}",
         InputActionKind.CursorMove => $"MOVE:{X},{Y}",
+        InputActionKind.RestrictedLeftClick => $"DOMAIN_LEFT:{DomainPoint}:{DomainAbsoluteX},{DomainAbsoluteY}",
+        InputActionKind.RestrictedAmountDigits => $"DOMAIN_AMOUNT:{AmountDigits}",
         _ => "UNKNOWN",
     };
 

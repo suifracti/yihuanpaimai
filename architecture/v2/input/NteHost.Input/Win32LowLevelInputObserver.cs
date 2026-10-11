@@ -139,8 +139,9 @@ public sealed class FakeInputObserver : IInputObserver
 ///   * teardown posts WM_QUIT to the owning thread and unhooks on that same
 ///     thread inside a finally block, so handles are released even on failure.
 ///
-/// It records no key codes, no scan codes, no typed text and no coordinate
-/// history. Only the closed event set in <see cref="InputEventKind"/> is forwarded.
+/// It retains no typed text, scan codes or coordinate history. A transient closed
+/// domain key/button discriminator permits exact one-shot matching; other keys
+/// remain undisclosed takeover events, and physical events never self-exempt.
 /// </summary>
 public sealed class Win32LowLevelInputObserver : IInputObserver
 {
@@ -446,6 +447,7 @@ public sealed class Win32LowLevelInputObserver : IInputObserver
                         Interlocked.Increment(ref _sequence))
                     {
                         NativeFlags = data.flags,
+                        DomainCode = data.vkCode is 0xA2 or 0x41 or >= 0x30 and <= 0x39 ? data.vkCode : 0,
                     });
                 }
             }
@@ -500,6 +502,7 @@ public sealed class Win32LowLevelInputObserver : IInputObserver
                         Interlocked.Increment(ref _sequence))
                     {
                         NativeFlags = data.flags,
+                        DomainCode = message == NativeInputMethods.WM_LBUTTONDOWN ? 1u : 0u,
                     });
                 }
             }

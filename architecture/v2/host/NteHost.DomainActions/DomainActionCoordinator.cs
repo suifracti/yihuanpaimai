@@ -10,6 +10,7 @@ public sealed record DomainIntent(string IntentId, DomainActionKind Kind, string
     public long MatchGeneration { get; init; }
     public string ObservationSessionId { get; init; } = "";
     public long MaxSafeBid { get; init; }
+    public string ApprovalId { get; init; } = "";
 }
 
 // Produced from the current qualified Native/Engine state, never from the intent itself.
@@ -21,6 +22,7 @@ public sealed record ActionScope(string MatchId, int Round, long FactsRevision, 
 {
     public long MatchGeneration { get; init; }
     public string ObservationSessionId { get; init; } = "";
+    public string ApprovalId { get; init; } = "";
 }
 
 public sealed record VisibleResult(string IntentId, DomainActionKind Kind, string OriginMatchId,
@@ -31,6 +33,7 @@ public sealed record VisibleResult(string IntentId, DomainActionKind Kind, strin
     public long OriginMatchGeneration { get; init; }
     public string ObservationSessionId { get; init; } = "";
     public long NewMatchGeneration { get; init; }
+    public string? EvidenceRef { get; init; }
 }
 public sealed record DomainReceipt(string IntentId, DomainActionKind Kind, string MatchId, int Round,
     long FactsRevision, ReceiptStatus Status, string Reason, long? Amount,
@@ -39,6 +42,10 @@ public sealed record DomainReceipt(string IntentId, DomainActionKind Kind, strin
     public long MatchGeneration { get; init; }
     public string ObservationSessionId { get; init; } = "";
     public long NewMatchGeneration { get; init; }
+    public string? EvidenceRef { get; init; }
+    public bool StopAvailable { get; init; } = true;
+    public bool TakeoverAvailable { get; init; } = true;
+    public string ApprovalId { get; init; } = "";
 }
 
 public sealed record PortOutcome(bool SideEffectAttempted, bool Completed, string Reason);
@@ -83,7 +90,7 @@ public sealed class DomainActionCoordinator
             }
             DomainReceipt NotSent(string reason) => new(intent.IntentId, intent.Kind, intent.MatchId,
                 intent.Round, intent.FactsRevision, ReceiptStatus.NOT_SENT, reason, intent.Amount)
-                { MatchGeneration = intent.MatchGeneration, ObservationSessionId = intent.ObservationSessionId };
+                { MatchGeneration = intent.MatchGeneration, ObservationSessionId = intent.ObservationSessionId, ApprovalId = intent.ApprovalId };
             if (stopped) return NotSent("SESSION_STOPPED_UNKNOWN");
             if (pending != null) return NotSent("CONFIRMATION_PENDING");
             if (receipts.Count >= 512) return NotSent("RECEIPT_CAPACITY_STOP");
@@ -102,7 +109,7 @@ public sealed class DomainActionCoordinator
                 : outcome.Completed ? ReceiptStatus.SENT_PENDING_CONFIRMATION : ReceiptStatus.UNKNOWN;
             var receipt = new DomainReceipt(intent.IntentId, intent.Kind, intent.MatchId, intent.Round,
                 intent.FactsRevision, status, outcome.Reason, intent.Amount, sentNs)
-                { MatchGeneration = intent.MatchGeneration, ObservationSessionId = intent.ObservationSessionId };
+                { MatchGeneration = intent.MatchGeneration, ObservationSessionId = intent.ObservationSessionId, ApprovalId = intent.ApprovalId };
             receipts.Add(intent.IntentId, (intent, receipt, scope!.SourceSequence));
             if (outcome.SideEffectAttempted) attempted.Add((intent.MatchId, intent.Round, intent.Kind));
             if (status == ReceiptStatus.SENT_PENDING_CONFIRMATION) pending = intent.IntentId;
@@ -119,8 +126,11 @@ public sealed class DomainActionCoordinator
                 throw new ArgumentException("UNKNOWN_INTENT", nameof(evidence));
             if (entry.Receipt.Status != ReceiptStatus.SENT_PENDING_CONFIRMATION) return entry.Receipt;
             var i = entry.Intent;
-            long now = clock();
             var current = SafeRead();
+            // A current-view read may finish a new independent capture. Compare
+            // against the clock AFTER that read; a pre-read clock falsely labels
+            // its legitimate capture timestamp as future.
+            long now = clock();
             if (!LiveContinuity(i, current, now) || now >= i.DeadlineNs)
                 return Stop(entry, "CONTINUITY_OR_CONFIRMATION_DEADLINE_LOST");
             bool matches = evidence.Kind == i.Kind && evidence.OriginMatchId == i.MatchId
@@ -144,6 +154,7 @@ public sealed class DomainActionCoordinator
             var confirmed = entry.Receipt with { Status = ReceiptStatus.CONFIRMED, Reason = "VISIBLE_RESULT_CONFIRMED",
                 EvidenceSequence = evidence.SourceSequence, NewMatchId = evidence.NewMatchId,
                 NewMatchGeneration = evidence.NewMatchGeneration };
+            confirmed = confirmed with { EvidenceRef = evidence.EvidenceRef };
             receipts[i.IntentId] = (i, confirmed, entry.Sequence); pending = null;
             return confirmed;
         }
@@ -156,9 +167,19 @@ public sealed class DomainActionCoordinator
         {
             if (pending == null) return null;
             var entry = receipts[pending];
+            var current = SafeRead();
             long now = clock();
-            return now >= entry.Intent.DeadlineNs || !LiveContinuity(entry.Intent, SafeRead(), now)
+            return now >= entry.Intent.DeadlineNs || !LiveContinuity(entry.Intent, current, now)
                 ? Stop(entry, "CONTINUITY_OR_CONFIRMATION_DEADLINE_LOST") : entry.Receipt;
+        }
+    }
+
+    public DomainReceipt MarkUnknown(string intentId, string reason)
+    {
+        lock (gate)
+        {
+            if (!receipts.TryGetValue(intentId, out var entry)) throw new ArgumentException("UNKNOWN_INTENT");
+            return Stop(entry, reason);
         }
     }
 
@@ -176,7 +197,8 @@ public sealed class DomainActionCoordinator
     private static bool LiveContinuity(DomainIntent i, ActionScope? s, long now) => Continuity(i, s)
         && s!.Budget > 0 && now < s.LeaseExpiresNs
         && s.ObservationSessionId == i.ObservationSessionId
-        && (i.Kind != DomainActionKind.Bid || (s.MatchId == i.MatchId && s.Round == i.Round && s.MatchGeneration == i.MatchGeneration));
+        && (i.Kind != DomainActionKind.Bid || (s.MatchId == i.MatchId && s.Round == i.Round
+            && s.MatchGeneration == i.MatchGeneration && s.ApprovalId == i.ApprovalId));
     private string Validate(DomainIntent i, ActionScope? s)
     {
         long now = clock();
@@ -196,7 +218,8 @@ public sealed class DomainActionCoordinator
         {
             DomainActionKind.Bid when s.Scene == "AUCTION" && i.Round is >= 1 and <= 5
                 && i.Amount is > 0 and <= 9_999_999 && i.Amount <= i.Budget
-                && i.Amount <= s.ApprovedAmountLimit && i.Amount <= i.MaxSafeBid => "OK",
+                && i.Amount <= s.ApprovedAmountLimit && i.Amount <= i.MaxSafeBid
+                && !string.IsNullOrWhiteSpace(i.ApprovalId) && i.ApprovalId == s.ApprovalId => "OK",
             DomainActionKind.ReturnLobby when s.Scene == "SETTLEMENT" && s.SettlementArchived && i.Amount == null => "OK",
             DomainActionKind.StartNextMatch when s.Scene == "LOBBY" && s.SettlementArchived
                 && s.NewMatchAdmission && i.Round == 0 && i.Amount == null => "OK",
