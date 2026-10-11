@@ -30,14 +30,14 @@ sealed class Fixture
     {
         Scope = new("match-1", 1, 7, 1000, 800, "AUCTION", "lease-1", Now + 900_000_000,
             Window, 2, 10, Now - 10_000_000, true, true, true, true, false, false)
-            { MatchGeneration = 1, ObservationSessionId = "obs-1" };
+            { MatchGeneration = 1, ObservationSessionId = "obs-1", ApprovalId = "test-approval" };
         Coordinator = new(() => Scope, () => Now, executionPort ? Port : null);
     }
     public DomainIntent Intent(string id = "bid-1", DomainActionKind kind = DomainActionKind.Bid) =>
         new(id, kind, Scope.MatchId, Scope.Round, Scope.FactsRevision,
             kind == DomainActionKind.Bid ? 500 : null, Scope.Budget, Now + 500_000_000,
             Scope.TakeoverGeneration, Scope.LeaseId, Window)
-            { MatchGeneration = Scope.MatchGeneration, ObservationSessionId = Scope.ObservationSessionId, MaxSafeBid = 800 };
+            { MatchGeneration = Scope.MatchGeneration, ObservationSessionId = Scope.ObservationSessionId, MaxSafeBid = 800, ApprovalId = Scope.ApprovalId };
     public VisibleResult Evidence(DomainIntent i, string scene = "AUCTION", string? newMatch = null)
     {
         Now += 10_000_000;
@@ -69,6 +69,7 @@ static class Program
     static void Case(string name, Action action) { action(); cases++; Console.WriteLine("PASS " + name); }
     static void Main(string[] args)
     {
+        if (args.Contains("--dummy-window")) { WindowsBackendChecks.Run(); return; }
         Case("default execution OFF", () => {
             var f = new Fixture(false); Require(f.Coordinator.Dispatch(f.Intent()).Status == ReceiptStatus.NOT_SENT, "OFF");
             Require(f.Port.Sends == 0, "NO_INPUT");
@@ -133,6 +134,14 @@ static class Program
             Require(f.Coordinator.Dispatch(i).Status == ReceiptStatus.CONFIRMED && f.Port.Sends == 1, "IDEMPOTENT");
             Require(f.Coordinator.Dispatch(i with { IntentId = "new-id" }).Status == ReceiptStatus.NOT_SENT && f.Port.Sends == 1, "ROUND_RESEND");
         });
+        Case("current read may finish a new capture before confirmation comparison", () => {
+            var f = new Fixture();
+            f.Coordinator = new(() => { f.Now += 1; f.Scope = f.Scope with { CapturedNs = f.Now }; return f.Scope; },
+                () => f.Now, f.Port);
+            var i = f.Intent(); Require(f.Coordinator.Dispatch(i).Status == ReceiptStatus.SENT_PENDING_CONFIRMATION, "DISPATCH");
+            var evidence = f.Evidence(i);
+            Require(f.Coordinator.Confirm(evidence).Status == ReceiptStatus.CONFIRMED, "POST_READ_CLOCK_REQUIRED");
+        });
         Case("partial or throwing backend UNKNOWN and globally no resend", () => {
             foreach (bool throws in new[] { false, true }) {
                 var f = new Fixture(); f.Port.Partial = !throws; f.Port.Throw = throws; var i = f.Intent();
@@ -180,6 +189,7 @@ static class Program
                 File.WriteAllText(args[0], JsonSerializer.Serialize(workflow, options));
             }
         });
+        ReceiptPathChecks.Run();
         Console.WriteLine($"PASS {cases} scenarios (fake input only)");
     }
 }

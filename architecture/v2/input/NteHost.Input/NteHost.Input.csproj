@@ -22,6 +22,7 @@
       action-mismatch) without adding any test-only surface to the production type.
     -->
     <InternalsVisibleTo Include="NteInputGuardVerifier" />
+    <InternalsVisibleTo Include="NteHost.DomainActions" />
   </ItemGroup>
 
 </Project>

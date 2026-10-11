@@ -12,6 +12,7 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <ProjectReference Include="..\NteHost.DomainActions\NteHost.DomainActions.csproj" />
     <ProjectReference Include="..\NteHost\NteHost.csproj" />
     <ProjectReference Include="..\NteHost.WindowMonitor\NteHost.WindowMonitor.csproj" />
     <PackageReference Include="Vortice.Direct3D11" Version="3.8.3" />

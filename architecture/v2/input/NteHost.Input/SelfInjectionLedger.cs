@@ -33,8 +33,9 @@ public readonly record struct ExemptionDecision(bool Exempted, string Reason);
 /// user takeover. In other words: spoofing the marker cannot buy silence, it can
 /// only buy a cancel.
 ///
-/// Key events are never exemptible: this module never injects keys, so a key
-/// event always means a human, and it can never be hidden.
+/// Public registration never permits keys/buttons. Internal domain registration
+/// permits only exact injected key/button/coordinate intents; physical keys,
+/// mismatched codes, unknown keys and right buttons always cause takeover.
 /// </summary>
 public sealed class SelfInjectionLedger
 {
@@ -49,6 +50,7 @@ public sealed class SelfInjectionLedger
         public long ExpiresNs;
         public bool Consumed;
         public bool Abandoned;
+        public uint DomainCode;
     }
 
     private readonly object _gate = new();
@@ -182,6 +184,30 @@ public sealed class SelfInjectionLedger
     public static bool IsExemptibleKind(InputActionKind kind) =>
         kind is InputActionKind.MouseWheel or InputActionKind.MouseHorizontalWheel or InputActionKind.CursorMove;
 
+    internal void RegisterDomain(InputAction action)
+    {
+        if (!action.DomainValid || !action.IsDomain) throw new InvalidOperationException("INVALID_DOMAIN_ACTION");
+        lock (_gate)
+        {
+            long now = _clock();
+            void Add(InputActionKind kind, uint code, int x = 0, int y = 0) => _intents.Add(new Intent
+                { Id = ++_intentSequence, Kind = kind, DomainCode = code, X = x, Y = y,
+                  RegisteredNs = now, ExpiresNs = now + _ttlNs });
+            if (action.Kind == InputActionKind.RestrictedLeftClick)
+            {
+                var point = action.DomainPoint!.Value;
+                Add(InputActionKind.CursorMove, 0, point.X, point.Y);
+                Add(InputActionKind.RestrictedLeftClick, 1, point.X, point.Y);
+            }
+            else
+            {
+                Add(InputActionKind.RestrictedAmountDigits, 0xA2);
+                Add(InputActionKind.RestrictedAmountDigits, 0x41);
+                foreach (char digit in action.AmountDigits!) Add(InputActionKind.RestrictedAmountDigits, digit);
+            }
+        }
+    }
+
     /// <summary>
     /// Decides whether an observed event is this process's own input.
     /// A false result is never "ignore"; the caller turns it into a takeover.
@@ -205,7 +231,7 @@ public sealed class SelfInjectionLedger
                 return new ExemptionDecision(false, InputSafetyReasons.DenyMarkerMismatch);
             }
 
-            if (observed.Kind is InputEventKind.KeyDown or InputEventKind.MouseButtonDown)
+            if (observed.Kind is InputEventKind.KeyDown or InputEventKind.MouseButtonDown && observed.DomainCode == 0)
             {
                 return new ExemptionDecision(false, InputSafetyReasons.DenyKindNeverExemptible);
             }
@@ -215,6 +241,8 @@ public sealed class SelfInjectionLedger
                 InputEventKind.MouseWheel => InputActionKind.MouseWheel,
                 InputEventKind.MouseHorizontalWheel => InputActionKind.MouseHorizontalWheel,
                 InputEventKind.MouseMove => InputActionKind.CursorMove,
+                InputEventKind.KeyDown => InputActionKind.RestrictedAmountDigits,
+                InputEventKind.MouseButtonDown => InputActionKind.RestrictedLeftClick,
                 _ => InputActionKind.CursorMove,
             };
 
@@ -232,9 +260,11 @@ public sealed class SelfInjectionLedger
                     continue;
                 }
 
-                bool coordinatesOk = intent.Kind != InputActionKind.CursorMove ||
+                bool coordinatesOk = intent.Kind is not (InputActionKind.CursorMove or InputActionKind.RestrictedLeftClick) ||
                                      (Math.Abs(intent.X - observed.X) <= intent.TolerancePx &&
                                       Math.Abs(intent.Y - observed.Y) <= intent.TolerancePx);
+                if (intent.DomainCode != observed.DomainCode && wanted is InputActionKind.RestrictedAmountDigits or InputActionKind.RestrictedLeftClick)
+                    continue;
 
                 if (intent.Abandoned)
                 {
