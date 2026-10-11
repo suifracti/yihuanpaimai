@@ -34,7 +34,7 @@ jobs:
         id: install-python-deps
         if: steps.setup-python.outcome == 'success'
         continue-on-error: true
-        run: python -m pip install --disable-pip-version-check --no-input numpy==2.2.6 onnxruntime==1.23.2 opencv-python==5.0.0.93 rapidocr-onnxruntime==1.4.4 websockets==16.1.1 mss==10.2.0
+        run: python -m pip install --disable-pip-version-check --no-input numpy==2.2.6 onnxruntime==1.23.2 opencv-python==5.0.0.93 rapidocr-onnxruntime==1.4.4 websockets==16.1.1 mss==10.2.0 pywin32==312
 
       - name: Run M1 partial DRAFT and one-shot exit contracts
         id: m1-contracts
