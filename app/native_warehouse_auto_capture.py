@@ -14,7 +14,7 @@ import cv2
 import numpy as np
 
 from warehouse_scrollbar_observation import WarehouseScrollbarObserver, warehouse_search_roi
-from warehouse_segment_overlap import align_warehouse_segments, DIR_DOWN, TerminalContinuity
+from warehouse_segment_overlap import align_warehouse_segments, DIR_DOWN, TerminalContinuity, content_retention_limit
 from warehouse_support_frame import stationary_support_proof
 from scene_anchors import settlement_title_visible
 from native_warehouse_content_stability import content_stability
@@ -456,6 +456,9 @@ class NativeWarehouseAutoCapture:
             delta = -120
             if self._observation.get('capturePolicy') == DELIVERY and state != 'BOTTOM':
                 delta = self._scroll_delta()
+                if delta == 0:
+                    self._stop('SCROLL_CONTENT_RETENTION_UNPROVEN')
+                    return
             self._last_wheel_delta = delta
             self._diagnose('scroll-step', wheelDelta=delta, pixelsPerNotch=self._pixels_per_notch,
                 predictedOnly=True, actualOverlapStillRequired=True, tailProbe=state == 'BOTTOM')
@@ -476,6 +479,13 @@ class NativeWarehouseAutoCapture:
         unit = self._pixels_per_notch or 30 * visible / 560
         remaining = max(0, track[3] - thumb[3]) * visible / (thumb[3] - thumb[1])
         target = min(.5 * visible, remaining)
+        limit = content_retention_limit(self._anchor)
+        if limit is not None:
+            target = min(target, limit)
+        self._diagnose('scroll-sampling-budget', contentRetentionLimitPx=limit,
+            predictedStepPx=target, pixelsPerNotch=unit, actualOverlapStillRequired=True)
+        if limit is not None and limit < unit:
+            return 0  # Minimum legal notch would remove the retained evidence.
         return -120 * max(1, min(12, int(target / unit)))
 
     def _schedule_page(self, delay):
