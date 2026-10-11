@@ -9,6 +9,7 @@ using System.Text.Json;
 using System.Text.Json.Nodes;
 using System.Threading;
 using NteHost;
+using NteHost.DomainActions;
 using NteHost.Protocol;
 using NteHost.WindowMonitor;
 
@@ -256,6 +257,23 @@ internal static class NativeObservationService
                 (request, cancelled) =>
                 {
                     var original = capture.CaptureAfterRequest(frameWaitMs, request.Gate, request.Deadline, cancelled, evidenceLease.PendingRequestClockSample);
+                    var comparisonNs = ProtocolClock.NowNs();
+                    var currentTarget = monitor.Snapshot();
+                    var currentState = ReadJsonObject(Path.Combine(workDir, "engine_state.json"));
+                    var domainFrame = capture.IsFrameCurrent(original)
+                        && IsObservationIdentityUsable(currentTarget, observationWindowMode)
+                        && BackgroundObservationPolicy.IsSameObservationTarget(currentTarget, target)
+                        && capture.IsClientAreaMappingCurrent()
+                        ? AdaptIndependentDomainCapture(original, currentState, request.Match,
+                            (string?)currentState?["pipelineContext"]?["scene"] ?? "UNKNOWN",
+                            sessionId, request.Gate, comparisonNs, currentTarget, capture)
+                        : null;
+                    trace.Event("domain-action.independent-capture", session.GenerationId, new
+                    {
+                        requestNs = request.Gate, comparisonNs, sourceSequence = original.AcquisitionSequence,
+                        captureScopeEpoch = original.CaptureScopeEpoch, qualified = domainFrame is not null,
+                        actionInput = "OFF", decoder = "NOT_CONNECTED",
+                    });
                     trace.Event("warehouse.source.v2.delivery", session.GenerationId,
                         new { scope = evidenceLease.PendingRequestDiagnosticContext,
                             diagnostic = original.DeliveryDiagnosticJson is null ? null : JsonNode.Parse(original.DeliveryDiagnosticJson) });
@@ -587,6 +605,23 @@ internal static class NativeObservationService
                     ? payload as JsonObject
                     : null;
                 var scene = (string?)perception?["scene"] ?? "UNKNOWN";
+                if (sourceRequestGate is long domainRequestNs
+                    && sourceReadbackRejection is null && dequeueRejection is null
+                    && mappingAfterEngineCurrent && capture.IsFrameCurrent(frame))
+                {
+                    var domainComparisonNs = ProtocolClock.NowNs();
+                    var expectedMatchGeneration = (long?)state?["lastFrame"]?["matchGeneration"]
+                        ?? (long?)state?["currentMatch"]?["matchGeneration"] ?? 0;
+                    var domainFrame = AdaptIndependentDomainCapture(frame, state,
+                        expectedMatchGeneration, scene, sessionId,
+                        domainRequestNs, domainComparisonNs, afterEngine, capture);
+                    trace.Event("domain-action.independent-capture", session.GenerationId, new
+                    {
+                        requestNs = domainRequestNs, comparisonNs = domainComparisonNs,
+                        sourceSequence = frame.AcquisitionSequence, captureScopeEpoch = frame.CaptureScopeEpoch,
+                        qualified = domainFrame is not null, actionInput = "OFF", decoder = "NOT_CONNECTED",
+                    });
+                }
                 if (scene == "UNKNOWN")
                     unknownSinceMs ??= Environment.TickCount64;
                 else
@@ -1002,6 +1037,57 @@ internal static class NativeObservationService
         }
     }
 
+    private static NativeDomainFrame? AdaptIndependentDomainCapture(CapturedBgraFrame frame,
+        JsonObject? state, long expectedMatchGeneration, string scene, string sessionId,
+        long requestNs, long comparisonNs, WindowMonitorSnapshot owner, ContinuousWgcCapture capture)
+    {
+        var currentMatch = state?["currentMatch"] as JsonObject;
+        var matchId = (string?)currentMatch?["id"];
+        var matchGeneration = (long?)state?["lastFrame"]?["matchGeneration"]
+            ?? (long?)currentMatch?["matchGeneration"] ?? 0;
+        if (string.IsNullOrWhiteSpace(matchId) || string.IsNullOrWhiteSpace(sessionId)
+            || matchGeneration <= 0 || matchGeneration != expectedMatchGeneration
+            || owner.TargetIdentity is not { IsPresent: true } identity
+            || owner.TargetHwnd != identity.Hwnd || owner.TargetPid != identity.Pid
+            || !capture.IsFrameCurrent(frame)) return null;
+        var geometry = ReadDomainClientGeometry(owner.TargetHwnd, frame.Width, frame.Height);
+        if (geometry is null) return null;
+
+        // Read-only observation has no approved amount, action lease, focused
+        // input epoch, or connected game decoder. Those gates remain closed.
+        var window = new WindowBinding(owner.TargetHwnd, owner.TargetPid,
+            identity.ProcessInstanceToken, FocusEpoch: 0);
+        var scope = new ActionScope(matchId, (int?)currentMatch?["roundNo"] ?? 0,
+            (long?)currentMatch?["factsRevision"] ?? 0, Budget: 0, ApprovedAmountLimit: 0,
+            scene, LeaseId: string.Empty, LeaseExpiresNs: 0, window,
+            TakeoverGeneration: 0, SourceSequence: frame.AcquisitionSequence,
+            CapturedNs: frame.CaptureTimestampNs, SourceQualified: true, Connected: false,
+            ForegroundMatches: owner.IsTargetForeground, ExecutionAuthorized: false,
+            SettlementArchived: false, NewMatchAdmission: false)
+        {
+            MatchGeneration = matchGeneration,
+            ObservationSessionId = sessionId,
+            ApprovalId = string.Empty,
+        };
+        return WgcDomainCaptureAdapter.FromIndependentCapture(frame, scope, geometry,
+            requestNs, comparisonNs, window, frame.CaptureScopeEpoch);
+    }
+
+    private static ClientGeometry? ReadDomainClientGeometry(long hwnd, int width, int height)
+    {
+        if (hwnd == 0) return null;
+        try
+        {
+            var handle = new IntPtr(hwnd);
+            if (!GetClientRect(handle, out var client)) return null;
+            if (client.Right - client.Left != width || client.Bottom - client.Top != height) return null;
+            var origin = new ClientPoint();
+            if (!ClientToScreen(handle, ref origin)) return null;
+            return new ClientGeometry(width, height, origin.X, origin.Y);
+        }
+        catch { return null; }
+    }
+
     private static JsonObject EvidenceTargetIdentity(WindowMonitorSnapshot snapshot) => new()
     {
         ["targetHwnd"] = snapshot.TargetHwnd, ["targetPid"] = snapshot.TargetPid,
@@ -1297,6 +1383,8 @@ internal static class NativeObservationService
 
     [StructLayout(LayoutKind.Sequential)]
     private struct ClientRect { public int Left, Top, Right, Bottom; }
+    [StructLayout(LayoutKind.Sequential)]
+    private struct ClientPoint { public int X, Y; }
 
     [DllImport("user32.dll")]
     [return: MarshalAs(UnmanagedType.Bool)]
@@ -1305,6 +1393,10 @@ internal static class NativeObservationService
     [DllImport("user32.dll", SetLastError = true)]
     [return: MarshalAs(UnmanagedType.Bool)]
     private static extern bool GetClientRect(IntPtr hwnd, out ClientRect client);
+
+    [DllImport("user32.dll", SetLastError = true)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static extern bool ClientToScreen(IntPtr hwnd, ref ClientPoint point);
 
     private static JsonObject? ReadJsonObject(string path)
     {

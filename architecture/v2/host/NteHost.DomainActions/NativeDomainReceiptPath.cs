@@ -171,8 +171,13 @@ public sealed class NativeDomainActionRuntime
         if (!committed && receipt.Status != ReceiptStatus.NOT_SENT)
             receipt = coordinator.MarkUnknown(receipt.IntentId, "DURABLE_RECEIPT_COMMIT_FAILED");
         var node = JsonSerializer.SerializeToNode(receipt, Json)!.AsObject();
-        var message = new JsonObject { ["type"] = "domain.action.receipt", ["observationSessionId"] = receipt.ObservationSessionId,
-            ["currentMatch"] = new JsonObject { ["bidActionReceipt"] = node } };
+        var message = new JsonObject
+        {
+            ["type"] = "domain.action.receipt",
+            ["observationSessionId"] = receipt.ObservationSessionId,
+            ["receipt"] = node,
+            ["receiptChannel"] = receipt.Kind == DomainActionKind.Bid ? "bid" : "session",
+        };
         publish(message);
         return receipt;
     }

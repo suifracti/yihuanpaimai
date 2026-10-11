@@ -219,6 +219,23 @@ class NativeObservationBridge:
                     else:
                         self.log("STARTUP:NATIVE", f"ignored non-json native output: {line[:300]}")
                     continue
+                if isinstance(event, dict) and event.get("type") == "domain.action.receipt":
+                    if len(line.encode("utf-8")) > 16 * 1024:
+                        self.log("OBSERVATION:NATIVE", "oversized domain action receipt ignored")
+                        continue
+                    with self._lock:
+                        if self.process is not child:
+                            continue
+                    if diagnostics is not None:
+                        diagnostics.submit("domain-action-receipts.jsonl", line + "\n")
+                    try:
+                        self.on_event(event)
+                    except Exception as exc:
+                        if diagnostics is not None:
+                            diagnostics.submit("host-stderr.log", f"domain receipt callback failed: {type(exc).__name__}: {exc}\n")
+                        else:
+                            self.log("OBSERVATION:NATIVE", f"domain receipt callback failed: {type(exc).__name__}: {exc}")
+                    continue
                 if isinstance(event, dict) and event.get('type') == 'native_warehouse_evidence':
                     # Independent source events cannot change business FRAME logs or last_status.
                     if len(line.encode('utf-8')) <= 16 * 1024 and self.on_evidence is not None:
