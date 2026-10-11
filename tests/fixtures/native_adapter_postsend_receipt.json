@@ -1,0 +1,17 @@
+{
+  "event": "SCROLLED",
+  "reason": "WINDOW_WHEEL_MESSAGE_SENT",
+  "details": {
+    "direction": "DOWN",
+    "delta": -1080,
+    "sourceLeaseId": "078f9664db4d45028038cce733b0ccc5",
+    "classification": "SENT_WAIT_POST_SCROLL_EVIDENCE",
+    "sendInterfaceInvoked": true,
+    "postScrollFrameReceived": false,
+    "displacementVerified": false,
+    "scrollRequestCount": 2,
+    "messageCompletedNs": 102510501005,
+    "remainingSourcePages": 11,
+    "remainingRawBytes": 134217218
+  }
+}
