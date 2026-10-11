@@ -91,22 +91,13 @@ def _overlap_ratio(mask_a: np.ndarray, mask_b: np.ndarray, dy: int) -> float:
     return float(inter.sum()) / float(union.sum())
 
 
-def _band_alignment(view_a: np.ndarray, view_b: np.ndarray,
-                    mask_a: np.ndarray, mask_b: np.ndarray, max_shift_px: int,
-                    *, band_divisions: int = 8) -> Dict[str, Any]:
-    """Match disjoint content bands anywhere in the other viewport.
-
-    A fixed upper strip cannot survive a half-viewport downward scroll. Short
-    bands distributed over the content retain lower overlaps in either
-    direction. Two distinct bands must agree, and the entire shared area must
-    support that displacement; repeated grid/background alone is insufficient.
-    """
+def _content_band_votes(view_a, view_b, mask_a, max_shift_px, band_h):
+    """Unique content correspondences; shared by matching and sampling prediction."""
     height, width = view_a.shape[:2]
-    band_h = max(12, height // band_divisions)
     x = width // 10
     band_w = width - 2 * x
     if height < 2 * band_h or band_w < 12:
-        return {}
+        return []
     votes = []
     for y in range(0, height - band_h + 1, band_h):
         template = view_a[y:y + band_h, x:x + band_w]
@@ -128,6 +119,35 @@ def _band_alignment(view_a: np.ndarray, view_b: np.ndarray,
         if float(competitors.max()) >= score - .05:
             continue
         votes.append((int(dy), float(score), y))
+    return votes
+
+
+def content_retention_limit(image):
+    """Predicted downward sampling limit, never a displacement/coverage proof.
+
+    Keep at least two disjoint uniquely localizable content bands in view.
+    If no such bands exist this supplies no new authority: existing alignment
+    and terminal checks still decide whether a later frame can progress.
+    """
+    if image is None or image.size == 0:
+        return None
+    view, mask = _content_view(image)
+    limits = []
+    for divisions in (8, 16):
+        band_h = max(12, view.shape[0] // divisions)
+        votes = _content_band_votes(view, view, mask, 0, band_h)
+        if len(votes) >= 2:
+            limits.append(sorted(y for _, _, y in votes)[-2])
+    return max(limits) if limits else None
+
+
+def _band_alignment(view_a: np.ndarray, view_b: np.ndarray,
+                    mask_a: np.ndarray, mask_b: np.ndarray, max_shift_px: int,
+                    *, band_divisions: int = 8) -> Dict[str, Any]:
+    """Two disjoint unique bands AND the complete shared area prove movement."""
+    height = view_a.shape[0]
+    band_h = max(12, height // band_divisions)
+    votes = _content_band_votes(view_a, view_b, mask_a, max_shift_px, band_h)
     if len(votes) < 2:
         return {}
     clusters = _cluster_offsets(votes)
