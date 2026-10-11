@@ -1288,7 +1288,10 @@ def get_current_match_presentation_summary() -> dict:
             "bidIntent": bid_intent,
             "automaticExecutionEnabled": False,
             "bidActionBackendStatus": "NOT_CONNECTED",
-            "bidActionReceipt": None,
+            "bidActionReceipt": copy.deepcopy(native_payload.get("bidActionReceipt")),
+            "domainActionReceipt": copy.deepcopy(native_payload.get("domainActionReceipt")),
+            "domainActionReceiptAccepted": native_payload.get("domainActionReceiptAccepted"),
+            "domainActionSessionPhase": getattr(_NATIVE_DOMAIN_ACTION_SESSION, "phase", None),
             "shadowUpdating": bool(native_payload.get("shadowUpdating")) if native_profile else False,
             "nativeControlResult": dict(native_payload.get("nativeControlResult") or {}),
             "manualCommandResult": dict(native_payload.get("manualCommandResult") or {}),
@@ -2924,6 +2927,119 @@ def _native_project_current_quote(data: Dict[str, Any], match: Any) -> None:
         data["myBid"] = my_seat.get("currentBid") if my_seat else None
 
 
+def _native_domain_action_session_observe_locked(
+    session_id: str, frame: Dict[str, Any], perception: Dict[str, Any], *, qualified: bool,
+) -> None:
+    """Advance the receipt consumer only from an accepted Native frame."""
+    global _NATIVE_DOMAIN_ACTION_SESSION, _NATIVE_DOMAIN_ACTION_SESSION_KEY
+    match_id = str(CURRENT_MATCH.id or "")
+    generation = getattr(CURRENT_MATCH, "_seq", 0)
+    try:
+        generation = int(generation)
+        source_sequence = int(frame.get("acquisitionSequence"))
+    except (TypeError, ValueError):
+        return
+    if not match_id or generation <= 0 or source_sequence <= 0:
+        return
+
+    raw_round = perception.get("round")
+    if type(raw_round) is not int:
+        raw_round = perception.get("roundNo")
+    if type(raw_round) is not int:
+        raw_round = CURRENT_MATCH.snapshot().get("roundNo", 0)
+    if type(raw_round) is not int:
+        raw_round = 0
+    scene = str(perception.get("scene") or "UNKNOWN").upper()
+    session_key = (session_id, match_id, generation)
+    if _NATIVE_DOMAIN_ACTION_SESSION_KEY != session_key:
+        _NATIVE_DOMAIN_ACTION_SESSION = None
+        _NATIVE_DOMAIN_ACTION_SESSION_KEY = session_key
+    from domain_action_session import DomainActionSession
+    from session_fsm import AuctionSessionFSM, SessionState
+    from vision_contract import VisionObservation, VisionSettlement
+
+    observation = VisionObservation(
+        round=raw_round,
+        settlement=VisionSettlement(isSettlement=scene == "SETTLEMENT"),
+    )
+    if _NATIVE_DOMAIN_ACTION_SESSION is None:
+        # A session cannot be reconstructed from a settlement-only frame.
+        # Require an observed auction round before creating its receipt consumer.
+        if scene == "SETTLEMENT" or raw_round not in range(1, 6):
+            return
+        fsm = AuctionSessionFSM()
+        fsm.handle_observation(observation)
+        if fsm.state not in (SessionState.AUCTION_R1, SessionState.AUCTION_ACTIVE):
+            return
+        consumer = DomainActionSession(
+            fsm, match_id, match_generation=generation,
+            observation_session_id=session_id,
+        )
+        consumer.last_evidence_sequence = source_sequence
+        _NATIVE_DOMAIN_ACTION_SESSION = consumer
+        return
+
+    _NATIVE_DOMAIN_ACTION_SESSION.observe(
+        observation, match_id=match_id, qualified=qualified,
+        source_sequence=source_sequence,
+    )
+
+
+def _native_domain_action_receipt_event(event: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+    """Keep bid receipts separate and send session receipts only to the session FSM."""
+    if event.get("type") != "domain.action.receipt":
+        return None
+    receipt = event.get("receipt")
+    if not isinstance(receipt, dict):
+        return None
+    session_id = str(event.get("observationSessionId") or "")
+    kind = receipt.get("kind")
+    channel = event.get("receiptChannel")
+    if (not session_id or session_id != _NATIVE_EXPECTED_SESSION
+            or session_id != _NATIVE_OBSERVATION_SESSION
+            or receipt.get("observationSessionId") != session_id
+            or not isinstance(receipt.get("intentId"), str) or not receipt["intentId"]
+            or receipt.get("status") not in {"NOT_SENT", "SENT_PENDING_CONFIRMATION", "CONFIRMED", "UNKNOWN"}
+            or kind not in {"Bid", "ReturnLobby", "StartNextMatch"}
+            or channel != ("bid" if kind == "Bid" else "session")):
+        return None
+
+    with _MANUAL_STATE_LOCK:
+        if kind == "Bid":
+            if (receipt.get("matchId") != CURRENT_MATCH.id
+                    or receipt.get("matchGeneration") != getattr(CURRENT_MATCH, "_seq", 0)):
+                return None
+            LATEST_PAYLOAD["bidActionReceipt"] = copy.deepcopy(receipt)
+        else:
+            consumer = _NATIVE_DOMAIN_ACTION_SESSION
+            if (consumer is None or receipt.get("matchId") != consumer.match_id
+                    or receipt.get("matchGeneration") != consumer.match_generation
+                    or receipt.get("observationSessionId") != consumer.observation_session_id):
+                return None
+            accepted = consumer.accept_receipt(receipt, now_ns=time.monotonic_ns())
+            LATEST_PAYLOAD["domainActionReceipt"] = copy.deepcopy(receipt)
+            LATEST_PAYLOAD["domainActionReceiptAccepted"] = accepted
+        current = get_current_match_presentation_summary()
+        LATEST_PAYLOAD["currentMatch"] = current
+        payload = {
+            "type": "domain_action_receipt",
+            "observationSessionId": session_id,
+            "receiptChannel": channel,
+            "currentMatch": current,
+        }
+
+    loop = WS_EVENT_LOOP
+    if loop is not None and loop.is_running():
+        try:
+            asyncio.run_coroutine_threadsafe(
+                broadcast_ws(json.dumps(payload, ensure_ascii=False)), loop
+            )
+        except Exception as exc:
+            log_stage("PRESENTATION:NATIVE", f"domain receipt broadcast failed: {type(exc).__name__}")
+    _native_post_main_status("native_domain_action_receipt", force=True)
+    return payload
+
+
 def _native_observation_event(event: Dict[str, Any]) -> Optional[Dict[str, Any]]:
     """Consume one versioned native Host line and project it into Main/HUD."""
     global _NATIVE_OBSERVATION_RECEIVER, _NATIVE_OBSERVATION_SESSION
@@ -2937,6 +3053,8 @@ def _native_observation_event(event: Dict[str, Any]) -> Optional[Dict[str, Any]]
 
     if not isinstance(event, dict):
         return
+    if event.get("type") == "domain.action.receipt":
+        return _native_domain_action_receipt_event(event)
     if event.get("sourceKind") != "native_wgc" or event.get("inputActions") is not False:
         _native_publish_health({
             "status": "ERROR",
@@ -3636,6 +3754,9 @@ def _native_observation_event(event: Dict[str, Any]) -> Optional[Dict[str, Any]]
                 elif shadow.get("shadowUpdating"):
                     data["solverStatus"] = "pending"
             data["overlayState"] = build_canonical_overlay_state(CURRENT_MATCH, data)
+            _native_domain_action_session_observe_locked(
+                session_id, frame, perception, qualified=True,
+            )
             # Publish the accepted observation scope under the lock before the
             # summary reader decides whether an active native result is eligible.
             LATEST_PAYLOAD.update(data)
@@ -5171,6 +5292,8 @@ _MANUAL_MATCH_PLAYED_AT: Dict[str, str] = {}
 _CAPTURE_SOURCE_INSTANCE_ID = f"desktop_{uuid.uuid4().hex}"
 _LIVE_VISION_ACTIVE = False
 _LIVE_VISION_MATCH_ID: Optional[str] = None
+_NATIVE_DOMAIN_ACTION_SESSION = None
+_NATIVE_DOMAIN_ACTION_SESSION_KEY: Optional[tuple[str, str, int]] = None
 _LIVE_VISION_EXIT_SCENES = frozenset({
     "CITY_TYCOON_HUB",
     "CITY_LEISURE_MENU",

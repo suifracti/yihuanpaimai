@@ -291,6 +291,28 @@ jobs:
           "status=$status" | Out-File -FilePath $env:GITHUB_OUTPUT -Append -Encoding utf8
           if ($status -ne 'PASS') { exit 1 }
 
+      - name: Run durable bid obligation contracts
+        id: durable-bid-obligations
+        if: steps.install-python-deps.outcome == 'success'
+        continue-on-error: true
+        shell: pwsh
+        run: |
+          $outputPath = 'build/ci-issue46-durable-bid-obligations.json'
+          python tools/run_tests.py test_durable_bid_obligations --output $outputPath
+          $testExitCode = $LASTEXITCODE
+          if (-not (Test-Path $outputPath)) {
+            $status = 'NOT_RUN'
+            'Durable bid obligations: NOT_RUN (no result file)' | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Append -Encoding utf8
+          } else {
+            $result = Get-Content $outputPath -Raw | ConvertFrom-Json
+            if ($testExitCode -ne 0 -or $result.tests -ne 15 -or $result.failures.Count -gt 0 -or $result.errors.Count -gt 0 -or $result.skipped.Count -gt 0) {
+              $status = 'FAIL'
+            } else { $status = 'PASS' }
+            "Durable bid obligations: $status; tests=$($result.tests); failures=$($result.failures.Count); errors=$($result.errors.Count); skipped=$($result.skipped.Count)" | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Append -Encoding utf8
+          }
+          "status=$status" | Out-File -FilePath $env:GITHUB_OUTPUT -Append -Encoding utf8
+          if ($status -ne 'PASS') { exit 1 }
+
       - name: Run sparse warehouse content-step budget contract
         id: content-step-budget
         if: steps.install-python-deps.outcome == 'success'
@@ -354,6 +376,8 @@ jobs:
           UI_STATUS: ${{ steps.bid-intent-ui.outputs.status }}
           BID_OUTCOME: ${{ steps.bid-intent-contract.outcome }}
           BID_STATUS: ${{ steps.bid-intent-contract.outputs.status }}
+          DURABLE_OUTCOME: ${{ steps.durable-bid-obligations.outcome }}
+          DURABLE_STATUS: ${{ steps.durable-bid-obligations.outputs.status }}
           STEP_BUDGET_OUTCOME: ${{ steps.content-step-budget.outcome }}
           STEP_BUDGET_STATUS: ${{ steps.content-step-budget.outputs.status }}
           RAW_PARTIAL_OUTCOME: ${{ steps.raw-partial-archive.outcome }}
@@ -406,6 +430,14 @@ jobs:
           "Raw PARTIAL Main archive reader bridge: $env:NATIVE_ARCHIVE_STATUS" | Tee-Object -FilePath $env:GITHUB_STEP_SUMMARY -Append
           "Read-only bid intent status UI: $env:UI_STATUS" | Tee-Object -FilePath $env:GITHUB_STEP_SUMMARY -Append
           "Scoped bid intent contract: $env:BID_STATUS" | Tee-Object -FilePath $env:GITHUB_STEP_SUMMARY -Append
+          if ($env:DURABLE_OUTCOME -eq 'success' -and $env:DURABLE_STATUS -eq 'PASS') {
+            $durableStatus = 'PASS'
+          } elseif ($env:DURABLE_OUTCOME -eq 'skipped' -or $env:SETUP_OUTCOME -ne 'success' -or $env:DEPS_OUTCOME -ne 'success') {
+            $durableStatus = 'NOT_RUN'
+          } else {
+            $durableStatus = 'FAIL'
+          }
+          "Durable bid obligation contracts: $durableStatus" | Tee-Object -FilePath $env:GITHUB_STEP_SUMMARY -Append
           "Sparse content-step budget contract: $env:STEP_BUDGET_STATUS" | Tee-Object -FilePath $env:GITHUB_STEP_SUMMARY -Append
           "Raw PARTIAL archive recovery: $env:RAW_PARTIAL_STATUS" | Tee-Object -FilePath $env:GITHUB_STEP_SUMMARY -Append
           if ($env:M1_OUTCOME -eq 'skipped' -or $env:SETUP_OUTCOME -ne 'success' -or $env:DEPS_OUTCOME -ne 'success') {
@@ -432,7 +464,7 @@ jobs:
             $deliveryStatus = 'FAIL'
           }
           "Full Native DELIVERY contract: $deliveryStatus; tests=$env:DELIVERY_TESTS; failures=$env:DELIVERY_FAILURES; errors=$env:DELIVERY_ERRORS; skipped=$env:DELIVERY_SKIPPED" | Tee-Object -FilePath $env:GITHUB_STEP_SUMMARY -Append
-          if ($env:TEST_OUTCOME -ne 'success' -or $compatStatus -ne 'PASS' -or $consumerStatus -ne 'PASS' -or $env:NATIVE_ARCHIVE_STATUS -ne 'PASS' -or $env:UI_STATUS -ne 'PASS' -or $env:BID_STATUS -ne 'PASS' -or $env:STEP_BUDGET_STATUS -notlike 'PASS*' -or $env:RAW_PARTIAL_STATUS -ne 'PASS' -or $m1Status -ne 'PASS' -or $observeStatus -ne 'PASS' -or $deliveryStatus -ne 'PASS') { exit 1 }
+          if ($env:TEST_OUTCOME -ne 'success' -or $compatStatus -ne 'PASS' -or $consumerStatus -ne 'PASS' -or $env:NATIVE_ARCHIVE_STATUS -ne 'PASS' -or $env:UI_STATUS -ne 'PASS' -or $env:BID_STATUS -ne 'PASS' -or $durableStatus -ne 'PASS' -or $env:STEP_BUDGET_STATUS -notlike 'PASS*' -or $env:RAW_PARTIAL_STATUS -ne 'PASS' -or $m1Status -ne 'PASS' -or $observeStatus -ne 'PASS' -or $deliveryStatus -ne 'PASS') { exit 1 }
 
   dotnet-scroll-diagnostics:
     name: .NET 8 offline scroll diagnostics
@@ -453,6 +485,12 @@ jobs:
         uses: actions/setup-dotnet@v6
         with:
           dotnet-version: '8.0.x'
+
+      - name: Build production WGC Native Host
+        id: wgc-host-build
+        if: steps.setup-dotnet.outcome == 'success'
+        shell: pwsh
+        run: dotnet build architecture/v2/host/wgc_live_harness/WgcLiveHarness.csproj --configuration Release --output build/ci-luna-b-wgc-host
 
       - name: Run isolated adapter pre-send diagnostics
         id: dotnet-contract
@@ -518,9 +556,9 @@ jobs:
           $output = dotnet run --project tests/native_domain_actions/domain-actions.csproj -- $workflowPath 2>&1
           $testExitCode = $LASTEXITCODE
           $output | Write-Output
-          $summaryLine = @($output | Where-Object { $_ -match '^PASS 9 scenarios \(fake input only\)$' })
+          $summaryLine = @($output | Where-Object { $_ -match '^PASS 10 scenarios \(fake input only\)$' })
           if ($testExitCode -ne 0 -or $summaryLine.Count -ne 1 -or -not (Test-Path $workflowPath)) { $status = 'FAIL' }
-          else { $status = 'PASS (9 fake-backend scenarios)' }
+          else { $status = 'PASS (10 fake-backend scenarios)' }
           "status=$status" | Out-File -FilePath $env:GITHUB_OUTPUT -Append -Encoding utf8
           "Native domain action harness: $status" | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Append -Encoding utf8
           if ($testExitCode -ne 0 -or $status -eq 'FAIL') { exit 1 }
@@ -543,3 +581,36 @@ jobs:
           }
           "status=$status" | Out-File -FilePath $env:GITHUB_OUTPUT -Append -Encoding utf8
           if ($status -ne 'PASS') { exit 1 }
+
+      - name: Run Main receipt channel bridge contracts
+        id: main-domain-action-receipts
+        shell: pwsh
+        run: |
+          $outputPath = 'build/ci-issue46-main-domain-action-receipts.json'
+          python tools/run_tests.py test_main_domain_action_receipts --output $outputPath
+          $testExitCode = $LASTEXITCODE
+          if (-not (Test-Path $outputPath)) {
+            'Main receipt channel bridge: NOT_RUN (no result file)' | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Append -Encoding utf8
+            exit 1
+          }
+          $result = Get-Content $outputPath -Raw | ConvertFrom-Json
+          $failures = @($result.failures).Count
+          $errors = @($result.errors).Count
+          $skipped = @($result.skipped).Count
+          if ($testExitCode -ne 0 -or $result.tests -ne 2 -or $failures -ne 0 -or $errors -ne 0 -or $skipped -ne 0) { $status = 'FAIL' }
+          else { $status = 'PASS' }
+          "Main receipt channel bridge: $status; tests=$($result.tests); failures=$failures; errors=$errors; skipped=$skipped" | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Append -Encoding utf8
+          if ($status -ne 'PASS') { exit 1 }
+
+      - name: Run isolated Windows ticketed input dummy
+        id: domain-action-dummy
+        shell: pwsh
+        run: |
+          $output = dotnet run --project tests/native_domain_actions/domain-actions.csproj -- --dummy-window 2>&1
+          $testExitCode = $LASTEXITCODE
+          $output | Write-Output
+          $summaryLine = @($output | Where-Object { $_ -match '^PASS Windows dummy adapter; HTGame never constructed/discovered/authorized$' })
+          if ($testExitCode -ne 0 -or $summaryLine.Count -ne 1) { $status = 'FAIL' }
+          else { $status = 'PASS (isolated dummy window only)' }
+          "Windows ticketed input dummy: $status" | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Append -Encoding utf8
+          if ($status -notlike 'PASS*') { exit 1 }

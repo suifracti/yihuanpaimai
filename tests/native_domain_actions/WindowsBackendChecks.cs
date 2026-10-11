@@ -101,7 +101,9 @@ static class WindowsBackendChecks
             var ownReceipt = f.Runtime.OnIndependentCapture(f.Intent.IntentId, frame, new(1, "dummy-self"));
             Console.WriteLine($"own receipt={ownReceipt?.Status}/{ownReceipt?.Reason} appAccepted={window.Accepted} pixels={f.Decoder.Decode(frame).OwnBid?.Amount}");
             Require(ownReceipt?.Status == ReceiptStatus.CONFIRMED, "INDEPENDENT_OWN_PIXEL_RECEIPT");
-            var payload = f.Events.Last()["currentMatch"]!["bidActionReceipt"]!;
+            var envelope = f.Events.Last();
+            Require((string?)envelope["receiptChannel"] == "bid", "BID_RECEIPT_CHANNEL");
+            var payload = envelope["receipt"]!;
             Require((string?)payload["status"] == "CONFIRMED" && (string?)payload["evidenceRef"] == frame.EvidenceRef, "MAIN_SCHEMA_PROJECTION");
             File.WriteAllText("build/native-domain-actions/dummy-receipt-events.json", new JsonArray(f.Events.Select(e => e.DeepClone()).ToArray()).ToJsonString());
             Require(f.Runtime.Dispatch(f.Intent).Status == ReceiptStatus.CONFIRMED && f.Raw.SendCallCount == 3, "NO_DUPLICATE_OS_SEND");
