@@ -2593,7 +2593,7 @@ class RealEngine:
         self._apply_pipeline_context(context, captured_at, lobby_handoff=lobby_handoff)
         return context
 
-    def _observe_frame_context(self, frame: np.ndarray, captured_at: str) -> tuple[dict, bool]:
+    def _observe_frame_context(self, frame: np.ndarray, captured_at: str, stage_timings=None) -> tuple[dict, bool]:
         closed_settlement_frame = bool(
             self._settlement_collection_closed
             and self.pipeline.current_context.get("scene") == "SETTLEMENT"
@@ -2609,12 +2609,14 @@ class RealEngine:
             record_stable_key=self.current_match.id,
             include_heavy_identity=False,
             prioritize_live_facts=True,
+            stage_timings=stage_timings,
         ), False
 
     def _process_frame(self, item: dict) -> None:
         started = qpc_ns()
         header = item["header"]
         stages: dict[str, float] = {}
+        observe_stages: dict[str, Any] = {}
         stage_start = started
 
         def mark_stage(name: str) -> None:
@@ -2654,10 +2656,11 @@ class RealEngine:
                     context, closed_settlement_frame = dict(self.last_context), True
                     context['observationEvidenceOnly'] = True
             else:
-                context, closed_settlement_frame = self._observe_frame_context(item["bgr"], captured_at)
+                context, closed_settlement_frame = self._observe_frame_context(item["bgr"], captured_at, observe_stages)
             mark_stage("observe")
             if self.stop_event.is_set() or int(item.get("identityInvalidationGeneration", -1)) != self._identity_generation():
-                self.log("frame.cancelled_before_commit", frameSequence=header["sequence"], processingStagesMs=stages)
+                self.log("frame.cancelled_before_commit", frameSequence=header["sequence"], processingStagesMs=stages,
+                         observeStagesMs=observe_stages)
                 return
             if self.capture_policy == DELIVERY:
                 rejection = validate_delivery(item['captureProof']['deliveryProof'], qpc_ns(),
@@ -2763,11 +2766,13 @@ class RealEngine:
                 inAuction=bool(context.get("inAuction")),
                 processingMs=processing_ms,
                 processingStagesMs=stages,
+                observeStagesMs=observe_stages,
                 queueWaitMs=max(0.0, (started - item.get("readCompletedNs", started)) / 1_000_000.0),
             )
         except Exception as exc:
             self.processing_errors.append(f"{type(exc).__name__}: {exc}")
-            self.log("frame.processing_failed", frameSequence=header.get("sequence"), error=str(exc))
+            self.log("frame.processing_failed", frameSequence=header.get("sequence"), error=str(exc),
+                     observeStagesMs=observe_stages)
             if self.fault != "no_ack" and not item.get("ackSent"):
                 try:
                     self._frame_ack(item, "CORRUPTED", (qpc_ns() - started) / 1_000_000.0)

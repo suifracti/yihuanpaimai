@@ -993,6 +993,7 @@ class NTEVisionPipeline:
         record_stable_key: Optional[str] = None,
         include_heavy_identity: bool = True,
         prioritize_live_facts: bool = False,
+        stage_timings: Optional[Dict[str, Any]] = None,
     ) -> Dict[str, Any]:
         """
         处理图像帧（支持局部 ROI 极速 OCR 解析 + 4人出价与全回合轨迹时序追踪）
@@ -1002,7 +1003,24 @@ class NTEVisionPipeline:
         live loop can publish OCR facts before the slow catalog match.
         prioritize_live_facts=True uses the strict round-title ROI to enter the
         live auction path and defers the optional detector-based estimate fallback.
+        stage_timings enables bounded per-call diagnostics on the Windows QPC
+        domain (perf_counter_ns); it never becomes part of the business context.
         """
+        if stage_timings is not None:
+            stage_timings.clear()
+
+        def timed(name, action, *args, **kwargs):
+            if stage_timings is None:
+                return action(*args, **kwargs)
+            started = time.perf_counter_ns()
+            try:
+                return action(*args, **kwargs)
+            finally:
+                elapsed = time.perf_counter_ns() - started
+                metric = stage_timings.setdefault(name, {"calls": 0, "elapsedMs": 0.0})
+                metric["calls"] += 1
+                metric["elapsedMs"] += elapsed / 1_000_000.0
+
         self._bind_acquisition_record(record_stable_key)
         self._frame_bid_captured_at = captured_at
         self._acquisition_frame = getattr(self, "_acquisition_frame", 0) + 1
@@ -1019,11 +1037,11 @@ class NTEVisionPipeline:
 
         h, w, _ = frame.shape
 
-        if self._handle_loading_black_frame(frame, time.monotonic()):
+        if timed("loadingTransition", self._handle_loading_black_frame, frame, time.monotonic()):
             return self.current_context
 
         # 0. 对局前：OpenCV 小图快检，毫秒级。禁止为了认大世界/都市大亨去跑 RapidOCR。
-        fast = self._classify_scene_fast(frame)
+        fast = timed("sceneNavigation", self._classify_scene_fast, frame)
         prev = self.current_context.get("scene")
         mode_provider = getattr(self, 'recognition_mode_provider', None)
         mode = mode_provider() if mode_provider else 'auto'
@@ -1038,7 +1056,7 @@ class NTEVisionPipeline:
             and fast["scene"] in PRE_AUCTION_NAV_SCENES
             and not self.current_context.get("isSettlement")
         ):
-            nav_live_round = self._read_df_auction_round_title(frame)
+            nav_live_round = timed("roundTitlePreflight", self._read_df_auction_round_title, frame)
         if mode == 'manual' and not force_refresh and fast['scene'] != SCENE_SETTLEMENT and prev != SCENE_SETTLEMENT:
             # No auction OCR in manual mode; settlement capture is independent.
             self.current_context['isSettlement'] = False
@@ -1071,9 +1089,9 @@ class NTEVisionPipeline:
             self._apply_pre_auction_scene(fast)
             # 进都市大亨/闲趣就开始预热 OCR，进大厅后 1 秒内要扫到助手和仪器组
             if fast["scene"] in (SCENE_CITY_TYCOON_HUB, SCENE_CITY_LEISURE_MENU, SCENE_AUCTION_LOBBY):
-                self._warm_ocr_async()
+                timed("ocrWarmupDispatch", self._warm_ocr_async)
             if fast["scene"] == SCENE_AUCTION_LOBBY:
-                self._refresh_lobby_loadout(
+                timed("lobbyLoadout", self._refresh_lobby_loadout,
                     frame,
                     force=force_refresh or prev != SCENE_AUCTION_LOBBY,
                     observed_at=captured_at,
@@ -1084,8 +1102,8 @@ class NTEVisionPipeline:
             self._nav_hold_frames = 0
             self._match_exit_hold = 0
             self._apply_pre_auction_scene({"scene": SCENE_AUCTION_LOBBY, "auctionEntryVisible": True})
-            self._warm_ocr_async()
-            self._refresh_lobby_loadout(
+            timed("ocrWarmupDispatch", self._warm_ocr_async)
+            timed("lobbyLoadout", self._refresh_lobby_loadout,
                 frame,
                 force=force_refresh or prev != SCENE_AUCTION_LOBBY,
                 observed_at=captured_at,
@@ -1110,7 +1128,7 @@ class NTEVisionPipeline:
         # 未命中对局前导航：可能已在局内 / 载入 / 结算。OCR 没就绪就先待命，不卡导航帧。
         # 已锁定的局内/结算保持原态，禁止被「OCR 未就绪」清成未知。
         if self._ocr_engine is None:
-            self._warm_ocr_async()
+            timed("ocrWarmupDispatch", self._warm_ocr_async)
             # OCR 未就绪不是退出证据：已锁定局内/结算保持原态
             return self.current_context
 
@@ -1131,7 +1149,7 @@ class NTEVisionPipeline:
             # The exact, high-confidence round title is sufficient evidence to
             # enter the existing live path. This avoids a blocking canvas scan
             # on the first auction frame while keeping settlement fail-closed.
-            observed_round = preflight_round if preflight_round is not None else self._read_df_auction_round_title(frame)
+            observed_round = preflight_round if preflight_round is not None else timed("roundTitlePreflight", self._read_df_auction_round_title, frame)
             previous_round = int(self.current_context.get("round") or 0)
             round_is_current = (
                 observed_round is not None
@@ -1175,7 +1193,7 @@ class NTEVisionPipeline:
         if is_auction_scene and prioritize_live_facts and not frame_looks_settlement:
             observed_round = preflight_round
             if observed_round is None:
-                observed_round = self._read_df_auction_round_title(frame)
+                observed_round = timed("roundTitlePreflight", self._read_df_auction_round_title, frame)
             if observed_round is not None:
                 previous_round = int(self.current_context.get("round") or 0)
                 if observed_round >= previous_round:
@@ -1276,7 +1294,7 @@ class NTEVisionPipeline:
                     }
 
             try:
-                df_est, df_timer = self._read_df_numeric_batch(
+                df_est, df_timer = timed("liveNumericOcr", self._read_df_numeric_batch,
                     frame,
                     include_estimate=False,
                     precomputed_results=[aligned_results[0]] if aligned_results[0] is not None else [],
@@ -1327,14 +1345,14 @@ class NTEVisionPipeline:
         elif is_auction_scene and not frame_looks_settlement:
             observed_round = preflight_round
             if observed_round is None:
-                observed_round = self._read_df_auction_round_title(frame)
+                observed_round = timed("roundTitlePreflight", self._read_df_auction_round_title, frame)
             if observed_round is not None:
                 previous_round = int(self.current_context.get("round") or 0)
                 if observed_round >= previous_round:
                     self.current_context["round"] = observed_round
                     round_title_confirmed = True
             try:
-                df_est, df_timer = self._read_df_numeric_batch(frame)
+                df_est, df_timer = timed("liveNumericOcr", self._read_df_numeric_batch, frame)
             except Exception:
                 df_est = None
                 df_timer = None
@@ -1480,7 +1498,7 @@ class NTEVisionPipeline:
 
             self._ocr_busy = True
             try:
-                res, _ = self.ocr(roi)
+                res, _ = timed("fullCanvasOcr", lambda: self.ocr(roi))
                 self.ocr_call_count += 1
                 self._last_auction_ocr_ts = time.monotonic()
                 self._last_intel_sig = self._intel_region_sig(frame)
@@ -1493,7 +1511,7 @@ class NTEVisionPipeline:
                 roi = frame[ry1:ry2, rx1:rx2]
                 self._ocr_busy = True
                 try:
-                    res, _ = self.ocr(roi)
+                    res, _ = timed("fullCanvasFallbackOcr", lambda: self.ocr(roi))
                     self.ocr_call_count += 1
                 finally:
                     self._ocr_busy = False
@@ -1608,7 +1626,7 @@ class NTEVisionPipeline:
                 return self.current_context
 
             # 3. 对局加载/匹配过渡界面
-            loading_info = self._parse_loading(mapped_res, w, h)
+            loading_info = timed("loadingCaptionParsing", self._parse_loading, mapped_res, w, h)
             if loading_info["isLoading"]:
                 self._match_exit_hold = 0
                 self.current_context["scene"] = SCENE_AUCTION_LOADING
