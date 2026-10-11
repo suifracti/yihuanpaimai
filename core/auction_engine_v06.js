@@ -285,13 +285,20 @@
       const candidates = key.split("/").map(part => part.trim()).filter(Boolean);
       if (!candidates.length) throw new Error(`${label}已知藏品格式错误：${tokenRaw}`);
       let singleResolvedItem = null;
+      const indexes = new Set();
       const prices = [...new Set(candidates.map(part => {
         const item = resolveItem(part);
         if (!item) throw new Error(`${label}图鉴中找不到：${part}`);
+        // Identity is stricter than price: equal-price catalog items may occupy
+        // different areas. A numeric clue still permits every matching identity.
+        const canonical = CATALOG_NAME_ALIASES[part] || part;
+        const named = items.findIndex(x => x[0] === canonical || x[0] === part);
+        if (named >= 0) indexes.add(named);
+        else items.forEach((x, i) => { if (Number(x[1]) === Number(item[1])) indexes.add(i); });
         if (candidates.length === 1) singleResolvedItem = item;
         return Number(item[1]);
       }))].sort((a, b) => a - b);
-      groups.push([prices, count]);
+      groups.push([prices, count, [...indexes]]);
       if (prices.length === 1) {
         const item = singleResolvedItem || items.find(x => Number(x[1]) === prices[0]);
         for (let i = 0; i < count; i++) known.push({ name: item[0], price: Number(item[1]), size: item[2] });
@@ -318,7 +325,7 @@
       ctx[`${key}Raw`] = expression;
       ctx[key] = parsed.known;
       ctx[`${rarity}Groups`] = parsed.groups;
-      ctx[`${key}Groups`] = parsed.groups.map(([prices, count]) => [prices.map(p => p * multiplier), count]);
+      ctx[`${key}Groups`] = parsed.groups.map(([prices, count, indexes]) => [prices.map(p => p * multiplier), count, indexes]);
     }
     return ctx;
   }
