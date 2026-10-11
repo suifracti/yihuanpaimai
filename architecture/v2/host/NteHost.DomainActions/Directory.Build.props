@@ -1,0 +1,6 @@
+<Project>
+  <PropertyGroup>
+    <BaseIntermediateOutputPath>$(MSBuildThisFileDirectory)..\..\..\..\build\native-domain-actions\$(MSBuildProjectName)\obj\</BaseIntermediateOutputPath>
+    <OutputPath>$(MSBuildThisFileDirectory)..\..\..\..\build\native-domain-actions\$(MSBuildProjectName)\out\</OutputPath>
+  </PropertyGroup>
+</Project>
