@@ -64,7 +64,7 @@ async def request_once(ws, record, timeout=10):
     raise TimeoutError("Host startup acknowledgement deadline")
 
 
-async def start(prepared, output, *, environment=None):
+async def start(prepared, output, *, environment=None, on_launch=None):
     import websockets
     # Refuse an occupied bus: do not start or command an unknown old process.
     with socket.socket() as probe:
@@ -90,6 +90,8 @@ async def start(prepared, output, *, environment=None):
         child = subprocess.Popen([sys.executable, str(ROOT / "app/main.py")], cwd=ROOT,
                                  env=env, stdout=out, stderr=err,
                                  creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))
+    if on_launch is not None:
+        on_launch(child)  # Retain ownership for the one-shot wrapper's bounded cleanup.
     record("assistant-launched", wrapperPid=child.pid)
     deadline = time.monotonic() + 15
     while time.monotonic() < deadline:
