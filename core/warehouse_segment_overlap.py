@@ -92,7 +92,8 @@ def _overlap_ratio(mask_a: np.ndarray, mask_b: np.ndarray, dy: int) -> float:
 
 
 def _band_alignment(view_a: np.ndarray, view_b: np.ndarray,
-                    mask_a: np.ndarray, mask_b: np.ndarray, max_shift_px: int) -> Dict[str, Any]:
+                    mask_a: np.ndarray, mask_b: np.ndarray, max_shift_px: int,
+                    *, band_divisions: int = 8) -> Dict[str, Any]:
     """Match disjoint content bands anywhere in the other viewport.
 
     A fixed upper strip cannot survive a half-viewport downward scroll. Short
@@ -101,7 +102,7 @@ def _band_alignment(view_a: np.ndarray, view_b: np.ndarray,
     support that displacement; repeated grid/background alone is insufficient.
     """
     height, width = view_a.shape[:2]
-    band_h = max(12, height // 8)
+    band_h = max(12, height // band_divisions)
     x = width // 10
     band_w = width - 2 * x
     if height < 2 * band_h or band_w < 12:
@@ -161,6 +162,7 @@ def _band_alignment(view_a: np.ndarray, view_b: np.ndarray,
             "verticalOffsetPx": offset, "normalizedOffset": round(offset / float(height), 4),
             "overlapRatio": round(overlap, 4), "confidence": round(shared_score, 3),
             "reason": "DISJOINT_CONTENT_BANDS", "supportCount": support,
+            "bandHeightPx": band_h,
             "progressionVerified": True}
 
 
@@ -300,6 +302,13 @@ def _align_warehouse_segments(
 
     # 2. Actual shared content at either edge, independent of scrollbar scale.
     bands = _band_alignment(view_a, view_b, mask_a, mask_b, max_shift_px)
+    if not bands:
+        # A clipped object may leave only one coarse band in the overlap.
+        # Split the sampling height, not the acceptance floors: still require
+        # two disjoint unique content matches AND the entire shared viewport.
+        # Periodic grid aliases cannot supply either unique content evidence.
+        bands = _band_alignment(view_a, view_b, mask_a, mask_b, max_shift_px,
+                                band_divisions=16)
     if bands:
         result.update(bands)
         direction = bands.get("direction")
