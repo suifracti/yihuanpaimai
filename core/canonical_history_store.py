@@ -870,6 +870,9 @@ class CanonicalHistoryStore:
                         prior_settlement = existing_record.get("settlement") or {}
                         # These fields belong to capture/review writers, never OCR archive.
                         for field in (
+                            "warehouseReviewPacket",
+                            "pageCount",
+                            "warehousePageCount",
                             "warehouseOccupancy",
                             "warehouseIdentityReview",
                             "reviewUnits",
@@ -881,7 +884,8 @@ class CanonicalHistoryStore:
                             "settlementItems",
                             "visibleInventory",
                         ):
-                            if field in prior_settlement and (field in ("inventoryArchive", "settlementItems", "visibleInventory")
+                            if field in prior_settlement and (field in ("warehouseReviewPacket", "pageCount", "warehousePageCount",
+                                                                       "inventoryArchive", "settlementItems", "visibleInventory")
                                                               or field not in rec_dict.setdefault("settlement", {})):
                                 rec_dict.setdefault("settlement", {})[field] = copy.deepcopy(prior_settlement[field])
                         from quality_sell_selection import merge_quality_sell_sidecar_bundle
