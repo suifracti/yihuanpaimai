@@ -122,7 +122,10 @@ class DomainActionSessionTests(unittest.TestCase):
         self.assertEqual(intent["amount"], 500)
         self.assertEqual(intent["deadlineNs"], 1_500_000_000)
         self.assertEqual(intent["maxSafeBid"], 800)
+        self.assertEqual(intent["approvalId"], "approved-1")
         self.assertEqual({key: intent[key] for key in binding}, binding)
+        prepared = dict(claim, executionEnabled=False, commitBeforeSendRequired=True)
+        self.assertEqual(claimed_bid_to_domain_intent(prepared, native, now_ms=1000, now_ns=1_000_000_000), intent)
         for bad_native in (dict(native, factsRevision=8), dict(native, observationSessionId="foreign"),
                            dict(native, matchGeneration=2), dict(native, budget=999),
                            dict(native, leaseExpiresNs=1_400_000_000)):

@@ -65,10 +65,15 @@ public sealed class Win32RawInputBackend : IRawInputBackend
         for (int i = 0; i < inputs.Length; i++)
         {
             var record = inputs[i];
+            if (record.Type != 0 && record.Type != 1) throw new InvalidOperationException("UNSUPPORTED_INPUT_TYPE");
             native[i] = new NativeInputMethods.INPUT
             {
                 type = record.Type,
-                u = new NativeInputMethods.INPUTUNION
+                u = record.Type == 1 ? new NativeInputMethods.INPUTUNION
+                {
+                    ki = new NativeInputMethods.KEYBDINPUT { wVk = checked((ushort)record.MouseData),
+                        dwFlags = record.Flags, dwExtraInfo = InputMarker.ToNative(record.ExtraInfo) },
+                } : new NativeInputMethods.INPUTUNION
                 {
                     mi = new NativeInputMethods.MOUSEINPUT
                     {
@@ -92,7 +97,7 @@ public sealed class Win32RawInputBackend : IRawInputBackend
 
             foreach (NativeInputMethods.INPUT record in native)
             {
-                _nativeExtraInfo.Add(InputMarker.FromNative(record.u.mi.dwExtraInfo));
+                _nativeExtraInfo.Add(InputMarker.FromNative(record.type == 1 ? record.u.ki.dwExtraInfo : record.u.mi.dwExtraInfo));
             }
         }
 

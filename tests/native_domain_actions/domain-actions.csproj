@@ -1,4 +1,10 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup><OutputType>Exe</OutputType><TargetFramework>net8.0</TargetFramework><ImplicitUsings>enable</ImplicitUsings><Nullable>enable</Nullable></PropertyGroup>
   <ItemGroup><ProjectReference Include="../../architecture/v2/host/NteHost.DomainActions/NteHost.DomainActions.csproj" /></ItemGroup>
+  <ItemGroup>
+    <Compile Include="../../architecture/v2/host/wgc_live_harness/WgcDomainCaptureAdapter.cs" Link="WgcDomainCaptureAdapter.cs" />
+    <Compile Include="../../architecture/v2/host/wgc_live_harness/CapturedBgraFrame.cs" Link="CapturedBgraFrame.cs" />
+    <Compile Include="../../architecture/v2/host/wgc_live_harness/CaptureDeliveryProof.cs" Link="CaptureDeliveryProof.cs" />
+    <Compile Include="../../architecture/v2/host/wgc_live_harness/RequestClockDiagnostics.cs" Link="RequestClockDiagnostics.cs" />
+  </ItemGroup>
 </Project>
