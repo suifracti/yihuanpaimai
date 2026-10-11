@@ -373,8 +373,47 @@ class MainViewStateProviderTests(unittest.TestCase):
         self.assertEqual(len(response["mainViewState"]["history"]["recentRecords"]), 1)
         self.assertEqual(
             MainWindowBridge.ALLOWED_ACTIONS - {'request_original_screenshots', 'delete_original_screenshot', 'restore_original_screenshot'},
-            frozenset(("toggle_overlay", "get_overlay_visibility", "toggle_main_pin", "set_main_pin", "request_app_status", "delete_history_record", "delete_history_records", "request_legacy_archive", "select_legacy_archive_source", "request_settlement_review", "import_settlement_screenshot", "replace_settlement_screenshot", "delete_settlement_screenshot", "rerun_settlement_recognition", "save_settlement_review", "settlement_item_review_action", "manual_facts", "manual_next_match", "manual_finalize", "manual_bootstrap", "start_live_vision", "export_reviewed_labels", "triggered_snapshot", "save_settlement_screenshot", "save_game_screenshot", "start_warehouse_capture", "prepare_warehouse_capture", "confirm_warehouse_capture", "stop_warehouse_capture", "request_warehouse_slot_evidence", "warehouse_instance_decision", "warehouse_identity_review", "export_history_records", "import_history_bundle")),
+            frozenset(("toggle_overlay", "get_overlay_visibility", "toggle_main_pin", "set_main_pin", "request_app_status", "delete_history_record", "delete_history_records", "request_legacy_archive", "request_native_warehouse_archive_page", "retry_settlement_inventory_archive", "start_warehouse_manual_takeover", "resume_warehouse_refinement", "set_capture_freshness_policy", "finish_warehouse_manual_capture", "cancel_warehouse_refinement", "capture_warehouse_manual_page", "set_native_auto_warehouse_capture", "prepare_warehouse_manual_takeover", "next_match_preparation", "cancel_warehouse_manual_capture", "set_observation_window_mode", "request_guidebook_sources", "select_legacy_archive_source", "request_settlement_review", "import_settlement_screenshot", "replace_settlement_screenshot", "delete_settlement_screenshot", "rerun_settlement_recognition", "save_settlement_review", "settlement_item_review_action", "manual_facts", "manual_next_match", "manual_finalize", "manual_bootstrap", "start_live_vision", "export_reviewed_labels", "triggered_snapshot", "save_settlement_screenshot", "save_game_screenshot", "start_warehouse_capture", "prepare_warehouse_capture", "confirm_warehouse_capture", "stop_warehouse_capture", "request_warehouse_slot_evidence", "warehouse_instance_decision", "warehouse_identity_review", "export_history_records", "import_history_bundle")),
         )
+
+    def test_bridge_reads_a_single_raw_partial_archive_page(self):
+        calls = []
+
+        def read_page(session_id, page_index):
+            calls.append((session_id, page_index))
+            return {
+                "ok": True,
+                "status": "RAW_PARTIAL_ARCHIVED",
+                "coverageStatus": "COVERAGE_UNPROVEN",
+                "sessionId": session_id,
+                "pageIndex": page_index,
+                "pageCount": 1,
+                "sourceSha256": "a" * 64,
+                "previewDataUrl": "data:image/jpeg;base64,AA==",
+            }
+
+        bridge = MainWindowBridge(
+            OverlayVisibilityController(_FakeOverlay()),
+            native_warehouse_archive_page_provider=read_page,
+        )
+
+        response = bridge.dispatch({
+            "action": "request_native_warehouse_archive_page",
+            "sessionId": "0123456789abcdef0123456789abcdef",
+            "pageIndex": 0,
+            "requestId": "main-archive-1",
+        })
+
+        self.assertEqual(calls, [("0123456789abcdef0123456789abcdef", 0)])
+        self.assertEqual(response["nativeWarehouseArchivePage"]["status"], "RAW_PARTIAL_ARCHIVED")
+        self.assertEqual(response["requestId"], "main-archive-1")
+        invalid = bridge.dispatch({
+            "action": "request_native_warehouse_archive_page",
+            "sessionId": "0123456789abcdef0123456789abcdef",
+            "pageIndex": "0",
+        })
+        self.assertEqual(invalid["nativeWarehouseArchivePage"]["status"], "INVALID_PAGE_INDEX")
+        self.assertEqual(len(calls), 1)
 
     def test_bridge_fail_softs_mutable_main_view_state_provider_result(self):
         bridge = MainWindowBridge(

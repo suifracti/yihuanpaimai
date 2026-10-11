@@ -181,6 +181,18 @@ jobs:
             exit $testExitCode
           }
 
+      - name: Run read-only bid intent status UI contract
+        id: bid-intent-ui
+        continue-on-error: true
+        shell: pwsh
+        run: |
+          node tests/bid_intent_status_ui.js
+          $testExitCode = $LASTEXITCODE
+          if ($testExitCode -eq 0) { $status = 'PASS' } else { $status = 'FAIL' }
+          "status=$status" | Out-File -FilePath $env:GITHUB_OUTPUT -Append -Encoding utf8
+          "Read-only bid intent status UI: $status" | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Append -Encoding utf8
+          if ($testExitCode -ne 0) { exit $testExitCode }
+
       - name: Verify strict solver source gate on Windows checkout
         id: solver-source-compatibility
         if: steps.install-python-deps.outcome == 'success'
@@ -224,7 +236,7 @@ jobs:
             $status = 'FAIL'
           } elseif (-not $runMatch.Success) {
             $status = 'NOT_RUN'
-          } elseif ([int]$runMatch.Groups[1].Value -ne 7) {
+          } elseif ([int]$runMatch.Groups[1].Value -ne 8) {
             $status = 'SKIP'
           } elseif ($skipMatch.Success -and [int]$skipMatch.Groups[1].Value -gt 0) {
             $status = 'SKIP'
@@ -233,6 +245,90 @@ jobs:
           }
           "status=$status" | Out-File -FilePath $env:GITHUB_OUTPUT -Append -Encoding utf8
           "Native Main/Solver/HUD consumer contract: $status" | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Append -Encoding utf8
+          if ($status -ne 'PASS') { exit 1 }
+
+      - name: Run raw PARTIAL Main archive reader bridge contract
+        id: native-raw-archive-main
+        if: steps.install-python-deps.outcome == 'success'
+        continue-on-error: true
+        shell: pwsh
+        run: |
+          $output = python -m unittest tests.test_main_view_state_provider.MainViewStateProviderTests.test_bridge_reuses_existing_action_and_serializes_only_snapshot_payload tests.test_main_view_state_provider.MainViewStateProviderTests.test_bridge_reads_a_single_raw_partial_archive_page -v 2>&1
+          $testExitCode = $LASTEXITCODE
+          $output | Write-Output
+          $runMatch = [regex]::Match(($output -join "`n"), 'Ran\s+2\s+tests')
+          if ($testExitCode -eq 0 -and $runMatch.Success) { $status = 'PASS' } else { $status = 'FAIL' }
+          "status=$status" | Out-File -FilePath $env:GITHUB_OUTPUT -Append -Encoding utf8
+          "Raw PARTIAL Main archive reader bridge: $status" | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Append -Encoding utf8
+          if ($status -ne 'PASS') { exit 1 }
+
+      - name: Run scoped bid intent contract
+        id: bid-intent-contract
+        if: steps.install-python-deps.outcome == 'success'
+        continue-on-error: true
+        shell: pwsh
+        run: |
+          $outputPath = 'build/ci-issue46-bid-intent.json'
+          python tools/run_tests.py test_bid_intent_contract --output $outputPath
+          $testExitCode = $LASTEXITCODE
+          if (-not (Test-Path $outputPath)) {
+            $status = 'NOT_RUN'
+            'Issue #46 bid intent: NOT_RUN (no result file)' | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Append -Encoding utf8
+          } else {
+            $result = Get-Content $outputPath -Raw | ConvertFrom-Json
+            if ($testExitCode -ne 0 -or $result.tests -ne 17 -or $result.failures.Count -gt 0 -or $result.errors.Count -gt 0 -or $result.skipped.Count -gt 0) {
+              $status = 'FAIL'
+            } else { $status = 'PASS' }
+            "Issue #46 bid intent: $status; tests=$($result.tests); failures=$($result.failures.Count); errors=$($result.errors.Count); skipped=$($result.skipped.Count)" | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Append -Encoding utf8
+          }
+          "status=$status" | Out-File -FilePath $env:GITHUB_OUTPUT -Append -Encoding utf8
+          if ($status -ne 'PASS') { exit 1 }
+
+      - name: Run sparse warehouse content-step budget contract
+        id: content-step-budget
+        if: steps.install-python-deps.outcome == 'success'
+        continue-on-error: true
+        shell: pwsh
+        run: |
+          $outputPath = 'build/ci-issue46-content-step-budget.json'
+          python tools/run_tests.py test_native_content_step_budget --output $outputPath
+          $testExitCode = $LASTEXITCODE
+          if (-not (Test-Path $outputPath)) {
+            $status = 'NOT_RUN'
+            'Issue #46 sparse content-step budget: NOT_RUN (no result file)' | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Append -Encoding utf8
+          } else {
+            $result = Get-Content $outputPath -Raw | ConvertFrom-Json
+            $expectedSkip = 'test_native_content_step_budget.ContentStepBudgetTests.test_real_originals_and_sent_vs_not_sent_then_safe_next_sampling'
+            $unexpectedSkips = @($result.skipped | Where-Object { $_[0] -ne $expectedSkip })
+            if ($testExitCode -ne 0 -or $result.tests -ne 4 -or $result.failures.Count -gt 0 -or $result.errors.Count -gt 0 -or $unexpectedSkips.Count -gt 0 -or $result.skipped.Count -ne 1) {
+              $status = 'FAIL'
+            } else { $status = 'PASS (private Issue #42 SOURCE SKIP)' }
+            "Issue #46 sparse content-step budget: $status; tests=$($result.tests); skipped=$($result.skipped.Count)" | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Append -Encoding utf8
+          }
+          "status=$status" | Out-File -FilePath $env:GITHUB_OUTPUT -Append -Encoding utf8
+          if ($status -eq 'FAIL' -or $status -eq 'NOT_RUN') { exit 1 }
+
+      - name: Run raw PARTIAL archive recovery contracts
+        id: raw-partial-archive
+        if: steps.install-python-deps.outcome == 'success'
+        continue-on-error: true
+        shell: pwsh
+        run: |
+          $outputPath = 'build/ci-issue46-raw-partial.json'
+          python tools/run_tests.py `
+            test_native_warehouse_intake.NativeWarehouseIntakeTests.test_rejected_support_selection_keeps_raw_partial_cold_reopenable `
+            test_native_warehouse_intake.NativeWarehouseIntakeTests.test_empty_support_selection_archives_raw_partial `
+            --output $outputPath
+          $testExitCode = $LASTEXITCODE
+          if (-not (Test-Path $outputPath)) {
+            $status = 'NOT_RUN'
+          } else {
+            $result = Get-Content $outputPath -Raw | ConvertFrom-Json
+            if ($testExitCode -ne 0 -or $result.tests -ne 2 -or $result.failures.Count -gt 0 -or $result.errors.Count -gt 0 -or $result.skipped.Count -gt 0) { $status = 'FAIL' }
+            else { $status = 'PASS' }
+          }
+          "status=$status" | Out-File -FilePath $env:GITHUB_OUTPUT -Append -Encoding utf8
+          "Issue #46 raw PARTIAL archive recovery: $status" | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Append -Encoding utf8
           if ($status -ne 'PASS') { exit 1 }
 
       - name: Report Python contract status
@@ -245,6 +341,16 @@ jobs:
           COMPAT_STATUS: ${{ steps.solver-source-compatibility.outputs.status }}
           CONSUMER_OUTCOME: ${{ steps.native-consumer-contract.outcome }}
           CONSUMER_STATUS: ${{ steps.native-consumer-contract.outputs.status }}
+          NATIVE_ARCHIVE_OUTCOME: ${{ steps.native-raw-archive-main.outcome }}
+          NATIVE_ARCHIVE_STATUS: ${{ steps.native-raw-archive-main.outputs.status }}
+          UI_OUTCOME: ${{ steps.bid-intent-ui.outcome }}
+          UI_STATUS: ${{ steps.bid-intent-ui.outputs.status }}
+          BID_OUTCOME: ${{ steps.bid-intent-contract.outcome }}
+          BID_STATUS: ${{ steps.bid-intent-contract.outputs.status }}
+          STEP_BUDGET_OUTCOME: ${{ steps.content-step-budget.outcome }}
+          STEP_BUDGET_STATUS: ${{ steps.content-step-budget.outputs.status }}
+          RAW_PARTIAL_OUTCOME: ${{ steps.raw-partial-archive.outcome }}
+          RAW_PARTIAL_STATUS: ${{ steps.raw-partial-archive.outputs.status }}
           M1_OUTCOME: ${{ steps.m1-contracts.outcome }}
           M1_STATUS: ${{ steps.m1-contracts.outputs.status }}
           OBSERVE_OUTCOME: ${{ steps.observe-diagnostics.outcome }}
@@ -290,6 +396,11 @@ jobs:
           }
           "Strict venue compatibility and mapping: $compatStatus" | Tee-Object -FilePath $env:GITHUB_STEP_SUMMARY -Append
           "Native consumer regressions: $consumerStatus" | Tee-Object -FilePath $env:GITHUB_STEP_SUMMARY -Append
+          "Raw PARTIAL Main archive reader bridge: $env:NATIVE_ARCHIVE_STATUS" | Tee-Object -FilePath $env:GITHUB_STEP_SUMMARY -Append
+          "Read-only bid intent status UI: $env:UI_STATUS" | Tee-Object -FilePath $env:GITHUB_STEP_SUMMARY -Append
+          "Scoped bid intent contract: $env:BID_STATUS" | Tee-Object -FilePath $env:GITHUB_STEP_SUMMARY -Append
+          "Sparse content-step budget contract: $env:STEP_BUDGET_STATUS" | Tee-Object -FilePath $env:GITHUB_STEP_SUMMARY -Append
+          "Raw PARTIAL archive recovery: $env:RAW_PARTIAL_STATUS" | Tee-Object -FilePath $env:GITHUB_STEP_SUMMARY -Append
           if ($env:M1_OUTCOME -eq 'skipped' -or $env:SETUP_OUTCOME -ne 'success' -or $env:DEPS_OUTCOME -ne 'success') {
             $m1Status = 'NOT_RUN'
           } elseif ($env:M1_STATUS) {
@@ -314,7 +425,7 @@ jobs:
             $deliveryStatus = 'FAIL'
           }
           "Full Native DELIVERY contract: $deliveryStatus; tests=$env:DELIVERY_TESTS; failures=$env:DELIVERY_FAILURES; errors=$env:DELIVERY_ERRORS; skipped=$env:DELIVERY_SKIPPED" | Tee-Object -FilePath $env:GITHUB_STEP_SUMMARY -Append
-          if ($env:TEST_OUTCOME -ne 'success' -or $compatStatus -ne 'PASS' -or $consumerStatus -ne 'PASS' -or $m1Status -ne 'PASS' -or $observeStatus -ne 'PASS' -or $deliveryStatus -ne 'PASS') { exit 1 }
+          if ($env:TEST_OUTCOME -ne 'success' -or $compatStatus -ne 'PASS' -or $consumerStatus -ne 'PASS' -or $env:NATIVE_ARCHIVE_STATUS -ne 'PASS' -or $env:UI_STATUS -ne 'PASS' -or $env:BID_STATUS -ne 'PASS' -or $env:STEP_BUDGET_STATUS -notlike 'PASS*' -or $env:RAW_PARTIAL_STATUS -ne 'PASS' -or $m1Status -ne 'PASS' -or $observeStatus -ne 'PASS' -or $deliveryStatus -ne 'PASS') { exit 1 }
 
   dotnet-scroll-diagnostics:
     name: .NET 8 offline scroll diagnostics
@@ -382,4 +493,46 @@ jobs:
           elseif ($cases.Count -ne 16) { $status = 'NOT_RUN' }
           else { $status = 'PASS' }
           "Second-scroll contracts: $status; distinct cases=$($cases.Count); exit=$testExitCode" | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Append -Encoding utf8
+          if ($status -ne 'PASS') { exit 1 }
+
+      - name: Set up Python for domain action session contract
+        id: setup-python-domain-actions
+        uses: actions/setup-python@v7
+        with:
+          python-version: '3.11'
+
+      - name: Run bounded Native domain action scenarios
+        id: domain-action-harness
+        shell: pwsh
+        run: |
+          $workDir = Join-Path $env:GITHUB_WORKSPACE 'build/native-domain-actions'
+          New-Item -ItemType Directory -Path $workDir -Force | Out-Null
+          $workflowPath = Join-Path $workDir 'workflow.json'
+          $output = dotnet run --project tests/native_domain_actions/domain-actions.csproj -- $workflowPath 2>&1
+          $testExitCode = $LASTEXITCODE
+          $output | Write-Output
+          $summaryLine = @($output | Where-Object { $_ -match '^PASS 9 scenarios \(fake input only\)$' })
+          if ($testExitCode -ne 0 -or $summaryLine.Count -ne 1 -or -not (Test-Path $workflowPath)) { $status = 'FAIL' }
+          else { $status = 'PASS (9 fake-backend scenarios)' }
+          "status=$status" | Out-File -FilePath $env:GITHUB_OUTPUT -Append -Encoding utf8
+          "Native domain action harness: $status" | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Append -Encoding utf8
+          if ($testExitCode -ne 0 -or $status -eq 'FAIL') { exit 1 }
+
+      - name: Run receipt-driven domain action session contracts
+        id: domain-action-session
+        shell: pwsh
+        run: |
+          $outputPath = 'build/ci-issue46-domain-action-session.json'
+          python tools/run_tests.py test_domain_action_session test_session_fsm --output $outputPath
+          $testExitCode = $LASTEXITCODE
+          if (-not (Test-Path $outputPath)) {
+            $status = 'NOT_RUN'
+            'Domain action session contracts: NOT_RUN (no result file)' | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Append -Encoding utf8
+          } else {
+            $result = Get-Content $outputPath -Raw | ConvertFrom-Json
+            if ($testExitCode -ne 0 -or $result.tests -ne 15 -or $result.failures.Count -gt 0 -or $result.errors.Count -gt 0 -or $result.skipped.Count -gt 0) { $status = 'FAIL' }
+            else { $status = 'PASS' }
+            "Domain action session contracts: $status; tests=$($result.tests); failures=$($result.failures.Count); errors=$($result.errors.Count); skipped=$($result.skipped.Count)" | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Append -Encoding utf8
+          }
+          "status=$status" | Out-File -FilePath $env:GITHUB_OUTPUT -Append -Encoding utf8
           if ($status -ne 'PASS') { exit 1 }

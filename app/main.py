@@ -435,6 +435,17 @@ if os.environ.get('NTE_CONTENT_EVIDENCE_ONLY') == '1':
 NATIVE_TRIAL_DRAFT_STORE = NativeTrialDraftStore(NATIVE_TRIAL_HISTORY_PATH)
 SETTLEMENT_INVENTORY_ARCHIVE = SettlementInventoryArchive(NATIVE_TRIAL_DRAFT_STORE)
 
+
+def _native_live_trial_drafts_for_main() -> List[Dict[str, Any]]:
+    """Add only verified raw-PARTIAL index metadata to the existing Main trial rows."""
+    drafts = NATIVE_TRIAL_DRAFT_STORE.list_drafts()
+    archives_by_record: Dict[str, List[Dict[str, Any]]] = {}
+    for archive in NATIVE_TRIAL_DRAFT_STORE.list_raw_partial_warehouse_archives():
+        archives_by_record.setdefault(archive["recordStableKey"], []).append(archive)
+    for draft in drafts:
+        draft["nativeRawPartialArchives"] = archives_by_record.get(str(draft.get("id") or ""), [])
+    return drafts
+
 if "--print-code-revision" in sys.argv or "--version" in sys.argv:
     print(get_code_revision())
     sys.exit(0)
@@ -888,6 +899,72 @@ def _native_unverified_accounting(facts: Dict[str, Any]) -> Dict[str, Any]:
     }
 
 
+def _build_native_bid_intent_presentation(
+    native_payload: Dict[str, Any], prediction: Optional[Dict[str, Any]],
+    frozen: Optional[Dict[str, Any]], *, native_projection_current: bool,
+    solver_status: Optional[str], solver_admission: Optional[Dict[str, Any]],
+) -> Optional[Dict[str, Any]]:
+    """Project an offline bid intent from the current native solver lease.
+
+    This computes a display-only proposal. It never creates a budget approval,
+    reservation, dispatch permission, or game input.
+    """
+    if not native_observation_enabled():
+        return None
+
+    now_ms = time.perf_counter_ns() / 1_000_000
+    timer = native_payload.get("timer")
+    frame_age_ms = native_payload.get("freshnessMs")
+    valid_timer = (
+        type(timer) in (int, float) and math.isfinite(timer) and timer >= 0
+        and type(frame_age_ms) in (int, float) and math.isfinite(frame_age_ms) and frame_age_ms >= 0
+    )
+    deadline_ms = int(now_ms + max(0, timer * 1000 - frame_age_ms)) if valid_timer else int(now_ms)
+
+    scope = {
+        "matchId": str(native_payload.get("matchId") or ""),
+        "matchGeneration": native_payload.get("matchGeneration", getattr(CURRENT_MATCH, "_seq", 0)),
+        "observationSessionId": native_payload.get("observationSessionId"),
+        "round": native_payload.get("round"),
+        "factsRevision": native_payload.get("factsRevision"),
+        "scene": native_payload.get("scene") or "UNKNOWN",
+    }
+    event = {
+        **scope,
+        "predictionSnapshot": prediction,
+        "frozenPrediction": frozen or {},
+    }
+    current = dict(scope)
+    admission = solver_admission if isinstance(solver_admission, dict) else {}
+    current["decisionEligible"] = bool(
+        native_projection_current and solver_status == "valid" and admission.get("eligible") is True
+    )
+    current["sourceQualified"] = bool(
+        native_projection_current
+        and scope["matchId"] == str(CURRENT_MATCH.id)
+        and scope["scene"] == "IN_AUCTION"
+        and native_payload.get("observationStatus") == "FRAME"
+        and native_payload.get("observationProfile") == "native-readonly-v1"
+        and native_payload.get("sourceKind") == "native_wgc"
+        and native_payload.get("currentAdviceQualified", True) is True
+        and _native_solver_lease_matches(native_payload)
+    )
+    from bid_intent import build_bid_intent
+    intent = build_bid_intent(
+        event, current, now_ms=int(now_ms), deadline_ms=deadline_ms, requested_bid=None,
+    )
+    if not valid_timer and intent.get("prohibitions") == ["DEADLINE_EXPIRED"]:
+        intent.update(
+            status="UNKNOWN",
+            prohibitions=["AUCTION_DEADLINE_UNAVAILABLE"],
+            explanation="当前帧没有可用的剩余倒计时；不生成有效报价意图。",
+        )
+    # Main only displays the proposal. The execution owner needs a separately
+    # approved, durable budget and a one-shot claim before any future dispatch.
+    intent["executionEnabled"] = False
+    return intent
+
+
 def get_current_match_presentation_summary() -> dict:
     """Return an immutable, presentation-only projection of the live match draft."""
     try:
@@ -1165,9 +1242,16 @@ def get_current_match_presentation_summary() -> dict:
                 native_payload.get("solverMissingReason") if native_profile else None
             ) or _admission_reason
         accounting_display = _native_unverified_accounting(facts) if native_profile else accounting_from_facts(facts)
+        bid_intent = _build_native_bid_intent_presentation(
+            native_payload, prediction, frozen,
+            native_projection_current=native_projection_current,
+            solver_status=solver_status, solver_admission=solver_admission,
+        )
         return {
             "matchId": CURRENT_MATCH.id,
+            "matchGeneration": getattr(CURRENT_MATCH, "_seq", 0),
             "factsRevision": CURRENT_MATCH.facts_revision,
+            "round": native_payload.get("round"),
             "recognitionMode": get_recognition_mode(),
             "observationProfile": native_observation_profile(),
             "nativeAutoWarehouseConfigured": CONFIG.get("app", {}).get("nativeAutoWarehouseCapture") is True,
@@ -1201,6 +1285,10 @@ def get_current_match_presentation_summary() -> dict:
             "solverStatus": solver_status,
             "solverMissingReason": solver_missing_reason,
             "solverAdmission": solver_admission,
+            "bidIntent": bid_intent,
+            "automaticExecutionEnabled": False,
+            "bidActionBackendStatus": "NOT_CONNECTED",
+            "bidActionReceipt": None,
             "shadowUpdating": bool(native_payload.get("shadowUpdating")) if native_profile else False,
             "nativeControlResult": dict(native_payload.get("nativeControlResult") or {}),
             "manualCommandResult": dict(native_payload.get("manualCommandResult") or {}),
@@ -8666,7 +8754,11 @@ def run_hud_app():
             warehouse_capture_host=WAREHOUSE_CAPTURE_HOST,
             warehouse_identity_review_session=WAREHOUSE_IDENTITY_REVIEW,
             warehouse_identity_review_history_store=WAREHOUSE_IDENTITY_HISTORY,
-            live_trial_drafts_provider=lambda: NATIVE_TRIAL_DRAFT_STORE.list_drafts(),
+            live_trial_drafts_provider=_native_live_trial_drafts_for_main,
+            native_warehouse_archive_page_provider=(
+                lambda session_id, page_index:
+                    NATIVE_TRIAL_DRAFT_STORE.read_raw_partial_warehouse_page(session_id, page_index)
+            ),
             shutdown_started_provider=lambda: shutdown_coordinator.started,
         )
         js_api.set_main_window(main_window)
