@@ -88,6 +88,46 @@ jobs:
           "status=$status" | Out-File -FilePath $env:GITHUB_OUTPUT -Append -Encoding utf8
           if ($status -ne 'PASS') { exit 1 }
 
+      - name: Run full Native DELIVERY eligibility contract
+        id: native-delivery-contract
+        if: steps.install-python-deps.outcome == 'success'
+        continue-on-error: true
+        shell: pwsh
+        run: |
+          $buildDir = Join-Path $env:GITHUB_WORKSPACE 'build'
+          $tempDir = Join-Path $buildDir 'ci-delivery-temp'
+          New-Item -ItemType Directory -Path $tempDir -Force | Out-Null
+          New-Item -ItemType Directory -Path (Join-Path $buildDir 'native-delivery-20261006') -Force | Out-Null
+          $env:TMP = $tempDir
+          $env:TEMP = $tempDir
+          $outputPath = 'build/ci-native-delivery-contract.json'
+          python tools/run_tests.py test_native_delivery_contract --output $outputPath
+          $testExitCode = $LASTEXITCODE
+          $status = 'NOT_RUN'
+          $tests = 0
+          $failureCount = 0
+          $errorCount = 0
+          $skipCount = 0
+          if (Test-Path $outputPath) {
+            $result = Get-Content $outputPath -Raw | ConvertFrom-Json
+            $tests = [int]$result.tests
+            $failureCount = @($result.failures).Count
+            $errorCount = @($result.errors).Count
+            $skipCount = @($result.skipped).Count
+            if ($testExitCode -ne 0 -or $tests -ne 15 -or $failureCount -ne 0 -or $errorCount -ne 0 -or $skipCount -ne 0) {
+              $status = 'FAIL'
+            } else {
+              $status = 'PASS'
+            }
+          }
+          "status=$status" | Out-File -FilePath $env:GITHUB_OUTPUT -Append -Encoding utf8
+          "tests=$tests" | Out-File -FilePath $env:GITHUB_OUTPUT -Append -Encoding utf8
+          "failures=$failureCount" | Out-File -FilePath $env:GITHUB_OUTPUT -Append -Encoding utf8
+          "errors=$errorCount" | Out-File -FilePath $env:GITHUB_OUTPUT -Append -Encoding utf8
+          "skipped=$skipCount" | Out-File -FilePath $env:GITHUB_OUTPUT -Append -Encoding utf8
+          "Full Native DELIVERY contract: $status; tests=$tests; failures=$failureCount; errors=$errorCount; skipped=$skipCount" | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Append -Encoding utf8
+          if ($status -ne 'PASS') { exit 1 }
+
       - name: Run offline Python contract
         id: python-contract
         if: steps.install-python-deps.outcome == 'success'
@@ -209,6 +249,12 @@ jobs:
           M1_STATUS: ${{ steps.m1-contracts.outputs.status }}
           OBSERVE_OUTCOME: ${{ steps.observe-diagnostics.outcome }}
           OBSERVE_STATUS: ${{ steps.observe-diagnostics.outputs.status }}
+          DELIVERY_OUTCOME: ${{ steps.native-delivery-contract.outcome }}
+          DELIVERY_STATUS: ${{ steps.native-delivery-contract.outputs.status }}
+          DELIVERY_TESTS: ${{ steps.native-delivery-contract.outputs.tests }}
+          DELIVERY_FAILURES: ${{ steps.native-delivery-contract.outputs.failures }}
+          DELIVERY_ERRORS: ${{ steps.native-delivery-contract.outputs.errors }}
+          DELIVERY_SKIPPED: ${{ steps.native-delivery-contract.outputs.skipped }}
         shell: pwsh
         run: |
           if ($env:TEST_OUTCOME -eq 'success') {
@@ -260,7 +306,15 @@ jobs:
             $observeStatus = 'FAIL'
           }
           "Observe-stage / scene-loading regressions: $observeStatus" | Tee-Object -FilePath $env:GITHUB_STEP_SUMMARY -Append
-          if ($env:TEST_OUTCOME -ne 'success' -or $compatStatus -ne 'PASS' -or $consumerStatus -ne 'PASS' -or $m1Status -ne 'PASS' -or $observeStatus -ne 'PASS') { exit 1 }
+          if ($env:DELIVERY_OUTCOME -eq 'skipped' -or $env:SETUP_OUTCOME -ne 'success' -or $env:DEPS_OUTCOME -ne 'success') {
+            $deliveryStatus = 'NOT_RUN'
+          } elseif ($env:DELIVERY_OUTCOME -eq 'success' -and $env:DELIVERY_STATUS -eq 'PASS' -and $env:DELIVERY_TESTS -eq '15' -and $env:DELIVERY_FAILURES -eq '0' -and $env:DELIVERY_ERRORS -eq '0' -and $env:DELIVERY_SKIPPED -eq '0') {
+            $deliveryStatus = 'PASS'
+          } else {
+            $deliveryStatus = 'FAIL'
+          }
+          "Full Native DELIVERY contract: $deliveryStatus; tests=$env:DELIVERY_TESTS; failures=$env:DELIVERY_FAILURES; errors=$env:DELIVERY_ERRORS; skipped=$env:DELIVERY_SKIPPED" | Tee-Object -FilePath $env:GITHUB_STEP_SUMMARY -Append
+          if ($env:TEST_OUTCOME -ne 'success' -or $compatStatus -ne 'PASS' -or $consumerStatus -ne 'PASS' -or $m1Status -ne 'PASS' -or $observeStatus -ne 'PASS' -or $deliveryStatus -ne 'PASS') { exit 1 }
 
   dotnet-scroll-diagnostics:
     name: .NET 8 offline scroll diagnostics
