@@ -249,6 +249,75 @@ class NativeMainSolverHudConsumptionV1Tests(unittest.TestCase):
         self.assertEqual(again(record)["knownGold"], OR_TOKEN)
         self.assertTrue(callable(ReceiverAgain().apply))
 
+    def test_native_presentation_consumes_scoped_bid_intent_but_keeps_execution_off(self):
+        app_main = _load_main()
+        match = CurrentMatch()
+        match.id = "issue-46-match"
+        match._seq = 7
+        facts_revision = match.facts_revision
+        prediction = {
+            "schemaVersion": "prediction-snapshot.v1",
+            "snapshotRole": "latest_valid_pre_settlement",
+            "matchId": match.id,
+            "predictionId": "prediction-46",
+            "producer": {"kind": "live_shadow"},
+            "informationCutoffAt": "2026-10-11T18:00:00+08:00",
+            "input": {
+                "inputHash": "a" * 64,
+                "normalizedFacts": {
+                    "round": 2, "q": 9, "goldAvg": 33538,
+                    "costs": {"sunkCost": 5000, "total": 12000},
+                    "targetProfit": 30000,
+                },
+            },
+            "status": {"solverStatus": "valid", "diagnosticOnly": False, "provisional": False},
+            "mode": {"informationMode": "structural_only"},
+            "forecast": {
+                "scope": "structural_inventory",
+                "structural": {"feasibleRange": [200000, 400000]},
+            },
+        }
+        native_payload = {
+            "scene": "IN_AUCTION", "inAuction": True, "observationStatus": "FRAME",
+            "observationProfile": "native-readonly-v1", "observationSessionId": "session-46",
+            "sourceKind": "native_wgc",
+            "matchId": match.id, "matchGeneration": match._seq, "round": 2,
+            "factsRevision": facts_revision, "timer": 40, "freshnessMs": 8,
+            "solverStatus": "valid", "computationQualification": {
+                "automaticBidExecutionQualified": False,
+            },
+        }
+        previous = dict(app_main.LATEST_PAYLOAD)
+        app_main.LATEST_PAYLOAD.clear()
+        app_main.LATEST_PAYLOAD.update(native_payload)
+        try:
+            with mock.patch.object(app_main, "CURRENT_MATCH", match), \
+                 mock.patch.object(app_main, "native_observation_enabled", return_value=True), \
+                 mock.patch.object(app_main, "_native_solver_lease_matches", return_value=True), \
+                 mock.patch.object(app_main, "_native_solver_admission_details",
+                                   return_value=({}, None, {"eligible": True})), \
+                 mock.patch.object(app_main, "_current_match_solver_sidecar",
+                                   return_value=(prediction, {})):
+                summary = app_main.get_current_match_presentation_summary()
+        finally:
+            app_main.LATEST_PAYLOAD.clear()
+            app_main.LATEST_PAYLOAD.update(previous)
+
+        intent = summary["bidIntent"]
+        self.assertEqual(intent["status"], "READY", intent)
+        self.assertEqual(intent["binding"], {
+            "matchId": match.id, "matchGeneration": match._seq,
+            "observationSessionId": "session-46", "round": 2,
+            "factsRevision": facts_revision,
+        })
+        self.assertEqual(intent["source"]["predictionId"], "prediction-46")
+        self.assertEqual(intent["valuationBasis"], "FEASIBLE_LOWER_BOUND_NOT_P50")
+        self.assertFalse(intent["budget"]["approved"])
+        self.assertFalse(intent["executionEnabled"])
+        self.assertFalse(summary["automaticExecutionEnabled"])
+        self.assertEqual(summary["bidActionBackendStatus"], "NOT_CONNECTED")
+        self.assertIsNone(summary["bidActionReceipt"])
+
     def _drive_native_hud_frame(self, app_main, match, snapshot):
         import live_shadow
 

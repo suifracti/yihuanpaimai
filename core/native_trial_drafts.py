@@ -3,9 +3,12 @@
 from __future__ import annotations
 
 import copy
+import base64
 import hashlib
 import json
 import os
+import re
+import struct
 import sys
 import tempfile
 import threading
@@ -74,6 +77,159 @@ class NativeTrialDraftStore:
         ]
         matches.sort(key=lambda row: str(row.get("updatedAt") or row.get("playedAt") or ""), reverse=True)
         return matches[: max(0, int(limit))]
+
+    def _raw_partial_manifest(self, session_id: str) -> Optional[dict[str, Any]]:
+        if not re.fullmatch(r"[0-9a-f]{32}", str(session_id or "")):
+            return None
+        path = self.root / "warehouse-intake" / f"{session_id}.json"
+        try:
+            if not path.is_file() or path.stat().st_size > 64 * 1024:
+                return None
+            manifest = json.loads(path.read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            return None
+        if not isinstance(manifest, dict):
+            return None
+        scope = manifest.get("scope")
+        pages = manifest.get("pages")
+        record_key = scope.get("recordStableKey") if isinstance(scope, dict) else None
+        if (
+            manifest.get("schemaVersion") != "native-warehouse-intake.v1"
+            or manifest.get("sessionId") != session_id
+            or manifest.get("state") != "PARTIAL"
+            or manifest.get("processingEvidenceIds") != []
+            or manifest.get("resultSourceFingerprint") is not None
+            or not isinstance(record_key, str)
+            or not record_key
+            or not isinstance(scope.get("observationSessionId"), str)
+            or not scope.get("observationSessionId")
+            or not isinstance(scope.get("targetInstance"), dict)
+            or not scope.get("targetInstance")
+            or type(scope.get("matchGeneration")) is not int
+            or scope["matchGeneration"] <= 0
+            or not isinstance(pages, list)
+            or not 0 < len(pages) <= 16
+            or self.lookup(record_key) is None
+        ):
+            return None
+        for page in pages:
+            if not isinstance(page, dict):
+                return None
+            descriptor = page.get("descriptor")
+            native_source = page.get("nativeSource")
+            width = native_source.get("width") if isinstance(native_source, dict) else None
+            height = native_source.get("height") if isinstance(native_source, dict) else None
+            if (
+                not isinstance(descriptor, dict)
+                or descriptor.get("recordStableKey") != record_key
+                or not isinstance(native_source, dict)
+                or native_source.get("kind") != "native-observation"
+                or native_source.get("observationSessionId") != scope["observationSessionId"]
+                or native_source.get("targetInstance") != scope["targetInstance"]
+                or type(width) is not int
+                or type(height) is not int
+                or width <= 0
+                or height <= 0
+                or width * height > 8_388_608
+                or type(native_source.get("byteSize")) is not int
+                or native_source["byteSize"] != 54 + width * height * 4
+                or not re.fullmatch(r"[0-9a-f]{64}", str(native_source.get("sha256") or ""))
+                or not re.fullmatch(r"[0-9a-f]{64}", str(page.get("pixelSha256") or ""))
+            ):
+                return None
+        return manifest
+
+    def list_raw_partial_warehouse_archives(self, limit: int = 50) -> list[dict[str, Any]]:
+        """List only same-match raw PARTIAL intakes; never promote them to History."""
+        directory = self.root / "warehouse-intake"
+        try:
+            paths = sorted(directory.glob("*.json"), key=lambda item: item.stat().st_mtime, reverse=True)
+        except OSError:
+            return []
+        result: list[dict[str, Any]] = []
+        max_items = min(max(0, int(limit)), 50)
+        for path in paths:
+            if len(result) >= max_items:
+                break
+            manifest = self._raw_partial_manifest(path.stem)
+            if manifest is None:
+                continue
+            scope = manifest["scope"]
+            result.append({
+                "sessionId": manifest["sessionId"],
+                "recordStableKey": scope["recordStableKey"],
+                "pageCount": len(manifest["pages"]),
+                "archiveStatus": "RAW_PARTIAL_ARCHIVED",
+                "coverageStatus": "COVERAGE_UNPROVEN",
+                "terminationReason": str(manifest.get("terminationReason") or "UNKNOWN")[:120],
+                "capturePolicy": scope.get("capturePolicy"),
+            })
+        return result
+
+    def read_raw_partial_warehouse_page(self, session_id: str, page_index: int) -> dict[str, Any]:
+        """Return one hash-verified, downscaled preview from an unqualified raw archive."""
+        if type(page_index) is not int or page_index < 0:
+            return {"ok": False, "status": "INVALID_PAGE_INDEX"}
+        manifest = self._raw_partial_manifest(str(session_id or ""))
+        if manifest is None:
+            return {"ok": False, "status": "RAW_PARTIAL_ARCHIVE_UNAVAILABLE"}
+        pages = manifest["pages"]
+        if page_index >= len(pages):
+            return {"ok": False, "status": "PAGE_NOT_FOUND"}
+        page = pages[page_index]
+        source = page["nativeSource"]
+        verified = self.read_source_image_descriptor(source)
+        raw = verified.get("data")
+        if verified.get("error") or not isinstance(raw, bytes):
+            return {"ok": False, "status": "SOURCE_INTEGRITY_FAILED"}
+        if (
+            len(raw) < 54
+            or raw[:2] != b"BM"
+            or len(raw) != 54 + source.get("width", 0) * source.get("height", 0) * 4
+            or int.from_bytes(raw[10:14], "little") != 54
+            or int.from_bytes(raw[14:18], "little") != 40
+            or struct.unpack_from("<ii", raw, 18) != (source.get("width"), -source.get("height"))
+            or raw[26:30] != b"\x01\x00\x20\x00"
+            or int.from_bytes(raw[30:34], "little") != 0
+            or hashlib.sha256(raw).hexdigest() != source.get("sha256")
+            or (page.get("bmpSha256") and hashlib.sha256(raw).hexdigest() != page.get("bmpSha256"))
+            or (page.get("pixelSha256") and hashlib.sha256(raw[54:]).hexdigest() != page.get("pixelSha256"))
+        ):
+            return {"ok": False, "status": "SOURCE_INTEGRITY_FAILED"}
+        try:
+            import cv2
+            import numpy as np
+
+            frame = cv2.imdecode(np.frombuffer(raw, dtype=np.uint8), cv2.IMREAD_COLOR)
+            expected_width, expected_height = source.get("width"), source.get("height")
+            if (
+                frame is None
+                or type(expected_width) is not int
+                or type(expected_height) is not int
+                or frame.shape[:2] != (expected_height, expected_width)
+                or expected_width * expected_height > 8_388_608
+            ):
+                return {"ok": False, "status": "SOURCE_INTEGRITY_FAILED"}
+            scale = min(1.0, 960 / max(expected_width, expected_height))
+            if scale < 1.0:
+                frame = cv2.resize(frame, (max(1, round(expected_width * scale)), max(1, round(expected_height * scale))))
+            encoded, image = cv2.imencode(".jpg", frame, [cv2.IMWRITE_JPEG_QUALITY, 82])
+            if not encoded:
+                return {"ok": False, "status": "PREVIEW_ENCODING_FAILED"}
+        except Exception:
+            return {"ok": False, "status": "PREVIEW_ENCODING_FAILED"}
+        return {
+            "ok": True,
+            "status": "RAW_PARTIAL_ARCHIVED",
+            "coverageStatus": "COVERAGE_UNPROVEN",
+            "sessionId": manifest["sessionId"],
+            "pageIndex": page_index,
+            "pageCount": len(pages),
+            "sourceSequence": page.get("sourceSequence"),
+            "capturedAt": source.get("capturedAt"),
+            "sourceSha256": source.get("sha256"),
+            "previewDataUrl": "data:image/jpeg;base64," + base64.b64encode(image.tobytes()).decode("ascii"),
+        }
 
     def patch_inventory_archive(self, record_id: str, settlement_patch: Mapping[str, Any],
                                 expected_archive: Mapping[str, Any]) -> dict[str, Any]:

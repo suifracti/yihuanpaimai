@@ -307,6 +307,7 @@ class MainWindowBridge:
             "delete_history_record",
             "delete_history_records",
             "request_legacy_archive",
+            "request_native_warehouse_archive_page",
             "select_legacy_archive_source",
             "request_settlement_review",
             "retry_settlement_inventory_archive",
@@ -402,6 +403,7 @@ class MainWindowBridge:
         warehouse_identity_review_history_store=None,
         history_path_provider=None,
         live_trial_drafts_provider=None,
+        native_warehouse_archive_page_provider=None,
         topmost_controller=None,
         user_pinned: bool = True,
         warehouse_slot_evidence_provider=None,
@@ -438,6 +440,7 @@ class MainWindowBridge:
         self._warehouse_identity_review_history_store = warehouse_identity_review_history_store
         self._history_path_provider = history_path_provider
         self._live_trial_drafts_provider = live_trial_drafts_provider
+        self._native_warehouse_archive_page_provider = native_warehouse_archive_page_provider
         self._topmost_controller = topmost_controller
         self._user_pinned = bool(user_pinned)
         self._capture_safety_override = False
@@ -809,6 +812,30 @@ class MainWindowBridge:
                     }
                 except Exception as exc:
                     response["legacyArchive"] = {"ok": False, "status": "ERROR", "message": str(exc)}
+
+        if action == "request_native_warehouse_archive_page":
+            provider = self._native_warehouse_archive_page_provider
+            session_id = str(payload.get("sessionId") or "")
+            page_index = payload.get("pageIndex")
+            if provider is None:
+                response["nativeWarehouseArchivePage"] = {
+                    "ok": False, "status": "ARCHIVE_READER_UNAVAILABLE"
+                }
+            elif type(page_index) is not int:
+                response["nativeWarehouseArchivePage"] = {
+                    "ok": False, "status": "INVALID_PAGE_INDEX"
+                }
+            else:
+                try:
+                    result = provider(session_id, page_index)
+                    response["nativeWarehouseArchivePage"] = (
+                        result if isinstance(result, dict)
+                        else {"ok": False, "status": "ARCHIVE_READER_INVALID_RESULT"}
+                    )
+                except Exception as exc:
+                    response["nativeWarehouseArchivePage"] = {
+                        "ok": False, "status": f"ARCHIVE_READ_FAILED:{type(exc).__name__}"
+                    }
 
         if action == "request_original_screenshots":
             service = self._settlement_review_service
@@ -1578,6 +1605,7 @@ def create_main_window_type(WinForms, Drawing):
             observation_window_mode_provider=None,
             capture_freshness_policy_provider=None,
             native_auto_warehouse_provider=None,
+            native_warehouse_archive_page_provider=None,
         ) -> None:
             self._overlay_controller = overlay_controller
             self._bridge = MainWindowBridge(
@@ -1609,6 +1637,7 @@ def create_main_window_type(WinForms, Drawing):
                 warehouse_identity_review_history_store=warehouse_identity_review_history_store,
                 history_path_provider=history_path_provider,
                 live_trial_drafts_provider=live_trial_drafts_provider,
+                native_warehouse_archive_page_provider=native_warehouse_archive_page_provider,
                 topmost_controller=self.set_topmost,
             )
             self._shutdown_request = shutdown_request

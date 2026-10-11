@@ -781,6 +781,15 @@
                     <div class="decision-reason-text" id="match-live-action-reason">等待本局有效结果。</div>
                   </div>
                 </div>
+                <section class="bid-intent-status" id="match-bid-intent-status" aria-live="polite" hidden>
+                  <div class="bid-intent-status-heading">
+                    <strong id="match-bid-intent-title">报价意图暂不可用</strong>
+                    <span id="match-bid-intent-execution">助手报价执行：关闭</span>
+                  </div>
+                  <p id="match-bid-intent-detail"></p>
+                  <p id="match-bid-intent-budget">预算授权：未批准 · 可用余额未知</p>
+                  <p id="match-bid-intent-receipt">助手报价回执：暂无记录</p>
+                </section>
               </div>
 
               <!-- 触发右侧抽屉的纯净按钮 -->
@@ -1204,6 +1213,14 @@
                   <span class="detail-time" id="detail-played-at">--</span>
                   <code id="detail-match-id" hidden>--</code>
                 </div>
+              </div>
+
+              <div class="detail-section" id="history-native-raw-partial" hidden>
+                <div class="detail-section-title">本局仓库原始页</div>
+                <p id="history-native-raw-partial-status" role="status"></p>
+                <div id="history-native-raw-partial-pages" class="native-raw-partial-pages"></div>
+                <p id="history-native-raw-partial-meta" class="detail-time"></p>
+                <img id="history-native-raw-partial-image" alt="经校验的本地原始仓库页预览" hidden style="display:block;max-width:100%;max-height:460px;object-fit:contain;background:#0b1220;border-radius:6px;" />
               </div>
 
               <!-- 区域 0：本局总结 (自然语义摘要) -->

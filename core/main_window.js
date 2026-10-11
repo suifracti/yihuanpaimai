@@ -62,6 +62,7 @@ const dashboard = {
   legacyLoadRequested: false,
   selectedHistoryRecords: new Map(),
   pendingDeleteSelection: null,
+  pendingNativeArchivePage: null,
   historyFilter: {
     primaryTab: "all",
     source: "all",
@@ -495,6 +496,7 @@ function projectLiveTrialDraft(record) {
     auctionEvidence: record?.auctionEvidence, intelCardEvidence: record?.intelCardEvidence,
     predictionSnapshot: record?.predictionSnapshot, bidding: record?.bidding,
     warehouse: record?.warehouse,
+    nativeRawPartialArchives: Array.isArray(record?.nativeRawPartialArchives) ? record.nativeRawPartialArchives : [],
     matchSummary: "隔离试用草稿 · 未进入正式 History", dataOrigin: "live-trial"
   };
 }
@@ -705,6 +707,9 @@ function renderHistoryList(items) {
           ? Boolean(it.auctionEvidence?.nativeObservation?.sourceFrames?.length)
           : (it.settlementEvidenceAvailable === true || (it.settlement && it.settlement.settlementEvidenceAvailable === true))));
       const shotBadge = hasShot ? `<span class="item-badge badge-shot" title="有结算截图">📷 截图</span>` : "";
+      const rawPartialCount = Array.isArray(it.nativeRawPartialArchives) ? it.nativeRawPartialArchives.length : 0;
+      const rawPartialBadge = rawPartialCount
+        ? `<span class="item-badge badge-draft" title="原始来源页已归档，覆盖资格未证明">仓库原图 PARTIAL</span>` : "";
       
       const st = it.settlement || {};
       let resultSummary = "未结算";
@@ -712,6 +717,7 @@ function renderHistoryList(items) {
         const total = it.actualTotal != null ? it.actualTotal : st.actualTotal;
         if (total != null) resultSummary = `总值 ${formatCurrency(total)}`;
       }
+      if (rawPartialCount) resultSummary = `原始仓库页 ${it.nativeRawPartialArchives[0].pageCount} 页 · 覆盖未证明`;
 
       item.innerHTML = `
         <div class="history-item-top">
@@ -719,7 +725,7 @@ function renderHistoryList(items) {
             <input type="checkbox" class="history-record-checkbox" data-record-id="${escapeHtml(it.id || it.key)}" data-source="${escapeHtml(it.recordSource || it.kind)}" ${it.recordSource === "live-trial" ? "hidden disabled" : ""} ${dashboard.selectedHistoryRecords.has(historySelectionKey(it.id || it.key, it.kind)) ? "checked" : ""} />
             <span class="history-item-time">${timeStr}</span>
           </label>
-          <div class="history-item-badges">${outcomeBadge}${reviewedBadge}${shotBadge}</div>
+          <div class="history-item-badges">${outcomeBadge}${reviewedBadge}${shotBadge}${rawPartialBadge}</div>
         </div>
         <div class="history-item-venue">${venueName} ${boxName ? `· ${boxName}` : ""}</div>
         <div class="history-item-summary">${resultSummary}</div>
@@ -870,6 +876,7 @@ function renderHistoryDetail(record) {
   document.querySelectorAll("#history-detail-card .detail-section").forEach((section) => {
     section.hidden = false;
   });
+  renderNativeRawPartialArchives(record);
 
   // Header
   const env = record.environment || {};
@@ -1098,6 +1105,71 @@ function renderHistoryDetail(record) {
   if (!isReviewLoaded && !isReviewPending) {
     loadSettlementReview(record.id, recordSource);
   }
+}
+
+function renderNativeRawPartialArchives(record) {
+  const panel = document.getElementById("history-native-raw-partial");
+  const list = document.getElementById("history-native-raw-partial-pages");
+  const status = document.getElementById("history-native-raw-partial-status");
+  const image = document.getElementById("history-native-raw-partial-image");
+  const meta = document.getElementById("history-native-raw-partial-meta");
+  if (!panel || !list || !status || !image || !meta) return;
+  list.replaceChildren();
+  image.hidden = true;
+  image.removeAttribute("src");
+  meta.textContent = "";
+  dashboard.pendingNativeArchivePage = null;
+  const archives = Array.isArray(record?.nativeRawPartialArchives) ? record.nativeRawPartialArchives : [];
+  if (record?.recordSource !== "live-trial" || !archives.length) {
+    panel.hidden = true;
+    status.textContent = "";
+    return;
+  }
+  panel.hidden = false;
+  status.textContent = "原始页已保存。该归档是 RAW_PARTIAL_ARCHIVED，覆盖状态为 COVERAGE_UNPROVEN；不代表仓库完整，也不进入正式 History。";
+  for (const archive of archives) {
+    if (!archive || !/^[0-9a-f]{32}$/.test(String(archive.sessionId || ""))) continue;
+    const heading = document.createElement("p");
+    heading.className = "native-raw-partial-session";
+    heading.textContent = `采集会话 ${archive.sessionId.slice(0, 8)} · ${archive.pageCount} 张原始页 · ${archive.terminationReason || "原因未知"}`;
+    list.appendChild(heading);
+    const pageCount = Math.min(16, Math.max(0, Number(archive.pageCount) || 0));
+    for (let pageIndex = 0; pageIndex < pageCount; pageIndex += 1) {
+      const button = document.createElement("button");
+      button.type = "button";
+      button.className = "btn-review-action";
+      button.textContent = `查看原始页 ${pageIndex + 1}`;
+      button.addEventListener("click", () => {
+        image.hidden = true;
+        status.textContent = `正在校验并读取第 ${pageIndex + 1} 张原始页…`;
+        const requestId = postNative("request_native_warehouse_archive_page", {
+          sessionId: archive.sessionId, pageIndex,
+        });
+        dashboard.pendingNativeArchivePage = { requestId, sessionId: archive.sessionId, pageIndex };
+      });
+      list.appendChild(button);
+    }
+  }
+}
+
+function renderNativeRawPartialPage(result, requestId) {
+  const pending = dashboard.pendingNativeArchivePage;
+  if (!pending || pending.requestId !== requestId
+      || result?.sessionId !== pending.sessionId || result?.pageIndex !== pending.pageIndex) return;
+  dashboard.pendingNativeArchivePage = null;
+  const status = document.getElementById("history-native-raw-partial-status");
+  const image = document.getElementById("history-native-raw-partial-image");
+  const meta = document.getElementById("history-native-raw-partial-meta");
+  if (!status || !image || !meta) return;
+  if (result?.ok !== true || typeof result.previewDataUrl !== "string") {
+    image.hidden = true;
+    status.textContent = `原始页不可用：${result?.status || "读取失败"}`;
+    return;
+  }
+  image.src = result.previewDataUrl;
+  image.hidden = false;
+  meta.textContent = `第 ${result.pageIndex + 1}/${result.pageCount} 页 · 来源帧 ${result.sourceSequence ?? "未知"} · ${result.capturedAt || "时间未知"} · 原图 SHA-256 ${result.sourceSha256}`;
+  status.textContent = "显示的是由已校验原图生成的预览；原图仍作为独立来源保存在本地。覆盖仍未证明。";
 }
 
 function renderAuctionEvidence(record, parent) {
@@ -1845,6 +1917,92 @@ function renderSolverAdmissionStatus(currentMatch) {
   document.getElementById("match-admission-auxiliary").textContent = purpleCount == null
     ? ""
     : `已接收紫色数量 ${purpleCount}，作为当前情报约束；它本身不替代会场、入场费或规则条件。`;
+}
+
+function renderBidIntentStatus(currentMatch) {
+  const panel = document.getElementById("match-bid-intent-status");
+  if (!panel) return;
+  const native = currentMatch?.observationProfile === "native-readonly-v1";
+  panel.hidden = !native;
+  if (!native) return;
+
+  const intent = currentMatch.bidIntent || {};
+  const status = String(intent.status || "UNKNOWN").toUpperCase();
+  const title = document.getElementById("match-bid-intent-title");
+  const detail = document.getElementById("match-bid-intent-detail");
+  const execution = document.getElementById("match-bid-intent-execution");
+  const budget = document.getElementById("match-bid-intent-budget");
+  const receipt = document.getElementById("match-bid-intent-receipt");
+  if (!title || !detail || !execution || !budget || !receipt) return;
+
+  const statusLabels = {
+    READY: "离线报价意图已生成（仅供审阅）",
+    UNKNOWN: "报价信息不足，未生成有效意图",
+    SKIP: "当前条件不满足报价意图门禁",
+  };
+  const basisLabels = {
+    FEASIBLE_LOWER_BOUND_NOT_P50: "可行范围下界（不是 P50）",
+    WHOLE_INVENTORY_P20: "整仓 P20",
+  };
+  const reasonLabels = {
+    OBSERVATION_NOT_ELIGIBLE: "当前观察或事实不满足报价资格",
+    STALE_SCOPE: "局、回合或事实版本已变化",
+    SNAPSHOT_BINDING_INVALID: "预测快照与当前回合不匹配",
+    SOLVER_NOT_VALID: "当前 Solver 结果无效",
+    DEADLINE_EXPIRED: "当前拍卖时限已过",
+    AUCTION_DEADLINE_UNAVAILABLE: "当前帧没有可用的拍卖倒计时",
+    COST_OR_POLICY_UNKNOWN: "成本或收益目标未知",
+    FULL_VALUE_UNAVAILABLE: "当前估值模式不能提供完整估值",
+    BUDGET_APPROVAL_REQUIRED: "预算尚未由用户批准",
+  };
+  const binding = intent.binding || {};
+  const matchId = binding.matchId || currentMatch.matchId || "未知局次";
+  const round = binding.round ?? currentMatch.round ?? "未知回合";
+  const predictionId = intent.source?.predictionId;
+  const basis = basisLabels[intent.valuationBasis] || "估值依据未知";
+  const hasCap = Number.isFinite(intent.maxSafeBid);
+  const cap = hasCap ? `条件上限 ${formatCurrency(intent.maxSafeBid)} 齿轮` : "条件上限未知";
+  const reasons = Array.isArray(intent.prohibitions)
+    ? intent.prohibitions.map(code => reasonLabels[code] || String(code)).filter(Boolean)
+    : [];
+  const explanation = status === "READY"
+    ? `${cap} · ${basis}`
+    : (reasons.join("；") || intent.explanation || "等待当前有效帧和预测快照");
+
+  title.textContent = statusLabels[status] || "报价意图状态未知";
+  detail.textContent = `局次 ${matchId} · 第 ${round} 回合 · ${predictionId ? `预测 ${predictionId} · ` : ""}${explanation}`;
+  execution.textContent = currentMatch.automaticExecutionEnabled === true && intent.executionEnabled === true
+    ? "自动执行：已批准"
+    : "自动执行：关闭";
+  const budgetState = intent.budget?.approved === true ? "已批准" : "未批准";
+  const remaining = Number.isFinite(intent.budget?.available)
+    ? ` · 可用余额 ${formatCurrency(intent.budget.available)}`
+    : " · 可用余额未知";
+  budget.textContent = `预算授权：${budgetState}${remaining}`;
+  const actionReceipt = currentMatch.bidActionReceipt;
+  const receiptStatus = String(actionReceipt?.status || "").toUpperCase();
+  const receiptLabels = {
+    NOT_SENT: "动作未发送",
+    SENT_PENDING_CONFIRMATION: "动作已发送，等待游戏确认",
+    CONFIRMED: "已收到绑定的游戏确认",
+    UNKNOWN: "结果未知，必须停止且不得自动重发",
+  };
+  if (actionReceipt && typeof actionReceipt === "object") {
+    const scopeMatches = actionReceipt.kind === "Bid"
+      && typeof actionReceipt.intentId === "string" && actionReceipt.intentId.length > 0
+      && actionReceipt.matchId === matchId
+      && actionReceipt.matchGeneration === binding.matchGeneration
+      && actionReceipt.observationSessionId === binding.observationSessionId
+      && actionReceipt.round === round
+      && actionReceipt.factsRevision === binding.factsRevision;
+    receipt.textContent = scopeMatches && receiptLabels[receiptStatus]
+      ? `助手报价回执：${receiptLabels[receiptStatus]}`
+      : "助手报价回执：存在但范围或状态未核实，未归属当前局";
+  } else if (currentMatch.bidActionBackendStatus === "NOT_CONNECTED") {
+    receipt.textContent = "助手报价回执：暂无记录；Native 报价发送端未接入";
+  } else {
+    receipt.textContent = "助手报价回执：暂无记录";
+  }
 }
 
 function focusAdmissionControl(id) {
@@ -3658,6 +3816,7 @@ function renderMatch(currentMatch, overlayVisible) {
     missingDecBox.innerHTML = missingDecList.map(t => `<span class="missing-tag">${t}</span>`).join(" ");
   }
   renderSolverAdmissionStatus(currentMatch);
+  renderBidIntentStatus(currentMatch);
 
   // Adaptive Snapshot Button State (Without Jumpy Layout)
   const snapBtn = document.getElementById("match-btn-snapshot");
@@ -5422,6 +5581,9 @@ function handleNativeMessage(event) {
       }
     }
     return;
+  }
+  if (payload.action === "request_native_warehouse_archive_page" && payload.nativeWarehouseArchivePage) {
+    renderNativeRawPartialPage(payload.nativeWarehouseArchivePage, payload.requestId);
   }
   if (payload.action === "request_guidebook_sources" && payload.guidebookSources) {
     if (dashboard.guidebookSourcesRequestId && payload.requestId !== dashboard.guidebookSourcesRequestId) return;
