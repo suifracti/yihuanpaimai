@@ -19,6 +19,8 @@ internal sealed record WarehouseSourceContext(string RecordKey, JsonObject Targe
 internal sealed class WarehouseScrollAttempt
 {
     internal bool SendInterfaceInvoked { get; private set; }
+    internal bool SendSucceeded { get; private set; }
+    internal void MarkSendSucceeded() { if (SendInterfaceInvoked) SendSucceeded = true; }
     internal string? PreSendCurrentGuardRejection { get; private set; }
     internal void RejectCurrentGuardBeforeSend(string reason)
     {
@@ -833,6 +835,7 @@ internal sealed class WarehouseEvidenceLease : IDisposable
             throw new InvalidOperationException("SOURCE_LIMIT_REACHED");
         var c = _context!;
         string[] currentFailures = [];
+        var scrollAttempt = new WarehouseScrollAttempt();
         bool Current()
         {
             // Freeze latest first; use a comparison time that follows that read.
@@ -854,12 +857,19 @@ internal sealed class WarehouseEvidenceLease : IDisposable
             }
             var failures = checks.Where(pair => !pair.Value!.GetValue<bool>()).Select(pair => pair.Key).ToArray();
             currentFailures = failures;
+            // A successful message may already have changed the old viewport.
+            // This is not input permission or displacement proof: every other
+            // lease/proof/scene guard and the adapter's target/map guard remains.
+            var postSendContentOnly = _policy == CapturePolicy.Delivery && scrollAttempt.SendSucceeded
+                && failures.SequenceEqual(new[] { "scrollContentQuantizationSupported" });
             details["checks"] = checks;
             details["failedChecks"] = new JsonArray(failures.Select(name => JsonValue.Create(name)).ToArray());
-            details["qualified"] = failures.Length == 0;
-            if (failures.Contains("scrollContentQuantizationSupported")) PreserveScrollRefusal(command, latest, details);
+            details["guardPhase"] = scrollAttempt.SendSucceeded ? "POST_SEND" : "PRE_SEND";
+            details["waitPostScrollEvidence"] = postSendContentOnly;
+            details["qualified"] = failures.Length == 0 || postSendContentOnly;
+            if (!postSendContentOnly && failures.Contains("scrollContentQuantizationSupported")) PreserveScrollRefusal(command, latest, details);
             LogScroll(command, "lease-qualification", details);
-            return failures.Length == 0;
+            return failures.Length == 0 || postSendContentOnly;
         }
         if (!Current())
         {
@@ -878,13 +888,11 @@ internal sealed class WarehouseEvidenceLease : IDisposable
             LogScroll(command, "scroll-ended", new JsonObject { ["classification"] = "NOT_SENT_QUALIFICATION_REJECTED", ["sendInterfaceInvoked"] = false });
             Close("WINDOW_SCROLL_FAILED_OR_TARGET_CHANGED"); return;
         }
-        var scrollAttempt = new WarehouseScrollAttempt();
         if (!_scrollDown(c with { WheelDelta = delta, ScrollAttempt = scrollAttempt }, Current))
         {
             // This is the *same* content-only pre-send recovery as the outer guard,
             // but only the adapter can prove it never reached the input API.
-            // Rejecting at its post-send guard must remain terminal even if the
-            // observed check happened to be content quantization.
+            // Failed/unknown sends and any other post-send guard loss stop.
             if (_policy == CapturePolicy.Delivery && scrollAttempt.ConfirmedNotSentByCurrentGuard
                 && currentFailures.SequenceEqual(new[] { "scrollContentQuantizationSupported" })
                 && IsOpen && ReferenceEquals(_context, c) && _clock() < _leaseDeadline)
@@ -905,6 +913,8 @@ internal sealed class WarehouseEvidenceLease : IDisposable
         _lastScrollCompletedNs = _clock();
         Emit(command, "SCROLLED", "WINDOW_WHEEL_MESSAGE_SENT", new JsonObject {
             ["direction"] = "DOWN", ["delta"] = delta, ["sourceLeaseId"] = source,
+            ["classification"] = "SENT_WAIT_POST_SCROLL_EVIDENCE", ["sendInterfaceInvoked"] = scrollAttempt.SendInterfaceInvoked,
+            ["postScrollFrameReceived"] = false, ["displacementVerified"] = false,
             ["scrollRequestCount"] = _scrolledSources.Count, ["messageCompletedNs"] = _lastScrollCompletedNs }, inputActions: true);
     }
 
