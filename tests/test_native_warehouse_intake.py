@@ -135,6 +135,7 @@ class NativeWarehouseIntakeTests(unittest.TestCase):
     def test_saved_processing_survives_stop_and_new_match_without_misattribution(self):
         self.frame(163, 1); self.intake.start_manual(); self.intake.capture_manual_page()
         old_key = self.scope['recordStableKey']
+        observation_snapshot = self.store.lookup(old_key)
         next_record = build_canonical_match_record_v7(match_id='next_intake_match',
             played_at='2026-10-09T10:00:00Z', lifecycle_status='DRAFT', source='manual')
         next_record['dataOrigin'] = 'live-trial'
@@ -158,6 +159,27 @@ class NativeWarehouseIntakeTests(unittest.TestCase):
         self.assertEqual(self.store.lookup(old_key)['settlement']['warehouseReviewPacket']['recordStableKey'],old_key)
         manifest = json.loads((self.store.root/'warehouse-intake'/f'{self.intake._session_id}.json').read_text())
         self.assertEqual(manifest['state'],'PARTIAL')
+        archived = self.store.lookup(old_key)['settlement']
+        # A later observation contains no capture-owned packet. Saving it must
+        # preserve the old archive and permit reopening without recognition.
+        self.store.save_draft(observation_snapshot)
+        saved = self.store.lookup(old_key)
+        self.assertEqual(saved['settlement'].get('warehouseReviewPacket'), archived['warehouseReviewPacket'])
+        self.assertEqual(saved['settlement'].get('warehousePageCount'), 1)
+        self.assertEqual(saved['lifecycleStatus'], 'DRAFT')
+        fresh = NativeWarehouseIntake(draft_store=self.store,
+            scope_provider=lambda: {'recordStableKey': 'next_intake_match'},
+            source_provider=lambda: None, auto_refine=False)
+        before_reopen = self.store.history_path.read_bytes()
+        with patch.object(WarehouseCaptureHost, '_process_saved_pages',
+                          side_effect=AssertionError('Saved PARTIAL must not be recognized again')):
+            reply = fresh.recover_saved_capture(self.intake._session_id)
+        self.assertTrue(reply['ok'], reply)
+        self.assertEqual(reply['reason'], 'SAVED_ARCHIVE_RESUMED')
+        self.assertEqual(fresh.review_packet_copy(), archived['warehouseReviewPacket'])
+        self.assertEqual(fresh.presentation_payload()['state'], 'PARTIAL')
+        self.assertEqual(self.store.history_path.read_bytes(), before_reopen)
+        self.assertEqual(self.store.lookup('next_intake_match'), next_before)
 
     def test_processing_exception_after_stop_has_durable_error(self):
         self.frame(163,1); self.intake.start_manual(); self.intake.capture_manual_page()
