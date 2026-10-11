@@ -2,7 +2,8 @@
 
 No input APIs or history writes. Times are caller-supplied monotonic milliseconds.
 Luna-B supplies admitted live scope; Sol-C must claim immediately before dispatch,
-persist reservations/unknown outcomes across restart, and never resend UNKNOWN.
+    use durable_bid_obligations.DurableBidIntentBook for execution obligations,
+    and never resend UNKNOWN. This in-memory book remains an offline policy helper.
 """
 from __future__ import annotations
 
@@ -130,6 +131,8 @@ def build_bid_intent(event, current, *, now_ms, deadline_ms, requested_bid=None)
 
 class BidIntentBook:
     """One approval book, locked reservations and one dispatch claim per round.
+
+    Offline policy helper only; production must use DurableBidIntentBook.
 
     budget: approved=True, approvalId, binding (match + session + generation),
     expiresAtMs, remaining, maxBid. Caller approval is trusted user-approval
