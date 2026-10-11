@@ -112,7 +112,8 @@ internal static class WarehouseWindowScroll
         var wheel = unchecked((uint)(ushort)(short)delta << 16);
         var before = ProtocolClock.NowNs();
         // Conservatively mark an attempted input before calling the platform.
-        // Neither a failed return nor a post-send Current() rejection can retry.
+        // A failed/unknown outcome cannot retry. Successful delivery permits
+        // only the lease's phase-aware post-send guard, never another input.
         context.ScrollAttempt?.MarkSendInterfaceInvoked();
         SendResult sent;
         try { sent = platform.Send(hwnd, wheel, coordinates); }
@@ -133,6 +134,7 @@ internal static class WarehouseWindowScroll
             ["errorMeaning"] = sent.ReturnValue == 0 && sent.Error == 0 ? "GENERIC_FAILURE_NO_EXTENDED_ERROR" : "raw error; success error is not a failure",
             ["postScrollFrameReceived"] = false });
         if (sent.ReturnValue == 0) return false;
+        context.ScrollAttempt?.MarkSendSucceeded();
         var currentAfter = current();
         Log("send-post-guard", new JsonObject { ["sendInterfaceInvoked"] = true,
             ["currentAfterSend"] = currentAfter, ["classification"] = currentAfter ? "SENT_DISPLACEMENT_UNPROVEN" : "SENT_GUARD_LOST",
