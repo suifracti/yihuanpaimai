@@ -30,11 +30,39 @@ jobs:
         with:
           python-version: '3.11'
 
-      - name: Install locked OpenCV and NumPy
+      - name: Install locked offline contract dependencies
         id: install-python-deps
         if: steps.setup-python.outcome == 'success'
         continue-on-error: true
-        run: python -m pip install --disable-pip-version-check --no-input numpy==2.2.6 opencv-python==5.0.0.93
+        run: python -m pip install --disable-pip-version-check --no-input numpy==2.2.6 opencv-python==5.0.0.93 websockets==16.1.1
+
+      - name: Run M1 partial DRAFT and one-shot exit contracts
+        id: m1-contracts
+        if: steps.install-python-deps.outcome == 'success'
+        continue-on-error: true
+        shell: pwsh
+        run: |
+          $buildDir = Join-Path $env:GITHUB_WORKSPACE 'build'
+          $tempDir = Join-Path $buildDir 'ci-test-temp'
+          New-Item -ItemType Directory -Path $tempDir -Force | Out-Null
+          $env:TMP = $tempDir
+          $env:TEMP = $tempDir
+          python tools/run_tests.py test_native_warehouse_intake.NativeWarehouseIntakeTests.test_saved_processing_survives_stop_and_new_match_without_misattribution test_native_one_shot_runner --output build/ci-m1-contracts.json
+          $testExitCode = $LASTEXITCODE
+          $status = 'NOT_RUN'
+          if (Test-Path build/ci-m1-contracts.json) {
+            $result = Get-Content build/ci-m1-contracts.json -Raw | ConvertFrom-Json
+            if ($testExitCode -ne 0 -or $result.failures.Count -gt 0 -or $result.errors.Count -gt 0) {
+              $status = 'FAIL'
+            } elseif ($result.skipped.Count -gt 0) {
+              $status = 'SKIP'
+            } elseif ($result.tests -eq 16) {
+              $status = 'PASS'
+            }
+            "M1 contracts: $status; tests=$($result.tests); skipped=$($result.skipped.Count)" | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Append -Encoding utf8
+          }
+          "status=$status" | Out-File -FilePath $env:GITHUB_OUTPUT -Append -Encoding utf8
+          if ($status -ne 'PASS') { exit 1 }
 
       - name: Run offline Python contract
         id: python-contract
@@ -111,6 +139,8 @@ jobs:
           COMPAT_STATUS: ${{ steps.solver-source-compatibility.outputs.status }}
           CONSUMER_OUTCOME: ${{ steps.native-consumer-contract.outcome }}
           CONSUMER_STATUS: ${{ steps.native-consumer-contract.outputs.status }}
+          M1_OUTCOME: ${{ steps.m1-contracts.outcome }}
+          M1_STATUS: ${{ steps.m1-contracts.outputs.status }}
         shell: pwsh
         run: |
           if ($env:TEST_OUTCOME -eq 'success') {
@@ -146,7 +176,15 @@ jobs:
           }
           "Strict venue compatibility and mapping: $compatStatus" | Tee-Object -FilePath $env:GITHUB_STEP_SUMMARY -Append
           "Native consumer regressions: $consumerStatus" | Tee-Object -FilePath $env:GITHUB_STEP_SUMMARY -Append
-          if ($env:TEST_OUTCOME -ne 'success' -or $compatStatus -ne 'PASS' -or $consumerStatus -ne 'PASS') { exit 1 }
+          if ($env:M1_OUTCOME -eq 'skipped' -or $env:SETUP_OUTCOME -ne 'success' -or $env:DEPS_OUTCOME -ne 'success') {
+            $m1Status = 'NOT_RUN'
+          } elseif ($env:M1_STATUS) {
+            $m1Status = $env:M1_STATUS
+          } else {
+            $m1Status = 'FAIL'
+          }
+          "M1 partial DRAFT + one-shot contracts: $m1Status" | Tee-Object -FilePath $env:GITHUB_STEP_SUMMARY -Append
+          if ($env:TEST_OUTCOME -ne 'success' -or $compatStatus -ne 'PASS' -or $consumerStatus -ne 'PASS' -or $m1Status -ne 'PASS') { exit 1 }
 
   dotnet-scroll-diagnostics:
     name: .NET 8 offline scroll diagnostics
