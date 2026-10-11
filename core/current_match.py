@@ -1405,6 +1405,8 @@ class CurrentMatch:
                         **({"manualDecision": deepcopy(s["manualDecision"])} if isinstance(s.get("manualDecision"), dict) else {}),
                         "identifiedName": str(s["identifiedName"]) if (s.get("identityStatus") == "EXACT" or (s.get("identifiedName") and s.get("identityStatus") != "CANDIDATE")) and s.get("identifiedName") and s.get("rarity") != "unknown" and s.get("evidenceLevel") != "OUTLINE_ONLY" else None,
                         **({"trackId": int(s["trackId"])} if s.get("trackId") is not None else {}),
+                        **({"shapeLocked": True} if s.get("shapeLocked") is True else {}),
+                        **({"isConfirmed": True} if s.get("isConfirmed") is True else {}),
                     }
                     for s in wh.get("slots") or []
                     if isinstance(s, dict) and s.get("col") is not None and s.get("row") is not None and s.get("w") is not None and s.get("h") is not None

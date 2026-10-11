@@ -51,6 +51,7 @@ class NativeWarehouseAutoCapture:
         self._observer = WarehouseScrollbarObserver()
         self._marker = None  # Lazy: strict mode does not depend on the reveal asset.
         self._retry_scope = self._support_floor = self._consumed_duplicate = None
+        self._consumed_scroll_recheck = None
         self._pixels_per_notch = None
         self._last_wheel_delta = -120
         self._tail_stationary = False
@@ -117,6 +118,7 @@ class NativeWarehouseAutoCapture:
             self._anchor = self._observation = None
             self._retry_scope = copy.deepcopy(token[2])
             self._support_floor = self._consumed_duplicate = None
+            self._consumed_scroll_recheck = None
             self._observer.reset()
             self._pixels_per_notch = None
             self._tail_stationary = False
@@ -201,6 +203,8 @@ class NativeWarehouseAutoCapture:
                 # saved viewport stays evidence; no movement/bottom is inferred.
                 self._wait_again(snap['reason'], self._anchor, self._observation,
                     self._observation['deliveryProof'])
+                if self._active and self._phase == 'WAIT_STABLE':
+                    self._consumed_scroll_recheck = copy.deepcopy(snap['scrollRecheck'])
             elif snap['reason'] != 'WINDOW_WHEEL_MESSAGE_SENT':
                 self._stop(snap['reason'] or 'WINDOW_SCROLL_FAILED')
             else:
@@ -251,7 +255,13 @@ class NativeWarehouseAutoCapture:
                 self._stop('WINDOW_SCROLL_NO_PROGRESS' if self._phase == 'WAIT_MOVED' else
                     'INDEPENDENT_STABILITY_UNPROVEN' if self._delivery() and proof and
                     not independent_support(self._support_floor, proof.get('deliveryProof')) else 'STABILITY_UNPROVEN')
-        elif snap['reason'] not in {'SOURCE_READY', 'SOURCE_REQUESTED', 'SAVED', 'WINDOW_WHEEL_MESSAGE_SENT'}:
+        # OPEN snapshots retain the last operation reason until another
+        # request; ignore only the exact safe receipt already consumed above.
+        elif (snap['reason'] not in {'SOURCE_READY', 'SOURCE_REQUESTED', 'SAVED', 'WINDOW_WHEEL_MESSAGE_SENT'}
+            and not (self._phase == 'WAIT_STABLE'
+                and snap['reason'] == 'SCROLL_CONTENT_CHANGED_BEFORE_SEND'
+                and self._consumed_scroll_recheck is not None
+                and snap.get('scrollRecheck') == self._consumed_scroll_recheck)):
             self._stop(snap['reason'] or 'SOURCE_FAILED')
 
     def _read_page(self, page):
