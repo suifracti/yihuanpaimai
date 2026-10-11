@@ -731,14 +731,32 @@ class NativeWarehouseSourceCoordinator:
         with self.intake._scope_lock, self._lock:
             if self._evidence_only:
                 return self._reply(False, 'EVIDENCE_ONLY_PROCESSING_DISABLED')
+            if self._pending is not None:
+                return self._reply(False, 'SOURCE_REQUEST_PENDING')
             if qualified_evidence_ids is not None and not getattr(self, 'offline_test_adapter', False):
                 supported = {p['descriptor']['evidenceId'] for p in self.intake.pages_copy()
                     if p.get('contentRole') == 'STABLE_SUPPORT'
                     and (p.get('contentCertificate') or {}).get('schema') == 'visible-content-support.v1'}
-                if any(eid not in supported for eid in qualified_evidence_ids):
-                    return self._reply(False, 'QUALIFIED_PAGE_SELECTION_UNPROVEN')
-            if self._pending is not None:
-                return self._reply(False, 'SOURCE_REQUEST_PENDING')
+                try:
+                    selected_ids = list(qualified_evidence_ids)
+                    invalid_selection = (not selected_ids
+                        or len(set(selected_ids)) != len(selected_ids)
+                        or any(not isinstance(eid, str) or eid not in supported for eid in selected_ids))
+                except TypeError:
+                    selected_ids = []
+                    invalid_selection = True
+                if invalid_selection:
+                    # Reject every unsupported page for recognition, but keep the
+                    # already saved same-match originals in an explicit raw PARTIAL.
+                    self._close('MANUAL_FINISHED')
+                    archived = self.intake.finish_manual_capture(
+                        termination_reason=termination_reason,
+                        qualified_evidence_ids=[])
+                    if archived.get('rawArchivePersisted'):
+                        return {**archived, 'ok': True, 'reason': 'RAW_PARTIAL_ARCHIVED',
+                            'selectionFailure': 'QUALIFIED_PAGE_SELECTION_UNPROVEN'}
+                    return archived
+                qualified_evidence_ids = selected_ids
             self._close('MANUAL_FINISHED')
             options = ({'qualified_evidence_ids': qualified_evidence_ids}
                 if qualified_evidence_ids is not None else {})

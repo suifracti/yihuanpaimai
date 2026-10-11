@@ -341,8 +341,14 @@ class NativeWarehouseIntake:
                 selected = [p for eid in qualified_evidence_ids for p in self._pages if p['descriptor']['evidenceId'] == eid]
                 if not selected:
                     self._state, self._reason = 'PARTIAL', 'NO_QUALIFIED_PAGES'
-                    self._write_manifest(self._pages)
-                    return self._reply(False, 'NO_QUALIFIED_PAGES')
+                    self._coverage, self._packet = 'COVERAGE_UNPROVEN', None
+                    self._processing_evidence_ids = []
+                    try:
+                        self._write_manifest(self._pages)
+                    except (OSError, IntakeRejected):
+                        self._state, self._reason = 'ERROR', 'PARTIAL_MANIFEST_WRITE_FAILED'
+                        return self._reply(False, self._reason)
+                    return self._reply(False, 'NO_QUALIFIED_PAGES', rawArchivePersisted=True)
             descriptors = [copy.deepcopy(p['descriptor']) for p in selected]
             record_key = self._binding['recordStableKey']
             self._processing_binding = copy.deepcopy(self._binding)
@@ -506,6 +512,19 @@ class NativeWarehouseIntake:
                 adopted = True
                 self._rejected_originals = manifest.get('rejectedOriginals', [])
                 self._encoded_bytes = sum(p['descriptor']['byteSize'] for p in self._pages)
+                raw_only = (manifest['state'] == 'PARTIAL'
+                    and manifest.get('processingEvidenceIds') == []
+                    and manifest.get('resultSourceFingerprint') is None)
+                if raw_only:
+                    # A rejected/empty local-fact selection still has a durable
+                    # same-match source archive. Reopen it for review without OCR
+                    # or any History write; saved originals remain unqualified.
+                    self._verify_saved_pages(self._pages, binding=binding)
+                    self._packet, self._state = None, 'PARTIAL'
+                    self._coverage, self._reason = 'COVERAGE_UNPROVEN', manifest.get('terminationReason')
+                    self._processing_evidence_ids = []
+                    self._resolve_placements = False
+                    return self._reply(True, 'RAW_PARTIAL_ARCHIVE_RESUMED')
                 ids = self._saved_support_ids() if binding.get('capturePolicy') == DELIVERY else None
                 expected_ids = ids if ids is not None else [p['descriptor']['evidenceId'] for p in self._pages]
                 if manifest.get('processingEvidenceIds') is not None and expected_ids != manifest['processingEvidenceIds']:
