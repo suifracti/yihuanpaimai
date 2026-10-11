@@ -247,19 +247,26 @@ jobs:
           "Native Main/Solver/HUD consumer contract: $status" | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Append -Encoding utf8
           if ($status -ne 'PASS') { exit 1 }
 
-      - name: Run raw PARTIAL Main archive reader bridge contract
+      - name: Run Main bridge and raw PARTIAL page contracts
         id: native-raw-archive-main
         if: steps.install-python-deps.outcome == 'success'
         continue-on-error: true
         shell: pwsh
         run: |
-          $output = python -m unittest tests.test_main_view_state_provider.MainViewStateProviderTests.test_bridge_reuses_existing_action_and_serializes_only_snapshot_payload tests.test_main_view_state_provider.MainViewStateProviderTests.test_bridge_reads_a_single_raw_partial_archive_page -v 2>&1
+          $outputPath = 'build/ci-issue46-main-bridge.json'
+          python tools/run_tests.py test_main_view_state_provider.MainViewStateProviderTests.test_bridge_reuses_existing_action_and_serializes_only_snapshot_payload test_main_view_state_provider.MainViewStateProviderTests.test_bridge_reads_a_single_raw_partial_archive_page --output $outputPath
           $testExitCode = $LASTEXITCODE
-          $output | Write-Output
-          $runMatch = [regex]::Match(($output -join "`n"), 'Ran\s+2\s+tests')
-          if ($testExitCode -eq 0 -and $runMatch.Success) { $status = 'PASS' } else { $status = 'FAIL' }
+          if (-not (Test-Path $outputPath)) {
+            $status = 'NOT_RUN'
+          } else {
+            $result = Get-Content $outputPath -Raw | ConvertFrom-Json
+            $failures = @($result.failures).Count
+            $errors = @($result.errors).Count
+            $skipped = @($result.skipped).Count
+            if ($testExitCode -eq 0 -and $result.tests -eq 2 -and $failures -eq 0 -and $errors -eq 0 -and $skipped -eq 0) { $status = 'PASS' } else { $status = 'FAIL' }
+          }
           "status=$status" | Out-File -FilePath $env:GITHUB_OUTPUT -Append -Encoding utf8
-          "Raw PARTIAL Main archive reader bridge: $status" | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Append -Encoding utf8
+          "Main Bridge and raw PARTIAL page contracts: $status" | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Append -Encoding utf8
           if ($status -ne 'PASS') { exit 1 }
 
       - name: Run scoped bid intent contract
