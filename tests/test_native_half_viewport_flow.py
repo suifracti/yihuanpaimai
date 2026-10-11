@@ -72,6 +72,81 @@ def viewport(offset):
 
 
 class HalfViewportFlowTests(unittest.TestCase):
+    def test_second_scroll_failure_after_verified_move_is_bounded(self):
+        # Synthetic viewport physics checks scheduling, not real-game accuracy.
+        # Receipt semantics are independently pinned to the Host contract.
+        receipts = json.loads(PRESEND_RECEIPTS.read_text(encoding='utf-8'))
+        for kind in ('before-target', 'before-send', 'post-send', 'send-unknown', 'send-exception', 'user-stop'):
+            with self.subTest(kind=kind):
+                f = LiveRun(output=OUT / 'second-scroll-python')
+                try:
+                    # Retain an unsupported first SOURCE, then obtain normal
+                    # viewport hints through the existing sampling contract.
+                    f.deliver(scene(0, revealing=True))
+                    frame = viewport(0)
+                    x, y, r, b = warehouse_search_roi(1920, 1080)
+                    def request_with_hints(prefix):
+                        with patch('native_warehouse_visible_content_gate.time.perf_counter_ns',
+                                side_effect=lambda: round(f.now * 1e9)):
+                            for ordinal in (1, 2):
+                                f.now += .65
+                                f.gate.sampling_hint(frame[y:b, x:r], capture_id=f'{prefix}/{ordinal}',
+                                    readback_ns=round(f.now * 1e9))
+                            f.tick()
+                    request_with_hints('first')
+                    f.deliver(frame)
+                    request_with_hints('support')
+                    f.deliver(frame.copy())
+                    self.assertEqual(f.auto._phase, 'WAIT_SCROLL')
+                    deadline = f.auto._deadline
+                    f.scroll_ack(); f.tick(); f.deliver(viewport(90))
+                    self.assertEqual(f.auto._phase, 'WAIT_STABLE')
+                    overlap = next(e['alignment'] for e in reversed(f.logs) if e['kind'] == 'image-overlap')
+                    self.assertEqual(overlap['status'], 'VERIFIED')
+                    self.assertLess(overlap['verticalOffsetPx'], 0)
+                    self.assertGreater(overlap['overlapRatio'], 0)
+                    frame = viewport(90)
+                    request_with_hints('moved-support')
+                    f.deliver(frame.copy())
+                    self.assertEqual(len(f.intake.pages_copy()), 5)
+                    self.assertEqual(f.auto._phase, 'WAIT_SCROLL')
+                    command = copy.deepcopy(f.source._pending)
+                    self.assertEqual(sum(c['operation'] == 'SCROLL_DOWN' for c in f.sent), 2)
+                    before = len(f.sent)
+                    if kind == 'user-stop':
+                        f.auto.stop()
+                        event = f.event('CLOSED', command, reason='MANUAL_SOURCE_CLOSED')
+                    else:
+                        receipt = receipts[kind]
+                        details = copy.deepcopy(receipt.get('details'))
+                        if details and 'sourceLeaseId' in details:
+                            details['sourceLeaseId'] = command['sourceLeaseId']
+                        event = f.event(receipt['event'], command, reason=receipt['reason'], details=details)
+                    f.auto.on_event(event)
+                    f.auto.on_event(copy.deepcopy(event))
+                    for _ in range(3):
+                        f.auto.poll()
+                    safe = kind in ('before-target', 'before-send')
+                    self.assertEqual(f.auto._active, safe)
+                    self.assertEqual(f.auto._deadline, deadline)
+                    self.assertEqual(sum(c['operation'] == 'SCROLL_DOWN' for c in f.sent), 2)
+                    self.assertFalse(f.auto._post_scroll_frame_received)
+                    if safe:
+                        self.assertEqual(f.auto._phase, 'WAIT_STABLE')
+                        f.tick()
+                        self.assertEqual(sum(c['operation'] == 'REQUEST_PAGE' for c in f.sent), 5)
+                        self.assertEqual(f.finalizations, [])
+                        f.now = deadline; f.auto.poll()
+                        self.assertFalse(f.auto._active)
+                    else:
+                        self.assertFalse(any(c['operation'] == 'REQUEST_PAGE' for c in f.sent[before:]))
+                    self.assertEqual(len(f.finalizations), 1)
+                    self.assertNotEqual(f.finalizations[0]['termination_reason'], 'COMPLETE')
+                    f.auto.on_event(copy.deepcopy(event)); f.auto.poll()
+                    self.assertEqual(len(f.finalizations), 1)
+                finally:
+                    f.close()
+
     def test_adapter_receipts_recheck_or_stop_without_resending(self):
         # These sanitized production Host contract examples are committed so a
         # clean checkout never depends on ignored build/ output or local logs.

@@ -8,6 +8,7 @@ if (args.Contains("--ordinary-expiry-only")) { OrdinaryFrameExpiryChecks.Run(roo
 if (args.Contains("--refusal-diagnostic-only")) { ContentRecheckChecks.Run(root, FixtureProof, diagnosticOnly: true); return; }
 if (args.Contains("--content-recheck-only")) { ContentRecheckChecks.Run(root, FixtureProof); return; }
 if (args.Contains("--adapter-presend-only")) { ContentRecheckChecks.RunAdapter(root, FixtureProof); return; }
+if (args.Contains("--second-scroll-only")) { ContentRecheckChecks.RunAdapter(root, FixtureProof, secondScroll: true); return; }
 if (args.Contains("--hint-slot-only")) { ContentHintSlotChecks.Run(root, FixtureProof); return; }
 if (args.Contains("--step-only")) { StepOnlyChecks.Run(root, FixtureProof); return; }
 if (args.Length == 2 && args[1] == "--content-evidence") {
