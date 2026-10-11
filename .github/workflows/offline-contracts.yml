@@ -220,6 +220,7 @@ jobs:
           if ($testExitCode -ne 0) { exit $testExitCode }
 
       - name: Report .NET contract status
+        id: dotnet-report
         if: always()
         env:
           SETUP_OUTCOME: ${{ steps.setup-dotnet.outcome }}
@@ -235,3 +236,20 @@ jobs:
           }
           ".NET offline contract: $status" | Tee-Object -FilePath $env:GITHUB_STEP_SUMMARY -Append
           if ($env:TEST_OUTCOME -ne 'success') { exit 1 }
+
+      - name: Run second-scroll post-send contracts
+        id: second-scroll-contract
+        if: steps.setup-dotnet.outcome == 'success'
+        shell: pwsh
+        run: |
+          $workDir = Join-Path $env:GITHUB_WORKSPACE 'build/ci-second-scroll'
+          New-Item -ItemType Directory -Path $workDir -Force | Out-Null
+          $output = dotnet run --project tests/native_scroll_diagnostics/scroll-diagnostics.csproj -- $workDir --second-scroll-only 2>&1
+          $testExitCode = $LASTEXITCODE
+          $output | Write-Output
+          $cases = @($output | ForEach-Object { if ($_ -match '^PASS: (second-scroll-\S+)\s*$') { $Matches[1] } } | Sort-Object -Unique)
+          if ($testExitCode -ne 0) { $status = 'FAIL' }
+          elseif ($cases.Count -ne 16) { $status = 'NOT_RUN' }
+          else { $status = 'PASS' }
+          "Second-scroll contracts: $status; distinct cases=$($cases.Count); exit=$testExitCode" | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Append -Encoding utf8
+          if ($status -ne 'PASS') { exit 1 }
