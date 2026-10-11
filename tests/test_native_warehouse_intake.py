@@ -181,6 +181,69 @@ class NativeWarehouseIntakeTests(unittest.TestCase):
         self.assertEqual(self.store.history_path.read_bytes(), before_reopen)
         self.assertEqual(self.store.lookup('next_intake_match'), next_before)
 
+    def test_rejected_support_selection_keeps_raw_partial_cold_reopenable(self):
+        from native_warehouse_source import NativeWarehouseSourceCoordinator
+
+        self.frame(163, 1)
+        self.assertTrue(self.intake.start_manual()['ok'])
+        self.assertTrue(self.intake.capture_manual_page()['ok'])
+        session = self.intake._session_id
+        before = self.store.history_path.read_bytes()
+        source = NativeWarehouseSourceCoordinator(self.intake,
+            send_control=lambda _command: True,
+            source_root_provider=lambda: self.root,
+            timers=False)
+
+        finalized = source.finish_manual_capture(termination_reason='INCOMPLETE',
+            qualified_evidence_ids=['not-a-saved-support-page'])
+
+        self.assertTrue(finalized['ok'], finalized)
+        self.assertEqual(finalized['reason'], 'RAW_PARTIAL_ARCHIVED')
+        manifest_path = self.store.root / 'warehouse-intake' / f'{session}.json'
+        manifest = json.loads(manifest_path.read_text(encoding='utf-8'))
+        self.assertEqual(manifest['state'], 'PARTIAL')
+        self.assertEqual(manifest['processingEvidenceIds'], [])
+        self.assertEqual(len(manifest['pages']), 1)
+
+        cold_store = NativeTrialDraftStore(self.store.history_path)
+        cold = NativeWarehouseIntake(draft_store=cold_store,
+            scope_provider=lambda: None, source_provider=lambda: None, auto_refine=False)
+        with patch.object(WarehouseCaptureHost, '_process_saved_pages',
+                          side_effect=AssertionError('Raw-only archive must not be recognized')):
+            reopened = cold.recover_saved_capture(session)
+
+        self.assertTrue(reopened['ok'], reopened)
+        self.assertEqual(reopened['reason'], 'RAW_PARTIAL_ARCHIVE_RESUMED')
+        self.assertEqual(cold.presentation_payload()['state'], 'PARTIAL')
+        self.assertEqual(cold.presentation_payload()['coverageStatus'], 'COVERAGE_UNPROVEN')
+        self.assertEqual(len(cold.pages_copy()), 1)
+        record = cold_store.lookup(self.scope['recordStableKey'])
+        self.assertEqual(record['lifecycleStatus'], 'DRAFT')
+        self.assertNotIn('warehouseReviewPacket', record['settlement'])
+        self.assertEqual(self.store.history_path.read_bytes(), before)
+
+    def test_empty_support_selection_archives_raw_partial(self):
+        from native_warehouse_source import NativeWarehouseSourceCoordinator
+
+        self.frame(163, 1)
+        self.assertTrue(self.intake.start_manual()['ok'])
+        self.assertTrue(self.intake.capture_manual_page()['ok'])
+        source = NativeWarehouseSourceCoordinator(self.intake,
+            send_control=lambda _command: True,
+            source_root_provider=lambda: self.root,
+            timers=False)
+
+        finalized = source.finish_manual_capture(termination_reason='INCOMPLETE',
+            qualified_evidence_ids=[])
+
+        self.assertTrue(finalized['ok'], finalized)
+        self.assertEqual(finalized['reason'], 'RAW_PARTIAL_ARCHIVED')
+        manifest = json.loads((self.store.root / 'warehouse-intake' /
+            f"{self.intake._session_id}.json").read_text(encoding='utf-8'))
+        self.assertEqual(manifest['state'], 'PARTIAL')
+        self.assertEqual(manifest['processingEvidenceIds'], [])
+        self.assertEqual(self.intake.presentation_payload()['coverageStatus'], 'COVERAGE_UNPROVEN')
+
     def test_processing_exception_after_stop_has_durable_error(self):
         self.frame(163,1); self.intake.start_manual(); self.intake.capture_manual_page()
         with patch.object(WarehouseCaptureHost,'_process_saved_pages',side_effect=ValueError('broken original')):
