@@ -145,6 +145,11 @@ class DeliveryTests(unittest.TestCase):
     def test_main_delivery_lifecycle_auction_scroll_observation_settlement_once_and_next_match(self):
         fixture = prepare_delivery_fixture(self)
         ns = fixture.ns
+        source_snapshot = fixture.source.source_session_snapshot
+        # This Main-only fake never requests a source page, so each new lease
+        # has the real coordinator's initial request-attempt count of zero.
+        fixture.source.source_session_snapshot = lambda: {
+            **source_snapshot(), 'requestAttempts': 0}
 
         def event(sequence, scene, match=None):
             # This is an Engine event stream; its revisions advance independently
@@ -492,28 +497,39 @@ class DeliveryTests(unittest.TestCase):
                 self.assertEqual(bool(scheduled), image_moved and slider_moved)
                 self.assertEqual(bool(stopped), not (image_moved and slider_moved))
 
-    def test_auto_stability_rejects_repeated_id_while_distinct_delivery_can_scroll(self):
+    def test_auto_stability_rejects_repeated_id_and_accepts_independent_delivery_for_stability(self):
         crop = np.arange(20 * 20 * 3, dtype=np.uint8).reshape(20, 20, 3)
-        def run(later):
-            calls = []
-            source = SimpleNamespace(request_scroll_down=lambda **kw: calls.append(kw) or {'ok': True})
-            source.intake = SimpleNamespace(_scope_lock=threading.RLock())
+        first = proof()
+        later = proof(2, first['readbackCompletedNs'] + 250_000_000,
+                      previous=first['sourceTimestampNs'])
+
+        def run(support):
+            source = SimpleNamespace(intake=SimpleNamespace(_scope_lock=threading.RLock()))
             auto = NativeWarehouseAutoCapture(source, clock=lambda: 100, timers=False)
             auto._phase = 'WAIT_STABLE'; auto._due = 99; auto._seen_pages = 1
             auto._anchor = crop; auto._deadline = 170
-            obs = {'scrollState': 'TOP', 'capturePolicy': DELIVERY, 'deliveryProof': proof(),
+            obs = {'scrollState': 'TOP', 'capturePolicy': DELIVERY, 'deliveryProof': first,
                    'trackBox': [90, 0, 96, 100], 'thumbBox': [90, 0, 96, 20], 'thumbPosition': 0.0}
             auto._observation = obs
+            auto._support_floor = first
             stopped = []; auto._stop = lambda reason, **_: stopped.append(reason)
             auto._diagnose = lambda *_a, **_k: None
-            auto._page(crop, {**obs, 'deliveryProof': later})
-            return calls, stopped
-        calls, stopped = run(proof())
-        self.assertEqual(calls, []); self.assertEqual(stopped, ['INDEPENDENT_STABILITY_UNPROVEN'])
-        later = proof(2, proof()['readbackCompletedNs'] + 250_000_000, previous=proof()['sourceTimestampNs'])
-        calls, stopped = run(later)
-        self.assertEqual(len(calls), 1); self.assertEqual(stopped, [])
-        self.assertNotEqual(calls[0]['base_proof']['captureId'], calls[0]['stable_proof']['captureId'])
+            qualified = []
+            # Isolate independent-source qualification; _stable applies the
+            # separate content-completion and scroll authorization gates.
+            auto._stable = lambda: qualified.append(copy.deepcopy(auto._observation))
+            auto._page(crop, {**obs, 'deliveryProof': support})
+            return qualified, stopped
+
+        qualified, stopped = run(first)
+        self.assertEqual(qualified, [])
+        self.assertEqual(stopped, ['INDEPENDENT_STABILITY_UNPROVEN'])
+
+        qualified, stopped = run(later)
+        self.assertEqual(stopped, [])
+        self.assertEqual(len(qualified), 1)
+        self.assertEqual(qualified[0]['stableBaseDeliveryProof']['captureId'], first['captureId'])
+        self.assertEqual(qualified[0]['stableDeliveryProof']['captureId'], later['captureId'])
 
 
 if __name__ == '__main__':
