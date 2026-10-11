@@ -180,16 +180,34 @@ class OneShotTests(unittest.TestCase):
         socket = Shutdown()
         with patch('websockets.connect', return_value=socket) as connect:
             self.assertTrue(asyncio.run(runner.close_owned_assistant(child, {'port': 1}, lambda *a, **k: None)))
-            self.assertEqual(socket.sent[0]['type'], 'eval_main_js')
+            self.assertEqual(socket.sent[0]['type'], 'eval_overlay_js')
+            self.assertEqual(socket.sent[0]['script'], 'window.pywebview.api.exit_app();')
             self.assertTrue(asyncio.run(runner.close_owned_assistant(child, {'port': 1}, lambda *a, **k: None)))
             self.assertFalse(asyncio.run(runner.close_owned_assistant(None, {'port': 1}, lambda *a, **k: None)))
             self.assertEqual(connect.call_count, 1)
+
+    def test_main_bridge_rejects_exit_app_without_adding_a_main_whitelist_action(self):
+        from main_window import MainWindowBridge
+        with self.assertRaisesRegex(ValueError, "Main bridge action is not allowed: 'exit_app'"):
+            MainWindowBridge(None).dispatch({'action': 'exit_app'})
 
     def test_shutdown_request_is_not_process_exit(self):
         socket = Socket()
         with patch('websockets.connect', return_value=socket):
             self.assertFalse(asyncio.run(runner.close_owned_assistant(Child(), {'port': 1},
                 lambda *a, **k: None, timeout=.01)))
+        self.assertEqual(socket.sent[0]['type'], 'eval_overlay_js')
+
+    def test_overlay_unavailable_does_not_claim_exit_or_kill_process(self):
+        child = Child()
+        rows = []
+        with patch('websockets.connect', side_effect=OSError('Overlay unavailable')):
+            self.assertFalse(asyncio.run(runner.close_owned_assistant(child, {'port': 1},
+                lambda kind, **data: rows.append({'kind': kind, **data}), timeout=.01)))
+        self.assertIsNone(child.poll())
+        self.assertFalse(next(row for row in rows if row['kind'] == 'assistant-exit')['processExitConfirmed'])
+        self.assertEqual(next(row for row in rows if row['kind'] == 'assistant-shutdown-request-failed')['reason'],
+                         'OSError')
 
     def make_config(self):
         (self.root / 'app').mkdir()
@@ -205,12 +223,103 @@ class OneShotTests(unittest.TestCase):
         candidate, config, original, manifest = self.make_config()
         with patch.object(runner, 'ROOT', self.root):
             old, selected = runner.select_options(manifest, candidate)
-            self.assertTrue(runner.restore_options(old, selected, candidate))
+            self.assertTrue(runner.restore_options(old, selected, candidate, process_exit_confirmed=True))
             self.assertEqual(config.read_bytes(), original)
             old, selected = runner.select_options(manifest, candidate)
             config.write_bytes(b'{"app":{"userEdit":true}}')
-            self.assertFalse(runner.restore_options(old, selected, candidate))
+            self.assertFalse(runner.restore_options(old, selected, candidate, process_exit_confirmed=True))
             self.assertEqual(config.read_bytes(), b'{"app":{"userEdit":true}}')
+
+    def test_config_restore_accepts_main_reserialization_and_is_idempotent(self):
+        candidate, config, original, manifest = self.make_config()
+        with patch.object(runner, 'ROOT', self.root):
+            old, selected = runner.select_options(manifest, candidate)
+            # Main serializes the selected JSON object with different whitespace/key order.
+            current = json.loads(selected)
+            config.write_bytes(json.dumps(current, ensure_ascii=False, sort_keys=True,
+                                          separators=(',', ':')).encode('utf-8'))
+            self.assertTrue(runner.restore_options(old, selected, candidate, process_exit_confirmed=True))
+            self.assertEqual(config.read_bytes(), original)
+            self.assertTrue(runner.restore_options(old, selected, candidate, process_exit_confirmed=True))
+            self.assertEqual(config.read_bytes(), original)
+
+    def test_config_restore_requires_confirmed_process_exit(self):
+        candidate, config, original, manifest = self.make_config()
+        with patch.object(runner, 'ROOT', self.root):
+            old, selected = runner.select_options(manifest, candidate)
+            selected_bytes = config.read_bytes()
+            self.assertFalse(runner.restore_options(old, selected, candidate, process_exit_confirmed=False))
+            self.assertEqual(config.read_bytes(), selected_bytes)
+            self.assertTrue(runner.restore_options(old, selected, candidate, process_exit_confirmed=True))
+            self.assertEqual(config.read_bytes(), original)
+
+    def test_config_restore_refuses_edit_during_restore(self):
+        candidate, config, original, manifest = self.make_config()
+        external = b'{"app":{"captureFreshnessPolicy":"user-change"}}'
+        with patch.object(runner, 'ROOT', self.root):
+            old, selected = runner.select_options(manifest, candidate)
+            actual_read_bytes = Path.read_bytes
+            reads = 0
+            def read_with_concurrent_edit(path):
+                nonlocal reads
+                if path == config:
+                    reads += 1
+                    if reads == 2:
+                        config.write_bytes(external)
+                return actual_read_bytes(path)
+            with patch.object(Path, 'read_bytes', read_with_concurrent_edit):
+                self.assertFalse(runner.restore_options(old, selected, candidate,
+                                                        process_exit_confirmed=True))
+            self.assertEqual(config.read_bytes(), external)
+
+    def test_unconfirmed_owned_process_keeps_selected_configuration(self):
+        candidate, config, original, manifest = self.make_config()
+        child = Child()
+        async def launch(prepared, output, *, environment, on_launch):
+            output.mkdir()
+            on_launch(child)
+            return True
+        async def unconfirmed(*args, **kwargs):
+            return False
+        receipt = {'candidateManifest': str(candidate), 'existingAssistantBusOccupied': False, 'candidateId': 'test'}
+        rows = []
+        with patch.object(runner, 'ROOT', self.root), patch.object(runner, 'Recorder',
+                return_value=lambda kind, **data: rows.append({'kind': kind, **data})), \
+                patch.object(runner, 'monitor', return_value=False), \
+                patch.object(runner, 'close_owned_assistant', new=unconfirmed), \
+                patch.object(runner, 'port_released', return_value=False):
+            result = asyncio.run(runner.start(SimpleNamespace(start=launch), {'port': 1}, manifest,
+                                               receipt, self.root / 'build/run'))
+        self.assertEqual(result, 1)
+        self.assertIsNone(child.poll())
+        self.assertNotEqual(config.read_bytes(), original)
+        self.assertFalse(rows[-1]['assistantExitConfirmed'])
+        self.assertFalse(rows[-1]['configRestored'])
+        self.assertFalse(rows[-1]['portReleased'])
+
+    def test_port_still_occupied_prevents_success_after_confirmed_exit(self):
+        candidate, config, original, manifest = self.make_config()
+        child = Child(0)
+        async def launch(prepared, output, *, environment, on_launch):
+            output.mkdir()
+            on_launch(child)
+            return True
+        async def exited(*args, **kwargs):
+            return True
+        receipt = {'candidateManifest': str(candidate), 'existingAssistantBusOccupied': False, 'candidateId': 'test'}
+        rows = []
+        with patch.object(runner, 'ROOT', self.root), patch.object(runner, 'Recorder',
+                return_value=lambda kind, **data: rows.append({'kind': kind, **data})), \
+                patch.object(runner, 'monitor', return_value=True), \
+                patch.object(runner, 'close_owned_assistant', new=exited), \
+                patch.object(runner, 'port_released', return_value=False):
+            result = asyncio.run(runner.start(SimpleNamespace(start=launch), {'port': 1}, manifest,
+                                               receipt, self.root / 'build/run'))
+        self.assertEqual(result, 1)
+        self.assertEqual(config.read_bytes(), original)
+        self.assertTrue(rows[-1]['assistantExitConfirmed'])
+        self.assertTrue(rows[-1]['configRestored'])
+        self.assertFalse(rows[-1]['portReleased'])
 
     def test_start_cleanup_and_return_status_are_not_false_pass(self):
         candidate, config, original, manifest = self.make_config()
