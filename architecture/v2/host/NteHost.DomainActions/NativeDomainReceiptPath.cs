@@ -1,0 +1,179 @@
+using System.Security.Cryptography;
+using System.Text.Json;
+using System.Text.Json.Nodes;
+using System.Text.Json.Serialization;
+
+namespace NteHost.DomainActions;
+
+/// <summary>Independent captured pixels with immutable scope, never a Solver result.</summary>
+public sealed class NativeDomainFrame
+{
+    public ActionScope Scope { get; }
+    public ClientGeometry Geometry { get; }
+    public ReadOnlyMemory<byte> Pixels { get; }
+    public int Stride { get; }
+    public string EvidenceRef { get; }
+    public NativeDomainFrame(ActionScope scope, ClientGeometry geometry, byte[] bgra, int stride)
+    {
+        if (geometry.Width <= 0 || geometry.Height <= 0 || stride < geometry.Width * 4L
+            || (long)stride * geometry.Height != bgra.Length) throw new ArgumentException("INVALID_FRAME_GEOMETRY");
+        Scope = scope; Geometry = geometry; Stride = stride;
+        Pixels = bgra.ToArray();
+        EvidenceRef = $"capture:{scope.ObservationSessionId}:{scope.SourceSequence}:{Convert.ToHexString(SHA256.HashData(Pixels.Span))}";
+    }
+}
+public sealed record OwnSeatBinding(int Slot, string PlayerIdentity);
+public sealed record CapturedOwnBid(int Slot, string PlayerIdentity, long Amount, bool AcceptanceVisible,
+    string EvidenceRef);
+public sealed record DecodedDomainFrame(string Scene, int Round, string MatchId, long MatchGeneration,
+    CapturedOwnBid? OwnBid, long? AmountField, IReadOnlyList<VisibleControlAnchor> Controls);
+public interface IGameDomainFrameDecoder
+{
+    // All fields must derive from THIS frame's pixels. Existing cached seats/myBid
+    // or a typed amount ROI cannot attest accepted-own-bid. Unknown returns null.
+    DecodedDomainFrame? Decode(NativeDomainFrame frame);
+}
+public sealed class UnconnectedGameDomainDecoder : IGameDomainFrameDecoder
+{
+    public DecodedDomainFrame? Decode(NativeDomainFrame frame) => null;
+}
+
+// Concrete capture/decoder join shared by the amount field and controls. Capture
+// callback must request a new WGC frame; retained Engine context is not a capture.
+public sealed class CapturedDomainControlEvidence : IDomainControlEvidence
+{
+    private readonly Func<NativeDomainFrame?> capture;
+    private readonly IGameDomainFrameDecoder decoder;
+    public CapturedDomainControlEvidence(Func<NativeDomainFrame?> capture, IGameDomainFrameDecoder decoder)
+    { this.capture = capture; this.decoder = decoder; }
+    public VisibleControlAnchor? Locate(DomainPrimitive primitive, DomainIntent intent)
+    {
+        var frame = capture();
+        if (frame == null || !frame.Scope.SourceQualified) return null;
+        var view = decoder.Decode(frame);
+        string expectedScene = intent.Kind switch { DomainActionKind.Bid => "AUCTION",
+            DomainActionKind.ReturnLobby => "SETTLEMENT", DomainActionKind.StartNextMatch => "LOBBY", _ => "INVALID" };
+        if (view == null || view.Scene != expectedScene || frame.Scope.Scene != expectedScene
+            || view.MatchId != frame.Scope.MatchId || view.MatchGeneration != frame.Scope.MatchGeneration
+            || view.Round != frame.Scope.Round) return null;
+        var matches = view?.Controls.Where(a => a.Primitive == primitive
+            && a.EvidenceRef == frame.EvidenceRef && a.SourceSequence == frame.Scope.SourceSequence
+            && a.CapturedNs == frame.Scope.CapturedNs && a.Geometry == frame.Geometry).ToArray();
+        return matches is { Length: 1 } ? matches[0] : null;
+    }
+    public AmountFieldReadback? CaptureAmountField()
+    {
+        var frame = capture();
+        if (frame == null || !frame.Scope.SourceQualified) return null;
+        var view = decoder.Decode(frame);
+        if (view?.AmountField is not (>= 0 and <= 9_999_999) || view.Scene != "AUCTION"
+            || view.MatchId != frame.Scope.MatchId || view.MatchGeneration != frame.Scope.MatchGeneration
+            || view.Round != frame.Scope.Round) return null;
+        var s = frame.Scope;
+        return new(view.AmountField.Value, s.MatchId, s.Round, s.FactsRevision, s.Window,
+            s.TakeoverGeneration, s.CapturedNs, s.SourceQualified)
+            { MatchGeneration = s.MatchGeneration, ObservationSessionId = s.ObservationSessionId };
+    }
+}
+
+public sealed class NativeVisibleResultProducer
+{
+    private readonly IGameDomainFrameDecoder decoder;
+    private readonly Func<long> clock;
+    public NativeVisibleResultProducer(IGameDomainFrameDecoder decoder, Func<long> clock)
+    { this.decoder = decoder; this.clock = clock; }
+    public VisibleResult? FromCapture(DomainIntent intent, DomainReceipt pending, NativeDomainFrame frame, OwnSeatBinding? ownSeat)
+    {
+        var s = frame.Scope; long now = clock();
+        if (pending.Status != ReceiptStatus.SENT_PENDING_CONFIRMATION || pending.IntentId != intent.IntentId
+            || !s.SourceQualified || s.CapturedNs <= pending.SentNs || s.CapturedNs > now
+            || now - s.CapturedNs > 500_000_000 || s.Window != intent.Window
+            || s.ObservationSessionId != intent.ObservationSessionId || s.TakeoverGeneration != intent.TakeoverGeneration)
+            return null;
+        var view = decoder.Decode(frame);
+        if (view == null || view.MatchId != s.MatchId || view.MatchGeneration != s.MatchGeneration || view.Round != s.Round)
+            return null;
+        long? accepted = null; string? newMatch = null; long newGeneration = 0;
+        if (intent.Kind == DomainActionKind.Bid)
+        {
+            if (s.MatchId != intent.MatchId || s.MatchGeneration != intent.MatchGeneration || s.Round != intent.Round
+                || view.Scene != "AUCTION" || ownSeat == null || view.OwnBid == null
+                || !view.OwnBid.AcceptanceVisible || view.OwnBid.Slot != ownSeat.Slot
+                || string.IsNullOrWhiteSpace(ownSeat.PlayerIdentity) || view.OwnBid.PlayerIdentity != ownSeat.PlayerIdentity
+                || view.OwnBid.EvidenceRef != frame.EvidenceRef || view.OwnBid.Amount != intent.Amount) return null;
+            accepted = view.OwnBid.Amount;
+        }
+        else if (intent.Kind == DomainActionKind.ReturnLobby)
+        {
+            if (view.Scene != "LOBBY" || s.MatchId != intent.MatchId || s.MatchGeneration != intent.MatchGeneration) return null;
+        }
+        else if (intent.Kind == DomainActionKind.StartNextMatch)
+        {
+            if (view.Scene != "AUCTION_R1" || view.Round != 1 || string.IsNullOrWhiteSpace(s.MatchId)
+                || s.MatchId == intent.MatchId || s.MatchGeneration <= intent.MatchGeneration) return null;
+            newMatch = s.MatchId; newGeneration = s.MatchGeneration;
+        }
+        else return null;
+        return new(intent.IntentId, intent.Kind, intent.MatchId, intent.Round, intent.FactsRevision,
+            accepted, newMatch, view.Scene, s.SourceSequence, s.CapturedNs, true, s.Window, s.TakeoverGeneration)
+            { OriginMatchGeneration = intent.MatchGeneration, ObservationSessionId = s.ObservationSessionId,
+              NewMatchGeneration = newGeneration, EvidenceRef = frame.EvidenceRef };
+    }
+}
+
+/// <summary>Actual receipt events for Luna-B's transport, with durable commit before publication.</summary>
+public sealed class NativeDomainActionRuntime
+{
+    private readonly DomainActionCoordinator coordinator;
+    private readonly NativeVisibleResultProducer producer;
+    private readonly IExecutionObligationPort? obligations;
+    private readonly Action<JsonObject> publish;
+    private readonly Dictionary<string, DomainIntent> intents = new();
+    private readonly object gate = new();
+    private static readonly JsonSerializerOptions Json = new() { PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
+        Converters = { new JsonStringEnumConverter() } };
+    public NativeDomainActionRuntime(DomainActionCoordinator coordinator, NativeVisibleResultProducer producer,
+        IExecutionObligationPort? obligations, Action<JsonObject> publish)
+    { this.coordinator = coordinator; this.producer = producer; this.obligations = obligations; this.publish = publish; }
+    public DomainReceipt Dispatch(DomainIntent intent)
+    {
+        lock (gate)
+        {
+            if (intents.TryGetValue(intent.IntentId, out var prior) && prior != intent)
+                throw new ArgumentException("IMMUTABLE_INTENT_CONFLICT");
+            intents[intent.IntentId] = intent;
+            return Emit(coordinator.Dispatch(intent));
+        }
+    }
+    public DomainReceipt? OnIndependentCapture(string intentId, NativeDomainFrame frame, OwnSeatBinding? ownSeat)
+    {
+        lock (gate)
+        {
+            if (!intents.TryGetValue(intentId, out var intent)) return null;
+            var pending = coordinator.Poll();
+            if (pending == null) return null;
+            if (pending.Status == ReceiptStatus.UNKNOWN) return Emit(pending);
+            if (pending.IntentId != intentId) return null;
+            VisibleResult? result;
+            try { result = producer.FromCapture(intent, pending, frame, ownSeat); }
+            catch { result = null; }
+            return result == null ? pending : Emit(coordinator.Confirm(result));
+        }
+    }
+    public DomainReceipt? Poll()
+    {
+        lock (gate) { var result = coordinator.Poll(); return result == null ? null : Emit(result); }
+    }
+    private DomainReceipt Emit(DomainReceipt receipt)
+    {
+        bool committed;
+        try { committed = obligations?.CommitReceipt(receipt) == true; } catch { committed = false; }
+        if (!committed && receipt.Status != ReceiptStatus.NOT_SENT)
+            receipt = coordinator.MarkUnknown(receipt.IntentId, "DURABLE_RECEIPT_COMMIT_FAILED");
+        var node = JsonSerializer.SerializeToNode(receipt, Json)!.AsObject();
+        var message = new JsonObject { ["type"] = "domain.action.receipt", ["observationSessionId"] = receipt.ObservationSessionId,
+            ["currentMatch"] = new JsonObject { ["bidActionReceipt"] = node } };
+        publish(message);
+        return receipt;
+    }
+}

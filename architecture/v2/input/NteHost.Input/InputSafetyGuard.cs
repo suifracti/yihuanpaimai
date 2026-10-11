@@ -10,6 +10,8 @@ public enum GuardState
 
 public sealed record InputSafetyOptions
 {
+    /// <summary>OFF unless the explicit domain adapter owns this guard.</summary>
+    public bool EnableRestrictedDomainActions { get; init; }
     /// <summary>Upper bound on how many self-injected events one arming generation may absorb.</summary>
     public int MaxSelfExemptionsPerArming { get; init; } = 16;
 
@@ -165,6 +167,8 @@ public sealed class InputSafetyGuard : ISendInputTicketAuthority
     public long AuthorityId { get; }
 
     public GuardState State => (GuardState)Volatile.Read(ref _stateAtomic);
+    public bool IsArmedFor(long target, long epoch) => State == GuardState.Armed
+        && Volatile.Read(ref _armedTargetId) == target && Volatile.Read(ref _armedEpoch) == epoch;
 
     public SelfInjectionLedger Ledger => _ledger;
 
@@ -557,6 +561,9 @@ public sealed class InputSafetyGuard : ISendInputTicketAuthority
         long exemptionBefore = Interlocked.Read(ref _selfExemptionCount);
         long sendBefore = _raw.SendCallCount;
 
+        if (action.IsDomain && (!_options.EnableRestrictedDomainActions || !action.CheckDomainCurrent()))
+            return Outcome(false, "DOMAIN_DISABLED_OR_CURRENT_REJECTED", "DOMAIN", sendBefore, false, false, false, false, string.Empty);
+
         if (State != GuardState.Armed)
         {
             return Outcome(false, StateReason(), "STATE", sendBefore, false, false, false, false, string.Empty);
@@ -803,6 +810,8 @@ public sealed class InputSafetyGuard : ISendInputTicketAuthority
     {
         _trace.Write(TracePhase.PrepareBegin, action.Fingerprint);
 
+        if (!action.CheckDomainCurrent()) return "DOMAIN_CURRENT_REJECTED";
+
         if (State != GuardState.Armed)
         {
             string reason = StateReason();
@@ -831,6 +840,7 @@ public sealed class InputSafetyGuard : ISendInputTicketAuthority
             bool applied;
             try
             {
+                if (!action.CheckDomainCurrent()) { _ledger.Abandon(intentId); return "DOMAIN_CURRENT_REJECTED"; }
                 _trace.Write(TracePhase.CursorPrepareInvoked, $"MOVE:{target.X},{target.Y}");
                 applied = _cursor.SetPosition(target.X, target.Y);
             }
@@ -882,8 +892,13 @@ public sealed class InputSafetyGuard : ISendInputTicketAuthority
                 return reason;
             }
 
-            ulong intentId = _ledger.Register(action.Kind, 0, 0, 0);
-            _trace.Write(TracePhase.SelfIntentRegistered, $"{action.Fingerprint};intent={intentId}");
+            if (action.IsDomain)
+                _ledger.RegisterDomain(action);
+            else
+            {
+                ulong intentId = _ledger.Register(action.Kind, 0, 0, 0);
+                _trace.Write(TracePhase.SelfIntentRegistered, $"{action.Fingerprint};intent={intentId}");
+            }
         }
 
         _trace.Write(TracePhase.PrepareDone, action.Fingerprint);
@@ -910,6 +925,17 @@ public sealed class InputSafetyGuard : ISendInputTicketAuthority
             if (State != GuardState.Armed)
             {
                 return InputSafetyReasons.TicketGuardNotArmed;
+            }
+
+            if (action.IsDomain && (!_options.EnableRestrictedDomainActions || !action.CheckDomainCurrent()))
+                return "DOMAIN_FINAL_CURRENT_REJECTED";
+            if (action.IsDomain)
+            {
+                // The domain callback may capture/read pixels. Re-read focus and
+                // ticket lifetime AFTER it, directly at the commit boundary.
+                var commit = RunPrecheck("DOMAIN_COMMIT");
+                if (!commit.Passed) return commit.Reason;
+                if (TraceClock.NowNs() >= ticket.ExpiresNs) return InputSafetyReasons.TicketExpired;
             }
 
             return ticket.TryConsume() ? InputSafetyReasons.Ok : InputSafetyReasons.TicketReused;

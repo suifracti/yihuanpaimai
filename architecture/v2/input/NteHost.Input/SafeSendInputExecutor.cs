@@ -144,9 +144,20 @@ public sealed class SafeSendInputExecutor
     private static InputRecord[] BuildInputs(InputAction action, ulong marker, out string reason)
     {
         reason = InputSafetyReasons.Ok;
+        if (!action.DomainValid) { reason = InputSafetyReasons.InvalidAction; return []; }
 
         switch (action.Kind)
         {
+            case InputActionKind.RestrictedLeftClick:
+                return [new(0, action.DomainAbsoluteX, action.DomainAbsoluteY, 0, 0xC001, marker),
+                    new(0, 0, 0, 0, 0x0002, marker), new(0, 0, 0, 0, 0x0004, marker)];
+            case InputActionKind.RestrictedAmountDigits:
+                // Closed Ctrl+A followed by 1..7 decimal digits. No Enter or arbitrary keys.
+                var result = new List<InputRecord>();
+                void Key(uint code, bool up) => result.Add(new(1, 0, 0, code, up ? 2u : 0u, marker));
+                Key(0xA2, false); Key(0x41, false); Key(0x41, true); Key(0xA2, true);
+                foreach (char digit in action.AmountDigits!) { Key(digit, false); Key(digit, true); }
+                return result.ToArray();
             case InputActionKind.MouseWheel:
                 return
                 [
