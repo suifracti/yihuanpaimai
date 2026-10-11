@@ -32,11 +32,13 @@ class NativeObservationBridge:
         on_event: Callable[[dict[str, Any]], None],
         log: Callable[[str, str], None],
         on_evidence: Optional[Callable[[dict[str, Any]], None]] = None,
+        on_obligation_request: Optional[Callable[[dict[str, Any]], dict[str, Any]]] = None,
     ) -> None:
         self.repo_root = Path(repo_root).resolve()
         self.on_event = on_event
         self.log = log
         self.on_evidence = on_evidence
+        self.on_obligation_request = on_obligation_request
         self.process: Optional[subprocess.Popen[str]] = None
         self._lock = threading.RLock()
         self._reader: Optional[threading.Thread] = None
@@ -235,6 +237,42 @@ class NativeObservationBridge:
                             diagnostics.submit("host-stderr.log", f"domain receipt callback failed: {type(exc).__name__}: {exc}\n")
                         else:
                             self.log("OBSERVATION:NATIVE", f"domain receipt callback failed: {type(exc).__name__}: {exc}")
+                    continue
+                if isinstance(event, dict) and event.get("type") in {
+                    "domain.action.obligation.request", "domain.action.receipt.commit.request"
+                }:
+                    expected_type = ("domain.action.obligation.ack"
+                                     if event.get("type") == "domain.action.obligation.request"
+                                     else "domain.action.receipt.ack")
+                    ack = None
+                    try:
+                        if self.on_obligation_request is not None:
+                            ack = self.on_obligation_request(event)
+                    except Exception as exc:
+                        self.log("OBSERVATION:NATIVE", f"durable obligation callback failed: {type(exc).__name__}")
+                    if not isinstance(ack, dict):
+                        ack = {
+                            "type": expected_type,
+                            "requestId": event.get("requestId"),
+                            "bootId": event.get("bootId"),
+                            "ledgerId": event.get("ledgerId"),
+                            "intentId": event.get("intentId") or (event.get("intent") or {}).get("intentId"),
+                            "ledgerRevision": event.get("ledgerRevision", -1),
+                            "accepted": False,
+                            "reason": "DURABLE_OBLIGATION_OWNER_NOT_CONNECTED",
+                        }
+                    if ack.get("type") != expected_type:
+                        ack = {**ack, "type": expected_type}
+                    if not self.send_control(ack):
+                        self.log("OBSERVATION:NATIVE", "durable obligation ACK could not reach Host")
+                    continue
+                if isinstance(event, dict) and event.get("type") in {
+                    "domain.action.host_ready", "domain.action.host_complete"
+                }:
+                    try:
+                        self.on_event(event)
+                    except Exception as exc:
+                        self.log("OBSERVATION:NATIVE", f"domain action ready callback failed: {type(exc).__name__}")
                     continue
                 if isinstance(event, dict) and event.get('type') == 'native_warehouse_evidence':
                     # Independent source events cannot change business FRAME logs or last_status.

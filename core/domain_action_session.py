@@ -202,13 +202,14 @@ def claimed_bid_to_domain_intent(claim: dict, native_scope: dict, *, now_ms: int
 
 
 def commit_domain_attempt(book, intent: dict, current: dict, native_scope: dict, *,
-                          now_ms: int, now_ns: int) -> bool:
+                          now_ms: int, now_ns: int, expected_revision=None) -> bool:
     """Native commit-before-input callback into Sol-B's sole durable book.
 
     Luna-B owns transport. The prepared intent grants no send permission. Never
     call attempted() during preparation or call it a second time on its ACK.
     """
-    permit = book.attempted(intent.get("intentId"), current, now_ms=now_ms)
+    permit = book.attempted(intent.get("intentId"), current, now_ms=now_ms,
+                            expected_revision=expected_revision)
     if permit.get("ok") is not True or permit.get("durableState") != "ATTEMPTED":
         return False
     try:
@@ -227,7 +228,7 @@ def commit_domain_attempt(book, intent: dict, current: dict, native_scope: dict,
 
 
 def commit_domain_receipt(book, receipt: dict, *, independently_qualified: bool,
-                          now_ms: int) -> bool:
+                          now_ms: int, expected_revision=None) -> bool:
     """Forward exact Native wire (including approvalId/evidenceRef) to Sol-B.
 
     independently_qualified must come from Native receipt/source provenance,
@@ -237,5 +238,6 @@ def commit_domain_receipt(book, receipt: dict, *, independently_qualified: bool,
                 "CONFIRMED": "EFFECTIVE", "UNKNOWN": "UNKNOWN"}.get(receipt.get("status"))
     if expected is None:
         return False
-    result = book.receipt(receipt, qualified=independently_qualified, now_ms=now_ms)
+    result = book.receipt(receipt, qualified=independently_qualified, now_ms=now_ms,
+                          expected_revision=expected_revision)
     return result.get("ok") is True and result.get("state") == expected

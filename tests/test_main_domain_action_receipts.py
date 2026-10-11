@@ -57,6 +57,8 @@ class MainDomainActionReceiptTests(unittest.TestCase):
             _NATIVE_EXPECTED_SESSION="obs-1",
             _NATIVE_OBSERVATION_SESSION="obs-1",
             _NATIVE_DOMAIN_ACTION_SESSION=session,
+            _NATIVE_DURABLE_BID_OBLIGATION_OWNER=SimpleNamespace(
+                receipt_is_committed=lambda _receipt: True),
             WS_EVENT_LOOP=None,
         ), mock.patch.object(app_main, "get_current_match_presentation_summary", side_effect=summary), \
              mock.patch.object(app_main, "_native_post_main_status"):
@@ -96,6 +98,55 @@ class MainDomainActionReceiptTests(unittest.TestCase):
         self.assertEqual(result["receiptChannel"], "bid")
         self.assertEqual(session.phase, "AUCTION")
         self.assertIsNone(session.pending_intent)
+
+    def test_unacknowledged_bid_receipt_is_not_main_visible(self):
+        session = self._session()
+        receipt = {
+            "intentId": "bid-1", "kind": "Bid", "status": "CONFIRMED",
+            "matchId": "match-1", "matchGeneration": 1,
+            "observationSessionId": "obs-1", "approvalId": "approval-1",
+        }
+        latest = {}
+        with mock.patch.multiple(
+            app_main,
+            CURRENT_MATCH=SimpleNamespace(id="match-1", _seq=1),
+            LATEST_PAYLOAD=latest,
+            _NATIVE_EXPECTED_SESSION="obs-1",
+            _NATIVE_OBSERVATION_SESSION="obs-1",
+            _NATIVE_DOMAIN_ACTION_SESSION=session,
+            _NATIVE_DURABLE_BID_OBLIGATION_OWNER=SimpleNamespace(
+                receipt_is_committed=lambda _receipt: False),
+            WS_EVENT_LOOP=None,
+        ), mock.patch.object(app_main, "_native_post_main_status"):
+            self.assertIsNone(app_main._native_observation_event({
+                "type": "domain.action.receipt", "observationSessionId": "obs-1",
+                "receiptChannel": "bid", "receipt": receipt,
+            }))
+        self.assertNotIn("bidActionReceipt", latest)
+
+    def test_starting_host_binds_boot_id_and_discards_previous_obligation_owner(self):
+        prior_owner = object()
+        starting = {
+            "type": "native_observation",
+            "schemaVersion": "native-observation-v1",
+            "status": "STARTING",
+            "observationSessionId": "obs-1",
+            "sourceKind": "native_wgc",
+            "details": {"domainActionBootId": "boot-current"},
+            "inputActions": False,
+            "formalHistoryWriter": False,
+        }
+        with mock.patch.multiple(
+            app_main,
+            _NATIVE_EXPECTED_SESSION=None,
+            _NATIVE_OBSERVATION_SESSION="obs-1",
+            _NATIVE_DOMAIN_ACTION_BOOT_ID="boot-previous",
+            _NATIVE_DURABLE_BID_OBLIGATION_OWNER=prior_owner,
+        ), mock.patch.object(app_main, "_native_confirm_window_mode", return_value=True), \
+             mock.patch.object(app_main, "_native_publish_health"):
+            app_main._native_observation_event(starting)
+            self.assertEqual(app_main._NATIVE_DOMAIN_ACTION_BOOT_ID, "boot-current")
+            self.assertIsNone(app_main._NATIVE_DURABLE_BID_OBLIGATION_OWNER)
 
 
 if __name__ == "__main__":

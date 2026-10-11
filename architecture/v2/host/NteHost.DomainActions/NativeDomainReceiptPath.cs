@@ -166,10 +166,13 @@ public sealed class NativeDomainActionRuntime
     }
     private DomainReceipt Emit(DomainReceipt receipt)
     {
-        bool committed;
-        try { committed = obligations?.CommitReceipt(receipt) == true; } catch { committed = false; }
-        if (!committed && receipt.Status != ReceiptStatus.NOT_SENT)
-            receipt = coordinator.MarkUnknown(receipt.IntentId, "DURABLE_RECEIPT_COMMIT_FAILED");
+        bool committed = receipt.Kind != DomainActionKind.Bid;
+        if (receipt.Kind == DomainActionKind.Bid)
+        {
+            try { committed = obligations?.CommitReceipt(receipt) == true; } catch { committed = false; }
+            if (!committed)
+                receipt = coordinator.MarkUnknown(receipt.IntentId, "DURABLE_RECEIPT_COMMIT_FAILED");
+        }
         var node = JsonSerializer.SerializeToNode(receipt, Json)!.AsObject();
         var message = new JsonObject
         {
@@ -178,7 +181,8 @@ public sealed class NativeDomainActionRuntime
             ["receipt"] = node,
             ["receiptChannel"] = receipt.Kind == DomainActionKind.Bid ? "bid" : "session",
         };
-        publish(message);
+        // Main only exposes a bid receipt after its sole durable ledger ACK.
+        if (committed) publish(message);
         return receipt;
     }
 }

@@ -3009,6 +3009,11 @@ def _native_domain_action_receipt_event(event: Dict[str, Any]) -> Optional[Dict[
             if (receipt.get("matchId") != CURRENT_MATCH.id
                     or receipt.get("matchGeneration") != getattr(CURRENT_MATCH, "_seq", 0)):
                 return None
+            owner = _NATIVE_DURABLE_BID_OBLIGATION_OWNER
+            if owner is None or not owner.receipt_is_committed(receipt):
+                # A Host wire receipt is not Main-visible until Sol-B's one
+                # durable book has ACKed the exact receipt.
+                return None
             LATEST_PAYLOAD["bidActionReceipt"] = copy.deepcopy(receipt)
         else:
             consumer = _NATIVE_DOMAIN_ACTION_SESSION
@@ -3040,11 +3045,64 @@ def _native_domain_action_receipt_event(event: Dict[str, Any]) -> Optional[Dict[
     return payload
 
 
+def _native_domain_action_obligation_request(event: Dict[str, Any]) -> Dict[str, Any]:
+    """Commit Host requests through the active Sol-B book; no book means deny."""
+    owner = _NATIVE_DURABLE_BID_OBLIGATION_OWNER
+    expected_type = ("domain.action.obligation.ack"
+                     if event.get("type") == "domain.action.obligation.request"
+                     else "domain.action.receipt.ack")
+    if (owner is None or event.get("observationSessionId") != _NATIVE_EXPECTED_SESSION
+            or event.get("observationSessionId") != _NATIVE_OBSERVATION_SESSION):
+        return {
+            "type": expected_type,
+            "requestId": event.get("requestId"),
+            "bootId": event.get("bootId"),
+            "ledgerId": event.get("ledgerId"),
+            "intentId": event.get("intentId") or (event.get("intent") or {}).get("intentId"),
+            "ledgerRevision": event.get("ledgerRevision", -1),
+            "accepted": False,
+            "reason": "DURABLE_OBLIGATION_OWNER_OR_SESSION_NOT_CONNECTED",
+        }
+    return owner.handle_request(event)
+
+
+def _native_bind_claimed_bid_obligation_owner(owner) -> bool:
+    """Attach an already-claimed owner to this live Host session; never creates approval."""
+    global _NATIVE_DURABLE_BID_OBLIGATION_OWNER
+    global _NATIVE_DOMAIN_ACTION_BOOT_ID
+    bridge = NATIVE_OBSERVATION_BRIDGE
+    if (bridge is None or not bridge.running or owner is None
+            or owner.boot_id != getattr(owner.book, "clock_id", None)
+            or owner.boot_id != _NATIVE_DOMAIN_ACTION_BOOT_ID
+            or owner.intent.get("kind") != "Bid"
+            or owner.intent.get("observationSessionId") != _NATIVE_EXPECTED_SESSION
+            or owner.intent.get("observationSessionId") != _NATIVE_OBSERVATION_SESSION):
+        return False
+    _NATIVE_DURABLE_BID_OBLIGATION_OWNER = owner
+    return True
+
+
+def _native_dispatch_claimed_bid_to_host() -> bool:
+    """Send the one immutable Main-owned claim to the current Host process."""
+    owner = _NATIVE_DURABLE_BID_OBLIGATION_OWNER
+    bridge = NATIVE_OBSERVATION_BRIDGE
+    if (owner is None or bridge is None or not bridge.running
+            or owner.intent.get("observationSessionId") != _NATIVE_EXPECTED_SESSION
+            or owner.intent.get("observationSessionId") != _NATIVE_OBSERVATION_SESSION):
+        return False
+    try:
+        envelope = owner.dispatch_envelope("dispatch-" + uuid.uuid4().hex)
+    except Exception:
+        return False
+    return bool(bridge.send_control(envelope))
+
+
 def _native_observation_event(event: Dict[str, Any]) -> Optional[Dict[str, Any]]:
     """Consume one versioned native Host line and project it into Main/HUD."""
     global _NATIVE_OBSERVATION_RECEIVER, _NATIVE_OBSERVATION_SESSION
     global _NATIVE_OBSERVATION_SEQUENCE, _NATIVE_OBSERVATION_LAST_FRAME_NS
     global _NATIVE_EXPECTED_SESSION
+    global _NATIVE_DOMAIN_ACTION_BOOT_ID, _NATIVE_DURABLE_BID_OBLIGATION_OWNER
     global _NATIVE_WINDOW_MODE_CONFIRMED, _NATIVE_OBSERVATION_SOURCE_NS, _NATIVE_DELIVERY_ANCHORED_MATCH
     global _LIVE_VISION_ACTIVE, _LIVE_VISION_MATCH_ID, _LIVE_CONTROL_WAITING_EXIT
     global _NATIVE_TRIAL_WAREHOUSE_SOURCES, _NATIVE_TRIAL_WAREHOUSE_DECISIONS
@@ -3070,6 +3128,11 @@ def _native_observation_event(event: Dict[str, Any]) -> Optional[Dict[str, Any]]
         return
 
     status = str(event.get("status") or "").upper()
+    details = event.get("details") if isinstance(event.get("details"), dict) else {}
+    action_boot_id = details.get("domainActionBootId")
+    if status == "STARTING":
+        _NATIVE_DOMAIN_ACTION_BOOT_ID = action_boot_id if isinstance(action_boot_id, str) else None
+        _NATIVE_DURABLE_BID_OBLIGATION_OWNER = None
     incoming_session = str(event.get("observationSessionId") or "").strip()
     if status == "STARTING":
         if _NATIVE_EXPECTED_SESSION and incoming_session != _NATIVE_EXPECTED_SESSION:
@@ -5294,6 +5357,8 @@ _LIVE_VISION_ACTIVE = False
 _LIVE_VISION_MATCH_ID: Optional[str] = None
 _NATIVE_DOMAIN_ACTION_SESSION = None
 _NATIVE_DOMAIN_ACTION_SESSION_KEY: Optional[tuple[str, str, int]] = None
+_NATIVE_DURABLE_BID_OBLIGATION_OWNER = None
+_NATIVE_DOMAIN_ACTION_BOOT_ID: Optional[str] = None
 _LIVE_VISION_EXIT_SCENES = frozenset({
     "CITY_TYCOON_HUB",
     "CITY_LEISURE_MENU",
@@ -8289,6 +8354,8 @@ def _start_native_observation_locked(*, resume_same_match: bool = False):
     global _NATIVE_WINDOW_MODE, _NATIVE_WINDOW_MODE_CONFIRMED, _NATIVE_WINDOW_TARGET_INSTANCE
     global _NATIVE_EXPECTED_SESSION, _NATIVE_OBSERVATION_SOURCE_NS
     global _NATIVE_AUTO_WAREHOUSE_ENABLED, _NATIVE_SOURCE_CAPTURE_CAPABILITY, _NATIVE_CAPTURE_POLICY, _NATIVE_DELIVERY_ANCHORED_MATCH, _NATIVE_AUTO_TRIGGER_STATUS
+    global _NATIVE_DURABLE_BID_OBLIGATION_OWNER
+    global _NATIVE_DOMAIN_ACTION_BOOT_ID
     if os.environ.get("NTE_DISABLE_VISION") == "1":
         PRESENTATION_RUNTIME.set_vision_process_state("disabled")
         log_stage("STARTUP:NATIVE", "Native observation disabled via NTE_DISABLE_VISION=1")
@@ -8318,6 +8385,7 @@ def _start_native_observation_locked(*, resume_same_match: bool = False):
             log_stage,
             on_evidence=lambda event: _native_source_evidence_event(event)
                 if NATIVE_OBSERVATION_BRIDGE is bridge else None,
+            on_obligation_request=_native_domain_action_obligation_request,
         )
         NATIVE_OBSERVATION_BRIDGE = bridge
         _NATIVE_AUTO_WAREHOUSE_ENABLED = (CONFIG.get("app", {}).get("nativeAutoWarehouseCapture") is True
@@ -8331,6 +8399,8 @@ def _start_native_observation_locked(*, resume_same_match: bool = False):
         _NATIVE_WINDOW_TARGET_INSTANCE = None
         _NATIVE_EXPECTED_SESSION = None
         _NATIVE_OBSERVATION_SOURCE_NS = None
+        _NATIVE_DURABLE_BID_OBLIGATION_OWNER = None
+        _NATIVE_DOMAIN_ACTION_BOOT_ID = None
         _native_publish_health({
             "status": "STARTING",
             "reason": "explicit-start",
