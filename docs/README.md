@@ -2,6 +2,10 @@
 
 ## 当前工作
 
+- **2026-10-12 单主线**：所有开发成果已收拢至公开 `main`，以后直接在这一主线上开发；[Issue #19](https://github.com/suifracti/yihuanpaimai/issues/19)保存当前业务状态。下方日期规划与本机证据链接用于历史追溯。
+
+- **2026-10-09 规划接手**：[收尾规划](plans/2026-09-05-project-replan.md#2026-10-09-规划接手恢复成果收敛到完整产品)。已有成果归位、第一包接收结果及下一包自动收仓范围见该节；当前状态见 Obsidian Handoff 最新节。以下保留历史证据范围。
+
 - [2026-10-03 正式后台只读识别设计与交付](superpowers/specs/2026-10-03-native-background-observation-design.md)及[自动翻页候选](superpowers/specs/2026-10-03-native-warehouse-auto-scroll-design.md)：代码已实施、真实生产验收未完成。早期大厅QA为2尝试/1接受，最新结算QA为3尝试/2接受、未来来源时间拒绝，均整体未通过；原始时钟诊断已准备，真实滚动、全仓覆盖及完整拍卖仍未验证。
 
 - [当前项目 Handoff](D:/ObsidianLiveSyncTestVault/03-项目与工程/异环拍卖助手/Handoff.md) 与 [Decisions](D:/ObsidianLiveSyncTestVault/03-项目与工程/异环拍卖助手/Decisions.md)：Native 主路线 `YH-MASTER-2026-09-22` 的当前执行入口；2026-09-28 状态为 P5 未完成，目录接线、结算归档与离场续作按各自离线范围解读。

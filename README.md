@@ -4,7 +4,30 @@
 
 **最终产品目标（2026-10-09 更新）**：自动进入拍卖、识别估值、自动出价、结算收仓、返回并自动开启下一局。当前实现尚未完成该全自动循环；详细阶段与边界见收尾规划。
 
-**2026-10-10：继续推进自动收仓规划，并建立公开 PR 审查流程。** 10 月 7 日封存成果继续保留；源码同步以 GitHub `main` 为基线，首批当前源码差异已准备为 Draft PR，等待审查。具体实施计划及本地验收材料继续由 Obsidian 管理，不随此代码包发布。真实游戏全自动流程尚未完成，不能作为已验收的无人值守助手交付。
+**2026-10-12：开发成果统一到 `main`。** 已有 PR、收仓、估值、输入回执、PARTIAL 归档与 Main/HUD 增量统一保存，后续使用这一条主线开发。合并是版本收拢，**不表示真实全自动验收通过**：第14次收仓仍为 PARTIAL，真实游戏金额/下一局解码尚未接通，默认不授权游戏输入。当前业务状态见 [Issue #19](https://github.com/suifracti/yihuanpaimai/issues/19)。
+
+## 从 GitHub 重新取得源码
+
+下载本仓库 `main` ZIP，或 `git clone https://github.com/suifracti/yihuanpaimai.git`。源码、UI 资源、轻量目录/模板、依赖锁定与 Host 构建工程在仓库内；Python 环境和 Native Host 输出需要重新安装/构建。不要使用旧候选脚本的默认10月6日 manifest 代表当前版本。
+
+在解压/克隆后的根目录执行以下准备命令（不启动游戏）：
+
+```powershell
+py -3.10 -m venv .venv
+.\.venv\Scripts\python.exe -m pip install -r requirements-desktop.lock.txt
+if (!(Test-Path app/config.json)) { Copy-Item app/config.example.json app/config.json }
+dotnet build architecture/v2/host/wgc_live_harness/WgcLiveHarness.csproj -c Release -o build/native-observation
+```
+
+需要 Windows x64、.NET 8 SDK、WebView2 Runtime 和 Node.js。只打开助手界面时使用已装依赖的明确解释器，避免裸 `python` 缺 `cv2`：
+
+```powershell
+$env:NTE_DISABLE_VISION = '1'
+$env:YIHUAN_DATA_ROOT = Join-Path $PWD 'build/local-data'
+.\.venv\Scripts\python.exe app/main.py
+```
+
+**删除旧目录前需要单独保留的本地资料**：`app/config.json`、`data/videos/`、`data/reference-crops/`、`build/` 内原图/会话/诊断证据及未发布工件。正式历史默认在 `%LOCALAPPDATA%\异环拍卖助手\data\history\异环拍卖数据.json`，自定义 `YIHUAN_DATA_ROOT` 的历史位于对应目录。它们不在公开 GitHub 中；下载源码不会恢复这些资料。被净化移除的旧截图/测试素材同样不恢复。源码恢复与本地私有资料恢复是两项不同操作。
 
 ## 界面
 
@@ -17,7 +40,7 @@
 - 主窗口、HUD、手工字段编辑、拍卖估值计算和实验室求解器已有实现；历史资料可以查看，旧格式记录保留 LEGACY 身份。
 - 仓库网格、部分格子分件、多页登记及重叠处理已有离线成果。候选框、观察组件和机器确认数都不等于准确物品总数；目录图不能单独证明身份。
 - Native 指定窗口观察、后台模式、最新帧有界队列、SOURCE v2 原图保存及同图核对已有代码。慢 OCR 会跳过待处理帧，持续取帧不保证记录每条短暂情报。
-- 结算自动触发和窗口滚动消息已接线，沿用本局一次及跨局换代保护。**真实稳定判定仍被未解释的物品内部像素变化阻断，真实滚动、完整覆盖和完整跨局流程未通过。**
+- 结算自动触发、独立内容支持和窗口滚动消息已接线，沿用本局一次及跨局换代保护。第14次已有两次真实滚轮发送，但末段像素重叠不足；小步采样修复已整合，真实完整底部与连续覆盖尚未通过。
 - `offline-content/2cb94b822f75` 的离线正常收页链路通过：保存、独立支持、模拟滚动回执、滚后位移、重叠及末尾覆盖可以串起来。使用生成夹具和空身份参照，**离线 COMPLETE 不等于实机全自动通过**；共同采样模型未启用到生产。
 
 ## 怎样运行
@@ -40,7 +63,7 @@ $env:YIHUAN_DATA_ROOT = Join-Path $PWD 'build\paused-ui-data'
 
 个人 `app/config.json` 原地保留、不入库；Git 提供 [app/config.example.json](app/config.example.json)。模板使用 Native 档案、严格来源模式，并关闭自动收页。本地旧配置可能已开启交付模式和自动收页，不能假定它等于模板。
 
-将来明确恢复开发后，才解除 `NTE_DISABLE_VISION` 并启动观察。保留 Host 位于 `build/native-bounded-restability-production-20261007/host/`，用 `NTE_NATIVE_HOST_EXE` 指向其中的 `WgcLiveHarness.exe`。运行需要整个 Host 目录及其依赖，不能只取 EXE。启动前核对配置、Host 身份和总线占用，不绕过占用检查或误停其他进程。
+明确开始实机观察时，才解除 `NTE_DISABLE_VISION`；用 `NTE_NATIVE_HOST_EXE` 指向从当前源码构建的 `build/native-observation/WgcLiveHarness.exe`。运行需要整个 Host 目录及依赖，不能只取 EXE。启动前核对配置、Host 身份和总线占用，不绕过占用检查或误停其他进程。
 
 ### 选项与停止
 
@@ -52,7 +75,7 @@ $env:YIHUAN_DATA_ROOT = Join-Path $PWD 'build\paused-ui-data'
 ## 未完成与已知问题
 
 1. WGC 来源时间未来值在游戏和自建 DXGI 窗口复现，问题未修复。严格模式保留拒绝；交付时序只证明近期交付，不能证明请求后渲染或来源绝对年龄，仍有上游迟交／重放风险。不能运行中换模式或自动降级。
-2. 真实结算内容判稳尚缺能解释内部微变的证据。按钮文字、灰色外观、OCR 一致或小幅像素变化不能单独放行。原图反例保留，不再围绕同一批图调阈值。
+2. 内容判稳与稀疏内容步长已有定向离线修复；新小步长后的独立 SOURCE、连续尾段和真实底部确认仍缺实机证据。按钮文字、灰色外观、OCR 一致或滑块位置不能单独证明完整覆盖。
 3. 第五张后的续取修复已有实机通过结论；它不证明稳定页、真实自动滚动、完整收页、返回大厅及自然下一局已经通过。
 4. 未证明跨视口对应时，不能直接累计数量或总价。裁切物件只算片段；品质、身份、数量及正式记账仍受原确认门槛约束，原图先保存不构成正式事实。
 5. 已知素材的项链／卡丁车拆件及 57px 纵向周期修复已整合，白框最终修复也在当前主目录；仍有局部 X 偏移、品质块未知及未见场景识别边界。这些局部修复不代表所有仓库物品可用。
