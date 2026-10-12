@@ -1,14 +1,16 @@
 # 文档索引
 
+> **本仓库 `docs/` 是工程技术与历史资料索引，不是新的项目交接或实时任务规划。** 请先按仓库根 `AGENTS.md` 阅读授权 Obsidian 的现行 Handoff，再按需要查本目录的日期报告。
+
 ## 当前工作
 
-- **2026-10-12 单主线**：所有开发成果已收拢至公开 `main`，以后直接在这一主线上开发；[Issue #19](https://github.com/suifracti/yihuanpaimai/issues/19)保存当前业务状态。下方日期规划与本机证据链接用于历史追溯。
+- **2026-10-12 单主线**：所有已公开开发成果已收拢至 `main`；**项目最新任务与验收状态只在授权 Obsidian Vault 的 `03-项目与工程/异环拍卖助手/README.md` → `Handoff.md` 中交接**，技术决定见 `Decisions.md`。已关闭的 [Issue #19](https://github.com/suifracti/yihuanpaimai/issues/19) 仅为历史归档，不能据其旧正文继续派工。下方日期文档只按各自发生时点使用。
 
 - **2026-10-09 规划接手**：[收尾规划](plans/2026-09-05-project-replan.md#2026-10-09-规划接手恢复成果收敛到完整产品)。已有成果归位、第一包接收结果及下一包自动收仓范围见该节；当前状态见 Obsidian Handoff 最新节。以下保留历史证据范围。
 
 - [2026-10-03 正式后台只读识别设计与交付](superpowers/specs/2026-10-03-native-background-observation-design.md)及[自动翻页候选](superpowers/specs/2026-10-03-native-warehouse-auto-scroll-design.md)：代码已实施、真实生产验收未完成。早期大厅QA为2尝试/1接受，最新结算QA为3尝试/2接受、未来来源时间拒绝，均整体未通过；原始时钟诊断已准备，真实滚动、全仓覆盖及完整拍卖仍未验证。
 
-- [当前项目 Handoff](D:/ObsidianLiveSyncTestVault/03-项目与工程/异环拍卖助手/Handoff.md) 与 [Decisions](D:/ObsidianLiveSyncTestVault/03-项目与工程/异环拍卖助手/Decisions.md)：Native 主路线 `YH-MASTER-2026-09-22` 的当前执行入口；2026-09-28 状态为 P5 未完成，目录接线、结算归档与离场续作按各自离线范围解读。
+- **现行 Obsidian 项目入口**：`03-项目与工程/异环拍卖助手/README.md`，其下 `Handoff.md` 是唯一活动交接，`Decisions.md` 是长期决定；需获 Vault 访问权。`YH-MASTER-2026-09-22` 及 2026-09-28 的 P5 记载属于历史，不能作为当前任务或授权。
 
 - [2026-09-20 Luna Max Goal 执行规划](plans/2026-09-20-luna-max-goal.md) 与 [已实施范围报告](reports/luna-goal-acceptance.md)：保留当时 V2-2 A/B/C、I1 的传帧、恢复与受控窗口证据；其结果不替代当前 Native P5 现场验收，旧时长/验证矩阵不作为本轮默认执行要求。
 
