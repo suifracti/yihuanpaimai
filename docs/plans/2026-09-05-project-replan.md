@@ -1,6 +1,6 @@
 ---
 type: project-handoff
-status: active
+status: historical
 updated: 2026-10-09
 project: 异环拍卖助手
 plan_version: YH-MASTER-2026-09-22-closeout-2026-10-09
@@ -9,7 +9,9 @@ implementation_status: P5_INCOMPLETE
 
 # 异环拍卖助手｜完整识别重构与当前交接
 
-> **2026-10-12：以下为历史规划与交接记录。当前源码统一在 GitHub `main`；当前任务见 [Issue #19](https://github.com/suifracti/yihuanpaimai/issues/19)，旧阶段和授权不自动恢复。
+> [!IMPORTANT]
+> **历史规划（记录截至 2026-10-09；自 2026-10-12 起已退出活动交接）**：本页所有“当前”“唯一下一步”、旧 SHA、固定排期和 PR/Agent 分工均只代表发生时点，**不能据此恢复旧任务**。最新版当前交接以获授权 Obsidian Vault 的 `03-项目与工程/异环拍卖助手/Handoff.md` 为准；代码以 GitHub `main` 与实际本机工作树为准。已关闭的 [Issue #19](https://github.com/suifracti/yihuanpaimai/issues/19) 仅为历史。
+
 
 ## 2026-10-09 规划接手：恢复成果，收敛到完整产品
 
