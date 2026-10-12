@@ -1,5 +1,7 @@
 # 项目工作规则
 
+> **当前项目交接入口（2026-10-12 起）**：如有授权访问用户 Obsidian Vault，请先遵守 Vault 根 `AGENTS.md`，再读 `03-项目与工程/异环拍卖助手/README.md` → `Handoff.md`（唯一当前进度、最早断点与下一项任务）→ `Decisions.md`（当前技术取舍）。**本 GitHub 仓库只作为代码主源和历史证据，不是另一份当前规划**。旧 [Issue #19](https://github.com/suifracti/yihuanpaimai/issues/19) 已关闭，不自动重开 Issue、PR 或旧 Agent 任务；Google Drive 仅传私人原图、日志、构建 ZIP 等交接附件。没有 Vault 访问权时，将仓库 README 的功能描述视为带日期快照，不假装读过 Vault，不据旧 Issue 进行自动出价、游戏输入或推送。
+
 通用工作与验证规则已移至 [用户级 AGENTS.md](C:/Users/Administrator/.codex/AGENTS.md)。如果当前工具未自动加载，开始工作前读取该文件；本文件仅保留项目专属约束。
 
 ## 项目目录约束
