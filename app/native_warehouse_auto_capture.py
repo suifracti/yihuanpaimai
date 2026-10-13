@@ -344,6 +344,11 @@ class NativeWarehouseAutoCapture:
                 support = (self._content_gate.compare(self._skip_observation, observation)
                     if self._skip_observation is not None else {'qualified': False})
                 if support['qualified']:
+                    # Preserve this already qualified pair for saved-image
+                    # analysis. A later SOURCE may change; it must neither
+                    # erase this certificate nor inherit its qualification.
+                    observation['contentStability'] = support
+                    self._content_gate.commit_support(self.source.intake, observation)
                     self._diagnose('skip-animation-visible-support', qualification=support,
                         revealCompletionProven=False)
                 else:

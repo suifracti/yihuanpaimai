@@ -123,7 +123,14 @@ class HalfViewportFlowTests(unittest.TestCase):
                     'sourceLeaseId': command['sourceLeaseId'], 'animationCompletionProven': False}))
             f.tick(); f.deliver(viewport(0))
             self.assertEqual(f.auto._phase, 'WAIT_STABLE')
-            f.tick(); f.deliver(viewport(0))
+            supported = f.source.pages_copy()[-1]['descriptor']['evidenceId']
+            self.assertIn(supported, f.gate.representatives())
+            changed = viewport(0)
+            changed[GRID[1]+70, GRID[0]+80] = (35, 200, 60)
+            f.tick(); f.deliver(changed)
+            self.assertIn(supported, f.gate.representatives())
+            self.assertFalse(f.auto._observation['contentStability']['qualified'])
+            self.assertNotIn(f.source.pages_copy()[-1]['descriptor']['evidenceId'], f.gate.representatives())
             self.assertEqual(sum(c['operation'] == 'SKIP_ANIMATION' for c in f.sent), 1)
             self.assertEqual(f.sent[-1]['operation'], 'SCROLL_DOWN')
         finally:
