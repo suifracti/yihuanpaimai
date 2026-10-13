@@ -184,6 +184,29 @@ class HalfViewportFlowTests(unittest.TestCase):
         self.assertEqual(f.finalizations[-1]['termination_reason'], 'INCOMPLETE')
         f.saved_trace('capture-despite-unmatched-content')
 
+    def test_top_placeholders_wait_without_button_then_middle_keeps_collecting(self):
+        f = LiveRun(output=ROOT/'build/t1-20261012/top-reveal-flow', capture_first=True)
+        try:
+            # A missing skip control must not lose visibly unrevealed TOP items.
+            f.deliver(scene(0, revealing=True)); f.tick(); f.deliver(scene(0, revealing=True))
+            self.assertEqual(sum(c['operation'] == 'SCROLL_DOWN' for c in f.sent), 0)
+            self.assertEqual(len(f.source.pages_copy()), 2)
+            f.tick(); f.deliver(scene(0, revealing=True))
+            self.assertEqual(sum(c['operation'] == 'SCROLL_DOWN' for c in f.sent), 0)
+            # First filled image becomes the anchor; another independent image
+            # is required. Waiting itself never grants a page certificate.
+            f.tick(); f.deliver(scene(0))
+            self.assertEqual(sum(c['operation'] == 'SCROLL_DOWN' for c in f.sent), 0)
+            f.tick(); f.deliver(scene(0))
+            self.assertEqual(f.sent[-1]['operation'], 'SCROLL_DOWN')
+            f.scroll_ack(); f.tick(); f.deliver(scene(1, revealing=True))
+            f.tick(); f.deliver(scene(1, revealing=True))
+            self.assertEqual(f.sent[-1]['operation'], 'SCROLL_DOWN')
+            self.assertTrue(f.auto._active)
+            self.assertFalse(any(p['kind'] == 'bottom-collected' for p in f.logs))
+        finally:
+            f.close()
+
     def test_capture_first_bottom_microchanges_finish_but_middle_noop_is_bounded(self):
         for bottom in (True, False):
             f = LiveRun(output=ROOT / 'build/t1-20261012/capture-first-python', capture_first=True)

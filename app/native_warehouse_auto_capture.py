@@ -426,6 +426,17 @@ class NativeWarehouseAutoCapture:
                     if self._content_gate is not None else content_stability(self._anchor, crop))
                 observation['contentStability'] = content
                 self._diagnose('content-stability', pageOrdinal=self._seen_pages, qualification=content)
+                if (self._collect_first() and self._scroll_count == 0 and state in {'TOP', 'NO_SCROLL'}
+                        and any(content.get(side, {}).get('unresolvedRegionCount', 0) > 0
+                                for side in ('previous', 'current'))):
+                    # Do not scroll away from known unrevealed TOP placeholders
+                    # just because the optional skip control was unavailable.
+                    # After the last placeholder disappears, re-anchor once for
+                    # an independent filled image. Middle-page microchanges and
+                    # overlap failures still do not block continued collection.
+                    self._wait_again('TOP_VISIBLE_CONTENT_STILL_REVEALING', crop,
+                        observation, observation['deliveryProof'])
+                    return
                 if not content['qualified'] and not self._collect_first():
                     if content['reason'] in {'CONTENT_CHANGING', 'CONTENT_UNREVEALED_OR_UNKNOWN'}:
                         self._wait_again(content['reason'], crop, observation, observation['deliveryProof'])
