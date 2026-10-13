@@ -41,6 +41,7 @@ class NativeWarehouseSourceCoordinator:
         self._host_limits = {}
         self._saved_source = self._duplicate_proof = None
         self._scroll_recheck = None
+        self._skip_result = None
         self._trigger_watch = None
         # The evidence callback is the only producer. Ordinary business FRAME leases are not consulted.
         intake._source_provider = self.source_copy
@@ -112,7 +113,8 @@ class NativeWarehouseSourceCoordinator:
             self._timer.cancel()
             self._timer = None
 
-    def start_manual(self, record_key=None, *, allow_window_scroll=False, retain_independent_originals=False, capture_first=False):
+    def start_manual(self, record_key=None, *, allow_window_scroll=False, retain_independent_originals=False,
+                     capture_first=False, skip_animation=False):
         with self.intake._scope_lock, self._lock:
             if capture_first and (not allow_window_scroll or not retain_independent_originals):
                 return self._reply(False, 'COLLECTION_SCROLL_SCOPE_REQUIRED')
@@ -134,9 +136,11 @@ class NativeWarehouseSourceCoordinator:
             self._host_limits = {}
             self._saved_source = self._duplicate_proof = None
             self._scroll_recheck = None
+            self._skip_result = None
             self._state = 'OPEN_PENDING'
             command = self._command('OPEN')
             command['allowWindowScroll'] = allow_window_scroll is True
+            command['allowSkipAnimation'] = skip_animation is True
             command['retainIndependentOriginals'] = retain_independent_originals is True
             command['captureFirst'] = capture_first is True
             self._pending = command
@@ -194,12 +198,13 @@ class NativeWarehouseSourceCoordinator:
                 'requestAttempts': self._ordinal,
                 'binding': copy.deepcopy(self._binding), 'savedSource': copy.deepcopy(self._saved_source),
                 'duplicateProof': copy.deepcopy(self._duplicate_proof),
-                'scrollRecheck': copy.deepcopy(self._scroll_recheck), 'limits': copy.deepcopy(self._host_limits)}
+                'scrollRecheck': copy.deepcopy(self._scroll_recheck),
+                'skipAnimationResult': copy.deepcopy(self._skip_result), 'limits': copy.deepcopy(self._host_limits)}
 
     def lease_scope_is_current(self, scope):
         """Independent active SOURCE authority; never renew ordinary FRAME health."""
         with self._lock:
-            return bool(self._binding and self._state in {'OPEN_PENDING', 'OPEN', 'REQUEST_PENDING', 'SCROLL_PENDING'}
+            return bool(self._binding and self._state in {'OPEN_PENDING', 'OPEN', 'REQUEST_PENDING', 'SCROLL_PENDING', 'SKIP_PENDING'}
                 and self._clock() < self._deadline and all(scope.get(k) == self._binding['scope'].get(k)
                 for k in ('recordStableKey', 'observationSessionId', 'targetInstance', 'matchGeneration')))
 
@@ -366,6 +371,28 @@ class NativeWarehouseSourceCoordinator:
             self._reason = reason
             return True
 
+    def request_skip_animation(self):
+        with self.intake._scope_lock, self._lock:
+            if (self._evidence_only or not self._delivery() or self._state != 'OPEN'
+                    or self._pending or not self._saved_source
+                    or self._host_limits.get('skipAnimationSupported') is not True):
+                return self._reply(False, 'SKIP_ANIMATION_UNAVAILABLE')
+            if not self._same_contract(self.intake.source_contract()):
+                self._close('SOURCE_SCOPE_CHANGED', cancel_intake=True)
+                return self._reply(False, self._reason)
+            command = self._command('SKIP_ANIMATION')
+            command.update(sourceLeaseId=self._saved_source['sourceLeaseId'],
+                pixelSha256=self._saved_source['pixelSha256'],
+                savedCaptureId=self._saved_source['deliveryProof']['captureId'])
+            self._skip_result = None
+            self._pending, self._state = command, 'SKIP_PENDING'
+            self._pending_until = min(self._clock() + 2, self._deadline)
+            if not self._send(command):
+                self._close('SKIP_ANIMATION_SEND_FAILED')
+                return self._reply(False, self._reason)
+            self._schedule(max(0, self._pending_until - self._clock()))
+            return self._reply(True, 'SKIP_ANIMATION_REQUESTED')
+
     def request_scroll_down(self, *, stable_proof=None, base_proof=None, wheel_delta=-120):
         if type(wheel_delta) is not int or not -1440 <= wheel_delta <= -120 or wheel_delta % 120:
             return self._reply(False, 'WINDOW_SCROLL_DELTA_REJECTED')
@@ -466,7 +493,10 @@ class NativeWarehouseSourceCoordinator:
             scroll_event = (event.get('event') == 'SCROLLED' and event.get('inputActions') is True
                 and self._state == 'SCROLL_PENDING' and self._pending
                 and self._pending.get('operation') == 'SCROLL_DOWN' and self._request_matches(event))
-            if event.get('inputActions') is not False and not scroll_event:
+            skip_event = (event.get('event') == 'SKIP_ANIMATION_RESULT' and self._state == 'SKIP_PENDING'
+                and self._pending and self._pending.get('operation') == 'SKIP_ANIMATION'
+                and self._request_matches(event))
+            if event.get('inputActions') is not False and not scroll_event and not skip_event:
                 return
             self.check_timeout()
             if self._state in {'CLOSED', 'ERROR', 'IDLE'} or not self._matches(event, self._binding):
@@ -523,6 +553,28 @@ class NativeWarehouseSourceCoordinator:
                 self._close(event.get('reason') or 'HOST_SOURCE_CLOSED', notify=False)
                 return
             if not self._request_matches(event):
+                return
+            if kind == 'SKIP_ANIMATION_RESULT' and skip_event:
+                status = counters.get('classification')
+                invoked = counters.get('sendInterfaceInvoked')
+                completed = counters.get('messageCompletedNs')
+                valid = (counters.get('sourceLeaseId') == self._pending['sourceLeaseId']
+                    and event.get('reason') == 'SKIP_ANIMATION_' + str(status)
+                    and counters.get('animationCompletionProven') is False
+                    and ((status == 'NOT_SENT' and invoked is False and event.get('inputActions') is False
+                          and completed == 0)
+                         or (status in {'SENT', 'UNKNOWN'} and invoked is True and event.get('inputActions') is True
+                             and type(completed) is int and 0 < completed <= self._qpc())))
+                if not valid:
+                    self._close('SKIP_ANIMATION_RECEIPT_REJECTED')
+                    return
+                self._skip_result = copy.deepcopy(counters)
+                if invoked:
+                    self._last_scroll_ns = completed  # Post-input SOURCE fence; not wheel progress.
+                self._saved_source = self._duplicate_proof = None
+                self._pending = None
+                self._state, self._reason = 'OPEN', event['reason']
+                self._schedule(max(0, self._deadline - self._clock()))
                 return
             if kind == 'REJECTED':
                 self._scroll_recheck = None
@@ -725,9 +777,9 @@ class NativeWarehouseSourceCoordinator:
                 self.cancel_trigger_watch('ABSOLUTE_SETTLEMENT_BUDGET_EXPIRED')
             elif self._state == 'OPEN_PENDING' and self._clock() >= self._pending_until:
                 self._close('SOURCE_PUBLISH_UNSUPPORTED_OR_TIMEOUT')
-            elif self._state in {'OPEN', 'REQUEST_PENDING', 'SCROLL_PENDING'} and self._clock() >= self._deadline:
+            elif self._state in {'OPEN', 'REQUEST_PENDING', 'SCROLL_PENDING', 'SKIP_PENDING'} and self._clock() >= self._deadline:
                 self._close('ABSOLUTE_SETTLEMENT_BUDGET_EXPIRED')
-            elif self._state in {'REQUEST_PENDING', 'SCROLL_PENDING'} and self._clock() >= self._pending_until:
+            elif self._state in {'REQUEST_PENDING', 'SCROLL_PENDING', 'SKIP_PENDING'} and self._clock() >= self._pending_until:
                 self._close('SOURCE_REQUEST_TIMEOUT')
 
     def close_source(self, reason):

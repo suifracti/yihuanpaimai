@@ -11,6 +11,11 @@ internal sealed record DeliveryVisualSummary(string CaptureId, long Epoch, long 
     // Only the scroll snapshot attaches the already read private payload.
     // It carries diagnostic evidence, never SOURCE or action authority.
     public CapturedBgraFrame? DiagnosticFrame { get; init; }
+    public byte[]? SkipButtonBgr { get; init; }
+    public bool SkipButtonEnabled => SkipButtonBgr is { Length: > 0 } pixels
+        && Enumerable.Range(0, pixels.Length / 3).Count(i =>
+            pixels[i * 3] > 180 && pixels[i * 3 + 1] > 180 && pixels[i * 3 + 2] > 180)
+            >= pixels.Length / 3 * .5;
     public static bool AdjacentCodes(byte[]? a, byte[]? b)
     {
         if (a is null || b is null || a.Length == 0 || a.Length != b.Length) return false;
@@ -86,7 +91,8 @@ internal sealed record DeliveryVisualSummary(string CaptureId, long Epoch, long 
             Hash(X(60), Y(125), X(355), Y(220)),
             Hash(X(1280), Y(200), f.Width, f.Height), p.Qualified && p.SourceMarkerProgress, Hash(0, 0, X(1280), f.Height),
             Hash(scroll.Left, scroll.Top, scroll.Right, scroll.Bottom),
-            CopyBgr(scroll.Left, scroll.Top, scroll.Right, scroll.Bottom), CopyBgr(X(60), Y(125), X(355), Y(220)));
+            CopyBgr(scroll.Left, scroll.Top, scroll.Right, scroll.Bottom), CopyBgr(X(60), Y(125), X(355), Y(220)))
+            { SkipButtonBgr = CopyBgr(X(1355), Y(978), X(1570), Y(1026)) };
     }
 }
 

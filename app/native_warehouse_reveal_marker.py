@@ -10,6 +10,7 @@ from visual_catalog import asset_root
 
 class RevealMarker:
     ROI = (1440, 984, 1558, 1011)
+    BUTTON_ROI = (1355, 978, 1570, 1026)
 
     def __init__(self, template=None):
         path = Path(template) if template is not None else asset_root() / 'assets/scene_anchors/skip_animation_text.png'
@@ -37,3 +38,16 @@ class RevealMarker:
             'animationState': 'UNKNOWN', 'completionState': 'UNKNOWN',
             'templateSha256': self.hash, 'roi': [x1, y1, x2, y2],
             'meaning': 'positive skip-animation text shape only; absence is not completion proof'}
+
+    def skip_button(self, frame):
+        """Locate the enabled skip control, without asserting reveal completion."""
+        marker = self.observe(frame)
+        h, w = frame.shape[:2]
+        x1, y1, x2, y2 = [round(v * (w / 1920 if i % 2 == 0 else h / 1080))
+                           for i, v in enumerate(self.BUTTON_ROI)]
+        gray = cv2.cvtColor(frame[y1:y2, x1:x2], cv2.COLOR_BGR2GRAY)
+        bright_fraction = float((gray > 180).mean())
+        return {'clickable': marker['status'] == 'PRESENT' and bright_fraction >= .5,
+                'textPresent': marker['status'] == 'PRESENT', 'brightFraction': bright_fraction,
+                'box': [x1, y1, x2, y2], 'animationState': 'UNKNOWN',
+                'completionState': 'UNKNOWN', 'meaning': 'skip control only; fresh post-click SOURCE required'}

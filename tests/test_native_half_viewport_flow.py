@@ -72,6 +72,66 @@ def viewport(offset):
 
 
 class HalfViewportFlowTests(unittest.TestCase):
+    def test_skip_animation_retries_unknown_on_fresh_source_then_collects(self):
+        from native_warehouse_reveal_marker import RevealMarker
+        f = LiveRun(output=ROOT/'build/t1-20261012/skip-animation-python', capture_first=True)
+        try:
+            f.source._host_limits['skipAnimationSupported'] = True
+            marker = Mock(spec=RevealMarker)
+            marker.observe.return_value = {'status': 'PRESENT', 'animationState': 'UNKNOWN'}
+            marker.skip_button.side_effect = [{'clickable': True}, {'clickable': True},
+                                              {'clickable': False}, {'clickable': False}]
+            f.auto._marker = marker
+            for outcome in ('UNKNOWN', 'SENT'):
+                f.deliver(viewport(0))
+                self.assertEqual(f.auto._phase, 'WAIT_SKIP_ANIMATION')
+                self.assertEqual(f.sent[-1]['operation'], 'SKIP_ANIMATION')
+                old = copy.deepcopy(f.source._pending)
+                ack = f.event('SKIP_ANIMATION_RESULT', old, inputActions=True,
+                    reason='SKIP_ANIMATION_'+outcome, details={'classification': outcome,
+                        'sendInterfaceInvoked': True, 'messageCompletedNs': round(f.now*1e9),
+                        'sourceLeaseId': old['sourceLeaseId'], 'animationCompletionProven': False})
+                f.auto.on_event(ack)
+                self.assertEqual(f.auto._phase, 'WAIT_INITIAL')
+                f.auto.on_event(ack)  # old receipt does not authorize another click
+                f.auto.poll()
+                self.assertTrue(f.auto._active)
+                f.tick()
+                self.assertEqual(f.sent[-1]['operation'], 'REQUEST_PAGE')
+            f.deliver(viewport(0)); f.tick(); f.deliver(viewport(0))
+            clicks = [c for c in f.sent if c['operation'] == 'SKIP_ANIMATION']
+            self.assertEqual(len(clicks), 2)
+            self.assertNotEqual(clicks[0]['sourceLeaseId'], clicks[1]['sourceLeaseId'])
+            self.assertEqual(f.sent[-1]['operation'], 'SCROLL_DOWN')
+        finally:
+            f.close()
+
+    def test_skip_animation_receipt_cannot_cross_match_or_claim_completion(self):
+        from native_warehouse_reveal_marker import RevealMarker
+        f = LiveRun(output=ROOT/'build/t1-20261012/skip-animation-python', capture_first=True)
+        try:
+            f.source._host_limits['skipAnimationSupported'] = True
+            marker = Mock(spec=RevealMarker)
+            marker.observe.return_value = {'status': 'PRESENT'}
+            marker.skip_button.return_value = {'clickable': True}
+            f.auto._marker = marker
+            f.deliver(viewport(0))
+            command = copy.deepcopy(f.source._pending)
+            ack = f.event('SKIP_ANIMATION_RESULT', command, inputActions=True,
+                reason='SKIP_ANIMATION_SENT', details={'classification': 'SENT',
+                    'sendInterfaceInvoked': True, 'messageCompletedNs': round(f.now*1e9),
+                    'sourceLeaseId': command['sourceLeaseId'], 'animationCompletionProven': False})
+            ack['matchGeneration'] = 2
+            f.auto.on_event(ack)
+            self.assertEqual(f.source.source_session_snapshot()['state'], 'SKIP_PENDING')
+            ack['matchGeneration'] = 1
+            ack['details']['animationCompletionProven'] = True
+            f.auto.on_event(ack)
+            self.assertFalse(f.auto._active)
+            self.assertEqual(sum(c['operation'] == 'SCROLL_DOWN' for c in f.sent), 0)
+        finally:
+            f.close()
+
     def test_capture_first_content_changes_and_missing_overlap_do_not_block_collection(self):
         f = LiveRun(output=ROOT / 'build/t1-20261012/capture-first-python', capture_first=True)
         self.addCleanup(f.close)

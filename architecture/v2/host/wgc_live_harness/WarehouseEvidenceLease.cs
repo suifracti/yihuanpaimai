@@ -92,6 +92,8 @@ internal sealed class WarehouseEvidenceLease : IDisposable
     private bool _windowScrollAllowed;
     private bool _retainIndependentOriginals;
     private bool _captureFirst;
+    private bool _skipAnimationAllowed;
+    private readonly Func<WarehouseSourceContext, Func<bool>, bool>? _skipAnimation;
     private TriggerWatch? _triggerWatch;
     private string? _probeBudgetRecord, _probeBudgetWatchId;
     private long _probeBudgetMatchGeneration = long.MinValue, _probeBudgetDeadlineNs;
@@ -128,7 +130,8 @@ internal sealed class WarehouseEvidenceLease : IDisposable
     public WarehouseEvidenceLease(string workRoot, string observation, Action<JsonObject> emit, Func<long>? clock = null,
         Func<WarehouseSourceContext, Func<bool>, bool>? scrollDown = null,
         string capturePolicy = CapturePolicy.Strict, Func<DeliveryVisualSummary?>? latestSummary = null,
-        Action<JsonObject>? scrollDiagnosticLog = null)
+        Action<JsonObject>? scrollDiagnosticLog = null,
+        Func<WarehouseSourceContext, Func<bool>, bool>? skipAnimation = null)
     {
         _workRoot = Path.GetFullPath(workRoot);
         _root = Path.GetFullPath(Path.Combine(workRoot, "warehouse-sources"));
@@ -137,6 +140,7 @@ internal sealed class WarehouseEvidenceLease : IDisposable
         _realClock = clock is null;
         _scrollDown = scrollDown; _policy = CapturePolicy.Parse(capturePolicy); _latestSummary = latestSummary;
         _scrollDiagnosticLog = scrollDiagnosticLog;
+        _skipAnimation = skipAnimation;
     }
 
     public void UpdateContext(WarehouseSourceContext context)
@@ -256,6 +260,7 @@ internal sealed class WarehouseEvidenceLease : IDisposable
             if (op == "REQUEST_PAGE") Request(command);
             else if (op == "ACK_SOURCE") Ack(command);
             else if (op == "SCROLL_DOWN") ScrollDown(command);
+            else if (op == "SKIP_ANIMATION") SkipAnimation(command);
             else throw new InvalidOperationException("UNKNOWN_SOURCE_OPERATION");
         }
         catch (Exception ex) when (ex is InvalidOperationException or FormatException or OverflowException)
@@ -292,6 +297,9 @@ internal sealed class WarehouseEvidenceLease : IDisposable
             && retain.TryGetValue<bool>(out var keep) && keep;
         _captureFirst = command["captureFirst"] is JsonValue collect
             && collect.TryGetValue<bool>(out var captureFirst) && captureFirst;
+        _skipAnimationAllowed = command["allowSkipAnimation"] is JsonValue skip
+            && skip.TryGetValue<bool>(out var allowSkip) && allowSkip
+            && _captureFirst && _windowScrollAllowed && _policy == CapturePolicy.Delivery;
         if (_captureFirst && (!_windowScrollAllowed || !_retainIndependentOriginals || _policy != CapturePolicy.Delivery))
         { _open = null; throw new InvalidOperationException("COLLECTION_SCROLL_SCOPE_REQUIRED"); }
         // Retaining independent equal originals is also necessary for visible
@@ -311,6 +319,7 @@ internal sealed class WarehouseEvidenceLease : IDisposable
             ["windowScrollSupported"] = _windowScrollAllowed && _scrollDown is not null,
             ["retainIndependentOriginals"] = _retainIndependentOriginals,
             ["captureFirst"] = _captureFirst,
+            ["skipAnimationSupported"] = _skipAnimationAllowed && _skipAnimation is not null,
             ["clientWidth"] = c.Width, ["clientHeight"] = c.Height });
     }
 
@@ -836,6 +845,61 @@ internal sealed class WarehouseEvidenceLease : IDisposable
     }
     public bool RequestCurrent(long gate, long match, string token)
     { lock (_gate) return IsOpen && _requestGate == gate && _context?.MatchGeneration == match && LeaseToken == token; }
+
+    private void SkipAnimation(JsonObject command)
+    {
+        if (!_skipAnimationAllowed || _skipAnimation is null)
+            throw new InvalidOperationException("SKIP_ANIMATION_NOT_AUTHORIZED");
+        if (_request is not null || _source is not null || _lastProof is null || _savedSummary is null)
+            throw new InvalidOperationException("SKIP_SOURCE_UNAVAILABLE");
+        if (Required(command, "sourceLeaseId") != _lastSavedSource
+            || Required(command, "pixelSha256") != _lastSavedHash
+            || Required(command, "savedCaptureId") != _lastProof.CaptureId
+            || Number(command, "requestOrdinal") != _ordinal)
+            throw new InvalidOperationException("SKIP_SOURCE_NOT_SAVED");
+        var c = _context!;
+        // Every attempt consumes a saved image. A fresh enabled-button image
+        // may authorize another harmless skip click, including after UNKNOWN.
+        var attempt = new WarehouseScrollAttempt();
+        bool ScopeCurrent()
+        {
+            var latest = _latestSummary?.Invoke();
+            var now = _clock();
+            return IsOpen && ReferenceEquals(_context, c) && c.TargetUsable && c.SettlementCaptureEligible
+                && now < Math.Min(_leaseDeadline, c.AbsoluteDeadlineNs)
+                && _lastProof.Qualified && now >= _lastProof.ReadbackCompletedNs
+                && latest is not null && latest.ActionQualified
+                && latest.CaptureId.StartsWith(_observation + "/", StringComparison.Ordinal)
+                && latest.Epoch == _lastProof.PoolEpoch && latest.ReadbackNs >= _lastProof.ReadbackCompletedNs
+                && now >= latest.ReadbackNs && now - latest.ReadbackNs <= FreshnessNs
+                && latest.SceneSupportedBy(_savedSummary);
+        }
+        bool Current()
+        {
+            if (!ScopeCurrent()) return false;
+            if (attempt.SendInterfaceInvoked) return true; // release may follow the button becoming disabled
+            var latest = _latestSummary?.Invoke();
+            return _savedSummary.SkipButtonEnabled && latest is not null && latest.SkipButtonEnabled;
+        }
+        bool delivered;
+        try { delivered = _skipAnimation(c with { ScrollAttempt = attempt }, Current); }
+        catch { delivered = false; }
+        var completed = _clock();
+        var classification = delivered && attempt.SendSucceeded ? "SENT"
+            : attempt.SendInterfaceInvoked ? "UNKNOWN" : "NOT_SENT";
+        Emit(command, "SKIP_ANIMATION_RESULT", "SKIP_ANIMATION_" + classification,
+            new JsonObject { ["classification"] = classification,
+                ["sendInterfaceInvoked"] = attempt.SendInterfaceInvoked,
+                ["messageCompletedNs"] = attempt.SendInterfaceInvoked ? completed : 0,
+                ["sourceLeaseId"] = _lastSavedSource, ["animationCompletionProven"] = false },
+            inputActions: attempt.SendInterfaceInvoked);
+        if (!ScopeCurrent())
+        { Close("SKIP_ANIMATION_FAILED_OR_SCOPE_CHANGED"); return; }
+        if (attempt.SendInterfaceInvoked) _lastScrollCompletedNs = completed;
+        _lastSavedSource = _lastSavedHash = null;
+        _lastProof = _savedProof = _priorSavedProof = null;
+        _savedSummary = _priorSavedSummary = null;
+    }
 
     private void ScrollDown(JsonObject command)
     {

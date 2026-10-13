@@ -87,6 +87,7 @@ internal static class NativeObservationService
         var evidenceQueue = new BlockingCollection<JsonObject>(8);
         var actionAcknowledgements = new DomainActionAcknowledgementRouter();
         Func<WarehouseSourceContext, Func<bool>, bool>? scrollWindow = null;
+        Func<WarehouseSourceContext, Func<bool>, bool>? skipAnimationWindow = null;
         Func<DeliveryVisualSummary?> latestSummary = () => null;
         var scrollDiagnosticLock = new object();
         long scrollDiagnosticBytes = 0;
@@ -108,7 +109,8 @@ internal static class NativeObservationService
         }
         using var evidenceLease = new WarehouseEvidenceLease(workDir, sessionId, EmitLine,
             scrollDown: (context, current) => scrollWindow?.Invoke(context, current) == true,
-            capturePolicy: capturePolicy, latestSummary: () => latestSummary(), scrollDiagnosticLog: WriteScrollDiagnostic);
+            capturePolicy: capturePolicy, latestSummary: () => latestSummary(), scrollDiagnosticLog: WriteScrollDiagnostic,
+            skipAnimation: (context, current) => skipAnimationWindow?.Invoke(context, current) == true);
         void StopTransport(string reason)
         {
             Interlocked.CompareExchange(ref stopReason, reason, string.Empty);
@@ -206,7 +208,8 @@ internal static class NativeObservationService
             launchMetadata["clientMap"] = $"{capture.CaptureItemWidth}x{capture.CaptureItemHeight}:{capture.ClientOffsetX},{capture.ClientOffsetY}:{capture.Width}x{capture.Height}";
             File.WriteAllText(Path.Combine(workDir, "observation-target.json"), launchMetadata.ToJsonString());
             latestSummary = () => capture.LatestScrollSummary;
-            scrollWindow = (context, current) => WarehouseWindowScroll.SendDown(context, () => {
+            bool InputCurrent(WarehouseSourceContext context, Func<bool> current)
+            {
                 var leaseCurrent = current();
                 var observed = leaseCurrent ? monitor.Snapshot() : null;
                 var identityCurrent = observed is not null
@@ -220,7 +223,11 @@ internal static class NativeObservationService
                     ["mappingFailureMeaning"] = "changed or cannot prove current mapping",
                     ["targetSnapshot"] = observed is null ? null : JsonSerializer.SerializeToNode(TargetEvidence(observed)) });
                 return leaseCurrent && identityCurrent && mappingCurrent == true && current();
-            }, WriteScrollDiagnostic);
+            }
+            scrollWindow = (context, current) => WarehouseWindowScroll.SendDown(context,
+                () => InputCurrent(context, current), WriteScrollDiagnostic);
+            skipAnimationWindow = (context, current) => WarehouseWindowScroll.SendSkipAnimation(context,
+                () => InputCurrent(context, current), WriteScrollDiagnostic);
             if (observationWindowMode == BackgroundObservationPolicy.BackgroundReadOnly
                 && !capture.IsClientAreaMappingCurrent())
                 throw new InvalidOperationException("background-client-area-mapping-unproven");
@@ -1131,7 +1138,7 @@ internal static class NativeObservationService
         {
             // Input is separately bound to an explicitly authorized source lease.
             var op = (string?)message["operation"];
-            if (op is "OPEN" or "REQUEST_PAGE" or "SCROLL_DOWN"
+            if (op is "OPEN" or "REQUEST_PAGE" or "SCROLL_DOWN" or "SKIP_ANIMATION"
                 && !MatchesObservationTargetIdentity(message["expectedTargetInstance"] as JsonObject,
                     monitor.Snapshot(), target, observationWindowMode))
                 lease.Reject(message, "SOURCE_TARGET_UNUSABLE");

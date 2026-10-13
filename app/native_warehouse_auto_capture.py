@@ -86,7 +86,7 @@ class NativeWarehouseAutoCapture:
             token = uuid.uuid4().hex
             self._token = (token, self._clock() + 15, copy.deepcopy(self.source.intake.source_contract()['scope']))
             return {'ok': True, 'armingToken': token,
-                'confirmCaption': '程序在本局结算仓库自动向下滚动并保存沿途原图，直到底部。匹配不确定仍继续收图；窗口失效、连续滚动无效或用户停止时保存已有结果。'}
+                'confirmCaption': '程序点击结算页可用的跳过动画按钮，随后向下滚动并保存原图直到底部。窗口失效、滚动无效或用户停止时保留已有结果。'}
 
     def confirm(self, token_id):
         with self._lock:
@@ -111,7 +111,7 @@ class NativeWarehouseAutoCapture:
             source_options = ({'retain_independent_originals': True}
                 if isinstance(self._content_gate, VisibleContentGate) and token[2].get('capturePolicy') == DELIVERY else {})
             if self._capture_first and isinstance(self._content_gate, VisibleContentGate) and token[2].get('capturePolicy') == DELIVERY:
-                source_options.update(retain_independent_originals=True, capture_first=True)
+                source_options.update(retain_independent_originals=True, capture_first=True, skip_animation=True)
             result = self.source.start_manual(token[2]['recordStableKey'], allow_window_scroll=True, **source_options)
             if not result.get('ok'):
                 return result
@@ -222,6 +222,19 @@ class NativeWarehouseAutoCapture:
                 self._phase = 'WAIT_MOVED'
                 self._schedule_page(.35)
             return
+        if self._phase == 'WAIT_SKIP_ANIMATION':
+            result = snap.get('skipAnimationResult')
+            if result is None:
+                self._stop(snap['reason'] or 'SKIP_ANIMATION_RECEIPT_MISSING')
+                return
+            self._diagnose('skip-animation-result', result=result, revealCompletionProven=False)
+            self._anchor = self._observation = self._support_floor = None
+            self._observer.reset()
+            if self._content_gate is not None:
+                self._content_gate.reset()
+            self._phase = 'WAIT_INITIAL'
+            self._schedule_page(.35)
+            return
         if self._phase not in {'WAIT_INITIAL', 'WAIT_MOVED', 'WAIT_STABLE'}:
             return
         if snap['reason'] == 'PAGE_ACCEPTED':
@@ -268,7 +281,8 @@ class NativeWarehouseAutoCapture:
                     not independent_support(self._support_floor, proof.get('deliveryProof')) else 'STABILITY_UNPROVEN')
         # OPEN snapshots retain the last operation reason until another
         # request; ignore only the exact safe receipt already consumed above.
-        elif (snap['reason'] not in {'SOURCE_READY', 'SOURCE_REQUESTED', 'SAVED', 'WINDOW_WHEEL_MESSAGE_SENT'}
+        elif (snap['reason'] not in {'SOURCE_READY', 'SOURCE_REQUESTED', 'SAVED', 'WINDOW_WHEEL_MESSAGE_SENT',
+                                    'SKIP_ANIMATION_SENT', 'SKIP_ANIMATION_NOT_SENT', 'SKIP_ANIMATION_UNKNOWN'}
             and not (self._phase == 'WAIT_STABLE'
                 and snap['reason'] in {'SCROLL_CONTENT_CHANGED_BEFORE_SEND', 'SCROLL_SUPPORT_EXPIRED_BEFORE_SEND'}
                 and self._consumed_scroll_recheck is not None
@@ -292,6 +306,7 @@ class NativeWarehouseAutoCapture:
             if self._marker is None:
                 self._marker = RevealMarker()
             observation['revealMarker'] = self._marker.observe(frame)
+            observation['skipAnimationButton'] = self._marker.skip_button(frame)
             observation['revealMarker'].update(originalSha256=desc['sha256'],
                 captureId=page['deliveryProof']['captureId'])
         if self._content_gate is not None:
@@ -321,6 +336,12 @@ class NativeWarehouseAutoCapture:
             if state not in {'TOP', 'NO_SCROLL'}:
                 self._stop('START_REQUIRES_TOP')
                 return
+            if self._collect_first() and observation.get('skipAnimationButton', {}).get('clickable'):
+                result = self.source.request_skip_animation()
+                self._diagnose('skip-animation-request', result=result, pageOrdinal=self._seen_pages)
+                if result.get('ok'):
+                    self._phase = 'WAIT_SKIP_ANIMATION'
+                    return
         elif self._phase == 'WAIT_MOVED':
             progress = self._scrollbar_progress(self._observation, observation)
             self._diagnose('scrollbar-progress', pageOrdinal=self._seen_pages, progress=progress)

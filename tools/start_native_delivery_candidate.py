@@ -46,6 +46,7 @@ def prepare(candidate=CANDIDATE):
         'candidateManifest': str(candidate), 'existingAssistantBusOccupied': occupied,
         'hostExe': prepared['hostExe'], 'hostSha256': manifest['binaryFiles'][host_key],
         'capturePolicyOnStart': POLICY, 'automaticSettlementCollectionOnStart': True,
+        'automaticSkipAnimationOnStart': True,
         'currentConfigPolicy': prepared['captureFreshnessPolicy'],
         'configSelectionOnlyAfterStartAuthorization': True,
         'sourceLimits': dict(manifest.get('sourceLimits', {
