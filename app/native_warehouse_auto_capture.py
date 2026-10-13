@@ -51,6 +51,7 @@ class NativeWarehouseAutoCapture:
         self._post_scroll_frame_received = False
         self._observer = WarehouseScrollbarObserver()
         self._marker = None  # Lazy: strict mode does not depend on the reveal asset.
+        self._skip_observation = None
         self._retry_scope = self._support_floor = self._consumed_duplicate = None
         self._consumed_scroll_recheck = None
         self._pixels_per_notch = None
@@ -122,6 +123,7 @@ class NativeWarehouseAutoCapture:
             self._seen_pages = self._scroll_count = 0
             self._post_scroll_frame_received = False
             self._anchor = self._observation = None
+            self._skip_observation = None
             self._retry_scope = copy.deepcopy(token[2])
             self._support_floor = self._consumed_duplicate = None
             self._consumed_scroll_recheck = None
@@ -230,8 +232,10 @@ class NativeWarehouseAutoCapture:
             self._diagnose('skip-animation-result', result=result, revealCompletionProven=False)
             self._anchor = self._observation = self._support_floor = None
             self._observer.reset()
-            if self._content_gate is not None:
-                self._content_gate.reset()
+            # Keep the two immutable originals for the next comparison. The
+            # input fence still requires a new post-click SOURCE; old frames
+            # never authorize another input. Stable visible content can end
+            # clicking even when the hovered button remains pink.
             self._phase = 'WAIT_INITIAL'
             self._schedule_page(.35)
             return
@@ -337,11 +341,18 @@ class NativeWarehouseAutoCapture:
                 self._stop('START_REQUIRES_TOP')
                 return
             if self._collect_first() and observation.get('skipAnimationButton', {}).get('clickable'):
-                result = self.source.request_skip_animation()
-                self._diagnose('skip-animation-request', result=result, pageOrdinal=self._seen_pages)
-                if result.get('ok'):
-                    self._phase = 'WAIT_SKIP_ANIMATION'
-                    return
+                support = (self._content_gate.compare(self._skip_observation, observation)
+                    if self._skip_observation is not None else {'qualified': False})
+                if support['qualified']:
+                    self._diagnose('skip-animation-visible-support', qualification=support,
+                        revealCompletionProven=False)
+                else:
+                    self._skip_observation = copy.deepcopy(observation)
+                    result = self.source.request_skip_animation()
+                    self._diagnose('skip-animation-request', result=result, pageOrdinal=self._seen_pages)
+                    if result.get('ok'):
+                        self._phase = 'WAIT_SKIP_ANIMATION'
+                        return
         elif self._phase == 'WAIT_MOVED':
             progress = self._scrollbar_progress(self._observation, observation)
             self._diagnose('scrollbar-progress', pageOrdinal=self._seen_pages, progress=progress)
@@ -730,6 +741,7 @@ class NativeWarehouseAutoCapture:
         self._generation += 1
         self._cancel_page_timer(reason)
         self._anchor = self._observation = self._support_floor = self._retry_scope = None
+        self._skip_observation = None
         self._consumed_duplicate = None
         self.source.close_source(reason)
         if self._content_gate is not None:

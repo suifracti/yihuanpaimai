@@ -45,9 +45,16 @@ class RevealMarker:
         h, w = frame.shape[:2]
         x1, y1, x2, y2 = [round(v * (w / 1920 if i % 2 == 0 else h / 1080))
                            for i, v in enumerate(self.BUTTON_ROI)]
-        gray = cv2.cvtColor(frame[y1:y2, x1:x2], cv2.COLOR_BGR2GRAY)
-        bright_fraction = float((gray > 180).mean())
-        return {'clickable': marker['status'] == 'PRESENT' and bright_fraction >= .5,
+        button = frame[y1:y2, x1:x2].astype(np.int16)
+        bright_fraction = float(np.all(button > 180, axis=2).mean())
+        blue, green, red = (button[:, :, i] for i in range(3))
+        # The real control becomes pink after pointer entry. Its white text no
+        # longer matches the black-text asset; this is still the same fixed
+        # settlement control, and its color does not prove reveal completion.
+        pink_fraction = float(((red >= 180) & (red - green >= 60) & (red - blue >= 20)).mean())
+        return {'clickable': (marker['status'] == 'PRESENT' and bright_fraction >= .5)
+                or pink_fraction >= .5,
                 'textPresent': marker['status'] == 'PRESENT', 'brightFraction': bright_fraction,
+                'pinkFraction': pink_fraction,
                 'box': [x1, y1, x2, y2], 'animationState': 'UNKNOWN',
                 'completionState': 'UNKNOWN', 'meaning': 'skip control only; fresh post-click SOURCE required'}

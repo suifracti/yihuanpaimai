@@ -83,7 +83,7 @@ class HalfViewportFlowTests(unittest.TestCase):
                                               {'clickable': False}, {'clickable': False}]
             f.auto._marker = marker
             for outcome in ('UNKNOWN', 'SENT'):
-                f.deliver(viewport(0))
+                f.deliver(scene(0, revealing=True))
                 self.assertEqual(f.auto._phase, 'WAIT_SKIP_ANIMATION')
                 self.assertEqual(f.sent[-1]['operation'], 'SKIP_ANIMATION')
                 old = copy.deepcopy(f.source._pending)
@@ -102,6 +102,29 @@ class HalfViewportFlowTests(unittest.TestCase):
             clicks = [c for c in f.sent if c['operation'] == 'SKIP_ANIMATION']
             self.assertEqual(len(clicks), 2)
             self.assertNotEqual(clicks[0]['sourceLeaseId'], clicks[1]['sourceLeaseId'])
+            self.assertEqual(f.sent[-1]['operation'], 'SCROLL_DOWN')
+        finally:
+            f.close()
+
+    def test_skip_animation_stable_top_continues_despite_pink_button(self):
+        from native_warehouse_reveal_marker import RevealMarker
+        f = LiveRun(output=ROOT/'build/t1-20261012/skip-animation-python', capture_first=True)
+        try:
+            f.source._host_limits['skipAnimationSupported'] = True
+            marker = Mock(spec=RevealMarker)
+            marker.observe.return_value = {'status': 'NOT_DETECTED', 'animationState': 'UNKNOWN'}
+            marker.skip_button.return_value = {'clickable': True, 'pinkFraction': .86}
+            f.auto._marker = marker
+            f.deliver(viewport(0))
+            command = copy.deepcopy(f.source._pending)
+            f.auto.on_event(f.event('SKIP_ANIMATION_RESULT', command, inputActions=True,
+                reason='SKIP_ANIMATION_SENT', details={'classification': 'SENT',
+                    'sendInterfaceInvoked': True, 'messageCompletedNs': round(f.now*1e9),
+                    'sourceLeaseId': command['sourceLeaseId'], 'animationCompletionProven': False}))
+            f.tick(); f.deliver(viewport(0))
+            self.assertEqual(f.auto._phase, 'WAIT_STABLE')
+            f.tick(); f.deliver(viewport(0))
+            self.assertEqual(sum(c['operation'] == 'SKIP_ANIMATION' for c in f.sent), 1)
             self.assertEqual(f.sent[-1]['operation'], 'SCROLL_DOWN')
         finally:
             f.close()

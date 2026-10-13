@@ -14,7 +14,9 @@ internal sealed record DeliveryVisualSummary(string CaptureId, long Epoch, long 
     public byte[]? SkipButtonBgr { get; init; }
     public bool SkipButtonEnabled => SkipButtonBgr is { Length: > 0 } pixels
         && Enumerable.Range(0, pixels.Length / 3).Count(i =>
-            pixels[i * 3] > 180 && pixels[i * 3 + 1] > 180 && pixels[i * 3 + 2] > 180)
+            (pixels[i * 3] > 180 && pixels[i * 3 + 1] > 180 && pixels[i * 3 + 2] > 180)
+            || (pixels[i * 3 + 2] >= 180 && pixels[i * 3 + 2] - pixels[i * 3 + 1] >= 60
+                && pixels[i * 3 + 2] - pixels[i * 3] >= 20))
             >= pixels.Length / 3 * .5;
     public static bool AdjacentCodes(byte[]? a, byte[]? b)
     {

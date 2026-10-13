@@ -29,14 +29,15 @@ internal static class SkipAnimationChecks
             ["allowSkipAnimation"] = true };
         lease.Handle(Command("OPEN"));
         Check((bool?)events.Last()["details"]?["skipAnimationSupported"] == true, "skip capability negotiated");
-        JsonObject Save(int sequence)
+        JsonObject Save(int sequence, bool pink = false)
         {
             lease.Handle(Command("REQUEST_PAGE", sequence));
             var gate = lease.PendingRequestGateNs!.Value;
             var proof = fixture(sequence, gate);
             now = proof.ReadbackCompletedNs + 1;
             latest = new(proof.CaptureId, 1, proof.ReadbackCompletedNs, "scene", "warehouse", true)
-                { SkipButtonBgr = Enumerable.Repeat((byte)220, 30).ToArray() };
+                { SkipButtonBgr = pink ? Enumerable.Range(0, 10).SelectMany(_ => new byte[] { 150, 45, 235 }).ToArray()
+                    : Enumerable.Repeat((byte)220, 30).ToArray() };
             Check(lease.TryPublish(new(16, 9, 64, Enumerable.Repeat((byte)sequence, 576).ToArray(),
                 proof.SourceNs, proof.ReadbackCompletedNs, "offline", sequence, "", sequence, proof,
                 latest, gate, 1), () => true), "independent source saved");
@@ -59,13 +60,13 @@ internal static class SkipAnimationChecks
         var sends = platform.Down;
         lease.Handle(first);
         Check(platform.Down == sends, "same image is consumed; no blind replay");
-        var second = Save(2);
+        var second = Save(2, pink: true);
         platform.Timeout = false;
         // Inventory/reveal pixels may change; they cannot prohibit the skip control.
         latest = latest! with { WarehouseRoiSha256 = "changed", ScrollContentRoiSha256 = "changed" };
         lease.Handle(second);
         Check(lease.IsOpen && platform.Down == sends + 1
-            && (string?)events.Last()["details"]?["classification"] == "SENT", "fresh image permits retry after unknown");
+            && (string?)events.Last()["details"]?["classification"] == "SENT", "fresh pink button permits retry after unknown");
         var third = Save(3);
         latest = latest! with { SkipButtonBgr = Enumerable.Repeat((byte)60, 30).ToArray() };
         lease.Handle(third);
