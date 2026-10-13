@@ -7,9 +7,11 @@ using WgcLiveHarness;
 static class ContentRecheckChecks
 {
     static void Check(bool value, string reason) { if (!value) throw new Exception(reason); }
-    public static void RunAdapter(string root, Func<long, long, CaptureDeliveryProof> fixture, bool secondScroll = false)
+    public static void RunAdapter(string root, Func<long, long, CaptureDeliveryProof> fixture, bool secondScroll = false, bool captureFirst = false)
     {
-        var cases = secondScroll ? new[] { "before-target", "before-send", "identity", "mapping",
+        var cases = captureFirst ? new[] { "before-target", "before-send", "expired-support", "latest-stale",
+            "identity", "mapping", "content-and-scene", "post-send", "send-unknown", "send-exception" }
+            : secondScroll ? new[] { "before-target", "before-send", "identity", "mapping",
             "content-and-scene", "send-unknown", "send-exception", "post-send", "user-stop",
             "post-scene", "post-identity", "post-mapping", "post-expired", "post-context", "post-stop", "post-unqualified" }
             : new[] { "before-target", "before-send", "identity", "geometry", "mapping",
@@ -71,7 +73,7 @@ static class ContentRecheckChecks
                 ["recordStableKey"] = "record", ["matchGeneration"] = 1L, ["expectedTargetInstance"] = target.DeepClone(),
                 ["leaseToken"] = lease.LeaseToken, ["requestOrdinal"] = ordinal, ["remainingPages"] = 16,
                 ["remainingPngBytes"] = 64L * 1024 * 1024, ["pngEncoding"] = WarehouseEvidenceLease.PngEncoding,
-                ["allowWindowScroll"] = true, ["retainIndependentOriginals"] = true };
+                ["allowWindowScroll"] = true, ["retainIndependentOriginals"] = true, ["captureFirst"] = captureFirst };
             lease.Handle(Cmd("OPEN"));
             var deadline = events.Last()["details"]!["deadlineNs"]!.GetValue<long>();
             var proofs = new List<CaptureDeliveryProof>(); var sources = new List<JsonObject>();
@@ -105,8 +107,42 @@ static class ContentRecheckChecks
                 Save(4, "moved"); Save(5, "moved");
             }
             var ordinal = secondScroll ? 5 : 2;
+            if (kind == "expired-support")
+            {
+                now += 3_000_000_000;
+                latest = latest! with { CaptureId = "offline/1/current", ReadbackNs = now - 1,
+                    ScrollContentRoiSha256 = "changed" };
+            }
+            if (kind == "latest-stale") now += 3_000_000_000;
             var token = lease.LeaseToken; var old = Scroll(ordinal); lease.Handle(old);
             File.WriteAllText(Path.Combine(work, "first-receipt.json"), events.Last().ToJsonString());
+            if (captureFirst)
+            {
+                var sent = kind is "before-target" or "before-send" or "expired-support" or "post-send";
+                Check(platform.Sends == (sent || kind.StartsWith("send-") ? 1 : 0), kind + ": exact fake API attempts");
+                Check(((string?)events.Last()["event"] == "SCROLLED") == sent,
+                    kind + ": collection wheel does not need content equality or old support age");
+                if (sent)
+                {
+                    Check(lease.IsOpen && lease.LeaseToken == token, "collection keeps original lease");
+                    lease.Handle(old); Check(platform.Sends == 1, "one saved SOURCE cannot resend a pulse");
+                    platform.BeforeCoordinates = null; platform.AfterSend = null;
+                    Save(3, "moved");
+                    Check(events.Any(e => (long?)e["requestOrdinal"] == 3 && (string?)e["event"] == "SOURCE"),
+                        "new independent post-scroll SOURCE saves");
+                }
+                else
+                {
+                    var sends = platform.Sends;
+                    lease.Handle(old); Check(platform.Sends == sends, "rejected/unknown pulse is never replayed");
+                }
+                File.WriteAllText(Path.Combine(work, "collection-check.json"), new JsonObject {
+                    ["case"] = kind, ["status"] = "PASS", ["realInput"] = false, ["sendCalls"] = platform.Sends,
+                    ["events"] = new JsonArray(events.Select(e => e.DeepClone()).ToArray()),
+                    ["diagnostics"] = new JsonArray(logs.Select(e => e.DeepClone()).ToArray()) }.ToJsonString());
+                Console.WriteLine("PASS: collection-" + kind);
+                continue;
+            }
             var recovery = events.SingleOrDefault(e => (string?)e["details"]?["classification"] == "NOT_SENT_CONTENT_SUPPORT_RECHECK");
             var safe = kind is "before-target" or "before-send";
             Check((recovery is not null) == safe, kind + ": only known pre-send content refusal permits recovery");
@@ -165,9 +201,10 @@ static class ContentRecheckChecks
             Console.WriteLine("PASS: " + (secondScroll ? "second-scroll-" : "adapter-") + kind);
         }
     }
-    public static void Run(string root, Func<long, long, CaptureDeliveryProof> fixture, bool diagnosticOnly = false)
+    public static void Run(string root, Func<long, long, CaptureDeliveryProof> fixture, bool diagnosticOnly = false, bool expiryOnly = false)
     {
-        foreach (var kind in diagnosticOnly ? new[] { "diagnostic-snapshot", "diagnostic-write-blocked" }
+        foreach (var kind in expiryOnly ? new[] { "local-expired", "future-support", "expiry-and-scene", "latest-expired" }
+            : diagnosticOnly ? new[] { "diagnostic-snapshot", "diagnostic-write-blocked" }
             : new[] { "content-only", "content-and-scene", "adapter-unknown" })
         {
             long now = 100_000_000_000; var events = new List<JsonObject>(); var calls = 0;
@@ -220,7 +257,14 @@ static class ContentRecheckChecks
                 return command;
             }
             Save(1, "old"); Save(2, "old");
-            if (kind != "adapter-unknown") latest = latest! with { ScrollContentRoiSha256 = "new" };
+            if (!expiryOnly && kind != "adapter-unknown") latest = latest! with { ScrollContentRoiSha256 = "new" };
+            if (expiryOnly)
+            {
+                now = proofs[1].ReadbackCompletedNs + 3_000_000_000;
+                if (kind == "future-support") now = proofs[1].ReadbackCompletedNs - 1;
+                if (kind != "latest-expired") latest = latest! with { CaptureId = "offline/1/current", ReadbackNs = now - 1 };
+                if (kind == "expiry-and-scene") latest = latest! with { SceneRoiSha256 = "other" };
+            }
             if (kind == "content-and-scene") latest = latest! with { SceneRoiSha256 = "other-scene" };
             long diagnosticSourceNs = 0;
             if (diagnosticOnly)
@@ -234,6 +278,24 @@ static class ContentRecheckChecks
                     File.WriteAllText(Path.Combine(work, "warehouse-scroll-refusal"), "blocked directory fixture");
             }
             var oldScroll = Scroll(2); lease.Handle(oldScroll);
+            if (expiryOnly)
+            {
+                if (kind == "local-expired")
+                {
+                    Check(lease.IsOpen && calls == 0 && (string?)events.Last()["reason"] == "SCROLL_SUPPORT_EXPIRED_BEFORE_SEND",
+                        "expired support is NOT_SENT and lease remains open");
+                    Check((string?)events.Last()["details"]?["failedChecks"]?[0] == "deliveryProofQualified",
+                        "actual expiry check retained");
+                    lease.Handle(oldScroll);
+                    Check(calls == 0 && (string?)events.Last()["reason"] == "SCROLL_SOURCE_NOT_SAVED_OR_REUSED", "old pulse consumed");
+                    Save(3, "old"); Save(4, "old"); lease.Handle(Scroll(4));
+                    Check(calls == 1 && (string?)events.Last()["event"] == "SCROLLED", "new independent supports restore sending");
+                    now = deadline; lease.Tick(); Check(!lease.IsOpen, "original context deadline unchanged");
+                }
+                else Check(!lease.IsOpen && calls == 0, kind + ": other qualification failure must stop");
+                Console.WriteLine("PASS: " + kind);
+                continue;
+            }
             if (diagnosticOnly)
             {
                 Check(lease.IsOpen && calls == 0 && events.Count(e => (string?)e["event"] == "SOURCE") == 2,

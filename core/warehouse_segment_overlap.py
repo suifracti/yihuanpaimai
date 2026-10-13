@@ -133,7 +133,7 @@ def content_retention_limit(image):
         return None
     view, mask = _content_view(image)
     limits = []
-    for divisions in (8, 16):
+    for divisions in (8, 16, 32):
         band_h = max(12, view.shape[0] // divisions)
         votes = _content_band_votes(view, view, mask, 0, band_h)
         if len(votes) >= 2:
@@ -329,6 +329,11 @@ def _align_warehouse_segments(
         # Periodic grid aliases cannot supply either unique content evidence.
         bands = _band_alignment(view_a, view_b, mask_a, mask_b, max_shift_px,
                                 band_divisions=16)
+    if not bands:
+        # A single-notch edge can retain two unique strips shorter than the
+        # previous 1/16 bands. Keep disjoint supports and all existing floors.
+        bands = _band_alignment(view_a, view_b, mask_a, mask_b, max_shift_px,
+                                band_divisions=32)
     if bands:
         result.update(bands)
         direction = bands.get("direction")

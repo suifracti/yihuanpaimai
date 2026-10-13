@@ -19,7 +19,7 @@ import tempfile
 import time
 
 ROOT = Path(__file__).resolve().parents[1]
-CANDIDATE = ROOT / 'build/native-retained-boundary-20261006/candidate-manifest.json'
+CANDIDATE = ROOT / 'build/t1-20261012/candidate-manifest.json'
 POLICY = 'wgc-delivery-v1'
 
 
@@ -48,9 +48,10 @@ def prepare(candidate=CANDIDATE):
         'capturePolicyOnStart': POLICY, 'automaticSettlementCollectionOnStart': True,
         'currentConfigPolicy': prepared['captureFreshnessPolicy'],
         'configSelectionOnlyAfterStartAuthorization': True,
-        'sourceLimits': {'originals': 16, 'requests': 32, 'seconds': 70},
+        'sourceLimits': dict(manifest.get('sourceLimits', {
+            'originals': None, 'requests': None, 'seconds': None, 'completion': 'VERIFIED_BOTTOM_AND_CONTINUOUS_COVERAGE'})),
         'monitorLimitSeconds': 1200, 'oneMatchOnly': True,
-        'settlementMonitorSeconds': 70, 'stopConfirmationSeconds': 10,
+        'settlementMonitorSeconds': None, 'stopConfirmationSeconds': 10,
         'noCaptureNoInputNoAssistantLaunch': True}
     return entry, prepared, manifest, receipt
 
@@ -304,8 +305,6 @@ async def monitor(prepared, output, record):
                                       open_timeout=2, close_timeout=1) as ws:
             try:
                 while time.monotonic() < deadline:
-                    if settlement_deadline is not None and time.monotonic() >= settlement_deadline:
-                        reason = 'FIRST_SETTLEMENT_OBSERVATION_70S_END'; break
                     for source_log, line in log_tailer.poll():
                         if 'WAREHOUSE:NATIVE_AUTO' not in line:
                             continue
@@ -346,7 +345,7 @@ async def monitor(prepared, output, record):
                     elif first_match and match and first_match != match:
                         reason = 'ONE_SHOT_MATCH_CHANGED'; break
                     if scene == 'SETTLEMENT' and settlement_deadline is None:
-                        settlement_deadline = time.monotonic() + 70
+                        settlement_deadline = True  # Track scene entry only, never a fixed collection deadline.
                     elif settlement_deadline is not None and scene and scene != 'SETTLEMENT':
                         reason = 'FIRST_SETTLEMENT_LEFT'; break
             except asyncio.CancelledError:

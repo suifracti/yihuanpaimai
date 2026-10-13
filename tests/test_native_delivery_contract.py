@@ -105,6 +105,50 @@ def prepare_delivery_fixture(test_case):
 
 
 class DeliveryTests(unittest.TestCase):
+    def test_waiting_preserves_capture_capability_and_recovered_settlement_auto_starts(self):
+        import ast
+        fixture = prepare_delivery_fixture(self)
+        ns = fixture.ns
+        ns['_native_source_observation_notice'](delivery_observation(fixture, 1, 'IN_AUCTION'))
+        self.assertFalse(fixture.auto._active)
+        # This fixture normally stubs output adapters. Waiting must execute
+        # the actual invalidation too, so it cannot silently renew old facts.
+        tree = ast.parse((ROOT / 'app/main.py').read_text(encoding='utf-8'))
+        revoke = next(n for n in tree.body if isinstance(n, ast.FunctionDef)
+                      and n.name == '_native_invalidate_solver_locked')
+        ns.update(ACTIVE_SNAPSHOT_HOLDER=Mock(), _SHADOW_PRESENTATION_LOCK=threading.RLock(),
+                  _SHADOW_PRESENTATION_KEYS={}, _native_reject_pending_controls_locked=Mock())
+        exec(compile(ast.fix_missing_locations(ast.Module(body=[revoke], type_ignores=[])),
+                     str(ROOT / 'app/main.py'), 'exec'), ns)
+        waiting = {
+            'type': 'native_observation', 'sourceKind': 'native_wgc',
+            'inputActions': False, 'formalHistoryWriter': False, 'status': 'READY',
+            'observationSessionId': 'background-session', 'observationWindowMode': 'background-readonly',
+            'captureFreshnessPolicy': DELIVERY, 'reason': 'waiting-for-new-frame',
+            'details': {'waitingForFrame': True, 'warehouseSourceBeforeBillFrozen': True,
+                        'target': copy.deepcopy(ns['LATEST_PAYLOAD']['target'])}}
+        with patch.dict(sys.modules, {'live_shadow': SimpleNamespace(invalidate_match_shadow=Mock())}):
+            ns['_native_source_observation_notice'](waiting)
+        self.assertTrue(ns['_NATIVE_SOURCE_CAPTURE_CAPABILITY'])
+        self.assertEqual(ns['_NATIVE_EXPECTED_SESSION'], 'background-session')
+        self.assertIsNone(ns['_NATIVE_SOLVER_LEASE'])  # waiting never renews old facts
+        self.assertFalse(fixture.auto._active)
+        with patch('scene_anchors.settlement_title_visible', return_value=True):
+            ns['_native_source_observation_notice'](delivery_observation(fixture, 2, 'SETTLEMENT', close=True))
+        self.assertTrue(fixture.auto._active)
+        self.assertEqual(fixture.source.actions, [('OPEN', True)])
+        bound = copy.deepcopy(ns['_native_warehouse_source_scope']())
+        snapshot = fixture.source.source_session_snapshot
+        fixture.source.source_session_snapshot = lambda: {**snapshot(), 'requestAttempts': 0}
+        fixture.source.lease_scope_is_current = lambda scope: all(scope.get(k) == bound[k]
+            for k in ('recordStableKey', 'observationSessionId', 'targetInstance', 'matchGeneration'))
+        with patch.dict(sys.modules, {'live_shadow': SimpleNamespace(invalidate_match_shadow=Mock())}):
+            ns['_native_source_observation_notice'](waiting)
+        self.assertEqual(ns['LATEST_PAYLOAD']['scene'], 'UNKNOWN')
+        self.assertEqual(ns['_native_warehouse_source_scope']()['scene'], 'SETTLEMENT')
+        self.assertTrue(fixture.auto._active)
+        self.assertEqual(fixture.source.actions, [('OPEN', True)])
+
     def test_computation_lease_binds_fact_version_and_preserves_manual_correction(self):
         fixture = prepare_delivery_fixture(self)
         ns = fixture.ns

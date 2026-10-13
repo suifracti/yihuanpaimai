@@ -27,9 +27,9 @@ def resolve_native_trial_history_path(
     *,
     frozen: Optional[bool] = None,
 ) -> Path:
-    """Keep source runs under build/ and packaged trial data beside its isolated root."""
+    """Honor the explicit runtime root; preserve the source default otherwise."""
     is_frozen = bool(getattr(sys, "frozen", False)) if frozen is None else bool(frozen)
-    if is_frozen:
+    if is_frozen or str(os.environ.get('YIHUAN_DATA_ROOT') or '').strip():
         from runtime_data import resolve_runtime_data_root
 
         root = resolve_runtime_data_root() / "native-live-trial"
@@ -83,7 +83,7 @@ class NativeTrialDraftStore:
             return None
         path = self.root / "warehouse-intake" / f"{session_id}.json"
         try:
-            if not path.is_file() or path.stat().st_size > 64 * 1024:
+            if not path.is_file() or path.stat().st_size > 4 * 1024 * 1024:
                 return None
             manifest = json.loads(path.read_text(encoding="utf-8"))
         except (OSError, ValueError):
@@ -96,9 +96,11 @@ class NativeTrialDraftStore:
         if (
             manifest.get("schemaVersion") != "native-warehouse-intake.v1"
             or manifest.get("sessionId") != session_id
-            or manifest.get("state") != "PARTIAL"
-            or manifest.get("processingEvidenceIds") != []
-            or manifest.get("resultSourceFingerprint") is not None
+            # Raw originals stay readable while recognition is pending or
+            # failed, as well as after it finishes. This reader grants neither
+            # content qualification nor coverage; those remain packet/ledger
+            # decisions. Do not make original retention depend on OCR state.
+            or manifest.get("state") not in {"MANUAL_CAPTURING", "ALIGNING", "PARTIAL", "ERROR", "COMPLETE", "CANCELLED"}
             or not isinstance(record_key, str)
             or not record_key
             or not isinstance(scope.get("observationSessionId"), str)
@@ -108,7 +110,7 @@ class NativeTrialDraftStore:
             or type(scope.get("matchGeneration")) is not int
             or scope["matchGeneration"] <= 0
             or not isinstance(pages, list)
-            or not 0 < len(pages) <= 16
+            or not len(pages)
             or self.lookup(record_key) is None
         ):
             return None
@@ -161,6 +163,7 @@ class NativeTrialDraftStore:
                 "pageCount": len(manifest["pages"]),
                 "archiveStatus": "RAW_PARTIAL_ARCHIVED",
                 "coverageStatus": "COVERAGE_UNPROVEN",
+                "captureState": manifest["state"],
                 "terminationReason": str(manifest.get("terminationReason") or "UNKNOWN")[:120],
                 "capturePolicy": scope.get("capturePolicy"),
             })

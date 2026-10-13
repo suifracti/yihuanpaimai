@@ -31,16 +31,22 @@ class ContentStepBudgetTests(unittest.TestCase):
         self.assertIsNone(content_retention_limit(b))
         self.assertNotEqual(align_warehouse_segments(a, b, required_direction='DOWN')['status'], 'VERIFIED')
 
-    def test_minimum_notch_cannot_destroy_last_two_content_bands(self):
+    def test_sparse_minimum_notch_probe_requires_real_progress_and_stops_on_failure(self):
         f = LiveRun(output=ROOT / 'build/issue42-evidence/minimum-notch')
         try:
             frame = sparse_frame(0)
             f.deliver(frame); f.tick(); f.deliver(frame.copy())
             f.scroll_ack(); f.tick(); f.deliver(sparse_frame(300))
             f.tick(); f.deliver(sparse_frame(300))
+            self.assertTrue(f.auto._active)
+            self.assertEqual(f.sent[-1]['wheelDelta'], -120)
+            self.assertEqual(sum(c['operation'] == 'SCROLL_DOWN' for c in f.sent), 2)
+            self.assertEqual(f.finalizations, [])
+            # A send receipt alone grants no displacement or coverage.
+            f.scroll_ack(); f.tick(); f.deliver(sparse_frame(300))
             self.assertFalse(f.auto._active)
-            self.assertEqual(f.auto._reason, 'SCROLL_CONTENT_RETENTION_UNPROVEN')
-            self.assertEqual(sum(c['operation'] == 'SCROLL_DOWN' for c in f.sent), 1)
+            self.assertEqual(f.auto._reason, 'WINDOW_SCROLL_NO_PROGRESS')
+            self.assertEqual(sum(c['operation'] == 'SCROLL_DOWN' for c in f.sent), 2)
             self.assertEqual(f.finalizations[-1]['termination_reason'], 'INCOMPLETE')
         finally:
             f.close()

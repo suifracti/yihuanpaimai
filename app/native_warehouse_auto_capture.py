@@ -24,7 +24,7 @@ from native_warehouse_visible_content_gate import VisibleContentGate
 
 class NativeWarehouseAutoCapture:
     def __init__(self, source, *, clock=None, timers=True, diagnostic_log=None,
-                 claim_attempt=None, offline_content_gate=None, content_gate=None):
+                 claim_attempt=None, offline_content_gate=None, content_gate=None, capture_first=True):
         self.source = source
         if offline_content_gate is not None and (not getattr(offline_content_gate, 'offline_only', False)
                 or not getattr(source, 'offline_test_adapter', False)
@@ -33,6 +33,7 @@ class NativeWarehouseAutoCapture:
         if content_gate is not None and (not isinstance(content_gate, VisibleContentGate) or offline_content_gate is not None):
             raise ValueError('VISIBLE_CONTENT_ADAPTER_REQUIRED')
         self._configured_content_gate = content_gate
+        self._capture_first = capture_first is True
         self._content_gate = offline_content_gate
         self._diagnostic_log = diagnostic_log
         self._claim_attempt = claim_attempt
@@ -53,9 +54,12 @@ class NativeWarehouseAutoCapture:
         self._retry_scope = self._support_floor = self._consumed_duplicate = None
         self._consumed_scroll_recheck = None
         self._pixels_per_notch = None
+        self._sparse_probe_used = False
         self._last_wheel_delta = -120
         self._tail_stationary = False
         self._terminal_continuity = TerminalContinuity()
+        self._coverage_pending = []
+        self._no_progress = self._viewport_rechecks = 0
 
     def __getattr__(self, name):
         return getattr(self.source, name)
@@ -82,7 +86,7 @@ class NativeWarehouseAutoCapture:
             token = uuid.uuid4().hex
             self._token = (token, self._clock() + 15, copy.deepcopy(self.source.intake.source_contract()['scope']))
             return {'ok': True, 'armingToken': token,
-                'confirmCaption': '程序只在本局结算仓库内自动向下翻页；不激活游戏、不移动鼠标。最多16张来源／32次请求、绝对70秒，滚动无效或证据不足即停止并保留原图。'}
+                'confirmCaption': '程序在本局结算仓库自动向下滚动并保存沿途原图，直到底部。匹配不确定仍继续收图；窗口失效、连续滚动无效或用户停止时保存已有结果。'}
 
     def confirm(self, token_id):
         with self._lock:
@@ -106,6 +110,8 @@ class NativeWarehouseAutoCapture:
                     if token[2].get('capturePolicy') == DELIVERY else None)
             source_options = ({'retain_independent_originals': True}
                 if isinstance(self._content_gate, VisibleContentGate) and token[2].get('capturePolicy') == DELIVERY else {})
+            if self._capture_first and isinstance(self._content_gate, VisibleContentGate) and token[2].get('capturePolicy') == DELIVERY:
+                source_options.update(retain_independent_originals=True, capture_first=True)
             result = self.source.start_manual(token[2]['recordStableKey'], allow_window_scroll=True, **source_options)
             if not result.get('ok'):
                 return result
@@ -121,9 +127,12 @@ class NativeWarehouseAutoCapture:
             self._consumed_scroll_recheck = None
             self._observer.reset()
             self._pixels_per_notch = None
+            self._sparse_probe_used = False
             self._tail_stationary = False
             self._terminal_continuity = TerminalContinuity()
-            self._deadline = self._clock() + 70
+            self._coverage_pending = []
+            self._no_progress = self._viewport_rechecks = 0
+            self._deadline = (2**63 - 1) / 1_000_000_000  # Active settlement scope; no 70-second quota.
             self._diagnose('started', scope=token[2], savedPages=0, deadline=self._deadline)
             return {'ok': True, 'reason': 'NATIVE_AUTO_STARTED'}
 
@@ -193,12 +202,14 @@ class NativeWarehouseAutoCapture:
         if self._phase == 'OPEN_SOURCE':
             if snap['limits'].get('windowScrollSupported') is not True:
                 self._stop('WINDOW_SCROLL_UNSUPPORTED')
+            elif self._collect_first() and snap['limits'].get('captureFirst') is not True:
+                self._stop('CAPTURE_FIRST_HOST_REQUIRED')
             else:
                 self._phase = 'WAIT_INITIAL'
                 self._request_page()
             return
         if self._phase == 'WAIT_SCROLL':
-            if (snap['reason'] == 'SCROLL_CONTENT_CHANGED_BEFORE_SEND' and snap.get('scrollRecheck')):
+            if (snap['reason'] in {'SCROLL_CONTENT_CHANGED_BEFORE_SEND', 'SCROLL_SUPPORT_EXPIRED_BEFORE_SEND'} and snap.get('scrollRecheck')):
                 # A validated Host receipt proves no adapter invocation. The
                 # saved viewport stays evidence; no movement/bottom is inferred.
                 self._wait_again(snap['reason'], self._anchor, self._observation,
@@ -259,7 +270,7 @@ class NativeWarehouseAutoCapture:
         # request; ignore only the exact safe receipt already consumed above.
         elif (snap['reason'] not in {'SOURCE_READY', 'SOURCE_REQUESTED', 'SAVED', 'WINDOW_WHEEL_MESSAGE_SENT'}
             and not (self._phase == 'WAIT_STABLE'
-                and snap['reason'] == 'SCROLL_CONTENT_CHANGED_BEFORE_SEND'
+                and snap['reason'] in {'SCROLL_CONTENT_CHANGED_BEFORE_SEND', 'SCROLL_SUPPORT_EXPIRED_BEFORE_SEND'}
                 and self._consumed_scroll_recheck is not None
                 and snap.get('scrollRecheck') == self._consumed_scroll_recheck)):
             self._stop(snap['reason'] or 'SOURCE_FAILED')
@@ -299,7 +310,7 @@ class NativeWarehouseAutoCapture:
                 self._stop('SOURCE_POLICY_CHANGED')
                 return
             if not self._guard() or not self._has_request_budget(
-                    allow_consumed_frame=self._content_gate is not None) or not self._valid_marker(observation):
+                    allow_consumed_frame=self._content_gate is not None) or (not self._collect_first() and not self._valid_marker(observation)):
                 return
         state = observation.get('scrollState')
         self._diagnose('scrollbar-observation', pageOrdinal=self._seen_pages, observation=observation)
@@ -313,26 +324,34 @@ class NativeWarehouseAutoCapture:
         elif self._phase == 'WAIT_MOVED':
             progress = self._scrollbar_progress(self._observation, observation)
             self._diagnose('scrollbar-progress', pageOrdinal=self._seen_pages, progress=progress)
-            # BOTTOM is a localized endpoint candidate, not proof that a small
-            # remaining tail cannot move. A sent tail probe must also preserve
-            # the viewport and visible business content before collecting its
-            # second independent support original.
+            # Probe a candidate bottom with another real wheel operation.
+            # In collection mode unchanged physical scrollbar endpoints, not
+            # item pixel equality, establish that scrolling has reached bottom.
             self._tail_stationary = False
             if (progress == 'WINDOW_SCROLL_NO_PROGRESS' and state == 'BOTTOM'
                     and self._observation['scrollState'] == 'BOTTOM'
-                    and isinstance(self._content_gate, VisibleContentGate)
+                    and (self._collect_first() or isinstance(self._content_gate, VisibleContentGate))
                     and all(observation.get(k) == self._observation.get(k)
                             for k in ('trackBox', 'thumbBox', 'thumbPosition'))):
-                stationary = self._content_gate.compare(self._observation, observation)
-                self._diagnose('tail-probe-content', qualification=stationary)
-                if not stationary['qualified']:
-                    self._stop('TAIL_STATIONARITY_UNPROVEN')
-                    return
+                if not self._collect_first():
+                    stationary = self._content_gate.compare(self._observation, observation)
+                    self._diagnose('tail-probe-content', qualification=stationary)
+                    if not stationary['qualified']:
+                        self._stop('TAIL_STATIONARITY_UNPROVEN')
+                        return
                 self._tail_stationary = True
+            elif progress == 'WINDOW_SCROLL_NO_PROGRESS' and self._collect_first():
+                self._no_progress += 1
+                self._diagnose('middle-no-progress', consecutiveAttempts=self._no_progress, bottomConfirmed=False)
+                if self._no_progress >= 3:
+                    self._stop(progress)
+                    return
             elif progress != 'DOWN':
                 self._stop(progress)
                 return
-            if not self._tail_stationary:
+            if progress == 'DOWN':
+                self._no_progress = 0
+            if not self._tail_stationary and progress == 'DOWN':
                 motion = align_warehouse_segments(self._anchor, crop, required_direction=DIR_DOWN,
                     prev_id=self._observation.get('sourceId', ''), next_id=observation.get('sourceId', ''),
                     terminal_continuity=self._terminal_continuity)
@@ -341,14 +360,27 @@ class NativeWarehouseAutoCapture:
                 if (motion.get('status') != 'VERIFIED' or motion.get('direction') != DIR_DOWN
                     or not isinstance(offset, (int, float)) or isinstance(offset, bool)
                     or not np.isfinite(offset) or offset >= 0):
-                    self._stop('OVERLAP_OR_SCROLL_PROGRESS_UNVERIFIED')
-                    return
-                self._pixels_per_notch = abs(offset) / (abs(self._last_wheel_delta) / 120)
+                    if not self._collect_first():
+                        self._stop('OVERLAP_OR_SCROLL_PROGRESS_UNVERIFIED')
+                        return
+                    self._coverage_pending.append({'pageOrdinal': self._seen_pages, 'alignment': motion})
+                else:
+                    self._pixels_per_notch = abs(offset) / (abs(self._last_wheel_delta) / 120)
+                # Only proven pixel progress permits a later sparse probe.
+                # A send receipt or scrollbar-only movement cannot reset it.
+                self._sparse_probe_used = False
         elif self._phase == 'WAIT_STABLE':
             if (observation.get('capturePolicy') == DELIVERY and state != 'NO_SCROLL'
                 and (not self._observation.get('thumbBox') or not observation.get('thumbBox')
                     or any(self._observation.get(k) != observation.get(k)
                            for k in ('trackBox', 'thumbBox', 'thumbPosition')))):
+                if self._collect_first() and self._scrollbar_progress(self._observation, observation) == 'DOWN':
+                    self._viewport_rechecks += 1
+                    if self._viewport_rechecks <= 3:
+                        self._tail_stationary = False
+                        self._coverage_pending.append({'pageOrdinal': self._seen_pages, 'reason': 'VIEWPORT_STILL_MOVING'})
+                        self._wait_again('VIEWPORT_STILL_MOVING', crop, observation, observation['deliveryProof'])
+                        return
                 self._stop('STABLE_VIEWPORT_UNPROVEN')
                 return
             if (observation.get('capturePolicy') == DELIVERY and not independent_support(
@@ -362,7 +394,7 @@ class NativeWarehouseAutoCapture:
                     if self._content_gate is not None else content_stability(self._anchor, crop))
                 observation['contentStability'] = content
                 self._diagnose('content-stability', pageOrdinal=self._seen_pages, qualification=content)
-                if not content['qualified']:
+                if not content['qualified'] and not self._collect_first():
                     if content['reason'] in {'CONTENT_CHANGING', 'CONTENT_UNREVEALED_OR_UNKNOWN'}:
                         self._wait_again(content['reason'], crop, observation, observation['deliveryProof'])
                         return
@@ -372,10 +404,11 @@ class NativeWarehouseAutoCapture:
             supported = (content['qualified'] if self._content_gate is not None
                 else stationary_support_proof(self._anchor, crop) is not None)
             if (state != self._observation['scrollState'] or self._clock() < self._due
-                or not (equal or supported) or float(crop.std()) < 8):
+                or (not self._collect_first() and (not (equal or supported) or float(crop.std()) < 8))):
                 self._stop('STABILITY_UNPROVEN')
                 return
             self._anchor, self._observation = crop, observation
+            self._viewport_rechecks = 0
             self._stable()
             return
         self._anchor, self._observation = crop, observation
@@ -412,11 +445,11 @@ class NativeWarehouseAutoCapture:
             return 'SCROLLBAR_PROGRESS_UNKNOWN'
 
     def _stable(self):
-        # The fresh duplicate path also needs content qualification: unchanged
-        # unrevealed silhouettes are not a stable page suitable for scrolling.
+        # Independent saved originals authorize collection, not item facts.
+        # Only genuinely qualified content pairs receive analysis certificates.
         if self._observation.get('capturePolicy') == DELIVERY:
             if not self._guard() or not self._has_request_budget(
-                    allow_consumed_frame=self._content_gate is not None) or not self._valid_marker(self._observation):
+                    allow_consumed_frame=self._content_gate is not None) or (not self._collect_first() and not self._valid_marker(self._observation)):
                 return
             support = self._observation.get('stableDeliveryProof')
             if not independent_support(self._support_floor, support):
@@ -425,10 +458,10 @@ class NativeWarehouseAutoCapture:
             if self._content_gate is not None:
                 content = self._content_gate.final_support(self._observation)
                 self._diagnose('content-stability-final', pageOrdinal=self._seen_pages, qualification=content)
-                if not content['qualified']:
+                if not content['qualified'] and not self._collect_first():
                     self._stop(content['reason'])
                     return
-            if self._content_gate is None:
+            if self._content_gate is None and not self._collect_first():
                 content = content_stability(self._anchor, self._anchor)
                 self._diagnose('content-stability-final', pageOrdinal=self._seen_pages, qualification=content)
                 if not content['qualified']:
@@ -440,16 +473,16 @@ class NativeWarehouseAutoCapture:
                 self._wait_again('CONTENT_COMPLETION_UNKNOWN', self._anchor, self._observation, support)
                 return
         self._diagnose('stable-page', pageOrdinal=self._seen_pages, observation=self._observation)
-        if self._content_gate is not None:
+        if self._content_gate is not None and (not self._collect_first() or content['qualified']):
             self._content_gate.commit_support(self.source.intake, self._observation)
+        elif self._collect_first():
+            self._coverage_pending.append({'pageOrdinal': self._seen_pages, 'reason': 'CONTENT_SUPPORT_UNQUALIFIED'})
         state = self._observation['scrollState']
         if state == 'NO_SCROLL' or (state == 'BOTTOM' and
-                (not isinstance(self._content_gate, VisibleContentGate) or self._tail_stationary)):
-            self._stop('COMPLETE', complete=True)  # only the existing ledger may grant complete coverage
-        elif self._seen_pages >= 16:
-            self._stop('SOURCE_LIMIT_REACHED')
-        elif self._content_gate is not None and self._request_attempts >= 32:
-            self._stop('SOURCE_REQUEST_LIMIT_REACHED')
+                (self._tail_stationary or not self._collect_first() and not isinstance(self._content_gate, VisibleContentGate))):
+            pending = bool(self._coverage_pending)
+            self._diagnose('bottom-collected', bottomConfirmed=True, coveragePending=self._coverage_pending)
+            self._stop('BOTTOM_SAVED_COVERAGE_PENDING' if pending else 'COMPLETE', complete=not pending)
         else:
             self._phase = 'WAIT_SCROLL'
             self._post_scroll_frame_received = False
@@ -461,7 +494,7 @@ class NativeWarehouseAutoCapture:
                     return
             self._last_wheel_delta = delta
             self._diagnose('scroll-step', wheelDelta=delta, pixelsPerNotch=self._pixels_per_notch,
-                predictedOnly=True, actualOverlapStillRequired=True, tailProbe=state == 'BOTTOM')
+                predictedOnly=True, actualOverlapStillRequired=not self._collect_first(), tailProbe=state == 'BOTTOM')
             result = (self.source.request_scroll_down(stable_proof=self._observation.get('stableDeliveryProof'),
                     base_proof=self._observation.get('stableBaseDeliveryProof') or self._observation.get('deliveryProof'),
                     wheel_delta=delta)
@@ -479,13 +512,38 @@ class NativeWarehouseAutoCapture:
         unit = self._pixels_per_notch or 30 * visible / 560
         remaining = max(0, track[3] - thumb[3]) * visible / (thumb[3] - thumb[1])
         target = min(.5 * visible, remaining)
+        if self._collect_first():
+            # Content density cannot make a reversible wheel operation stall.
+            # Keep roughly half a viewport for later overlap review; only real
+            # pixel matches calibrate this prediction. A failed middle pulse
+            # gets at most two retries, each based on newly saved originals.
+            delta = -120 * max(1, min(12, int(target / unit)))
+            self._diagnose('capture-first-step', wheelDelta=delta, predictedStepPx=target,
+                coverageQualified=False, consecutiveNoProgress=self._no_progress)
+            return delta
         limit = content_retention_limit(self._anchor)
         if limit is not None:
             target = min(target, limit)
         self._diagnose('scroll-sampling-budget', contentRetentionLimitPx=limit,
             predictedStepPx=target, pixelsPerNotch=unit, actualOverlapStillRequired=True)
         if limit is not None and limit < unit:
-            return 0  # Minimum legal notch would remove the retained evidence.
+            # Sampling prediction is not a movement admission test. Try one
+            # minimum notch; WAIT_MOVED still requires independent SOURCE and
+            # verified pixel overlap. Do not repeat across a sparse region.
+            if self._sparse_probe_used:
+                return 0
+            self._sparse_probe_used = True
+            self._diagnose('sparse-minimum-notch-probe', wheelDelta=-120,
+                coverageQualified=False, actualOverlapStillRequired=True)
+            return -120
+        if limit is None:
+            if self._sparse_probe_used:
+                return 0
+            self._sparse_probe_used = True
+            self._diagnose('sparse-minimum-notch-probe', wheelDelta=-120,
+                coverageQualified=False, actualOverlapStillRequired=True)
+            return -120
+        self._sparse_probe_used = False  # Retained content supports normal sampling again.
         return -120 * max(1, min(12, int(target / unit)))
 
     def _schedule_page(self, delay):
@@ -539,6 +597,9 @@ class NativeWarehouseAutoCapture:
     def _delivery(self):
         return bool(self._retry_scope and self._retry_scope.get('capturePolicy') == DELIVERY)
 
+    def _collect_first(self):
+        return self._capture_first and self._delivery() and isinstance(self._content_gate, VisibleContentGate)
+
     @property
     def _request_attempts(self):
         return self.source.source_session_snapshot()['requestAttempts']
@@ -556,7 +617,7 @@ class NativeWarehouseAutoCapture:
             self._stop('SOURCE_SCOPE_CHANGED')
             return False
         count = snap.get('requestAttempts')
-        if type(count) is not int or not 0 <= count <= 32:
+        if type(count) is not int or count < 0:
             self._stop('SOURCE_REQUEST_COUNTER_UNPROVEN')
             return False
         # OPEN_PENDING has no negotiated Host deadline yet.
@@ -577,12 +638,6 @@ class NativeWarehouseAutoCapture:
     def _has_request_budget(self, *, allow_consumed_frame=False):
         if allow_consumed_frame:
             return True  # _guard validates the counters; no new request/action is granted here.
-        if self._request_attempts >= 32:
-            self._stop('SOURCE_REQUEST_LIMIT_REACHED')
-            return False
-        if len(self.source.pages_copy()) >= 16:
-            self._stop('SOURCE_LIMIT_REACHED')
-            return False
         return True
 
     def _wait_again(self, cause, crop, observation, support):
@@ -594,11 +649,9 @@ class NativeWarehouseAutoCapture:
         self._observation.pop('stableBaseDeliveryProof', None)
         self._support_floor = copy.deepcopy(support)
         self._phase = 'WAIT_STABLE'
-        if isinstance(self._content_gate, VisibleContentGate):
+        if isinstance(self._content_gate, VisibleContentGate) and not self._collect_first():
             self._content_gate.require_sampling_hint(support['readbackCompletedNs'])
-        remaining = min(16 - len(self.source.pages_copy()), 32 - self._request_attempts)
-        delay = (.6 if isinstance(self._content_gate, VisibleContentGate)
-            else max(.6, (self._deadline - self._clock()) / (2 * remaining)))
+        delay = .6  # Request cadence only; elapsed time never grants stable content.
         self._diagnose('stability-recheck', cause=cause, captureId=support['captureId'],
             requestAttempts=self._request_attempts, savedOriginals=len(self.source.pages_copy()),
             deadline=self._deadline, nextRequestDelaySeconds=delay,
@@ -631,7 +684,7 @@ class NativeWarehouseAutoCapture:
                 return
             if self.source.source_session_snapshot()['state'] != 'OPEN':
                 return  # One existing SOURCE request owns the slot until its result/timeout.
-            if (self._content_gate is not None and self._seen_pages
+            if (not self._collect_first() and self._content_gate is not None and self._seen_pages
                     and self._phase == 'WAIT_STABLE' and not self._content_gate.request_eligible()):
                 self._diagnose('sampling-hint-awaiting', sourceAuthority=False, deadline=self._deadline)
                 self._schedule_page(.6)  # No time-based release; poll still enforces the original deadline.
@@ -649,6 +702,7 @@ class NativeWarehouseAutoCapture:
 
     def _stop(self, reason, *, complete=False):
         self._diagnose('capture-ended', reason=reason, savedPages=len(self.source.pages_copy()),
+            coveragePending=self._coverage_pending,
             scrollRequests=self._scroll_count, finalizationReason='COMPLETE' if complete else 'INCOMPLETE',
             postScrollFrameReceived=self._post_scroll_frame_received, completeCoverageMustBeGrantedByLedger=True)
         self._active, self._phase, self._reason = False, 'STOPPED', reason
@@ -670,7 +724,10 @@ class NativeWarehouseAutoCapture:
             if self._active:
                 self._stop('USER_STOP')
                 return {'ok': True, 'reason': 'STOP_REQUESTED'}
-            return self.source.cancel_manual_capture()
+            # Stopping observation revokes live collection, not already saved
+            # old-match analysis. Explicit processing cancellation is separate.
+            self.source.close_source('USER_STOP')
+            return self.source.intake.end_collection('USER_STOP')
 
     def presentation_payload(self):
         with self._lock:
@@ -681,15 +738,18 @@ class NativeWarehouseAutoCapture:
                 view.update(available=True, state='CAPTURING',
                     stopAvailable=self._active, automaticPhase=self._phase, scrollRequestCount=self._scroll_count)
                 view['message'] = f'Native 自动收页 · 已保存 {len(self.source.pages_copy())} 页 · {self._phase}'
-                if self._active and self._phase == 'WAIT_STABLE' and self._delivery():
+                if self._active and self._phase == 'WAIT_STABLE' and self._collect_first():
+                    view['message'] = f'正在保存当前视口的独立原图 · 已保存 {len(self.source.pages_copy())} 张'
+                elif self._active and self._phase == 'WAIT_STABLE' and self._delivery():
                     view['message'] = (f'交付时序自动收页 · 原图 {len(self.source.pages_copy())} 张 · '
-                        f'当前可见内容尚无独立支持，尚未证明覆盖 · 请求 {self._request_attempts}/32')
+                        f'当前可见内容尚无独立支持，尚未证明覆盖 · 请求 {self._request_attempts}')
             else:
                 ready = self.source.prepare_manual()
                 view['available'] = bool(ready.get('ok'))
                 if self._reason:
                     view['automaticTerminationReason'] = self._reason
                     messages = {'USER_STOP': '已停止自动收页，原图保留。',
+                        'BOTTOM_SAVED_COVERAGE_PENDING': '已滚到底部并保存原图，部分页面衔接仍待核对。',
                         'WINDOW_SCROLL_NO_PROGRESS': '滚动消息未产生可核实的位移，已停止；原图保留。',
                         'OVERLAP_OR_SCROLL_PROGRESS_UNVERIFIED': '无法证明跨页位移和重叠，已停止；原图保留。',
                         'STABILITY_UNPROVEN': '仓库画面稳定性证据不足，已停止；原图保留。',

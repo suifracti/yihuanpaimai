@@ -25,6 +25,28 @@ from settlement_truth_evidence_contract import validate_settlement_evidence_orig
 
 
 class NativeWarehouseIntakeTests(unittest.TestCase):
+    def test_collection_retention_is_not_cut_off_at_sixteen_sources(self):
+        self.frame(163, 1)
+        self.assertTrue(self.intake.start_manual(retain_independent_originals=True)['ok'])
+        for sequence in range(1, 18):
+            self.source['frameSequence'] = sequence
+            self.source['receivedAt'] = time.monotonic()  # Independent synthetic fixture arrivals.
+            result = self.intake.capture_manual_page()
+            self.assertTrue(result['ok'], (sequence, result))
+        self.assertEqual(len(self.intake.pages_copy()), 17)
+        self.assertEqual(self.intake.presentation_payload()['coverageStatus'], 'COVERAGE_UNPROVEN')
+
+    def test_source_trial_store_follows_explicit_runtime_isolation(self):
+        from native_trial_drafts import resolve_native_trial_history_path
+        import os
+        isolated = ROOT / 'build/t1-20261012/preflight-runtime'
+        with patch.dict(os.environ, {'YIHUAN_DATA_ROOT': str(isolated)}):
+            self.assertEqual(resolve_native_trial_history_path(ROOT, frozen=False),
+                isolated.resolve() / 'native-live-trial/canonical-history.json')
+        with patch.dict(os.environ, {}, clear=True):
+            self.assertEqual(resolve_native_trial_history_path(ROOT, frozen=False),
+                ROOT / 'build/native-observation/trial-drafts/canonical-history.json')
+
     def setUp(self):
         self.root = Path(tempfile.mkdtemp(prefix='native-intake-', dir=ROOT / 'build'))
         self.store = NativeTrialDraftStore(self.root / 'trial/canonical-history.json')
@@ -129,6 +151,11 @@ class NativeWarehouseIntakeTests(unittest.TestCase):
             release.set(); self.intake.wait_processing(10)
         self.assertEqual(before, self.store.history_path.read_bytes())
         self.assertEqual(self.intake.presentation_payload()['state'], 'CANCELLED')
+        cold = NativeTrialDraftStore(self.store.history_path)
+        self.assertEqual(cold.list_raw_partial_warehouse_archives()[0]['pageCount'], 1)
+        raw = cold.read_raw_partial_warehouse_page(self.intake._session_id, 0)
+        self.assertTrue(raw['ok'], raw)
+        self.assertEqual(raw['coverageStatus'], 'COVERAGE_UNPROVEN')
         self.assertTrue(self.intake.start_manual()['ok'])
         self.assertEqual(self.intake.presentation_payload()['segmentCount'], 0)
 
@@ -151,7 +178,14 @@ class NativeWarehouseIntakeTests(unittest.TestCase):
             self.assertTrue(self.intake.finish_manual_capture(termination_reason='INCOMPLETE')['ok'])
             self.assertTrue(entered.wait(2))
             self.intake._scope_provider = lambda:None
-            self.assertTrue(self.intake.end_collection('OBSERVATION_ENDED')['ok'])
+            from native_warehouse_source import NativeWarehouseSourceCoordinator
+            from native_warehouse_auto_capture import NativeWarehouseAutoCapture
+            source = NativeWarehouseSourceCoordinator(self.intake, send_control=lambda c: True,
+                source_root_provider=lambda: self.root, timers=False)
+            auto = NativeWarehouseAutoCapture(source, timers=False)
+            self.assertTrue(auto.stop()['ok'])
+            self.assertTrue(auto.stop()['ok'])  # Shutdown is idempotent, not a cancellation of saved work.
+            self.assertEqual(self.intake._state, 'ALIGNING')
             self.intake._scope_provider = lambda:{**self.scope, 'recordStableKey':'next_intake_match'}
             release.set(); self.intake.wait_processing(15)
         self.assertEqual(self.intake.presentation_payload()['state'],'PARTIAL')
@@ -232,6 +266,35 @@ class NativeWarehouseIntakeTests(unittest.TestCase):
         self.assertEqual(record['lifecycleStatus'], 'DRAFT')
         self.assertNotIn('warehouseReviewPacket', record['settlement'])
         self.assertEqual(self.store.history_path.read_bytes(), before)
+
+    def test_alignment_pending_keeps_original_pages_reopenable(self):
+        self.frame(163, 1)
+        self.assertTrue(self.intake.start_manual()['ok'])
+        self.assertTrue(self.intake.capture_manual_page()['ok'])
+        waiting, release = threading.Event(), threading.Event()
+
+        def pending(*args, **kwargs):
+            waiting.set()
+            release.wait(5)
+            return {'ok': False, 'reason': 'OFFLINE_PROCESSOR_STOPPED'}
+
+        with patch.object(WarehouseCaptureHost, '_process_saved_pages', side_effect=pending):
+            try:
+                self.assertTrue(self.intake.finish_manual_capture(termination_reason='INCOMPLETE')['ok'])
+                self.assertTrue(waiting.wait(3))
+                cold = NativeTrialDraftStore(self.store.history_path)
+                archives = cold.list_raw_partial_warehouse_archives()
+                self.assertEqual(len(archives), 1, 'Pending recognition cannot hide saved SOURCE originals')
+                page = cold.read_raw_partial_warehouse_page(self.intake._session_id, 0)
+                self.assertTrue(page['ok'], page)
+                self.assertEqual(page['coverageStatus'], 'COVERAGE_UNPROVEN')
+                self.assertEqual(page['sourceSha256'], self.intake.pages_copy()[0]['nativeSource']['sha256'])
+                # Reading originals neither finishes alignment nor adds facts.
+                self.assertEqual(self.intake._state, 'ALIGNING')
+                self.assertNotIn('warehouseReviewPacket', cold.lookup(self.scope['recordStableKey'])['settlement'])
+            finally:
+                release.set()
+                self.intake.wait_processing(3)
 
     def test_empty_support_selection_archives_raw_partial(self):
         from native_warehouse_source import NativeWarehouseSourceCoordinator

@@ -24,12 +24,12 @@ from settlement_truth_evidence_contract import validate_settlement_evidence_orig
 from warehouse_capture_host import WarehouseCaptureHost
 from native_capture_delivery import DELIVERY, STRICT
 
-MAX_PAGES = 16
+MAX_PAGES = None  # Completion follows actual coverage, not an image quota.
 MAX_PIXELS = 8_388_608
 MAX_BMP_BYTES = 54 + 4 * MAX_PIXELS
 MAX_ENCODED_BYTES = 64 * 1024 * 1024
 MAX_FRAME_AGE_SECONDS = 2.0
-MAX_MANIFEST_BYTES = 64 * 1024
+MAX_MANIFEST_BYTES = 4 * 1024 * 1024
 
 
 class IntakeRejected(RuntimeError):
@@ -129,8 +129,9 @@ class NativeWarehouseIntake:
             current['scene'] = scope.get('scene') if isinstance(scope, dict) else None
             return {'sessionId': self._session_id, 'generation': self._generation,
                 'state': self._state, 'scope': current,
-                'remainingPages': max(0, MAX_PAGES - len(self._pages)),
-                'remainingPngBytes': max(0, MAX_ENCODED_BYTES - self._encoded_bytes)}
+                # Numeric compatibility fields are not cumulative quotas.
+                'remainingPages': 2**31 - 1,
+                'remainingPngBytes': MAX_ENCODED_BYTES}
 
     def prepare_manual(self):
         with self._scope_lock, self._lock:
@@ -199,8 +200,6 @@ class NativeWarehouseIntake:
                 if (not self._retain_independent_originals
                         and any(p['pixelSha256'] == pixel_hash for p in self._pages)):
                     return self._reply(True, 'DUPLICATE_PAGE', duplicate=True)
-                if len(self._pages) >= MAX_PAGES:
-                    raise IntakeRejected('LIMIT_REACHED')
                 path = Path(source['path']).resolve(strict=True)
                 path.relative_to(Path(source['sourceRoot']).resolve(strict=True))
                 with path.open('rb') as stream:
@@ -217,7 +216,7 @@ class NativeWarehouseIntake:
                     raise IntakeRejected('ORIGINAL_FRAME_LEASE_MISMATCH')
                 payload = encode_settlement_original(frame)
                 del frame
-                if self._encoded_bytes + len(payload) > MAX_ENCODED_BYTES:
+                if len(payload) > MAX_ENCODED_BYTES:
                     raise IntakeRejected('LIMIT_REACHED')
                 # Keep the exact Native BMP, then derive a legal shared-Store
                 # descriptor. The Native source descriptor remains unchanged.
@@ -497,7 +496,7 @@ class NativeWarehouseIntake:
                         or manifest.get('sessionId') != session_id
                         or manifest.get('state') not in {'ALIGNING','ERROR','PARTIAL','COMPLETE'}
                         or type(manifest.get('generation')) is not int or manifest['generation'] <= 0
-                        or not 0 < len(manifest.get('pages', [])) <= MAX_PAGES):
+                        or not len(manifest.get('pages', []))):
                     raise IntakeRejected('INVALID_INTAKE_MANIFEST')
                 binding = _anchor(manifest['scope'])
                 if self.draft_store.lookup(binding['recordStableKey']) is None:

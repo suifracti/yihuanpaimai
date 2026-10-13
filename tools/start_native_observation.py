@@ -44,7 +44,10 @@ def prepare():
             "python": sys.executable, "preparationDoesNotLoadModelsOrCapture": True}
 
 
-async def request_once(ws, record, timeout=10):
+async def request_once(ws, record, timeout=30):
+    # Cold model startup and the first analysis share this startup wait. The
+    # previous 10s cut off a ready Host while its first vision call was running;
+    # this does not extend FRAME/SOURCE age or the collection lifetime.
     await ws.send(json.dumps({"type": "start_live_vision", "resumeSameMatch": False}))
     record("observation-request-sent")
     deadline = time.monotonic() + timeout

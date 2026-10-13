@@ -4,6 +4,13 @@
 
 通用工作与验证规则已移至 [用户级 AGENTS.md](C:/Users/Administrator/.codex/AGENTS.md)。如果当前工具未自动加载，开始工作前读取该文件；本文件仅保留项目专属约束。
 
+## 源码同步（2026-10-13 用户决定）
+
+- GitHub `main` 是最新代码主线；在本目录的 `main` 开发。每次完成修改和最小必要检查后 commit/push，不能把未同步的本地候选当成最新正式源码。Obsidian 保存进度、取舍和证据位置，不维护另一套源码基线。
+- 开始修改前读取远端 `main` 和本地状态；发生并行修改时按行为整合，不整文件覆盖或强推。本轮普通修改已获持续同步授权，实机、发布和其他操作仍按当次授权。
+- 本地 `codex/consolidate-workspace` 只保留旧私有历史，禁止推送、merge 或 mirror 到公开仓库；保留 `origin` 的禁用推送地址。从公开 `main` 提交后使用 `git push https://github.com/suifracti/yihuanpaimai.git main:main`，不推其他引用。
+- 仓库滚动先保存独立原图、继续到物理底部，再核连续覆盖；不能从历史报告恢复 16 SOURCE / 32 请求 / 固定70秒人工总额度。未证明覆盖仍记 PARTIAL。
+
 ## 项目目录约束
 
 - 唯一工作仓库是本文件所在目录，目前为 `D:\yihuanpaimai`。V2-2 A/B/C 和 I1 集成已经合并，勿重新建立 recovery 或兄弟项目目录。

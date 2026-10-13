@@ -35,7 +35,7 @@ LAYOUT = ContentLayout(GRID, REFERENCES, 'independent procedural scene; full rec
 
 
 class Run:
-    def __init__(self, *, content_gate=None, output=OUT):
+    def __init__(self, *, content_gate=None, output=OUT, capture_first=False):
         output.mkdir(parents=True, exist_ok=True)
         self.root = Path(tempfile.mkdtemp(dir=output, prefix='flow-'))
         self.now, self.sent, self.logs, self.sequence = 100., [], [], 0
@@ -58,13 +58,13 @@ class Run:
         self.gate = content_gate or OfflineContentGate(LAYOUT)
         gate_option = {'content_gate': self.gate} if content_gate is not None else {'offline_content_gate': self.gate}
         self.auto = NativeWarehouseAutoCapture(self.source, clock=lambda: self.now, timers=False,
-                      diagnostic_log=lambda s: self.logs.append(json.loads(s)), **gate_option)
+                      diagnostic_log=lambda s: self.logs.append(json.loads(s)), capture_first=capture_first, **gate_option)
         assert self.auto.confirm(self.auto.prepare()['armingToken'])['ok']
         self.auto.on_event(self.event('OPENED', details={'deadlineNs': 170_000_000_000,
             'clientWidth': 1920, 'clientHeight': 1080, 'remainingSourcePages': 16,
             'remainingRawBytes': 128*1024*1024, 'maxPngBytes': 64*1024*1024,
             'pngEncoding': 'opencv-bgr8-png-bound.v1', 'clientMap': 'map', 'windowScrollSupported': True,
-            'retainIndependentOriginals': content_gate is not None}))
+            'retainIndependentOriginals': content_gate is not None or capture_first, 'captureFirst': capture_first}))
 
     def event(self, kind, command=None, **extras):
         cmd = command or self.sent[-1]

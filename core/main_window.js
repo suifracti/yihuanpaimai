@@ -1133,7 +1133,7 @@ function renderNativeRawPartialArchives(record) {
     heading.className = "native-raw-partial-session";
     heading.textContent = `采集会话 ${archive.sessionId.slice(0, 8)} · ${archive.pageCount} 张原始页 · ${archive.terminationReason || "原因未知"}`;
     list.appendChild(heading);
-    const pageCount = Math.min(16, Math.max(0, Number(archive.pageCount) || 0));
+    const pageCount = Math.max(0, Number(archive.pageCount) || 0);
     for (let pageIndex = 0; pageIndex < pageCount; pageIndex += 1) {
       const button = document.createElement("button");
       button.type = "button";

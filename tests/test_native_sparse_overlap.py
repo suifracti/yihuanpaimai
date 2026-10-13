@@ -35,6 +35,45 @@ def sparse_world(offset, *, artwork=True):
 
 
 class SparseOverlapTests(unittest.TestCase):
+    @unittest.skipUnless(os.environ.get('YH_T1_ONCE02_ROOT'), 'private T1 SOURCE opt-in')
+    def test_real_single_notch_clipped_edge_enters_independent_support_wait(self):
+        root = Path(os.environ['YH_T1_ONCE02_ROOT'])
+        manifest = json.loads(next((root / 'warehouse-intake').glob('*.json')).read_text(encoding='utf-8'))
+        self.assertEqual(manifest['scope']['recordStableKey'], 'replayfile_5bfa7882cb7d543a4525')
+        self.assertEqual(len(manifest['pages']), 34)
+        frames, crops = [], []
+        for page, sha in zip(manifest['pages'][-2:], (
+                '789fa44d8af9a0c570a7477deca9be5d50d9a1fda1bc2e10b049cc9d282953a7',
+                '4e58568d8257dedd6c3cc7e5cd0bef3403a0fa4133250817ba224755c25db021')):
+            raw = (root / page['nativeSource']['relativePath']).read_bytes()
+            self.assertEqual(hashlib.sha256(raw).hexdigest(), sha)
+            frame = cv2.imdecode(np.frombuffer(raw, np.uint8), cv2.IMREAD_COLOR)
+            x, y, r, b = warehouse_search_roi(1920, 1080)
+            frames.append(frame); crops.append(frame[y:b, x:r].copy())
+        motion = align_warehouse_segments(*crops, prev_id='33', next_id='34', required_direction='DOWN')
+        # Independently observed grid phase shifts 13->39 in a 56px grid;
+        # the actual one-notch receipt and artwork correspondences imply -30.
+        self.assertEqual(motion['status'], 'VERIFIED', motion)
+        self.assertEqual(motion['verticalOffsetPx'], -30)
+        self.assertGreaterEqual(motion['supportCount'], 2)
+        from tests.test_native_half_viewport_flow import LiveRun
+        from warehouse_scrollbar_observation import WarehouseScrollbarObserver
+        f = LiveRun(output=ROOT / 'build/t1-20261012/once02-offline-flow')
+        try:
+            # Inert SOURCE/input context, real pixels. No claim of live freshness.
+            f.auto._phase = 'WAIT_MOVED'
+            f.auto._anchor = crops[0]
+            f.auto._observation = WarehouseScrollbarObserver().observe(frames[0], source_id='33')
+            f.auto._last_wheel_delta = -120
+            f.auto._sparse_probe_used = True
+            f.deliver(frames[1])
+            self.assertEqual(f.auto._phase, 'WAIT_STABLE', f.logs[-2:])
+            self.assertEqual(f.finalizations, [])
+            self.assertFalse(f.auto._sparse_probe_used)
+            self.assertFalse(any(c['operation'] == 'SCROLL_DOWN' for c in f.sent))
+        finally:
+            f.close()
+
     def test_clipped_artwork_keeps_disjoint_unique_pixel_support(self):
         motion = align_warehouse_segments(sparse_world(0), sparse_world(271), required_direction='DOWN')
         self.assertEqual(motion['status'], 'VERIFIED', motion)

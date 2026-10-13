@@ -335,25 +335,21 @@ internal static class NativeObservationService
             var settlementCollectionClosed = false;
             string? settlementMatchId = null;
             string? deliveryRecordKey = null;
-            var ordinaryRecovery = new OrdinaryFrameRecovery(frameWaitMs);
-            void EndOrdinaryRecovery()
+            var ordinaryRecovery = new OrdinaryFrameRecovery();
+            long? frameGapStartedNs = null;
+            void WaitForOrdinaryFrame(string cause)
             {
-                // Timeout is not authority to reinterpret an owner/target/
-                // mapping fault as ordinary aging. Preserve the first discard
-                // while still reporting the current safety boundary.
                 capture.ThrowIfFailed();
-                var endTarget = monitor.Snapshot();
-                var endReason = ordinaryRecovery.First!.Reason;
-                if (!IsObservationIdentityUsable(endTarget, observationWindowMode)
-                    || !BackgroundObservationPolicy.IsSameObservationTarget(endTarget, target))
-                    endReason = PauseReason(endTarget, observationWindowMode);
-                else if (observationWindowMode == BackgroundObservationPolicy.BackgroundReadOnly
-                    && !capture.IsClientAreaMappingCurrent()) endReason = "client-area-mapping-changed";
-                evidenceLease.SignalStop();
-                EmitStatus(sessionId, "PAUSED", endReason, new {
-                    terminationReason = "ORDINARY_FRAME_RECOVERY_TIMEOUT", firstFault = ordinaryRecovery.First.ToJson(),
-                    deadlineNs = ordinaryRecovery.DeadlineNs, comparedAtNs = ProtocolClock.NowNs() });
-                ShutdownObservation();
+                if (frameGapStartedNs is not null) return;
+                frameGapStartedNs = ProtocolClock.NowNs();
+                trace.Event("ordinary-frame.waiting", session.GenerationId, new {
+                    firstObservedNs = frameGapStartedNs, reason = cause, captureOwnerFailed = false,
+                    firstFault = ordinaryRecovery.First?.ToJson(), businessSubmitted = false, inputActions = false });
+                EmitStatus(sessionId, "READY", "waiting-for-new-frame", new {
+                    waitingForFrame = true, firstObservedNs = frameGapStartedNs,
+                    target = TargetEvidence(monitor.Snapshot()),
+                    warehouseSourceBeforeBillFrozen = true,
+                    businessSubmitted = false, inputActions = false });
             }
             void DiscardOrdinary(CapturedBgraFrame stale, long comparedAtNs)
             {
@@ -361,7 +357,8 @@ internal static class NativeObservationService
                 trace.Event("ordinary-frame.discarded", session.GenerationId, new {
                     captureId = stale.DeliveryProof!.CaptureId, readbackTimestampNs = stale.CaptureTimestampNs,
                     comparedAtNs, firstFault = ordinaryRecovery.First!.ToJson(),
-                    deadlineNs = ordinaryRecovery.DeadlineNs, businessSubmitted = false, inputActions = false });
+                    businessSubmitted = false, inputActions = false });
+                WaitForOrdinaryFrame("DELIVERY_LOCAL_USE_EXPIRED");
             }
             while (maxFrames <= 0 || acceptedFrames < maxFrames)
             {
@@ -373,7 +370,6 @@ internal static class NativeObservationService
                     return 0;
                 }
                 if (capture.PendingOrdinaryExpiry is { } ownerDiscard) ordinaryRecovery.Begin(ownerDiscard);
-                if (ordinaryRecovery.Expired(ProtocolClock.NowNs())) { EndOrdinaryRecovery(); return 3; }
                 // Admit queued SOURCE/wheel commands only after the next
                 // serial business result has refreshed the existing lifecycle
                 // context below. An old settlement context cannot send a wheel
@@ -418,7 +414,7 @@ internal static class NativeObservationService
                     frame = sourceRequestGate is long requestGate
                         ? capture.CaptureAfterRequest(frameWaitMs, requestGate,
                             evidenceLease.PendingRequestDeadlineNs, () => !evidenceLease.IsOpen)
-                        : capture.Capture(ordinaryRecovery.RemainingWaitMs(ProtocolClock.NowNs(), frameWaitMs));
+                        : capture.Capture(frameWaitMs);
                 }
                 catch (OperationCanceledException) when (sourceRequestGate is not null && !evidenceLease.IsOpen)
                 {
@@ -428,18 +424,20 @@ internal static class NativeObservationService
                     continue;
                 }
                 catch (CaptureScopeInvalidatedException) when (ordinaryRecovery.First is null) { continue; }
+                catch (OrdinaryFrameUnavailableException) when (sourceRequestGate is null)
+                {
+                    if (capture.PendingOrdinaryExpiry is { } first) ordinaryRecovery.Begin(first);
+                    WaitForOrdinaryFrame("NO_NEW_FRAME");
+                    // Game loading can outlast a single poll. Keep the same
+                    // observation; the next iteration checks stop, target and
+                    // mapping before waiting again. No old frame is submitted.
+                    continue;
+                }
                 catch (TimeoutException) when (sourceRequestGate is not null)
                 {
                     WriteRequestClock();
                     evidenceLease.Close("SOURCE_REQUEST_TIMEOUT");
                     continue;
-                }
-                catch (TimeoutException) when ((ordinaryRecovery.First ?? capture.PendingOrdinaryExpiry) is { } firstOrdinaryFault)
-                {
-                    ordinaryRecovery.Begin(firstOrdinaryFault);
-                    trace.Event("ordinary-frame.recovery-timeout", session.GenerationId, new {
-                        firstFault = firstOrdinaryFault.ToJson(), deadlineNs = ordinaryRecovery.DeadlineNs });
-                    EndOrdinaryRecovery(); return 3;
                 }
                 catch (Exception ex)
                 {
@@ -519,12 +517,18 @@ internal static class NativeObservationService
                     ShutdownObservation();
                     return 3;
                 }
-                if (ordinaryRecovery.Expired(dequeueComparedAtNs)) { EndOrdinaryRecovery(); return 3; }
                 if (ordinaryRecovery.First is { } recovered)
                     trace.Event("ordinary-frame.recovered", session.GenerationId, new {
                         firstFault = recovered.ToJson(), captureId = frame.DeliveryProof!.CaptureId,
-                        deadlineNs = ordinaryRecovery.DeadlineNs, comparedAtNs = dequeueComparedAtNs });
+                        comparedAtNs = dequeueComparedAtNs });
                 ordinaryRecovery.Accepted();
+                if (frameGapStartedNs is long gapStarted)
+                {
+                    trace.Event("ordinary-frame.resumed", session.GenerationId, new {
+                        firstObservedNs = gapStarted, resumedAtNs = dequeueComparedAtNs,
+                        frame.AcquisitionSequence, frame.CaptureTimestampNs });
+                    frameGapStartedNs = null;
+                }
                 lastSourceTimestampNs = frame.SourceTimestampNs;
                 var businessStartedNs = ProtocolClock.NowNs();
                 Dictionary<string, object?> transfer;
@@ -647,7 +651,7 @@ internal static class NativeObservationService
                 if (scene == "SETTLEMENT")
                 {
                     settlementSinceMs ??= Environment.TickCount64;
-                    settlementSourceDeadlineNs ??= checked(ProtocolClock.NowNs() + 70_000_000_000L);
+                    settlementSourceDeadlineNs ??= long.MaxValue;
                     settlementMatchId ??= (string?)state?["currentMatch"]?["id"];
                 }
                 var settlementReady = (bool?)state?["pipelineContext"]?["settlementReady"] == true;

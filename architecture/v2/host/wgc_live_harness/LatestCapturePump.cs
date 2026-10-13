@@ -82,6 +82,7 @@ internal sealed class LatestCapturePump<TSource, TFrame> : IDisposable
                     // Only the ordinary producer throws this typed, age-only
                     // discard. Explicit SOURCE jobs retain their original errors.
                     catch (OrdinaryFrameExpiredException) { }
+                    catch (OrdinaryFrameUnavailableException) { }
                     catch (OperationCanceledException) when (IsStopped || HasJob) { }
                 }
             }
@@ -127,9 +128,11 @@ internal sealed class LatestCapturePump<TSource, TFrame> : IDisposable
     }
     public TFrame Take(int timeoutMs)
     {
-        WaitUntil(() => _latest is not null, timeoutMs);
         lock (_gate)
         {
+            // Selection and transfer must share the same lock. Explicit
+            // SOURCE jobs may discard the ordinary slot between these steps.
+            WaitUntil(() => _latest is not null, timeoutMs);
             CheckAvailable();
             var frame = _latest!; _latest = null; _taken++;
             var now = Stopwatch.GetTimestamp();

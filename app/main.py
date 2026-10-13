@@ -914,7 +914,7 @@ def _build_native_bid_intent_presentation(
 
     now_ms = time.perf_counter_ns() / 1_000_000
     timer = native_payload.get("timer")
-    frame_age_ms = native_payload.get("freshnessMs")
+    frame_age_ms = _native_use_age_ms(native_payload)
     valid_timer = (
         type(timer) in (int, float) and math.isfinite(timer) and timer >= 0
         and type(frame_age_ms) in (int, float) and math.isfinite(frame_age_ms) and frame_age_ms >= 0
@@ -4064,7 +4064,7 @@ def _arm_native_postclose_trigger_watch(event: Dict[str, Any], accepted: Dict[st
         reasons.append('TRIGGER_SCOPE_NOT_CURRENT')
     now_ns = time.perf_counter_ns()
     if (type(deadline_ns) is not int or deadline_ns <= now_ns
-            or deadline_ns - now_ns > 70_000_000_000):
+            or deadline_ns > 2**63 - 1):
         reasons.append('TRIGGER_DEADLINE_INVALID')
     if not client_map:
         reasons.append('TRIGGER_SCOPE_NOT_CURRENT')
@@ -4185,10 +4185,11 @@ def _native_warehouse_intake_scope() -> Dict[str, Any]:
 def _native_warehouse_source_scope() -> Dict[str, Any]:
     scope = _native_warehouse_intake_scope()
     coordinator = _NATIVE_WAREHOUSE_SOURCE_COORDINATOR
-    # A frozen bill stops ordinary business FRAME publication. Its independent SOURCE lease
-    # keeps the saved settlement scope, while every source/input is still checked live by Host.
+    # A frozen bill or temporary FRAME wait invalidates ordinary facts. The
+    # independent SOURCE lease keeps its bound settlement scope; it cannot
+    # create a new lease here, and Host still checks every source/input live.
     # This never refreshes ordinary vision health, source timestamps or business facts.
-    if scope['scene'] == 'UNKNOWN' and LATEST_PAYLOAD.get('scene') == 'SETTLEMENT' and coordinator is not None:
+    if scope['scene'] == 'UNKNOWN' and coordinator is not None:
         active_source = bool(getattr(coordinator, 'lease_scope_is_current', lambda _scope: False)(scope))
         active_watch = bool(getattr(coordinator, 'trigger_watch_scope_is_current', lambda _scope: False)(scope))
         if active_source or active_watch:

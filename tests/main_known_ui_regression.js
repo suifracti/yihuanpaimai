@@ -20,6 +20,8 @@ class Element {
   replaceChildren() { this.children=[]; }
   setCustomValidity(message) { this.error=message; }
   reportValidity() {}
+  setAttribute(name, value) { this[name] = String(value); }
+  removeAttribute(name) { delete this[name]; }
 }
 const elements = new Map();
 for(const rarity of ['gold','purple','red']) for(const prefix of ['match-input-known-','match-suggest-','match-chips-']) elements.set(prefix+rarity,new Element());
@@ -104,3 +106,32 @@ const historyText=textOf(evidenceSection);
 for(const text of ['随机展示5件藏品','座位 2：0','666666','补货确认','前局遗留','未确认名称']) assert(historyText.includes(text),text);
 assert(!historyText.includes('不能冒充已识别'));
 console.log('history shows raw intel, four seats including zero, uncertain inventory and prior-match restock: passed');
+
+for (const id of ['history-native-raw-partial', 'history-native-raw-partial-pages',
+  'history-native-raw-partial-status', 'history-native-raw-partial-image',
+  'history-native-raw-partial-meta']) elements.set(id, new Element());
+const rawSession = 'abcdef0123456789abcdef0123456789';
+const rawDraft = sandbox.projectLiveTrialDraft({ id: 'saved-native-match',
+  nativeRawPartialArchives: [{ sessionId: rawSession, pageCount: 12,
+    captureState: 'ALIGNING', terminationReason: 'INCOMPLETE' }] });
+sandbox.renderNativeRawPartialArchives(rawDraft);
+assert.equal(elements.get('history-native-raw-partial').hidden, false);
+const rawButtons = elements.get('history-native-raw-partial-pages').children.filter(e => e.tagName === 'button');
+assert.equal(rawButtons.length, 12);
+rawButtons[11].fire('click');
+const rawRequest = sent.at(-1);
+assert.equal(rawRequest.action, 'request_native_warehouse_archive_page');
+assert.equal(rawRequest.sessionId, rawSession);
+assert.equal(rawRequest.pageIndex, 11);
+const rawReply = { ok: true, sessionId: rawSession, pageIndex: 11, pageCount: 12,
+  sourceSha256: 'a'.repeat(64), sourceSequence: 99, capturedAt: '2026-10-11T10:00:00Z',
+  status: 'RAW_PARTIAL_ARCHIVED', coverageStatus: 'COVERAGE_UNPROVEN',
+  previewDataUrl: 'data:image/jpeg;base64,AA==' };
+sandbox.renderNativeRawPartialPage(rawReply, rawRequest.requestId);
+assert.equal(elements.get('history-native-raw-partial-image').hidden, false);
+assert.match(elements.get('history-native-raw-partial-status').textContent, /覆盖仍未证明/);
+const priorRawImage = elements.get('history-native-raw-partial-image').src;
+sandbox.renderNativeRawPartialPage({ ...rawReply, sessionId: 'other-match-session',
+  previewDataUrl: 'wrong-page' }, rawRequest.requestId);
+assert.equal(elements.get('history-native-raw-partial-image').src, priorRawImage);
+console.log('saved pending originals: 12 page buttons, real action routing and stale-match refusal passed');

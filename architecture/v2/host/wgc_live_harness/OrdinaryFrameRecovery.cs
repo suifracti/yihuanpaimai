@@ -2,6 +2,17 @@ using System.Text.Json.Nodes;
 
 namespace WgcLiveHarness;
 
+// No new ordinary observation during a loading/static interval is not a
+// capture-owner failure. Each poll remains cancellable; explicit SOURCE jobs
+// never use this exception or retry their original deadline.
+internal sealed class OrdinaryFrameUnavailableException(Exception cause)
+    : TimeoutException("ordinary-frame-waiting", cause)
+{
+    public static bool IsSelectionTimeout(Exception cause) => cause is TimeoutException && cause.Message is
+        "DELIVERY_DEADLINE" or "Request-frame selection reached its original deadline."
+        or "Explicit frame request reached its original deadline.";
+}
+
 internal sealed record OrdinaryFrameDiscard(string CaptureId, string SessionId, long PoolEpoch,
     long CaptureScopeEpoch, long Sequence, long ReadbackNs, long ComparedAtNs)
 {
@@ -20,15 +31,12 @@ internal sealed class OrdinaryFrameExpiredException(OrdinaryFrameDiscard discard
     public OrdinaryFrameDiscard Discard { get; } = discard;
 }
 
-// One retry window for ordinary FRAME admission, never a SOURCE request.
-internal sealed class OrdinaryFrameRecovery(int frameWaitMs)
+// Keep the first discarded ordinary frame for diagnostics and scope checking.
+// Local expiry cannot impose a total loading timeout. SOURCE deadlines are
+// independent; every newly accepted ordinary frame still passes its 2s gate.
+internal sealed class OrdinaryFrameRecovery
 {
-    private readonly long _waitNs = Math.Clamp(frameWaitMs, 1, 5000) * 1_000_000L;
     public OrdinaryFrameDiscard? First { get; private set; }
-    public long DeadlineNs { get; private set; }
-    public bool Expired(long now) => First is not null && now >= DeadlineNs;
-    public int RemainingWaitMs(long now, int normalWaitMs) => First is null ? normalWaitMs
-        : checked((int)Math.Max(1, Math.Min(normalWaitMs, (DeadlineNs - now + 999_999) / 1_000_000)));
     public static bool Recoverable(CapturedBgraFrame frame, long now) => frame.DeliveryProof is { } proof
         && proof.IsLocalAgeExpired(now) && frame.CaptureTimestampNs == proof.ReadbackCompletedNs
         && frame.SourceTimestampNs == proof.SourceNs && frame.AcquisitionSequence == proof.AcquisitionSequence;
@@ -48,7 +56,7 @@ internal sealed class OrdinaryFrameRecovery(int frameWaitMs)
     public void Begin(OrdinaryFrameDiscard first)
     {
         if (First is not null) return;
-        First = first; DeadlineNs = checked(first.ComparedAtNs + _waitNs);
+        First = first;
     }
-    public void Accepted() { First = null; DeadlineNs = 0; }
+    public void Accepted() { First = null; }
 }

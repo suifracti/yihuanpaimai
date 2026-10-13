@@ -16,7 +16,7 @@ SCHEMA_V2 = 'native-warehouse-source.v2'
 CONTROL_TYPE = 'native_warehouse_evidence_control'
 EVENT_TYPE = 'native_warehouse_evidence'
 PNG_ENCODING = 'opencv-bgr8-png-bound.v1'
-MAX_TRIGGER_PROBES = 32
+MAX_TRIGGER_PROBES = 2**31 - 1  # Wire counter sentinel, not a product quota.
 MIN_TRIGGER_PROBE_INTERVAL_NS = 600_000_000
 
 
@@ -64,9 +64,9 @@ class NativeWarehouseSourceCoordinator:
         if result.get('ok'):
             result['capturePolicy'] = self.intake.source_contract()['scope'].get('capturePolicy', STRICT)
             result['confirmCaption'] = ('每次手动请求保全原游戏窗口客户端的一张新原帧；'
-                '会话受16帧和绝对70秒预算限制，窗口不合格、映射变化或过期将停止。')
+                '会话随当前结算场景与窗口身份有效，窗口不合格、映射变化或过期将停止。')
         if result.get('ok') and result.get('capturePolicy') == DELIVERY:
-            result['confirmCaption'] = '交付时序原帧：先保存再核对；不能证明请求后渲染或来源绝对年龄。16张来源／32次请求／70秒，不自动降级。'
+            result['confirmCaption'] = '交付时序原帧：先保存再核对；不能证明请求后渲染或来源绝对年龄。持续至真实底部，不自动降级。'
         return result
 
     def _source_is_current(self):
@@ -99,8 +99,9 @@ class NativeWarehouseSourceCoordinator:
             return False
 
     def _schedule(self, seconds):
-        if self._timer:
-            self._timer.cancel()
+        self._cancel_timer()
+        if seconds > 3600:
+            return  # Scope lifetime has no timer; individual requests retain their timeouts.
         if self._timers:
             self._timer = threading.Timer(seconds, self.check_timeout)
             self._timer.daemon = True
@@ -111,8 +112,10 @@ class NativeWarehouseSourceCoordinator:
             self._timer.cancel()
             self._timer = None
 
-    def start_manual(self, record_key=None, *, allow_window_scroll=False, retain_independent_originals=False):
+    def start_manual(self, record_key=None, *, allow_window_scroll=False, retain_independent_originals=False, capture_first=False):
         with self.intake._scope_lock, self._lock:
+            if capture_first and (not allow_window_scroll or not retain_independent_originals):
+                return self._reply(False, 'COLLECTION_SCROLL_SCOPE_REQUIRED')
             if self._evidence_only and (allow_window_scroll or not retain_independent_originals):
                 return self._reply(False, 'EVIDENCE_ONLY_SOURCE_REQUIRED')
             if retain_independent_originals and self.intake.source_contract()['scope'].get('capturePolicy') != DELIVERY:
@@ -135,6 +138,7 @@ class NativeWarehouseSourceCoordinator:
             command = self._command('OPEN')
             command['allowWindowScroll'] = allow_window_scroll is True
             command['retainIndependentOriginals'] = retain_independent_originals is True
+            command['captureFirst'] = capture_first is True
             self._pending = command
             self._pending_until = self._clock() + 2
             if not self._send(command):
@@ -207,7 +211,7 @@ class NativeWarehouseSourceCoordinator:
                     or type(deadline_ns) is not int):
                 return {'ok': False, 'reason': 'TRIGGER_CONTEXT_INVALID'}
             remaining = deadline_ns - self._qpc()
-            if not 0 < remaining <= 70_000_000_000:
+            if remaining <= 0:
                 return {'ok': False, 'reason': 'TRIGGER_DEADLINE_EXPIRED'}
             current = self.intake.source_contract()['scope']
             if not self._same_scope_authority(scope, current):
@@ -488,12 +492,12 @@ class NativeWarehouseSourceCoordinator:
                         if type(details[key]) is not int or details[key] <= 0:
                             raise ValueError()
                     if (details.get('pngEncoding') != PNG_ENCODING or details['clientWidth'] > 1920
-                        or details['clientHeight'] > 1080 or details['remainingSourcePages'] > 16
-                        or details['remainingRawBytes'] > 128 * 1024 * 1024
+                        or details['clientHeight'] > 1080 or details['remainingSourcePages'] > 2**31 - 1
+                        or details['remainingRawBytes'] > 2**63 - 1
                         or details['maxPngBytes'] > 64 * 1024 * 1024):
                         raise ValueError()
                     remaining = (details['deadlineNs'] - self._qpc()) / 1_000_000_000
-                    if not 0 < remaining <= 70:
+                    if remaining <= 0:
                         raise ValueError()
                 except (KeyError, TypeError, ValueError):
                     self._close('SOURCE_NEGOTIATION_REJECTED', cancel_intake=True)
@@ -512,7 +516,7 @@ class NativeWarehouseSourceCoordinator:
             if event.get('leaseToken') != self._lease:
                 return
             counters = event.get('details') or {}
-            for key, maximum in (('remainingSourcePages', 16), ('remainingRawBytes', 128 * 1024 * 1024)):
+            for key, maximum in (('remainingSourcePages', 2**31 - 1), ('remainingRawBytes', 2**63 - 1)):
                 if type(counters.get(key)) is int and 0 <= counters[key] <= maximum:
                     self._host_limits[key] = counters[key]
             if kind == 'CLOSED':
@@ -522,12 +526,16 @@ class NativeWarehouseSourceCoordinator:
                 return
             if kind == 'REJECTED':
                 self._scroll_recheck = None
-                if (event.get('reason') == 'SCROLL_CONTENT_CHANGED_BEFORE_SEND'
+                content_recheck = (event.get('reason') == 'SCROLL_CONTENT_CHANGED_BEFORE_SEND'
+                    and counters.get('failedChecks') == ['scrollContentQuantizationSupported'])
+                expired_recheck = (event.get('reason') == 'SCROLL_SUPPORT_EXPIRED_BEFORE_SEND'
+                    and counters.get('failedChecks') == ['deliveryProofQualified']
+                    and counters.get('supportFailure') == 'DELIVERY_LOCAL_USE_EXPIRED')
+                if ((content_recheck or expired_recheck)
                     and self._delivery() and self._state == 'SCROLL_PENDING'
                     and self._pending.get('operation') == 'SCROLL_DOWN'
                     and counters.get('classification') == 'NOT_SENT_CONTENT_SUPPORT_RECHECK'
                     and counters.get('sendInterfaceInvoked') is False
-                    and counters.get('failedChecks') == ['scrollContentQuantizationSupported']
                     and counters.get('sourceLeaseId') == self._pending.get('sourceLeaseId')):
                     self._scroll_recheck = copy.deepcopy(counters)
                 self._pending = None

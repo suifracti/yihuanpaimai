@@ -93,6 +93,10 @@ internal sealed class ContinuousWgcCapture : IDisposable
                 ? source.CaptureDelivered(frameWaitMs, requestClock.Nanoseconds, long.MaxValue, stop, _observation, epoch)
                 : source.CaptureAfterRequest(frameWaitMs, requestClock.Nanoseconds, long.MaxValue, stop)) with { CaptureScopeEpoch = epoch }, ordinary: true); }
             catch (MappingProbeException ex) { Ensure(source, ex.Probe); throw new CaptureScopeInvalidatedException(); }
+            catch (TimeoutException ex) when (OrdinaryFrameUnavailableException.IsSelectionTimeout(ex))
+            {
+                throw new OrdinaryFrameUnavailableException(ex);
+            }
             catch (Exception ex) when (ex is not OperationCanceledException)
             {
                 _failureClockDiagnostics = _policy == CapturePolicy.Delivery ? source.LastDeliveryDiagnosticJson : source.LastRequestClockDiagnosticsJson;
@@ -113,7 +117,13 @@ internal sealed class ContinuousWgcCapture : IDisposable
     public string FailureReason(string fallback) => _pump.FailureException is { } failure ? CaptureFailure.Reason(failure, fallback) : fallback;
     public CapturedBgraFrame Capture(int timeoutMs)
     {
-        var frame = _pump.Take(timeoutMs);
+        CapturedBgraFrame frame;
+        try { frame = _pump.Take(timeoutMs); }
+        catch (TimeoutException ex) when (ex.Message == "capture-owner-wait-timeout"
+            && _pump.FailureException is null && !IsStopped)
+        {
+            throw new OrdinaryFrameUnavailableException(ex);
+        }
         if (!IsFrameCurrent(frame)) throw new CaptureScopeInvalidatedException();
         return frame;
     }

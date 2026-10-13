@@ -4,6 +4,8 @@
 
 ## 当前工作
 
+- **2026-10-13 本地/公开源码收敛**：[源码与历史对齐记录](reports/2026-10-13-source-mainline-alignment.md)。以后 GitHub `main` 保存最新源码，每次修改完成同步；Obsidian 保留当前进度与授权边界。旧分支、旧候选和日期报告不作为另一条活动源码主线。
+
 - **2026-10-12 单主线**：所有已公开开发成果已收拢至 `main`；**项目最新任务与验收状态只在授权 Obsidian Vault 的 `03-项目与工程/异环拍卖助手/README.md` → `Handoff.md` 中交接**，技术决定见 `Decisions.md`。已关闭的 [Issue #19](https://github.com/suifracti/yihuanpaimai/issues/19) 仅为历史归档，不能据其旧正文继续派工。下方日期文档只按各自发生时点使用。
 
 - **2026-10-09 规划接手**：[收尾规划](plans/2026-09-05-project-replan.md#2026-10-09-规划接手恢复成果收敛到完整产品)。已有成果归位、第一包接收结果及下一包自动收仓范围见该节；当前状态见 Obsidian Handoff 最新节。以下保留历史证据范围。

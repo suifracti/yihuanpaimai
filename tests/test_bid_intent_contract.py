@@ -40,6 +40,36 @@ def intent(e=None, c=None, amount=50000):
 
 
 class BidIntentContract(unittest.TestCase):
+    def test_main_delivery_proposal_uses_readback_age_and_rejects_missing_or_invalid_timing(self):
+        import ast
+        import math
+        from types import SimpleNamespace
+        from native_capture_delivery import DELIVERY, validate_delivery
+        from tests.test_native_delivery_contract import proof
+        tree = ast.parse((ROOT / 'app/main.py').read_text(encoding='utf-8'))
+        functions = [n for n in tree.body if isinstance(n, ast.FunctionDef)
+                     and n.name in {'_build_native_bid_intent_presentation', '_native_use_age_ms'}]
+        original = proof(1, request=1_000_000_000, session='s1')
+        ns = dict(math=math, DELIVERY=DELIVERY, validate_delivery=validate_delivery,
+                  time=SimpleNamespace(perf_counter_ns=lambda: original['readbackCompletedNs'] + 250_000_000),
+                  native_observation_enabled=lambda: True, CURRENT_MATCH=SimpleNamespace(id='m1', _seq=1),
+                  _native_solver_lease_matches=lambda _: True)
+        future = ast.ImportFrom(module='__future__', names=[ast.alias(name='annotations')], level=0)
+        exec(compile(ast.fix_missing_locations(ast.Module(body=[future, *functions], type_ignores=[])),
+                     str(ROOT / 'app/main.py'), 'exec'), ns)
+        payload = {**current(), 'timer': 5, 'freshnessMs': None, 'captureFreshnessPolicy': DELIVERY,
+                   'deliveryProof': original, 'observationStatus': 'FRAME',
+                   'observationProfile': 'native-readonly-v1', 'sourceKind': 'native_wgc'}
+        build = lambda value: ns['_build_native_bid_intent_presentation'](value,
+            event()['predictionSnapshot'], None, native_projection_current=True,
+            solver_status='valid', solver_admission={'eligible': True})
+        self.assertEqual(build(payload)['status'], 'READY')
+        self.assertEqual(build(payload)['maxSafeBid'], 58000)
+        self.assertFalse(build(payload)['executionEnabled'])
+        for bad in ({**payload, 'timer': None},
+                    {**payload, 'deliveryProof': {**original, 'drainTakeCount': 0}}):
+            self.assertEqual(build(bad)['status'], 'UNKNOWN')
+
     def test_structural_floor_not_center_or_p50_and_costs_once(self):
         value = intent()
         self.assertEqual(value['status'], 'READY', value)

@@ -4,6 +4,9 @@ using WgcLiveHarness;
 
 // No real HWND or native send. Test the actual adapter/lease through injected OS outcomes.
 var root = args[0];
+if (args.Contains("--ordinary-wait-only")) { OrdinaryFrameExpiryChecks.RunWait(root, FixtureProof); return; }
+if (args.Contains("--collection-only")) { ContentRecheckChecks.RunAdapter(root, FixtureProof, captureFirst: true); return; }
+if (args.Contains("--support-expiry-only")) { ContentRecheckChecks.Run(root, FixtureProof, expiryOnly: true); return; }
 if (args.Contains("--ordinary-expiry-only")) { OrdinaryFrameExpiryChecks.Run(root, FixtureProof); return; }
 if (args.Contains("--refusal-diagnostic-only")) { ContentRecheckChecks.Run(root, FixtureProof, diagnosticOnly: true); return; }
 if (args.Contains("--content-recheck-only")) { ContentRecheckChecks.Run(root, FixtureProof); return; }

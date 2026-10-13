@@ -138,14 +138,15 @@ class OneShotTests(unittest.TestCase):
         self.assertEqual(tail.tails, {})
         self.assertEqual(socket.sent, [{'type': 'stop_live_vision'}])
 
-    def test_settlement_deadline_does_not_extend_with_repeated_scene(self):
+    def test_settlement_past_seventy_seconds_stops_on_scene_exit(self):
         clock = SimpleNamespace(now=0)
         class Timed(Socket):
             async def recv(self):
                 if self.sent:
                     return await super().recv()
                 clock.now += 40
-                return json.dumps({'scene': 'SETTLEMENT', 'matchId': 'test-match'})
+                return json.dumps({'scene': 'SETTLEMENT' if clock.now <= 120 else 'AUCTION_LOBBY',
+                                   'matchId': 'test-match'})
         socket = Timed([{'type': 'native_stop_receipt', 'processExitConfirmed': True}])
         rows = []
         with patch('websockets.connect', return_value=socket), patch.object(runner, 'time',
@@ -153,8 +154,8 @@ class OneShotTests(unittest.TestCase):
             asyncio.run(runner.monitor({'port': 1}, self.root,
                 lambda kind, **data: rows.append({'kind': kind, **data})))
         self.assertEqual(next(r['reason'] for r in rows if r['kind'] == 'observation-ended'),
-                         'FIRST_SETTLEMENT_OBSERVATION_70S_END')
-        self.assertEqual(clock.now, 120)
+                         'FIRST_SETTLEMENT_LEFT')
+        self.assertEqual(clock.now, 160)
         self.assertTrue(rows[-1]['processExitConfirmed'])
 
     def test_scene_exit_match_change_and_health_failure_stop(self):

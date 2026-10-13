@@ -29,8 +29,8 @@ PRESEND_RECEIPTS = ROOT / 'tests/fixtures/native_adapter_presend_receipts.json'
 
 
 class LiveRun(Run):
-    def __init__(self, output=OUT):
-        super().__init__(content_gate=VisibleContentGate(), output=output)
+    def __init__(self, output=OUT, capture_first=False):
+        super().__init__(content_gate=VisibleContentGate(), output=output, capture_first=capture_first)
         # Stop at the analysis handoff. No old recognition/identity suite runs.
         self.finalizations = []
         self.finish = patch.object(self.source, 'finish_manual_capture',
@@ -72,6 +72,154 @@ def viewport(offset):
 
 
 class HalfViewportFlowTests(unittest.TestCase):
+    def test_capture_first_content_changes_and_missing_overlap_do_not_block_collection(self):
+        f = LiveRun(output=ROOT / 'build/t1-20261012/capture-first-python', capture_first=True)
+        self.addCleanup(f.close)
+        first = viewport(0)
+        changed = first.copy()
+        x, y, r, b = GRID
+        changed[y+65:y+90, x+80:x+105] = (230, 50, 140)
+        f.deliver(first); f.tick(); f.deliver(changed)
+        self.assertEqual(f.auto._phase, 'WAIT_SCROLL')
+        self.assertFalse(f.auto._observation['contentStability']['qualified'])
+        self.assertEqual(f.gate.representatives(), [])  # no invented content certificate
+        f.scroll_ack(); f.tick()
+        moved = viewport(180)
+        moved[y:b, x:r] = np.roll(moved[y:b, x:r], 25, axis=1)
+        f.deliver(moved)
+        self.assertEqual(f.auto._phase, 'WAIT_STABLE')
+        overlap = next(p for p in reversed(f.logs) if p['kind'] == 'image-overlap')['alignment']
+        self.assertNotEqual(overlap['status'], 'VERIFIED')
+        f.tick(); f.deliver(moved.copy())
+        self.assertEqual(f.auto._phase, 'WAIT_SCROLL')
+        self.assertEqual(len(f.intake.pages_copy()), 4)
+        self.assertTrue(f.auto._coverage_pending)
+        f.scope['matchGeneration'] = 2
+        f.auto.presentation_payload()
+        self.assertFalse(f.auto._active)
+        self.assertEqual(f.auto._reason, 'SOURCE_SCOPE_CHANGED')
+        self.assertEqual(f.finalizations[-1]['termination_reason'], 'INCOMPLETE')
+        f.saved_trace('capture-despite-unmatched-content')
+
+    def test_capture_first_bottom_microchanges_finish_but_middle_noop_is_bounded(self):
+        for bottom in (True, False):
+            f = LiveRun(output=ROOT / 'build/t1-20261012/capture-first-python', capture_first=True)
+            try:
+                def pair(frame):
+                    f.deliver(frame); f.tick(); f.deliver(frame.copy())
+                pair(viewport(0))
+                f.scroll_ack(); f.tick(); pair(viewport(360 if bottom else 180))
+                if bottom:
+                    f.scroll_ack(); f.tick()
+                    frame = viewport(360)
+                    frame[GRID[1]+80:GRID[1]+110, GRID[0]+100:GRID[0]+130] = (60, 80, 120)
+                    f.deliver(frame)
+                    self.assertTrue(f.auto._tail_stationary)
+                    f.tick(); f.deliver(frame.copy())
+                    self.assertFalse(f.auto._active)
+                    self.assertTrue(any(p['kind'] == 'bottom-collected' for p in f.logs))
+                    # A skipped synthetic section was intentionally not proven;
+                    # physical bottom never fabricates continuous pixel coverage.
+                    self.assertEqual(f.finalizations[-1]['termination_reason'], 'INCOMPLETE')
+                else:
+                    for attempt in range(3):
+                        f.scroll_ack(); f.tick(); f.deliver(viewport(180))
+                        if attempt < 2:
+                            f.tick(); f.deliver(viewport(180))
+                            self.assertEqual(f.auto._phase, 'WAIT_SCROLL')
+                    self.assertFalse(f.auto._active)
+                    self.assertEqual(f.auto._reason, 'WINDOW_SCROLL_NO_PROGRESS')
+                    self.assertFalse(any(p['kind'] == 'bottom-collected' for p in f.logs))
+                    self.assertEqual(f.finalizations[-1]['termination_reason'], 'INCOMPLETE')
+                f.saved_trace('capture-first-bottom' if bottom else 'capture-first-noop')
+            finally:
+                f.close()
+
+    @unittest.skipUnless(os.environ.get('YH_T1_CAPTURE_ROOT'), 'private T1 SOURCE opt-in')
+    def test_capture_first_real_sparse_page_keeps_useful_step(self):
+        root = Path(os.environ['YH_T1_CAPTURE_ROOT'])
+        manifest = json.loads(next((root / 'warehouse-intake').glob('*.json')).read_text(encoding='utf-8'))
+        self.assertEqual(manifest['scope']['recordStableKey'], 'replayfile_8ab2b18128ffceaba0e5')
+        src = manifest['pages'][-1]['nativeSource']
+        raw = (root / src['relativePath']).read_bytes()
+        self.assertEqual(hashlib.sha256(raw).hexdigest(), src['sha256'])
+        frame = cv2.imdecode(np.frombuffer(raw, np.uint8), cv2.IMREAD_COLOR)
+        from warehouse_scrollbar_observation import WarehouseScrollbarObserver
+        from warehouse_segment_overlap import content_retention_limit
+        x, y, r, b = warehouse_search_roi(1920, 1080)
+        crop = frame[y:b, x:r]
+        self.assertEqual(content_retention_limit(crop), 0)
+        for capture_first in (False, True):
+            f = LiveRun(output=ROOT / 'build/t1-20261012/capture-first-python', capture_first=capture_first)
+            try:
+                f.auto._anchor = crop
+                f.auto._observation = WarehouseScrollbarObserver().observe(frame, source_id='real-last')
+                self.assertEqual(f.auto._observation['scrollState'], 'MIDDLE')
+                f.auto._pixels_per_notch = 30  # measured real -120 receipt and -30px correspondence
+                steps = [f.auto._scroll_delta(), f.auto._scroll_delta()]
+                if capture_first:
+                    self.assertTrue(all(-1440 <= step <= -960 for step in steps), steps)
+                else:
+                    self.assertEqual(steps, [-120, 0])  # preserved actual old stop cause
+            finally:
+                f.close()
+
+    def test_not_sent_expired_support_rechecks_without_resending_old_scroll(self):
+        for invoked in (False, True):
+            f = LiveRun(output=ROOT / 'build/t1-20261012/support-expiry-python')
+            try:
+                frame = viewport(0)
+                f.deliver(frame); f.tick(); f.deliver(frame.copy())
+                old = copy.deepcopy(f.source._pending)
+                self.assertEqual(old['operation'], 'SCROLL_DOWN')
+                deadline = f.auto._deadline
+                event = f.event('REJECTED', old, reason='SCROLL_SUPPORT_EXPIRED_BEFORE_SEND', details={
+                    'classification': 'NOT_SENT_CONTENT_SUPPORT_RECHECK', 'sendInterfaceInvoked': invoked,
+                    'sourceLeaseId': old['sourceLeaseId'], 'failedChecks': ['deliveryProofQualified'],
+                    'supportFailure': 'DELIVERY_LOCAL_USE_EXPIRED'})
+                f.auto.on_event(event)
+                # Production status reads repeat the OPEN operation reason
+                # before the scheduled independent SOURCE request owns it.
+                f.auto.presentation_payload()
+                f.auto.on_event(copy.deepcopy(event))
+                self.assertEqual(f.auto._active, not invoked)
+                if not invoked:
+                    self.assertEqual(f.auto._phase, 'WAIT_STABLE')
+                    self.assertEqual(f.source.source_session_snapshot()['state'], 'OPEN')
+                    self.assertEqual(f.finalizations, [])
+                    x, y, r, b = warehouse_search_roi(1920, 1080)
+                    with patch('native_warehouse_visible_content_gate.time.perf_counter_ns',
+                            side_effect=lambda: round(f.now * 1e9)):
+                        for i in (1, 2):
+                            f.now += .65
+                            f.gate.sampling_hint(frame[y:b, x:r], capture_id=f'expiry-hint/{i}',
+                                readback_ns=round(f.now * 1e9))
+                        f.auto.poll()
+                    self.assertEqual(f.sent[-1]['operation'], 'REQUEST_PAGE')
+                self.assertEqual(f.auto._deadline, deadline)
+                self.assertEqual(sum(c['operation'] == 'SCROLL_DOWN' for c in f.sent), 1)
+            finally:
+                f.close()
+
+    def test_request_thirty_three_after_seventy_seconds_keeps_scope_guard(self):
+        f = LiveRun(output=OUT / 'coverage-driven')
+        try:
+            # The Host's active scene owns the lifetime; no elapsed-time or count quota.
+            f.source._deadline = f.auto._deadline = (2**63 - 1) / 1e9
+            f.source._pending = None
+            f.source._state = 'OPEN'
+            f.source._ordinal = 32
+            f.now = 180.
+            self.assertTrue(f.auto._guard())
+            self.assertTrue(f.source.capture_manual_page()['ok'])
+            self.assertEqual(f.sent[-1]['requestOrdinal'], 33)
+            self.assertEqual(f.sent[-1]['operation'], 'REQUEST_PAGE')
+            f.scope['matchGeneration'] = 2
+            self.assertFalse(f.auto._guard())
+            self.assertFalse(f.auto._active)
+        finally:
+            f.close()
+
     def test_second_scroll_failure_after_verified_move_is_bounded(self):
         # Synthetic viewport physics checks scheduling, not real-game accuracy.
         # Receipt semantics are independently pinned to the Host contract.
