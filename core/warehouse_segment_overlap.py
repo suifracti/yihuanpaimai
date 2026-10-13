@@ -469,27 +469,58 @@ class TerminalContinuity:
         lo, hi = int(np.ceil(low * max(0, delta - 1))), int(np.floor(high * (delta + 1)))
         va, _ = _content_view(a); vb, _ = _content_view(b)
         height = va.shape[0]
-        if (low > high or lo <= 3 or hi > min(max_shift_px, .88 * height)
+        if (low > high or lo < 0 or hi > min(max_shift_px, .88 * height)
                 or hi - lo >= .5 * g0['cellHeight']):
             return {}  # The calibrated interval must exclude grid-period aliases.
         gradients = [cv2.Sobel(cv2.cvtColor(im, cv2.COLOR_BGR2GRAY),
                               cv2.CV_32F, 0, 1, ksize=3) for im in (va, vb)]
+        representations = [(gradients, False)]
+        vertical_traces = None
+        # Only an empty shared tail may use grid-line traces. Half-cell
+        # horizontal runs remove corner sparkles/background texture without
+        # masking a detected object, lowering correspondence floors, or
+        # inferring movement from the scrollbar alone.
+        if all(c['boundingBox'][3] <= lo for c in ga['components']):
+            kernel = np.ones((1, max(1, int(g0['cellWidth'] / 2))), np.uint8)
+            traces = [cv2.morphologyEx(g, cv2.MORPH_OPEN, kernel)
+                      - cv2.morphologyEx(-g, cv2.MORPH_OPEN, kernel) for g in gradients]
+            representations.append((traces, True))
+            vertical_kernel = np.ones((max(1, int(g0['cellHeight'] / 2)), 1), np.uint8)
+            vertical = [cv2.Sobel(cv2.cvtColor(im, cv2.COLOR_BGR2GRAY),
+                        cv2.CV_32F, 1, 0, ksize=3) for im in (va, vb)]
+            vertical_traces = [cv2.morphologyEx(g, cv2.MORPH_OPEN, vertical_kernel)
+                - cv2.morphologyEx(-g, cv2.MORPH_OPEN, vertical_kernel) for g in vertical]
         candidates = []
-        for offset in range(lo, hi + 1):
-            shared_a, shared_b = gradients[0][offset:], gradients[1][:-offset]
-            halves = [(shared_a, shared_b), *zip(np.array_split(shared_a, 2), np.array_split(shared_b, 2))]
-            if any(float(x.std()) < 8 or float(y.std()) < 8 for x, y in halves):
-                continue
-            scores = [float(cv2.matchTemplate(x, y, cv2.TM_CCOEFF_NORMED)[0, 0]) for x, y in halves]
-            # Same .80 correspondence floor as content bands; require both
-            # disjoint grid portions as well as the complete shared gradient.
-            if min(scores) >= .80:
-                candidates.append((min(scores), offset, scores))
+        for representation, grid_trace in representations:
+            for offset in range(lo, hi + 1):
+                shared_a = representation[0][offset:]
+                shared_b = representation[1][:-offset] if offset else representation[1]
+                halves = [(shared_a, shared_b), *zip(np.array_split(shared_a, 2), np.array_split(shared_b, 2))]
+                if any(float(x.std()) < 8 or float(y.std()) < 8 for x, y in halves):
+                    continue
+                scores = [float(cv2.matchTemplate(x, y, cv2.TM_CCOEFF_NORMED)[0, 0]) for x, y in halves]
+                # Same .80 floor and both disjoint portions as before.
+                if min(scores) >= .80:
+                    if grid_trace:
+                        ax = vertical_traces[0][offset:]
+                        bx = vertical_traces[1][:-offset] if offset else vertical_traces[1]
+                        vertical_parts = [(ax,bx), *zip(np.array_split(ax,2),np.array_split(bx,2))]
+                        if any(float(x.std()) < 8 or float(y.std()) < 8 for x,y in vertical_parts):
+                            continue
+                        # Horizontal runs alone erase column location. Retain
+                        # the orthogonal registered columns to reject drift.
+                        if min(float(cv2.matchTemplate(x,y,cv2.TM_CCOEFF_NORMED)[0,0])
+                               for x,y in vertical_parts) < .80:
+                            continue
+                    candidates.append((min(scores), offset, scores, grid_trace))
         if not candidates:
             return {}
         candidates.sort(reverse=True)
-        score, offset, scores = candidates[0]
-        if any(abs(dy - offset) > CLUSTER_BIN for _, dy, _ in candidates[1:]):
+        score, offset, scores, grid_trace = candidates[0]
+        # Tiny thumb motion may include zero in its uncertainty interval. A
+        # stationary image or competing stationary support is never movement.
+        if offset == 0 or any((dy == 0 or abs(dy - offset) > CLUSTER_BIN)
+                             for _, dy, _, _ in candidates[1:]):
             return {}
         self.end = after  # Advance the cursor, never train the scale on this inference.
         return {'status': STATUS_VERIFIED, 'direction': DIR_DOWN,
@@ -500,7 +531,8 @@ class TerminalContinuity:
                 'offsetBasis': 'content-calibrated scrollbar interval plus registered grid gradients',
                 'terminalContinuity': {'calibration': self.samples.copy(),
                     'thumbDelta': delta, 'displacementIntervalPx': [lo, hi],
-                    'gridPeriodPx': g0['cellHeight'], 'sharedGradientScores': scores}}
+                    'gridPeriodPx': g0['cellHeight'], 'sharedGradientScores': scores,
+                    'emptySharedGridTrace': grid_trace}}
 
 
 def align_warehouse_segments(prev_img, next_img, *, prev_id='', next_id='',
@@ -514,7 +546,7 @@ def align_warehouse_segments(prev_img, next_img, *, prev_id='', next_id='',
         terminal_continuity.record(prev_img, next_img, result)
     elif (required_direction == DIR_DOWN and result['status'] == STATUS_UNVERIFIED
             and result['reason'] in {REASON_LARGE_GAP, REASON_INSUFFICIENT_FEATURES,
-                                    REASON_LOW_OVERLAP, 'SPARSE_PROGRESSION_VERIFIED'}
+                                    REASON_LOW_OVERLAP, REASON_NO_MOVEMENT, 'SPARSE_PROGRESSION_VERIFIED'}
             and prev_id and next_id and prev_id != next_id):
         terminal = terminal_continuity.terminal(prev_img, next_img, max_shift_px)
         if terminal:

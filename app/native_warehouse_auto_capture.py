@@ -16,7 +16,7 @@ import numpy as np
 from warehouse_scrollbar_observation import WarehouseScrollbarObserver, warehouse_search_roi
 from warehouse_segment_overlap import align_warehouse_segments, DIR_DOWN, TerminalContinuity, content_retention_limit
 from warehouse_support_frame import stationary_support_proof
-from scene_anchors import settlement_title_visible
+from scene_anchors import settlement_title_visible, settlement_controls_visible, settlement_reveal_progress
 from native_warehouse_content_stability import content_stability
 from native_warehouse_reveal_marker import RevealMarker
 from native_warehouse_visible_content_gate import VisibleContentGate
@@ -52,6 +52,8 @@ class NativeWarehouseAutoCapture:
         self._observer = WarehouseScrollbarObserver()
         self._marker = None  # Lazy: strict mode does not depend on the reveal asset.
         self._skip_observation = None
+        self._reveal_progress = None
+        self._reveal_no_progress = 0
         self._retry_scope = self._support_floor = self._consumed_duplicate = None
         self._consumed_scroll_recheck = None
         self._pixels_per_notch = None
@@ -124,6 +126,8 @@ class NativeWarehouseAutoCapture:
             self._post_scroll_frame_received = False
             self._anchor = self._observation = None
             self._skip_observation = None
+            self._reveal_progress = None
+            self._reveal_no_progress = 0
             self._retry_scope = copy.deepcopy(token[2])
             self._support_floor = self._consumed_duplicate = None
             self._consumed_scroll_recheck = None
@@ -311,6 +315,8 @@ class NativeWarehouseAutoCapture:
                 self._marker = RevealMarker()
             observation['revealMarker'] = self._marker.observe(frame)
             observation['skipAnimationButton'] = self._marker.skip_button(frame)
+            observation['finalSettlementControlsVisible'] = settlement_controls_visible(frame)
+            observation['revealProgressKey'] = settlement_reveal_progress(frame)
             observation['revealMarker'].update(originalSha256=desc['sha256'],
                 captureId=page['deliveryProof']['captureId'])
         if self._content_gate is not None:
@@ -340,6 +346,8 @@ class NativeWarehouseAutoCapture:
             if state not in {'TOP', 'NO_SCROLL'}:
                 self._stop('START_REQUIRES_TOP')
                 return
+            if self._collect_first() and self._reveal_wait_expired(observation):
+                return
             if self._collect_first() and observation.get('skipAnimationButton', {}).get('clickable'):
                 support = (self._content_gate.compare(self._skip_observation, observation)
                     if self._skip_observation is not None else {'qualified': False})
@@ -351,13 +359,8 @@ class NativeWarehouseAutoCapture:
                     self._content_gate.commit_support(self.source.intake, observation)
                     self._diagnose('skip-animation-visible-support', qualification=support,
                         revealCompletionProven=False)
-                else:
-                    self._skip_observation = copy.deepcopy(observation)
-                    result = self.source.request_skip_animation()
-                    self._diagnose('skip-animation-request', result=result, pageOrdinal=self._seen_pages)
-                    if result.get('ok'):
-                        self._phase = 'WAIT_SKIP_ANIMATION'
-                        return
+                if self._skip_revealing(observation):
+                    return
         elif self._phase == 'WAIT_MOVED':
             progress = self._scrollbar_progress(self._observation, observation)
             self._diagnose('scrollbar-progress', pageOrdinal=self._seen_pages, progress=progress)
@@ -432,14 +435,16 @@ class NativeWarehouseAutoCapture:
                 observation['contentStability'] = content
                 self._diagnose('content-stability', pageOrdinal=self._seen_pages, qualification=content)
                 if (self._collect_first() and self._scroll_count == 0 and state in {'TOP', 'NO_SCROLL'}
-                        and any(content.get(side, {}).get('unresolvedRegionCount', 0) > 0
-                                for side in ('previous', 'current'))):
-                    # Do not scroll away from known unrevealed TOP placeholders
-                    # just because the optional skip control was unavailable.
-                    # After the last placeholder disappears, re-anchor once for
-                    # an independent filled image. Middle-page microchanges and
-                    # overlap failures still do not block continued collection.
-                    self._wait_again('TOP_VISIBLE_CONTENT_STILL_REVEALING', crop,
+                        and (not observation.get('finalSettlementControlsVisible')
+                            or any(content.get(side, {}).get('unresolvedRegionCount', 0) > 0
+                                   for side in ('previous', 'current')))):
+                    # A stable TOP can precede reveal of items below it. Final
+                    # sale/exit layout is separate scene evidence, not item facts.
+                    if self._reveal_wait_expired(observation):
+                        return
+                    if self._skip_revealing(observation):
+                        return
+                    self._wait_again('SETTLEMENT_REVEAL_NOT_FINISHED', crop,
                         observation, observation['deliveryProof'])
                     return
                 if not content['qualified'] and not self._collect_first():
@@ -491,6 +496,30 @@ class NativeWarehouseAutoCapture:
             return 'DOWN'
         except (KeyError, TypeError, ValueError):
             return 'SCROLLBAR_PROGRESS_UNKNOWN'
+
+    def _reveal_wait_expired(self, observation):
+        count = observation.get('contentProfile', {}).get('visibleUnresolvedRegionCount', 0)
+        if observation.get('finalSettlementControlsVisible') and count == 0:
+            self._reveal_no_progress = 0
+            return False
+        key = (observation.get('revealProgressKey'), count)
+        self._reveal_no_progress = self._reveal_no_progress + 1 if key == self._reveal_progress else 0
+        self._reveal_progress = key
+        if self._reveal_no_progress >= 6:
+            self._stop('SETTLEMENT_REVEAL_NO_PROGRESS')
+            return True
+        return False
+
+    def _skip_revealing(self, observation):
+        if observation.get('finalSettlementControlsVisible') or not observation.get('skipAnimationButton', {}).get('clickable'):
+            return False
+        self._skip_observation = copy.deepcopy(observation)
+        result = self.source.request_skip_animation()
+        self._diagnose('skip-animation-request', result=result, pageOrdinal=self._seen_pages)
+        if result.get('ok'):
+            self._phase = 'WAIT_SKIP_ANIMATION'
+            return True
+        return False
 
     def _stable(self):
         # Independent saved originals authorize collection, not item facts.

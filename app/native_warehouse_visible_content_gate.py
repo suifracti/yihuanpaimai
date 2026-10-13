@@ -6,7 +6,7 @@ import time
 from native_capture_delivery import independent_support
 from native_warehouse_content_stability import content_stability, content_observation
 from scene_anchors import settlement_title_visible
-from warehouse_scrollbar_observation import warehouse_search_roi
+from warehouse_scrollbar_observation import warehouse_content_roi
 
 
 class VisibleContentGate:
@@ -32,13 +32,15 @@ class VisibleContentGate:
         self._frames[key] = frame.copy()
         while len(self._frames) > 2:
             self._frames.pop(next(iter(self._frames)))
-        x,y,r,b = warehouse_search_roi(frame.shape[1],frame.shape[0])
-        if not content_observation(frame[y:b,x:r])['qualified']:
+        x,y,r,b = warehouse_content_roi(frame.shape[1],frame.shape[0])
+        visible = content_observation(frame[y:b,x:r])
+        if not visible['qualified']:
             self.require_sampling_hint(page['deliveryProof']['readbackCompletedNs'])
         return {'scope': copy.deepcopy(scope), 'mapping': mapping,
                 'reviewBinding': copy.deepcopy(review_binding), 'evidenceId': page['descriptor']['evidenceId'],
                 'sha256': page['descriptor']['sha256'], 'captureId': page['deliveryProof']['captureId'],
                 'pixelSha256': page['pixelSha256'], 'bmpSha256': page['bmpSha256'],
+                'visibleUnresolvedRegionCount': visible['unresolvedRegionCount'],
                 'rawBgrSha256': hashlib.sha256(frame.tobytes()).hexdigest()}
 
     def request_eligible(self):
@@ -73,7 +75,7 @@ class VisibleContentGate:
             return {'qualified': False, 'reason': 'CONTENT_SCENE_UNPROVEN'}
         if frames[0].shape != frames[1].shape:
             return {'qualified': False, 'reason': 'CONTENT_GEOMETRY_UNPROVEN'}
-        x, y, r, bottom = warehouse_search_roi(frames[0].shape[1], frames[0].shape[0])
+        x, y, r, bottom = warehouse_content_roi(frames[0].shape[1], frames[0].shape[0])
         result = content_stability(*(f[y:bottom, x:r] for f in frames))
         if result['qualified']:
             def ref(p):

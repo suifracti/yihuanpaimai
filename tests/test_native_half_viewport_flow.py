@@ -8,6 +8,7 @@ import copy
 import hashlib
 import json
 import os
+import struct
 import threading
 from pathlib import Path
 from unittest.mock import Mock, patch
@@ -48,10 +49,10 @@ class LiveRun(Run):
             'diagnostics': self.logs, 'finalizations': self.finalizations}, indent=2), encoding='utf-8')
 
 
-def viewport(offset):
+def viewport(offset, *, settlement_finished=True):
     """Independent physics: crop one fixed world, advance a physical scrollbar."""
     x, y, r, b = GRID
-    top, bottom = scene(0), scene(2)
+    top, bottom = scene(0, settlement_finished=settlement_finished), scene(2)
     world = np.empty((922, r-x, 3), np.uint8)
     world[:b-y] = top[y:b, x:r]
     world[360:] = bottom[y:b, x:r]
@@ -72,6 +73,49 @@ def viewport(offset):
 
 
 class HalfViewportFlowTests(unittest.TestCase):
+    def test_hint_uses_business_domain_without_becoming_source(self):
+        from warehouse_scrollbar_observation import warehouse_content_roi
+        f = LiveRun(output=ROOT/'build/t1-20261012/content-hint-domain', capture_first=True)
+        try:
+            f.source._state, f.source._pending = 'OPEN', None
+            x,y,r,b = warehouse_content_roi(1920,1080)
+            crop = viewport(0)[y:b,x:r]
+            h,w = crop.shape[:2]
+            self.assertEqual((w,h),(600,566))
+            pixels = cv2.cvtColor(crop,cv2.COLOR_BGR2BGRA).tobytes()
+            raw = struct.pack('<2sIHHI',b'BM',54+len(pixels),0,0,54)
+            raw += struct.pack('<IiiHHIIiiII',40,w,-h,1,32,0,len(pixels),0,0,0,0)+pixels
+            path = f.root/'warehouse-sources/content-observation.bmp'
+            path.parent.mkdir(exist_ok=True); path.write_bytes(raw)
+            event = f.event('CONTENT_HINT',details={'sourceAuthority':False,'formalFactsQualified':False,
+                'clientMap':'map','captureId':'fixture/1/2','readbackNs':round(f.now*1e9),
+                'path':str(path),'sha256':hashlib.sha256(raw).hexdigest(),'width':w,'height':h})
+            self.assertTrue(np.array_equal(f.source.read_content_hint(event),crop))
+            event['details']['height'] = 636
+            self.assertIsNone(f.source.read_content_hint(event))
+            self.assertEqual(f.source.pages_copy(),[])
+            self.assertEqual(f.gate.representatives(),[])
+            self.assertFalse(any(c['operation']=='SCROLL_DOWN' for c in f.sent))
+        finally:
+            f.close()
+
+    def test_finished_layout_missing_and_no_reveal_progress_stops_with_saved_originals(self):
+        f = LiveRun(output=ROOT/'build/t1-20261012/final-controls-no-progress', capture_first=True)
+        try:
+            f.source._host_limits['skipAnimationSupported'] = True
+            for i in range(7):
+                f.deliver(viewport(0, settlement_finished=False))
+                if i == 6:
+                    break
+                self.assertEqual(f.auto._phase, 'WAIT_STABLE')
+                f.tick()
+            self.assertFalse(f.auto._active)
+            self.assertEqual(f.auto._reason, 'SETTLEMENT_REVEAL_NO_PROGRESS')
+            self.assertFalse(any(c['operation']=='SCROLL_DOWN' for c in f.sent))
+            self.assertEqual(len(f.source.pages_copy()),7)
+        finally:
+            f.close()
+
     def test_skip_animation_retries_unknown_on_fresh_source_then_collects(self):
         from native_warehouse_reveal_marker import RevealMarker
         f = LiveRun(output=ROOT/'build/t1-20261012/skip-animation-python', capture_first=True)
@@ -79,9 +123,12 @@ class HalfViewportFlowTests(unittest.TestCase):
             f.source._host_limits['skipAnimationSupported'] = True
             marker = Mock(spec=RevealMarker)
             marker.observe.return_value = {'status': 'PRESENT', 'animationState': 'UNKNOWN'}
-            marker.skip_button.side_effect = [{'clickable': True}, {'clickable': True},
+            marker.skip_button.side_effect = [{'clickable': False}, {'clickable': True}, {'clickable': True},
                                               {'clickable': False}, {'clickable': False}]
             f.auto._marker = marker
+            f.deliver(scene(0, revealing=True))
+            self.assertEqual(f.auto._phase, 'WAIT_STABLE')
+            f.tick()
             for outcome in ('UNKNOWN', 'SENT'):
                 f.deliver(scene(0, revealing=True))
                 self.assertEqual(f.auto._phase, 'WAIT_SKIP_ANIMATION')
@@ -115,12 +162,20 @@ class HalfViewportFlowTests(unittest.TestCase):
             marker.observe.return_value = {'status': 'NOT_DETECTED', 'animationState': 'UNKNOWN'}
             marker.skip_button.return_value = {'clickable': True, 'pinkFraction': .86}
             f.auto._marker = marker
-            f.deliver(viewport(0))
+            f.deliver(viewport(0, settlement_finished=False))
             command = copy.deepcopy(f.source._pending)
             f.auto.on_event(f.event('SKIP_ANIMATION_RESULT', command, inputActions=True,
                 reason='SKIP_ANIMATION_SENT', details={'classification': 'SENT',
                     'sendInterfaceInvoked': True, 'messageCompletedNs': round(f.now*1e9),
                     'sourceLeaseId': command['sourceLeaseId'], 'animationCompletionProven': False}))
+            f.tick(); f.deliver(viewport(0, settlement_finished=False))
+            self.assertEqual(f.auto._phase, 'WAIT_SKIP_ANIMATION')
+            self.assertFalse(any(c['operation']=='SCROLL_DOWN' for c in f.sent))
+            command = copy.deepcopy(f.source._pending)
+            f.auto.on_event(f.event('SKIP_ANIMATION_RESULT', command, inputActions=True,
+                reason='SKIP_ANIMATION_SENT', details={'classification':'SENT',
+                    'sendInterfaceInvoked':True, 'messageCompletedNs':round(f.now*1e9),
+                    'sourceLeaseId':command['sourceLeaseId'], 'animationCompletionProven':False}))
             f.tick(); f.deliver(viewport(0))
             self.assertEqual(f.auto._phase, 'WAIT_STABLE')
             supported = f.source.pages_copy()[-1]['descriptor']['evidenceId']
@@ -131,7 +186,7 @@ class HalfViewportFlowTests(unittest.TestCase):
             self.assertIn(supported, f.gate.representatives())
             self.assertFalse(f.auto._observation['contentStability']['qualified'])
             self.assertNotIn(f.source.pages_copy()[-1]['descriptor']['evidenceId'], f.gate.representatives())
-            self.assertEqual(sum(c['operation'] == 'SKIP_ANIMATION' for c in f.sent), 1)
+            self.assertEqual(sum(c['operation'] == 'SKIP_ANIMATION' for c in f.sent), 2)
             self.assertEqual(f.sent[-1]['operation'], 'SCROLL_DOWN')
         finally:
             f.close()
@@ -679,6 +734,129 @@ class HalfViewportFlowTests(unittest.TestCase):
         drifted = np.roll(viewport(180)[y:b, x:r], 25, axis=1)
         result = align_warehouse_segments(a, drifted, required_direction='DOWN')
         self.assertNotEqual(result['status'], 'VERIFIED', result)
+
+
+@unittest.skipUnless(os.environ.get('YIHUAN_REAL_SOURCE_QA') == '1', 'retained SOURCE opt-in')
+class RecentRealTerminalContinuityQATests(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        store = Path(os.environ.get('YIHUAN_RECENT_SOURCE_ROOT',
+            str(ROOT/'build/t1-20261012/real-once-08/runtime-data/native-live-trial')))
+        manifest = next((store/'warehouse-intake').glob('*.json'))
+        pages = json.loads(manifest.read_text(encoding='utf-8'))['pages']
+        cls.crops, cls.frames = {}, {}
+        x,y,r,b = warehouse_search_roi(1920,1080)
+        for n in range(1,33):
+            source = pages[n-1]['nativeSource']; raw = (store/source['relativePath']).read_bytes()
+            if hashlib.sha256(raw).hexdigest() != source['sha256']:
+                raise AssertionError('Retained original changed')
+            cls.frames[n] = cv2.imdecode(np.frombuffer(raw,np.uint8),cv2.IMREAD_COLOR)
+            cls.crops[n] = cls.frames[n][y:b,x:r].copy()
+
+    def test_real_final_layout_and_footer_changes_are_distinct_from_reveal(self):
+        from scene_anchors import settlement_controls_visible
+        from native_warehouse_content_stability import content_stability
+        from warehouse_scrollbar_observation import warehouse_content_roi
+        self.assertTrue(all(not settlement_controls_visible(self.frames[n]) for n in range(1,22)))
+        self.assertTrue(all(settlement_controls_visible(self.frames[n]) for n in range(22,33)))
+        x,y,r,b = warehouse_content_roi(1920,1080)
+        for i,j in ((29,30),(31,32)):
+            self.assertTrue(content_stability(self.frames[i][y:b,x:r],self.frames[j][y:b,x:r])['qualified'])
+        self.assertFalse(content_stability(self.frames[21][y:b,x:r],self.frames[22][y:b,x:r])['qualified'])
+        for px,py in ((1388,279),(1334,230),(1848,745),(1350,775),(1887,440)):
+            changed = self.frames[24].copy(); changed[py,px] ^= 16
+            self.assertFalse(content_stability(self.frames[24][y:b,x:r],changed[y:b,x:r])['qualified'])
+
+    def test_real_top_visible_support_does_not_leave_while_hidden_items_reveal(self):
+        f = LiveRun(output=ROOT/'build/t1-20261012/real-initial-layout-replay', capture_first=True)
+        try:
+            f.source._host_limits['skipAnimationSupported'] = True
+            for n in range(1,21):
+                f.deliver(self.frames[n])
+                self.assertTrue(f.auto._active, (n,f.auto._reason))
+                self.assertFalse(any(c['operation']=='SCROLL_DOWN' for c in f.sent))
+                command = copy.deepcopy(f.source._pending)
+                self.assertEqual(command['operation'],'SKIP_ANIMATION')
+                f.auto.on_event(f.event('SKIP_ANIMATION_RESULT',command,inputActions=True,
+                    reason='SKIP_ANIMATION_SENT',details={'classification':'SENT',
+                        'sendInterfaceInvoked':True,'messageCompletedNs':round(f.now*1e9),
+                        'sourceLeaseId':command['sourceLeaseId'],'animationCompletionProven':False}))
+                f.tick()
+            self.assertGreater(len(f.gate.representatives()),0)
+        finally:
+            f.close()
+
+    def test_real_tail_runs_through_fresh_support_and_bottom_probe(self):
+        # Re-enter at the already recorded second scroll; this tests the tail
+        # state machine, not a reconstruction of the earlier unrevealed TOP.
+        from warehouse_scrollbar_observation import WarehouseScrollbarObserver
+        f = LiveRun(output=ROOT/'build/t1-20261012/real-tail-flow', capture_first=True)
+        try:
+            context = TerminalContinuity()
+            self.match(self.crops[20],self.crops[21],context,20,21)
+            f.auto._terminal_continuity = context
+            f.auto._scroll_count = 2
+            f.auto._last_wheel_delta = -1080
+            f.auto._phase = 'WAIT_MOVED'
+            f.auto._anchor = self.crops[22].copy()
+            f.auto._observation = WarehouseScrollbarObserver().observe(self.frames[22],source_id='seed-22')
+            f.deliver(self.frames[23]); f.tick(); f.deliver(self.frames[24])
+            self.assertEqual(f.auto._phase,'WAIT_SCROLL')
+            for i,j in ((25,26),(27,28),(29,30),(31,32)):
+                f.scroll_ack(); f.tick(); f.deliver(self.frames[i])
+                self.assertTrue(f.auto._active,(i,f.auto._reason))
+                f.tick(); f.deliver(self.frames[j])
+                if j < 32:
+                    self.assertEqual(f.auto._phase,'WAIT_SCROLL',(j,f.auto._reason))
+            self.assertFalse(f.auto._active)
+            self.assertEqual(f.auto._reason,'COMPLETE')
+            motions=[e['alignment']['verticalOffsetPx'] for e in f.logs if e['kind']=='image-overlap']
+            self.assertEqual(motions,[-271,-271,-30,-5])
+            self.assertTrue(any(e['kind']=='bottom-collected' and e['bottomConfirmed'] for e in f.logs))
+            self.assertEqual(len(f.gate.representatives()),5)
+            f.saved_trace('real-tail')
+        finally:
+            f.close()
+
+    def calibrated(self):
+        context = TerminalContinuity()
+        for i,j,offset in ((20,21,-270),(22,23,-271)):
+            result = self.match(self.crops[i],self.crops[j],context,i,j)
+            self.assertEqual(result['status'],'VERIFIED',result)
+            self.assertEqual(result['verticalOffsetPx'],offset)
+        return context
+
+    @staticmethod
+    def match(a,b,context,i=24,j=25):
+        return align_warehouse_segments(a,b,prev_id=str(i),next_id=str(j),
+            required_direction='DOWN',terminal_continuity=context)
+
+    def test_connected_empty_tail_and_small_final_motion(self):
+        context = self.calibrated()
+        for i,j,offset in ((24,25,-271),(26,27,-30),(28,29,-5)):
+            result = self.match(self.crops[i],self.crops[j],context,i,j)
+            self.assertEqual(result['status'],'VERIFIED',result)
+            self.assertEqual(result['verticalOffsetPx'],offset)
+            self.assertFalse(result['bottomConfirmed'])
+        self.assertNotEqual(self.match(self.crops[24],self.crops[25],TerminalContinuity())['status'],'VERIFIED')
+
+    def test_grid_alias_skipped_view_and_stationary_thumb_noise_are_rejected(self):
+        a,b = self.crops[24],self.crops[25]
+        false_bottom = b.copy();false_bottom[:,565:580] = a[:,565:580]
+        phase = b.copy();phase[:559,:562] = np.roll(b[:559,:562],-28,axis=0)
+        drift = b.copy();drift[:559,:562] = np.roll(b[:559,:562],25,axis=1)
+        occupied = b.copy();occupied[120:230,60:170] = (45,160,215)
+        for label,before,after in [('false-bottom',a,false_bottom),('wrong-phase',a,phase),
+                ('horizontal-drift',a,drift),('new-occupied-tail',a,occupied),
+                ('skipped-real-view',self.crops[22],b)]:
+            with self.subTest(label=label):
+                self.assertNotEqual(self.match(before,after,self.calibrated())['status'],'VERIFIED')
+        context = self.calibrated()
+        self.match(a,b,context)
+        self.match(self.crops[26],self.crops[27],context,26,27)
+        stationary = self.crops[28].copy()
+        stationary[:,565:580] = self.crops[29][:,565:580]
+        self.assertNotEqual(self.match(self.crops[28],stationary,context,28,29)['status'],'VERIFIED')
 
 
 @unittest.skipUnless(os.environ.get('YIHUAN_REAL_SOURCE_QA') == '1',

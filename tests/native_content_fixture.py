@@ -14,7 +14,7 @@ REFERENCES = ((1180, 250, 1220, 290), (1200, 450, 1240, 490),
               (1150, 650, 1190, 690), (1210, 730, 1250, 770))
 
 
-def scene(view=0, *, revealing=False):
+def scene(view=0, *, revealing=False, settlement_finished=None):
     frame = np.full((1080, 1920, 3), 20, np.uint8)
     title = cv2.imread(str(ROOT/'assets/scene_anchors/settlement_title.png'))
     h, w = title.shape[:2]
@@ -53,6 +53,12 @@ def scene(view=0, *, revealing=False):
     frame[214:776, 1882:1894] = 45
     thumb = (214, 410, 576)[view]
     frame[thumb:thumb+200, 1882:1894] = 210
+    if (not revealing if settlement_finished is None else settlement_finished):
+        for name, (x, y) in [('settlement_sale_label',(1338,862)),
+                             ('settlement_exit_label',(1680,986))]:
+            label = cv2.imread(str(ROOT/('assets/scene_anchors/'+name+'.png')))
+            h,w = label.shape[:2]
+            frame[y:y+h,x:x+w] = label
     return frame
 
 

@@ -44,7 +44,8 @@ internal sealed record DeliveryVisualSummary(string CaptureId, long Epoch, long 
         return va / a.Length >= 64 && vb / b.Length >= 64
             && (ab - sa * sb / a.Length) / Math.Sqrt(va * vb) >= .99;
     }
-    // Same normalized board + right/bottom padding as warehouse_search_roi.
+    // Same dedicated business domain as warehouse_content_roi. The larger
+    // search ROI includes sale/exit decorations below the clipped grid rim.
     // Includes unknown/dark cells, badges, clipping edges and scrollbar; no item masks.
     internal static (int Left, int Top, int Right, int Bottom) ScrollContentBox(int width, int height)
     {
@@ -58,9 +59,9 @@ internal sealed record DeliveryVisualSummary(string CaptureId, long Epoch, long 
         var left = Math.Clamp(vx + (int)(.685 * vw), 0, width - 1);
         var top = Math.Clamp(vy + (int)(.196 * vh), 0, height - 1);
         var right = Math.Max(left + 1, Math.Min(width, vx + (int)(.978 * vw)));
-        var bottom = Math.Max(top + 1, Math.Min(height, vy + (int)(.755 * vh)));
+        var bottom = Math.Max(top + 1, Math.Min(height, vy + (int)(.720 * vh)));
         return (left, top, Math.Min(width, right + (int)(.020 * vw)),
-            Math.Min(height, bottom + (int)(.030 * vh)));
+            bottom);
     }
 
     public static DeliveryVisualSummary From(CapturedBgraFrame f)

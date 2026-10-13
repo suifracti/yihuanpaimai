@@ -57,6 +57,17 @@ def warehouse_search_roi(width: int, height: int) -> Tuple[int, int, int, int]:
     return x1, y1, max(x1 + 1, x2), max(y1 + 1, y2)
 
 
+def warehouse_content_roi(width: int, height: int) -> Tuple[int, int, int, int]:
+    """Grid, clipped bottom rim and entire scrollbar; exclude settlement footer.
+
+    The search box remains larger for geometry/identification. At 1920x1080
+    the business panel ends at y=776; sale/exit UI below it is not item content.
+    """
+    x1, y1, x2, _ = warehouse_search_roi(width, height)
+    _, vy, _, vh = ROIScaler.get_viewport_rect(width, height)
+    return x1, y1, x2, max(y1 + 1, min(height, vy + int(.720 * vh)))
+
+
 def _content_fingerprint(gray: np.ndarray) -> str:
     small = cv2.resize(gray, (24, 24), interpolation=cv2.INTER_AREA)
     return hashlib.sha256(small.tobytes()).hexdigest()

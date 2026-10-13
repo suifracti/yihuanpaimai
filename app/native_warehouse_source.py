@@ -427,7 +427,7 @@ class NativeWarehouseSourceCoordinator:
         """Read one volatile observation ROI; never append a source or grant scroll."""
         import cv2
         import numpy as np
-        from warehouse_scrollbar_observation import warehouse_search_roi
+        from warehouse_scrollbar_observation import warehouse_content_roi
         with self.intake._scope_lock, self._lock:
             d = event.get('details') or {}
             if (self._evidence_only or self._state != 'OPEN' or not self._delivery()
@@ -447,7 +447,7 @@ class NativeWarehouseSourceCoordinator:
                 path = Path(d['path']).resolve(strict=True)
                 if path != root / 'warehouse-sources' / 'content-observation.bmp':
                     return None
-                box = warehouse_search_roi(self._host_limits['clientWidth'], self._host_limits['clientHeight'])
+                box = warehouse_content_roi(self._host_limits['clientWidth'], self._host_limits['clientHeight'])
                 w, h = box[2]-box[0], box[3]-box[1]
                 if (d.get('width'),d.get('height')) != (w,h):
                     return None
