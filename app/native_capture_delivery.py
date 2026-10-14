@@ -7,6 +7,12 @@ DELIVERY = 'wgc-delivery-v1'
 POLICIES = frozenset((STRICT, DELIVERY))
 
 
+class DeliveryFrameExpired(ValueError):
+    def __init__(self, binding):
+        super().__init__('DELIVERY_LOCAL_USE_EXPIRED')
+        self.binding = binding
+
+
 def validate_delivery(proof, now_ns, *, session=None, max_age_ns=2_000_000_000,
                       require_progress=False):
     try:
@@ -74,6 +80,14 @@ def independent_support(before, after):
         return False
 
 
+def local_age_expired(proof, now_ns, *, session=None):
+    """Only elapsed local use age; clock order and every proof field still valid."""
+    return (isinstance(proof, dict) and type(now_ns) is int
+            and type(proof.get('readbackCompletedNs')) is int
+            and now_ns - proof['readbackCompletedNs'] > 2_000_000_000
+            and validate_delivery(proof, proof['readbackCompletedNs'], session=session) is None)
+
+
 def read_slot_proof(root, item, session, target, now_ns):
     path = Path(root) / 'capture-proofs' / f"{item['bufferIndex']}.json"
     with path.open('rb') as stream:
@@ -83,6 +97,9 @@ def read_slot_proof(root, item, session, target, now_ns):
     binding = json.loads(raw)
     proof = binding.get('deliveryProof')
     rejection = validate_delivery(proof, now_ns, session=session, require_progress=False)
+    expired = local_age_expired(proof, now_ns, session=session)
+    if expired:
+        rejection = None  # Complete original binding checks before classifying the discard.
     if (rejection or binding.get('capturePolicy') != DELIVERY
             or binding.get('sessionId') != session or binding.get('targetInstance') != target
             or binding.get('bufferIndex') != item['bufferIndex']
@@ -90,4 +107,6 @@ def read_slot_proof(root, item, session, target, now_ns):
             or binding.get('pixelSha256') != item['rawSha256']
             or proof['readbackCompletedNs'] != item['header']['captureTimestampNs']):
         raise ValueError(rejection or 'FRAME_PROOF_BINDING')
+    if expired:
+        raise DeliveryFrameExpired(binding)
     return binding

@@ -1629,8 +1629,10 @@ class NTEVisionPipeline:
             loading_info = timed("loadingCaptionParsing", self._parse_loading, mapped_res, w, h)
             if loading_info["isLoading"]:
                 self._match_exit_hold = 0
-                self.current_context["scene"] = SCENE_AUCTION_LOADING
-                self.current_context["sceneLabel"] = SCENE_LABELS[SCENE_AUCTION_LOADING]
+                game_loading = loading_info.get("kind") == "game"
+                self.current_context["loadingKind"] = loading_info.get("kind")
+                self.current_context["scene"] = SCENE_UNKNOWN if game_loading else SCENE_AUCTION_LOADING
+                self.current_context["sceneLabel"] = "游戏加载中" if game_loading else SCENE_LABELS[SCENE_AUCTION_LOADING]
                 self.current_context["auctionEntryVisible"] = False
                 self.current_context["isLoading"] = True
                 self.current_context["inLobby"] = False
@@ -1639,7 +1641,7 @@ class NTEVisionPipeline:
                 self.current_context["round"] = 0
                 self.current_context["loadingPercent"] = loading_info["percent"]
                 self.current_context["loadingVenue"] = loading_info.get("venue")
-                direction = "to_lobby" if self._had_settlement else "to_auction"
+                direction = None if game_loading else ("to_lobby" if self._had_settlement else "to_auction")
                 self.current_context["loadingDirection"] = direction
                 self.current_context["hadSettlement"] = self._had_settlement
                 if direction == "to_lobby":
@@ -1647,6 +1649,7 @@ class NTEVisionPipeline:
                 return self.current_context
             else:
                 self.current_context["isLoading"] = False
+                self.current_context["loadingKind"] = None
 
             # 遍历 OCR 提取各个区域 (Round, Intel, Fallbacks)
             for box, text, score in mapped_res:
@@ -4144,7 +4147,8 @@ class NTEVisionPipeline:
         data = {
             "isLoading": False,
             "percent": None,
-            "venue": None
+            "venue": None,
+            "kind": "auction"
         }
 
         # 拍卖强信号（四席出价、倒计时、回合、已知拍卖HUD等）：一旦检测到，必须绝对否决 AUCTION_LOADING
@@ -4179,6 +4183,10 @@ class NTEVisionPipeline:
             # 排除右上角 HUD 区域 (X >= 0.70, Y <= 0.45)
             if nx >= 0.70 and ny <= 0.45:
                 continue
+
+            if ny >= .70 and any(word in t for word in ("资源校验", "资源检查", "资源加载", "资源更新", "正在载入游戏")):
+                data["kind"] = "game"
+                has_loading_layout_evidence = True
 
             # Auction entry animation, not an item identity or a live round.
             if (score >= 0.85 and 0.25 <= nx <= 0.65 and 0.82 <= ny <= 0.97

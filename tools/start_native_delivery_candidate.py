@@ -373,6 +373,7 @@ async def start(entry, prepared, manifest, receipt, output):
     owned = []
     record = lambda kind, **data: print(json.dumps({'kind': kind, **data}), flush=True)
     passed = False
+    leave_assistant_open = False
     try:
         started = await entry.start(prepared, output,
             environment={'NTE_DISABLE_ICON': '1', 'NTE_ALLOW_HUD_CAPTURE': '1'},
@@ -385,14 +386,18 @@ async def start(entry, prepared, manifest, receipt, output):
         elif owned and owned[0].poll() is None:
             import websockets
             async with websockets.connect(f"ws://127.0.0.1:{prepared['port']}", open_timeout=2, close_timeout=1) as ws:
-                await stop_once(ws, record, 'START_FAILED')
+                leave_assistant_open = await stop_once(ws, record, 'START_FAILED')
     finally:
         # Cancellation and startup/transport errors follow the same owned cleanup.
         assistant_confirmed = False
         restored = False
         released = False
         try:
-            assistant_confirmed = await close_owned_assistant(owned[0] if owned else None, prepared, record)
+            if leave_assistant_open:
+                safe_record(record, 'assistant-left-open', observationStarted=False,
+                    hostExitConfirmed=True, reason='START_FAILED_MAIN_REMAINS_AVAILABLE')
+            else:
+                assistant_confirmed = await close_owned_assistant(owned[0] if owned else None, prepared, record)
         finally:
             try:
                 if owned and assistant_confirmed:
@@ -402,6 +407,7 @@ async def start(entry, prepared, manifest, receipt, output):
             except OSError as exc:
                 safe_record(record, 'cleanup-error', reason=type(exc).__name__)
         safe_record(record, 'cleanup-result', assistantExitConfirmed=assistant_confirmed,
+                    assistantLeftOpen=leave_assistant_open,
                     configRestored=restored, portReleased=released, noRetry=True)
     return 0 if passed and assistant_confirmed and restored and released else 1
 

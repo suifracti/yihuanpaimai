@@ -16,6 +16,19 @@ from main import build_nav_hud_payload, build_in_auction_hud_payload
 
 
 class TestHudWordingAndLoadingDirection(unittest.TestCase):
+    def test_resource_verification_is_game_loading_not_auction_entry(self):
+        from vision_pipeline import NTEVisionPipeline
+        pipeline = NTEVisionPipeline.__new__(NTEVisionPipeline)
+        def text(value, x=1750, y=1000):
+            return ([[x,y],[x+100,y],[x+100,y+24],[x,y+24]],value,.99)
+        login = pipeline._parse_loading([text('54%',1800,960),text('资源校验中')])
+        self.assertTrue(login['isLoading'])
+        self.assertEqual(login['kind'],'game')
+        self.assertEqual(login['percent'],54)
+        auction = pipeline._parse_loading([text('54%',1800,960),text('随机拍品抽选中',700,950)])
+        self.assertTrue(auction['isLoading'])
+        self.assertEqual(auction['kind'],'auction')
+
     def test_main_py_nav_payload_loading_direction(self):
         # Ingress loading
         ctx_ingress = {

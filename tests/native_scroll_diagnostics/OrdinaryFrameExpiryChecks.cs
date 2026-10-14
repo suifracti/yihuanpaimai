@@ -90,6 +90,20 @@ static class OrdinaryFrameExpiryChecks
         var old = Frame(1); var observed = old.CaptureTimestampNs + 2_381_584_700;
         var recovery = new OrdinaryFrameRecovery();
         Check(OrdinaryFrameRecovery.Recoverable(old, observed), "real failed local age is discardable");
+        Check(OrdinaryFrameRecovery.EngineDiscardedExpired(old,
+            new() { ["perceptionSkipped"] = true }, observed), "engine-expired SKIPPED releases ordinary frame");
+        var ageError = new JsonObject { ["errorCode"] = "ERR_SCHEMA_VALIDATION_FAILED",
+            ["message"] = "ORDINARY_FRAME_LOCAL_USE_EXPIRED", ["isFatal"] = false };
+        Check(OrdinaryFrameRecovery.EngineDiscardedExpired(old,
+            new() { ["perceptionPayload"] = ageError }, observed), "worker-local expiry resumes without a business result");
+        Check(!OrdinaryFrameRecovery.EngineDiscardedExpired(old,
+            new() { ["perceptionSkipped"] = true }, old.CaptureTimestampNs + 1), "fresh queue rejection is not age recovery");
+        ageError["isFatal"] = true;
+        Check(!OrdinaryFrameRecovery.EngineDiscardedExpired(old,
+            new() { ["perceptionPayload"] = ageError }, observed), "fatal errors do not recover");
+        ageError["isFatal"] = false; ageError["message"] = "FRAME_SCOPE_RETIRED";
+        Check(!OrdinaryFrameRecovery.EngineDiscardedExpired(old,
+            new() { ["perceptionPayload"] = ageError }, observed), "other errors keep stopping");
         recovery.Discard(old, observed);
         var fresh = Frame(2, observed + 100_000_000);
         var comparison = fresh.CaptureTimestampNs + 1;

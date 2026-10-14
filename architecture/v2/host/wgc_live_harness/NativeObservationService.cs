@@ -528,14 +528,6 @@ internal static class NativeObservationService
                     trace.Event("ordinary-frame.recovered", session.GenerationId, new {
                         firstFault = recovered.ToJson(), captureId = frame.DeliveryProof!.CaptureId,
                         comparedAtNs = dequeueComparedAtNs });
-                ordinaryRecovery.Accepted();
-                if (frameGapStartedNs is long gapStarted)
-                {
-                    trace.Event("ordinary-frame.resumed", session.GenerationId, new {
-                        firstObservedNs = gapStarted, resumedAtNs = dequeueComparedAtNs,
-                        frame.AcquisitionSequence, frame.CaptureTimestampNs });
-                    frameGapStartedNs = null;
-                }
                 lastSourceTimestampNs = frame.SourceTimestampNs;
                 var businessStartedNs = ProtocolClock.NowNs();
                 Dictionary<string, object?> transfer;
@@ -579,6 +571,19 @@ internal static class NativeObservationService
                     return 5;
                 }
 
+                if (sourceRequestGate is null && capturePolicy == CapturePolicy.Delivery
+                    && OrdinaryFrameRecovery.EngineDiscardedExpired(frame, transfer, ProtocolClock.NowNs()))
+                {
+                    DiscardOrdinary(frame, ProtocolClock.NowNs()); continue;
+                }
+                if (transfer.GetValueOrDefault("ackMessageType") is "ERROR"
+                    || transfer.GetValueOrDefault("ackAccepted") is false
+                    || transfer.GetValueOrDefault("published") is false)
+                {
+                    evidenceLease.SignalStop();
+                    EmitStatus(sessionId, "ERROR", "engine-frame-ack-rejected", transfer);
+                    ShutdownObservation(); return 6;
+                }
                 if (transfer.TryGetValue("perceptionReceived", out var received) && received is not true)
                 {
                     evidenceLease.SignalStop();
@@ -591,6 +596,14 @@ internal static class NativeObservationService
                 capture.ThrowIfFailed();
                 if (capture.IsStopped) throw new OperationCanceledException("observation stopped before publication");
                 if (!capture.IsFrameCurrent(frame)) continue;
+                ordinaryRecovery.Accepted();
+                if (frameGapStartedNs is long gapStarted)
+                {
+                    trace.Event("ordinary-frame.resumed", session.GenerationId, new {
+                        firstObservedNs = gapStarted, resumedAtNs = ProtocolClock.NowNs(),
+                        frame.AcquisitionSequence, frame.CaptureTimestampNs });
+                    frameGapStartedNs = null;
+                }
                 processedFrames++;
                 trace.Event("observation.capture.statistics", session.GenerationId,
                     new { capture = capture.Statistics(), processedFrames, acceptedFrames,

@@ -40,6 +40,12 @@ internal sealed class OrdinaryFrameRecovery
     public static bool Recoverable(CapturedBgraFrame frame, long now) => frame.DeliveryProof is { } proof
         && proof.IsLocalAgeExpired(now) && frame.CaptureTimestampNs == proof.ReadbackCompletedNs
         && frame.SourceTimestampNs == proof.SourceNs && frame.AcquisitionSequence == proof.AcquisitionSequence;
+    public static bool EngineDiscardedExpired(CapturedBgraFrame frame, Dictionary<string, object?> transfer, long now) =>
+        Recoverable(frame, now) && (transfer.GetValueOrDefault("perceptionSkipped") is true
+            || transfer.GetValueOrDefault("perceptionPayload") is JsonObject error
+                && (string?)error["errorCode"] == "ERR_SCHEMA_VALIDATION_FAILED"
+                && (string?)error["message"] == "ORDINARY_FRAME_LOCAL_USE_EXPIRED"
+                && (bool?)error["isFatal"] == false);
     public string? ContextRejection(CapturedBgraFrame frame) => First is not { } first ? null
         : frame.DeliveryProof is not { } proof || proof.ObservationSessionId != first.SessionId
             || proof.PoolEpoch != first.PoolEpoch || frame.CaptureScopeEpoch != first.CaptureScopeEpoch

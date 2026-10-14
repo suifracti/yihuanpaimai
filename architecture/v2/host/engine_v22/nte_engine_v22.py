@@ -70,7 +70,8 @@ from venue_box_catalog import (  # noqa: E402
     normalize_venue_from_box,
 )
 from vision_pipeline import NTEVisionPipeline  # noqa: E402
-from native_capture_delivery import DELIVERY, STRICT, POLICIES, validate_delivery, read_slot_proof
+from native_capture_delivery import (DELIVERY, STRICT, POLICIES, validate_delivery, read_slot_proof,
+                                     DeliveryFrameExpired, local_age_expired)
 from warehouse_viewport_scope import WarehouseViewportScope
 from scene_anchors import settlement_title_visible  # noqa: E402
 
@@ -2628,10 +2629,16 @@ class RealEngine:
         try:
             if self.capture_policy == DELIVERY:
                 binding = item['captureProof']
-                rejection = validate_delivery(binding['deliveryProof'], qpc_ns(), session=self.session_id)
-                if (rejection or item['entryMatchId'] != self.current_match.id
+                if (item['entryMatchId'] != self.current_match.id
                         or item['entryMatchGeneration'] != self.current_match._seq):
-                    raise ValueError(rejection or 'FRAME_SCOPE_RETIRED')
+                    raise ValueError('FRAME_SCOPE_RETIRED')
+                rejection = validate_delivery(binding['deliveryProof'], qpc_ns(), session=self.session_id)
+                if rejection and local_age_expired(binding['deliveryProof'], qpc_ns(), session=self.session_id):
+                    self.log('frame.discarded_expired', frameSequence=header['sequence'])
+                    self.send_error('ERR_SCHEMA_VALIDATION_FAILED', 'PAYLOAD', 'ORDINARY_FRAME_LOCAL_USE_EXPIRED', False)
+                    return
+                if rejection:
+                    raise ValueError(rejection)
             captured_at = self._capture_iso(int(header["captureTimestampNs"]))
             marker_stalled = self.capture_policy == DELIVERY and not item['captureProof']['deliveryProof']['sourceMarkerProgress']
             if marker_stalled:
@@ -2689,7 +2696,8 @@ class RealEngine:
             mark_stage("contextAndLifecycle")
             if self.stop_event.is_set():
                 return
-            history_status = "UNCHANGED" if closed_settlement_frame else self._persist_history()
+            game_loading = scene == 'UNKNOWN' and context.get('loadingKind') == 'game'
+            history_status = "UNCHANGED" if closed_settlement_frame or game_loading else self._persist_history()
             mark_stage("history")
             if scene == "SETTLEMENT" and history_status == "PERSISTED_DRAFT":
                 # A recoverable isolated DRAFT lets the existing pipeline
@@ -2815,8 +2823,11 @@ class RealEngine:
         item = self.reader.read_frame(envelope.get("payload") or {}, self.session_id)
         item["receivedNs"] = received_ns
         if self.capture_policy == DELIVERY:
+            expired = False
             try:
                 binding = read_slot_proof(self.work_dir, item, self.session_id, self.observation_target_identity, qpc_ns())
+            except DeliveryFrameExpired as exc:
+                binding, expired = exc.binding, True
             except (OSError, ValueError, TypeError, KeyError) as exc:
                 raise ProtocolError('ERR_SCHEMA_VALIDATION_FAILED', 'capture proof: ' + str(exc)) from exc
             proof = binding['deliveryProof']
@@ -2831,6 +2842,11 @@ class RealEngine:
             item['captureProof'] = copy.deepcopy(binding)  # before ACK/slot reuse
             item['entryMatchId'] = self.current_match.id
             item['entryMatchGeneration'] = self.current_match._seq
+            if expired:
+                self._frame_ack(item, 'SKIPPED', 0.0)
+                self.log('frame.discarded_expired', frameSequence=item['header']['sequence'],
+                         captureId=proof['captureId'], businessSubmitted=False)
+                return
         item["identityInvalidationGeneration"] = self._identity_generation()
         if self.fault == "bad_header":
             self.send_error("ERR_CORRUPT_FRAME_MAGIC", "PAYLOAD", "test fault: header rejected", False)

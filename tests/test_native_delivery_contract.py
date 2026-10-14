@@ -373,8 +373,8 @@ class DeliveryTests(unittest.TestCase):
         engine._last_delivery_sequence = engine._last_delivery_epoch = 0
         engine.frame_queue = queue.Queue(maxsize=2)
         engine.reader = SimpleNamespace(read_frame=lambda *_: copy.deepcopy(item))
-        acks = []
-        engine._frame_ack = lambda data, *_: acks.append(copy.deepcopy(data))
+        acks, statuses = [], []
+        engine._frame_ack = lambda data, status, *_: (acks.append(copy.deepcopy(data)), statuses.append(status))
         for broken in ({'pixelSha256': 'bad'}, {'sequence': 2}, {'clientMap': 'different'},
                        {'recordStableKey': 'retired'}):
             path.write_text(json.dumps({**binding, **broken}))
@@ -383,12 +383,27 @@ class DeliveryTests(unittest.TestCase):
                     engine.handle_frame_ready({'payload': {}})
             self.assertTrue(engine.frame_queue.empty()); self.assertEqual(acks, [])
         path.write_text(json.dumps(binding))
+        engine.log = Mock()
+        with patch.object(module, 'qpc_ns', return_value=p['readbackCompletedNs'] + 2_000_000_001):
+            engine.handle_frame_ready({'payload': {}})
+        self.assertTrue(engine.frame_queue.empty())
+        self.assertEqual(len(acks), 1)
+        self.assertEqual(statuses, ['SKIPPED'])
+        # The expired frame releases its own slot without any business result.
+        p = proof(2, request=p['readbackCompletedNs'] + 2_000_100_000)
+        binding.update(sequence=2, deliveryProof=p)
+        item['header'].update(sequence=2, captureTimestampNs=p['readbackCompletedNs'])
+        path.write_text(json.dumps(binding))
         with patch.object(module, 'qpc_ns', return_value=p['readbackCompletedNs']):
             engine.handle_frame_ready({'payload': {}})
-        self.assertEqual(len(acks), 1)
+        self.assertEqual(len(acks), 2)
         path.write_text('{}')  # Host may now reuse the slot. Queued proof must stay immutable.
         queued = engine.frame_queue.get_nowait()
         self.assertEqual(queued['captureProof'], binding)
+        engine.send_error = Mock()
+        with patch.object(module,'qpc_ns',return_value=p['readbackCompletedNs'] + 2_000_000_001):
+            engine._process_frame(queued)
+        engine.send_error.assert_called_once_with('ERR_SCHEMA_VALIDATION_FAILED','PAYLOAD','ORDINARY_FRAME_LOCAL_USE_EXPIRED',False)
         path.write_text(json.dumps(binding))
         with patch.object(module, 'qpc_ns', return_value=p['readbackCompletedNs']):
             with self.assertRaises(module.ProtocolError):
