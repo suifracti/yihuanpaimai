@@ -1,4 +1,5 @@
 """New delivery contract only. Inert pixels/events; no window or desktop capture."""
+import asyncio
 import copy
 import hashlib
 import importlib.util
@@ -11,7 +12,7 @@ import tempfile
 import threading
 import unittest
 from types import SimpleNamespace
-from unittest.mock import Mock, patch
+from unittest.mock import AsyncMock, Mock, patch
 
 import cv2
 import numpy as np
@@ -332,6 +333,61 @@ class DeliveryTests(unittest.TestCase):
                 self.assertIn(('redirected', shared.replace('admitted', 'later-detail')), tail.poll())
             finally:
                 tail.close()
+
+    def test_monitor_continues_past_twenty_minutes_until_user_stop(self):
+        from tools import start_native_delivery_candidate as launcher
+        clock = [0.0]
+        received = []
+        records = []
+
+        async def receive():
+            # A healthy event arrives after the old launcher deadline.
+            clock[0] = 1201.0
+            if not received:
+                received.append('healthy')
+                return json.dumps({'visionHealth': {'stage': 'native-ready'}})
+            received.append('user-stop')
+            return json.dumps({'visionHealth': {'stage': 'native-stopped', 'reason': 'USER_STOP'}})
+
+        ws = SimpleNamespace(recv=receive)
+        # Async context special methods must belong to the type.
+        class Connection:
+            async def __aenter__(self): return ws
+            async def __aexit__(self, *_): pass
+
+        with patch('websockets.connect', return_value=Connection()), \
+                patch.object(launcher.time, 'monotonic', side_effect=lambda: clock[0]), \
+                patch.object(launcher, 'NativeRunLogTail') as tail, \
+                patch.object(launcher, 'stop_once', new=AsyncMock(return_value=True)) as stop:
+            tail.return_value.poll.return_value = []
+            asyncio.run(launcher.monitor({'port': 8766}, ROOT / 'build',
+                lambda kind, **data: records.append((kind, data))))
+        self.assertEqual(received, ['healthy', 'user-stop'])
+        self.assertIn(('observation-ended', {'reason': 'USER_STOP', 'oneMatchOnly': True}), records)
+        stop.assert_awaited_once()
+
+    def test_confirmed_observation_stop_keeps_main_available_for_review(self):
+        from tools import start_native_delivery_candidate as launcher
+        for reason in ('COLLECTION_COMPLETE', 'COLLECTION_PARTIAL:LARGE_GAP'):
+            with self.subTest(reason=reason), tempfile.TemporaryDirectory(dir=ROOT / 'build') as folder:
+                output = Path(folder) / 'fresh'
+                child = SimpleNamespace(poll=lambda: None)
+                async def entry_start(*_, **kwargs):
+                    output.mkdir()
+                    kwargs['on_launch'](child)
+                    return True
+                entry = SimpleNamespace(start=entry_start)
+                receipt = {'existingAssistantBusOccupied': False, 'candidateManifest': str(output / 'manifest.json'),
+                           'candidateId': 'offline'}
+                with patch.object(launcher, 'select_options', return_value=(b'original', b'selected')), \
+                        patch.object(launcher, 'monitor', new=AsyncMock(return_value=(reason, True))), \
+                        patch.object(launcher, 'close_owned_assistant', new=AsyncMock(return_value=True)) as close, \
+                        patch.object(launcher, 'restore_options', return_value=True) as restore, \
+                        patch.object(launcher, 'port_released', return_value=False):
+                    result = asyncio.run(launcher.start(entry, {'port': 8766}, {}, receipt, output))
+                close.assert_not_awaited()
+                restore.assert_not_called()
+                self.assertEqual(result, 0 if reason == 'COLLECTION_COMPLETE' else 1)
 
     def test_origin_label_local_age_and_independent_stability(self):
         first = proof()

@@ -51,7 +51,7 @@ def prepare(candidate=CANDIDATE):
         'configSelectionOnlyAfterStartAuthorization': True,
         'sourceLimits': dict(manifest.get('sourceLimits', {
             'originals': None, 'requests': None, 'seconds': None, 'completion': 'VERIFIED_BOTTOM_AND_CONTINUOUS_COVERAGE'})),
-        'monitorLimitSeconds': 1200, 'oneMatchOnly': True,
+        'monitorLimitSeconds': None, 'oneMatchOnly': True,
         'settlementMonitorSeconds': None, 'stopConfirmationSeconds': 10,
         'noCaptureNoInputNoAssistantLaunch': True}
     return entry, prepared, manifest, receipt
@@ -296,16 +296,15 @@ async def monitor(prepared, output, record):
     import websockets
     log_tailer = NativeRunLogTail(output)
     first_match = None
-    settlement_deadline = None
+    settlement_seen = False
     last_snapshot = None
-    reason = 'MONITOR_DEADLINE'
+    reason = 'MONITOR_CANCELLED'
     exit_confirmed = False
-    deadline = time.monotonic() + 1200  # Only this acceptance session, never the product observer.
     try:
         async with websockets.connect(f"ws://127.0.0.1:{prepared['port']}", max_size=8 * 1024 * 1024,
                                       open_timeout=2, close_timeout=1) as ws:
             try:
-                while time.monotonic() < deadline:
+                while True:
                     for source_log, line in log_tailer.poll():
                         if 'WAREHOUSE:NATIVE_AUTO' not in line:
                             continue
@@ -345,9 +344,9 @@ async def monitor(prepared, output, record):
                         first_match = match
                     elif first_match and match and first_match != match:
                         reason = 'ONE_SHOT_MATCH_CHANGED'; break
-                    if scene == 'SETTLEMENT' and settlement_deadline is None:
-                        settlement_deadline = True  # Track scene entry only, never a fixed collection deadline.
-                    elif settlement_deadline is not None and scene and scene != 'SETTLEMENT':
+                    if scene == 'SETTLEMENT':
+                        settlement_seen = True
+                    elif settlement_seen and scene:
                         reason = 'FIRST_SETTLEMENT_LEFT'; break
             except asyncio.CancelledError:
                 reason = 'MONITOR_CANCELLED'
@@ -359,7 +358,7 @@ async def monitor(prepared, output, record):
                 exit_confirmed = await stop_once(ws, record, reason)
     finally:
         log_tailer.close()
-    return reason == 'COLLECTION_COMPLETE' and exit_confirmed
+    return reason, exit_confirmed
 
 
 async def start(entry, prepared, manifest, receipt, output):
@@ -382,7 +381,8 @@ async def start(entry, prepared, manifest, receipt, output):
         if started:
             safe_record(record, 'observation-started', oneMatchOnly=True, candidateId=receipt['candidateId'])
             (output / 'acceptance-plan.json').write_text(json.dumps(receipt, ensure_ascii=False, indent=2), encoding='utf-8')
-            passed = await monitor(prepared, output, record)
+            reason, leave_assistant_open = await monitor(prepared, output, record)
+            passed = reason == 'COLLECTION_COMPLETE' and leave_assistant_open
         elif owned and owned[0].poll() is None:
             import websockets
             async with websockets.connect(f"ws://127.0.0.1:{prepared['port']}", open_timeout=2, close_timeout=1) as ws:
@@ -394,8 +394,8 @@ async def start(entry, prepared, manifest, receipt, output):
         released = False
         try:
             if leave_assistant_open:
-                safe_record(record, 'assistant-left-open', observationStarted=False,
-                    hostExitConfirmed=True, reason='START_FAILED_MAIN_REMAINS_AVAILABLE')
+                safe_record(record, 'assistant-left-open', observationStarted=started,
+                    hostExitConfirmed=True, reason='MAIN_REMAINS_AVAILABLE_FOR_REVIEW')
             else:
                 assistant_confirmed = await close_owned_assistant(owned[0] if owned else None, prepared, record)
         finally:
@@ -409,7 +409,7 @@ async def start(entry, prepared, manifest, receipt, output):
         safe_record(record, 'cleanup-result', assistantExitConfirmed=assistant_confirmed,
                     assistantLeftOpen=leave_assistant_open,
                     configRestored=restored, portReleased=released, noRetry=True)
-    return 0 if passed and assistant_confirmed and restored and released else 1
+    return 0 if passed and (leave_assistant_open or (assistant_confirmed and restored and released)) else 1
 
 
 def main():
