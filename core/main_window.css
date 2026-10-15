@@ -1969,6 +1969,9 @@ input, select { font: inherit; color: var(--text); }
 .guidebook-item-card { display: flex; flex-direction: column; gap: 6px; min-height: 76px; padding: 10px; border: 1px solid var(--border); border-radius: 7px; background: var(--bg); color: var(--text); text-align: left; cursor: pointer; }
 .guidebook-item-card:hover, .guidebook-item-card.is-selected { border-color: var(--border-focus); background: var(--surface-hover); }
 .guidebook-item-card small { color: var(--text-muted); }
+.guidebook-item-image { display: block; width: 100%; height: 110px; object-fit: contain; border-radius: 5px; background: #111317; }
+.guidebook-item-image.is-detail { height: auto; max-height: 220px; margin-bottom: 12px; }
+.guidebook-image-missing { display: grid; place-items: center; min-height: 110px; color: var(--text-muted); font-size: 12px; }
 .guidebook-item-detail { position: sticky; top: 0; padding: 14px; border: 1px solid var(--border); border-radius: 7px; background: var(--bg); }
 .guidebook-item-detail h2 { margin: 10px 0 6px; font-size: 17px; }
 .guidebook-item-detail p, .guidebook-source-note { color: var(--text-muted); font-size: 11px; line-height: 1.5; }
@@ -1990,6 +1993,7 @@ input, select { font: inherit; color: var(--text); }
 .guidebook-keyframe-image { display: block; max-width: 100%; max-height: 65vh; width: auto; height: auto; object-fit: contain; margin-top: 8px; border: 1px solid var(--border); border-radius: 5px; }
 .guidebook-character-list { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 10px; margin-top: 14px; }
 .guidebook-character-card { min-width: 0; padding: 12px; border: 1px solid var(--border); border-radius: 7px; background: var(--bg); }
+.guidebook-character-portrait { display: block; width: 100%; height: 160px; object-fit: contain; margin-bottom: 12px; border-radius: 6px; }
 .guidebook-character-heading { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
 .guidebook-character-heading h3 { margin: 0; }
 .guidebook-character-card p, .guidebook-character-revelations { color: var(--text-secondary); font-size: 11px; line-height: 1.5; }

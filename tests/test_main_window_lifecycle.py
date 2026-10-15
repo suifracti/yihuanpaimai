@@ -33,6 +33,28 @@ class _FakeOverlay:
 
 
 class MainWindowLifecycleTests(unittest.TestCase):
+    def test_guidebook_bridge_loads_local_item_pictures_and_character_portraits(self):
+        import base64
+        import io
+        from PIL import Image
+
+        result = MainWindowBridge(OverlayVisibilityController(_FakeOverlay())).dispatch(
+            {"action": "request_guidebook_sources"})["guidebookSources"]
+        self.assertTrue(result["ok"], result.get("message"))
+        self.assertEqual(len(result["items"]), 223)
+        self.assertEqual(len(result["roles"]), 9)
+        thumbnails = [item["thumbnailUri"] for item in result["items"]]
+        self.assertNotEqual(thumbnails[0], thumbnails[1])
+        with Image.open(io.BytesIO(base64.b64decode(thumbnails[0].split(",", 1)[1]))) as image:
+            self.assertLessEqual(image.width, 360)
+            self.assertLessEqual(image.height, 240)
+            self.assertGreater(image.width, 100)
+        self.assertTrue(result["catalogImages"]["方盒随身听"].startswith("data:image/jpeg;base64,"))
+        roles = {role["name"]: role for role in result["roles"]}
+        self.assertTrue(roles["小吱"]["portraitUri"].startswith("data:image/jpeg;base64,"))
+        self.assertNotIn("portraitUri", roles["黑羽"])
+        self.assertTrue(roles["黑羽"]["sourceImage"]["available"])
+
     def test_live_trial_drafts_are_visible_without_entering_formal_history_counts(self):
         draft = {"id": "trial-match", "lifecycleStatus": "DRAFT", "dataOrigin": "live-trial"}
         bridge = MainWindowBridge(

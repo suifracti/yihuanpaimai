@@ -186,7 +186,7 @@ assert.match(get("guidebook-item-detail").innerHTML, /基础参考价/);
 const sourceRequestId = sent[0].requestId;
 sandbox.handleNativeMessage({ data: {
   type: "app_status", action: "request_guidebook_sources", requestId: sourceRequestId,
-  guidebookSources: { ok: true, counts: { uniqueSourceEntries: 3 }, items: [
+  guidebookSources: { ok: true, counts: { uniqueSourceEntries: 3 }, catalogImages: { "独立目录条目": "data:image/jpeg;base64,reference-card" }, items: [
     { sourceId: "vertical-source", name: "纵向来源样本", sourceName: "纵向来源样本", category: "古董", sourceGeometry: "1x2", sourceRarity: "blue", sourceOnly: true, sourcePrice: null, sourcePriceStatus: "UNKNOWN_NOT_PROMOTED", sourceImages: [{ uri: "file:///source-v.png", path: "1.4更新/古董/1x2/source.png" }] },
     { sourceId: "horizontal-source", name: "横向来源样本", sourceName: "横向来源样本", category: "科技", sourceGeometry: "2x1", sourceRarity: "blue", sourceOnly: true, sourcePrice: null, sourcePriceStatus: "UNKNOWN_NOT_PROMOTED", sourceImages: [{ uri: "file:///source-h.png", path: "1.4更新/科技/2x1/source.png" }] },
     { sourceId: "linked-source", visualCatalogId: "candidate-1", name: "独立目录条目", category: "日用", sourceGeometry: "2x2", sourceRarity: "gold", sourceOnly: false, solverMatch: { key: "gold:0:独立目录条目" }, sourcePrice: null, sourcePriceStatus: "UNKNOWN_NOT_PROMOTED", sourceImages: [{ uri: "file:///candidate-source.png", path: "1.4更新/日用/2x2/candidate-source.png" }] }
@@ -194,9 +194,14 @@ sandbox.handleNativeMessage({ data: {
 } });
 assert.match(get("guidebook-item-detail").innerHTML, /基础参考价/);
 assert.match(get("guidebook-item-detail").innerHTML, /查看来源原图/);
+assert.match(get("guidebook-catalog-grid").innerHTML, /class="guidebook-item-image" src="data:image\/jpeg;base64,reference-card"/);
+assert.match(get("guidebook-item-detail").innerHTML, /class="guidebook-item-image is-detail"/);
+vm.runInContext(`dashboard.guidebookSources.roles.unshift({ name: "小吱", portraitUri: "data:image/jpeg;base64,xiaozhi", sourceImage: { uri: "file:///xiaozhi-skills.png" } });`, sandbox);
 sandbox.renderGuidebookCharacters();
 assert.match(get("guidebook-character-list").innerHTML, /黑羽/);
 assert.match(get("guidebook-character-list").innerHTML, /file:\/\/\/black-feather.png/);
+assert.match(get("guidebook-character-list").innerHTML, /class="guidebook-character-portrait"/);
+assert.match(get("guidebook-character-list").innerHTML, /guidebook-role-source" open/);
 vm.runInContext(`dashboard.guidebookCategory = "古董"; dashboard.guidebookGridSize = "1x2";`, sandbox);
 sandbox.renderGuidebookCatalog();
 assert.match(get("guidebook-catalog-grid").innerHTML, /纵向来源样本/);
@@ -547,7 +552,7 @@ sandbox.renderPinState(true);
 sandbox.renderOverlayState(false);
 sandbox.showView("settings");
 assert.equal(get("settings-player-name").textContent, "PLAYER_LOCAL");
-assert.match(get("settings-observation-profile").textContent, /只读观察/);
+assert.match(get("settings-observation-profile").textContent, /只读识别/);
 assert.equal(get("settings-pin-toggle").textContent, "关闭置顶");
 assert.equal(get("settings-overlay-toggle").textContent, "显示悬浮窗");
 

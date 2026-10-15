@@ -1460,6 +1460,13 @@ function guidebookSourceImagesMarkup(source) {
   }).join("")}</div>`;
 }
 
+function guidebookThumbnailMarkup(item, detail = false) {
+  const uri = (item.sourceRecords || []).find(source => source.thumbnailUri)?.thumbnailUri
+    || dashboard.guidebookSources?.catalogImages?.[item.name];
+  return uri ? `<img class="guidebook-item-image${detail ? " is-detail" : ""}" src="${escapeHtml(uri)}" alt="${escapeHtml(item.name)}" loading="lazy">`
+    : `<span class="guidebook-image-missing">暂无图片</span>`;
+}
+
 function guidebookCatalogDetailMarkup(item) {
   if (!item) return `<span class="tag">本地目录</span><h2>没有匹配条目</h2><p>可清除搜索词或更换筛选条件。</p>`;
   const sources = item.sourceRecords || [];
@@ -1481,7 +1488,7 @@ function guidebookCatalogDetailMarkup(item) {
   const imageMarkup = sources.map(guidebookSourceImagesMarkup).join("");
   const sourceStatus = item.sourceOnly ? "1.4 来源资料 · 仅展示" : "现有求解目录条目";
   const rarityLabel = GUIDEBOOK_RARITY_LABELS[item.rarity] || "品质未确认";
-  return `<span class="${GUIDEBOOK_RARITY_LABELS[item.rarity] ? `rarity-tag is-${item.rarity}` : "tag"}">${rarityLabel}</span><h2>${escapeHtml(item.name)}</h2><p class="guidebook-source-status">${sourceStatus}</p>${solverValue}${sourceLabel}${sourceValue}<p>${item.footprint && item.footprint !== "unknown" ? `现有目录规格：${escapeHtml(item.footprint)}。` : "目录规格未知。"}目录条目不代表本局已经识别或确认了该藏品。</p>${candidateMarkup}${conflictMarkup}${imageMarkup}<small>目录版本：${escapeHtml(item.catalogVersion || "未知")}${source?.visualCatalogId ? ` · 稳定图鉴 ID：${escapeHtml(source.visualCatalogId)}` : ""}</small>`;
+  return `${guidebookThumbnailMarkup(item, true)}<span class="${GUIDEBOOK_RARITY_LABELS[item.rarity] ? `rarity-tag is-${item.rarity}` : "tag"}">${rarityLabel}</span><h2>${escapeHtml(item.name)}</h2><p class="guidebook-source-status">${sourceStatus}</p>${solverValue}${sourceLabel}${sourceValue}<p>${item.footprint && item.footprint !== "unknown" ? `现有目录规格：${escapeHtml(item.footprint)}。` : "目录规格未知。"}目录条目不代表本局已经识别或确认了该藏品。</p>${candidateMarkup}${conflictMarkup}${imageMarkup}<small>目录版本：${escapeHtml(item.catalogVersion || "未知")}${source?.visualCatalogId ? ` · 稳定图鉴 ID：${escapeHtml(source.visualCatalogId)}` : ""}</small>`;
 }
 
 function renderGuidebookCatalog() {
@@ -1544,7 +1551,7 @@ function renderGuidebookCatalog() {
       const value = item.sourceOnly
         ? (source?.sourcePriceStatus === "VISUALLY_CONFIRMED_1_4_SOURCE" && source.sourcePrice != null ? `原图 ${formatCurrency(source.sourcePrice)} · 仅展示` : "来源字段待确认 · 仅展示")
         : (item.price == null ? "目录未提供参考价" : `目录参考 ${formatCurrency(item.price)}`);
-      return `<button type="button" role="listitem" class="guidebook-item-card${item.key === dashboard.guidebookSelectedItem ? " is-selected" : ""}" data-guidebook-item-index="${index}" aria-pressed="${item.key === dashboard.guidebookSelectedItem}"><span class="rarity-tag${GUIDEBOOK_RARITY_LABELS[item.rarity] ? ` is-${item.rarity}` : ""}">${rarityLabel}</span><strong>${escapeHtml(item.name)}</strong><small>${escapeHtml(subtitle)}</small><small>${escapeHtml(value)}</small></button>`;
+      return `<button type="button" role="listitem" class="guidebook-item-card${item.key === dashboard.guidebookSelectedItem ? " is-selected" : ""}" data-guidebook-item-index="${index}" aria-pressed="${item.key === dashboard.guidebookSelectedItem}">${guidebookThumbnailMarkup(item)}<span class="rarity-tag${GUIDEBOOK_RARITY_LABELS[item.rarity] ? ` is-${item.rarity}` : ""}">${rarityLabel}</span><strong>${escapeHtml(item.name)}</strong><small>${escapeHtml(subtitle)}</small><small>${escapeHtml(value)}</small></button>`;
     }).join("")
     : `<p class="guidebook-empty">${rows.length ? "没有符合筛选条件的藏品。" : escapeHtml(dashboard.guidebookSourcesError || "正在读取本地目录与 1.4 来源资料。")}</p>`;
   const selected = filtered.find(item => item.key === dashboard.guidebookSelectedItem) || filtered[0] || null;
@@ -1792,9 +1799,10 @@ function renderGuidebookCharacters() {
     const revelations = Array.isArray(role.revelations) && role.revelations.length
       ? `<ul class="guidebook-character-revelations">${role.revelations.map(text => `<li>${escapeHtml(text)}</li>`).join("")}</ul>` : "";
     const image = role.sourceImage?.uri
-      ? `<details class="guidebook-role-source"><summary>查看角色来源原图</summary><img src="${escapeHtml(role.sourceImage.uri)}" alt="${escapeHtml(role.name)}技能来源原图" loading="lazy"><small>${escapeHtml(role.sourceImage.path || "")}</small></details>`
+      ? `<details class="guidebook-role-source"${role.portraitUri ? "" : " open"}><summary>查看角色来源原图</summary><img src="${escapeHtml(role.sourceImage.uri)}" alt="${escapeHtml(role.name)}技能来源原图" loading="lazy"><small>${escapeHtml(role.sourceImage.path || "")}</small></details>`
       : `<p class="guidebook-source-missing">角色来源原图暂不可读取。</p>`;
-    return `<article class="guidebook-character-card"><div class="guidebook-character-heading"><h3>${escapeHtml(role.name)}</h3>${role.newInThisBatch ? `<span class="tag">本批素材新增</span>` : ""}</div>${role.flavor ? `<p class="guidebook-character-flavor">${escapeHtml(role.flavor)}</p>` : ""}<strong>${escapeHtml(role.skillName || "技能资料待确认")}</strong><p>${escapeHtml(role.skillDescription || "技能说明待确认")}</p>${revelations}${role.integrationNote ? `<p class="guidebook-identity-note">${escapeHtml(role.integrationNote)}</p>` : ""}${image}</article>`;
+    const portrait = role.portraitUri ? `<img class="guidebook-character-portrait" src="${escapeHtml(role.portraitUri)}" alt="${escapeHtml(role.name)}头像" loading="lazy">` : "";
+    return `<article class="guidebook-character-card">${portrait}<div class="guidebook-character-heading"><h3>${escapeHtml(role.name)}</h3>${role.newInThisBatch ? `<span class="tag">本批素材新增</span>` : ""}</div>${role.flavor ? `<p class="guidebook-character-flavor">${escapeHtml(role.flavor)}</p>` : ""}<strong>${escapeHtml(role.skillName || "技能资料待确认")}</strong><p>${escapeHtml(role.skillDescription || "技能说明待确认")}</p>${revelations}${role.integrationNote ? `<p class="guidebook-identity-note">${escapeHtml(role.integrationNote)}</p>` : ""}${image}</article>`;
   }).join("");
 }
 

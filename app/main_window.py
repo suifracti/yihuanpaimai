@@ -3,7 +3,9 @@
 from __future__ import annotations
 
 import ctypes
+import base64
 import hashlib
+import io
 import json
 import os
 import threading
@@ -57,6 +59,26 @@ def _load_guidebook_display_sources(project_root: Path) -> dict:
         raise ValueError("1.4 图鉴资料超出只读展示范围")
 
     missing_images = 0
+    image_cache = {}
+
+    def thumbnail(asset: Path, cell=None, columns=1, rows=1) -> str:
+        from PIL import Image
+
+        if asset not in image_cache:
+            with Image.open(asset) as image:
+                image_cache[asset] = image.convert("RGB")
+        image = image_cache[asset]
+        if cell is not None:
+            row, column = cell
+            width, height = image.size
+            image = image.crop((round(column * width / columns), round(row * height / rows),
+                                round((column + 1) * width / columns), round((row + 1) * height / rows)))
+        else:
+            image = image.copy()
+        image.thumbnail((360, 240), Image.Resampling.LANCZOS)
+        output = io.BytesIO()
+        image.save(output, format="JPEG", quality=85)
+        return "data:image/jpeg;base64," + base64.b64encode(output.getvalue()).decode("ascii")
 
     def attach_image_uri(image: dict) -> dict:
         nonlocal missing_images
@@ -85,8 +107,27 @@ def _load_guidebook_display_sources(project_root: Path) -> dict:
         item["sourceImages"] = [
             attach_image_uri(image) for image in entry.get("sourceImages") or [] if isinstance(image, dict)
         ]
+        for image in item["sourceImages"]:
+            if image.get("available"):
+                item["thumbnailUri"] = thumbnail(root / image["path"], image.get("cell"),
+                                                 image.get("columns", 1), image.get("rows", 1))
+                break
         items.append(item)
 
+    # Older catalog entries without a 1.4 source retain their existing reference card.
+    catalog_images = {}
+    references = _read_json(root / "assets/items/catalog_reference_manifest_v2.json")
+    for reference in references.get("records") or []:
+        if not reference.get("cropRelativePath"):
+            continue
+        try:
+            asset = _verified_project_asset(root, reference["cropRelativePath"], reference["cropSha256"])
+            catalog_images[reference["name"]] = thumbnail(asset)
+        except (OSError, ValueError):
+            continue
+
+    portraits = _read_json(root / "assets/lobby_characters/manifest.json")
+    portrait_files = {entry["id"]: entry["file"] for entry in portraits.get("characters") or []}
     roles = []
     for entry in source.get("roles") or []:
         if not isinstance(entry, dict):
@@ -95,6 +136,11 @@ def _load_guidebook_display_sources(project_root: Path) -> dict:
         image = role.get("sourceImage")
         if isinstance(image, dict):
             role["sourceImage"] = attach_image_uri(image)
+        portrait_file = portrait_files.get(role.get("name"))
+        if portrait_file:
+            portrait = root / "assets/lobby_characters" / portrait_file
+            if portrait.is_file():
+                role["portraitUri"] = thumbnail(portrait)
         roles.append(role)
 
     return {
@@ -105,6 +151,7 @@ def _load_guidebook_display_sources(project_root: Path) -> dict:
         "counts": source.get("counts") or {},
         "items": items,
         "roles": roles,
+        "catalogImages": catalog_images,
         "message": "部分来源图片暂不可读取" if missing_images else "",
     }
 
@@ -1315,7 +1362,6 @@ class MainWindowBridge:
         if action == "export_history_records":
             try:
                 from datetime import datetime, timezone
-                from pathlib import Path
                 from canonical_history_store import CanonicalHistoryStore
                 from runtime_data import resolve_runtime_history_path, runtime_data_paths
 
