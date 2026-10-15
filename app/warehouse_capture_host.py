@@ -803,6 +803,7 @@ class WarehouseCaptureHost:
         already_cropped: bool = False,
         finalization_reason: str = 'COMPLETE',
         resolve_placements: bool = True,
+        identity_evidence_ids: Optional[Sequence[str]] = None,
     ) -> Dict[str, Any]:
         """Consume Store originals; coverage and physical identity have separate proofs."""
         import cv2
@@ -891,7 +892,8 @@ class WarehouseCaptureHost:
             ledger.add_segment(desc, sequence_index=sequence, top_proof=top,
                                bottom_proof=bottom, overlap_proof=coverage_link)
             intake = proc.accept_segment(frame, desc, sequence, observation, physical_link,
-                                         already_cropped=already_cropped)
+                                         already_cropped=already_cropped,
+                                         allow_item_observations=(identity_evidence_ids is None or seg_id in identity_evidence_ids))
             if not intake.get("accepted"):
                 raise ValueError("RECONSTRUCTION_REJECTED: " + str(intake.get("reason")))
             accepted_pages.append(desc)

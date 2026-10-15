@@ -73,6 +73,7 @@ class WarehouseReconstructionProcessor:
         overlap_proof: Optional[Mapping[str, Any]] = None,
         *,
         already_cropped: bool = True,
+        allow_item_observations: bool = True,
     ) -> Dict[str, Any]:
         evidence_id = str(descriptor.get("evidenceId") or "").strip()
         digest = str(descriptor.get("sha256") or "").strip()
@@ -100,6 +101,8 @@ class WarehouseReconstructionProcessor:
         self._source_origins[evidence_id] = origin
         if frame is not None:
             self._frames[evidence_id] = frame
+        if not allow_item_observations:
+            return {"accepted": True, "reason": "COVERAGE_ONLY"}
 
         try:
             observation = self._observe_grid(

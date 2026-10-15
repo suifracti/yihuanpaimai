@@ -85,6 +85,7 @@ class NativeWarehouseIntake:
         self._worker, self._processor = None, None
         self._coverage, self._packet = 'COVERAGE_UNPROVEN', None
         self._processing_binding, self._processing_evidence_ids = None, None
+        self._coverage_evidence_ids = None
         self._resolve_placements = False
         from native_warehouse_refinement import SavedWarehouseRefinement
         self._refiner = SavedWarehouseRefinement(self) if auto_refine else None
@@ -104,6 +105,7 @@ class NativeWarehouseIntake:
             'terminationReason': self._reason,
             'resultSourceFingerprint': (self._packet or {}).get('sourceFingerprint'),
             'processingEvidenceIds': self._processing_evidence_ids,
+            'coverageEvidenceIds': self._coverage_evidence_ids,
             'refinement': refinement,
             'placementRefinementPending': not (self._resolve_placements and self._packet
                 and self._state in {'PARTIAL','COMPLETE'}),
@@ -168,6 +170,7 @@ class NativeWarehouseIntake:
             self._coverage, self._packet = 'COVERAGE_UNPROVEN', None
             self._processor = None
             self._processing_binding, self._processing_evidence_ids = None, None
+            self._coverage_evidence_ids = None
             return self._reply(True, 'MANUAL_READY')
 
     def capture_manual_page(self):
@@ -324,7 +327,7 @@ class NativeWarehouseIntake:
             self._write_manifest(self._pages)
 
     def finish_manual_capture(self, *, termination_reason='COMPLETE', qualified_evidence_ids=None,
-                              resolve_placements=False):
+                              resolve_placements=False, coverage_evidence_ids=None):
         with self._scope_lock, self._lock:
             if self._state != 'MANUAL_CAPTURING' or not self._pages:
                 return self._reply(False, 'NO_PAGES' if not self._pages else 'NOT_IN_MANUAL_MODE')
@@ -338,7 +341,7 @@ class NativeWarehouseIntake:
                             for eid in qualified_evidence_ids)):
                     return self._reply(False, 'QUALIFIED_PAGE_SELECTION_UNPROVEN')
                 selected = [p for eid in qualified_evidence_ids for p in self._pages if p['descriptor']['evidenceId'] == eid]
-                if not selected:
+                if not selected and not coverage_evidence_ids:
                     self._state, self._reason = 'PARTIAL', 'NO_QUALIFIED_PAGES'
                     self._coverage, self._packet = 'COVERAGE_UNPROVEN', None
                     self._processing_evidence_ids = []
@@ -348,11 +351,20 @@ class NativeWarehouseIntake:
                         self._state, self._reason = 'ERROR', 'PARTIAL_MANIFEST_WRITE_FAILED'
                         return self._reply(False, self._reason)
                     return self._reply(False, 'NO_QUALIFIED_PAGES', rawArchivePersisted=True)
+            fact_ids = [p['descriptor']['evidenceId'] for p in selected]
+            if coverage_evidence_ids is not None:
+                saved_ids = {p['descriptor']['evidenceId'] for p in self._pages}
+                if (len(set(coverage_evidence_ids)) != len(coverage_evidence_ids)
+                        or not set(coverage_evidence_ids) <= saved_ids
+                        or not set(fact_ids) <= set(coverage_evidence_ids)):
+                    return self._reply(False, 'COVERAGE_PAGE_SELECTION_UNPROVEN')
+                selected = [p for p in self._pages if p['descriptor']['evidenceId'] in coverage_evidence_ids]
+            self._coverage_evidence_ids = coverage_evidence_ids
             descriptors = [copy.deepcopy(p['descriptor']) for p in selected]
             record_key = self._binding['recordStableKey']
             self._processing_binding = copy.deepcopy(self._binding)
             self._resolve_placements = resolve_placements is True
-            self._processing_evidence_ids = [d['evidenceId'] for d in descriptors]
+            self._processing_evidence_ids = fact_ids
             processor = WarehouseCaptureHost(store_factory=lambda: self.evidence_store, driver_available=False)
             self._processor, self._state = processor, 'ALIGNING'
             self._reason = termination_reason
@@ -384,7 +396,8 @@ class NativeWarehouseIntake:
             self._verify_saved_pages(pages)
             result = processor._process_saved_pages(record_key, descriptors,
                 history_store=_SessionHistory(self, generation), finalization_reason=termination_reason,
-                resolve_placements=self._resolve_placements)
+                resolve_placements=self._resolve_placements,
+                identity_evidence_ids=self._processing_evidence_ids if self._coverage_evidence_ids is not None else None)
         except Exception as exc:
             result = {'ok': False, 'reason': 'PROCESSING_FAILED:' + str(exc)[:120], 'error': type(exc).__name__}
         with self._scope_lock, self._lock:
@@ -446,6 +459,9 @@ class NativeWarehouseIntake:
         ids = []
         indexed = {p['descriptor']['evidenceId']: p for p in self._pages}
         for page in self._pages:
+            if (self._coverage_evidence_ids is not None
+                    and page['descriptor']['evidenceId'] not in self._coverage_evidence_ids):
+                continue
             if page.get('contentRole') != 'STABLE_SUPPORT':
                 continue
             cert = page.get('contentCertificate') or {}
@@ -508,11 +524,12 @@ class NativeWarehouseIntake:
                     raise IntakeRejected('ORIGINAL_FRAME_LEASE_MISMATCH')
                 self._session_id, self._generation = session_id, manifest['generation']
                 self._binding, self._pages = binding, manifest['pages']
+                self._coverage_evidence_ids = manifest.get('coverageEvidenceIds')
                 adopted = True
                 self._rejected_originals = manifest.get('rejectedOriginals', [])
                 self._encoded_bytes = sum(p['descriptor']['byteSize'] for p in self._pages)
                 raw_only = (manifest['state'] == 'PARTIAL'
-                    and manifest.get('processingEvidenceIds') == []
+                    and manifest.get('processingEvidenceIds') == [] and not self._coverage_evidence_ids
                     and manifest.get('resultSourceFingerprint') is None)
                 if raw_only:
                     # A rejected/empty local-fact selection still has a durable
@@ -543,7 +560,8 @@ class NativeWarehouseIntake:
                     return self._reply(True,'SAVED_ARCHIVE_RESUMED')
                 self._state = 'MANUAL_CAPTURING'
                 return self.finish_manual_capture(termination_reason='INCOMPLETE', qualified_evidence_ids=ids,
-                    resolve_placements=refine_placements and self._refiner is None)
+                    resolve_placements=refine_placements and self._refiner is None,
+                    coverage_evidence_ids=self._coverage_evidence_ids)
             except (OSError, ValueError, KeyError, IntakeRejected) as exc:
                 if adopted:
                     self._state, self._reason = 'ERROR', str(exc)[:160]

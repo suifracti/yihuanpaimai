@@ -62,6 +62,7 @@ class NativeWarehouseAutoCapture:
         self._tail_stationary = False
         self._terminal_continuity = TerminalContinuity()
         self._coverage_pending = []
+        self._coverage_evidence_ids = []
         self._no_progress = self._viewport_rechecks = 0
 
     def __getattr__(self, name):
@@ -137,6 +138,7 @@ class NativeWarehouseAutoCapture:
             self._tail_stationary = False
             self._terminal_continuity = TerminalContinuity()
             self._coverage_pending = []
+            self._coverage_evidence_ids = []
             self._no_progress = self._viewport_rechecks = 0
             self._deadline = (2**63 - 1) / 1_000_000_000  # Active settlement scope; no 70-second quota.
             self._diagnose('started', scope=token[2], savedPages=0, deadline=self._deadline)
@@ -553,7 +555,15 @@ class NativeWarehouseAutoCapture:
         if self._content_gate is not None and (not self._collect_first() or content['qualified']):
             self._content_gate.commit_support(self.source.intake, self._observation)
         elif self._collect_first():
-            self._coverage_pending.append({'pageOrdinal': self._seen_pages, 'reason': 'CONTENT_SUPPORT_UNQUALIFIED'})
+            self._diagnose('item-support-pending', pageOrdinal=self._seen_pages,
+                reason='CONTENT_SUPPORT_UNQUALIFIED', formalFactsQualified=False)
+        if self._collect_first():
+            # Independent same-viewport originals are coverage inputs, even when
+            # animated pixels cannot certify item facts. The saved-page Host
+            # still proves TOP, every overlap and BOTTOM from the actual pixels.
+            key = (self._observation.get('contentProfile') or {}).get('evidenceId')
+            if key and key not in self._coverage_evidence_ids:
+                self._coverage_evidence_ids.append(key)
         state = self._observation['scrollState']
         if state == 'NO_SCROLL' or (state == 'BOTTOM' and
                 (self._tail_stationary or not self._collect_first() and not isinstance(self._content_gate, VisibleContentGate))):
@@ -778,6 +788,7 @@ class NativeWarehouseAutoCapture:
             self._stop(result.get('reason') or 'SOURCE_FAILED')
 
     def _stop(self, reason, *, complete=False):
+        capture_first = self._collect_first()
         self._diagnose('capture-ended', reason=reason, savedPages=len(self.source.pages_copy()),
             coveragePending=self._coverage_pending,
             scrollRequests=self._scroll_count, finalizationReason='COMPLETE' if complete else 'INCOMPLETE',
@@ -794,6 +805,12 @@ class NativeWarehouseAutoCapture:
         if self.source.pages_copy() and self.source.intake.source_contract()['state'] == 'MANUAL_CAPTURING':
             options = ({'qualified_evidence_ids': self._content_gate.representatives()}
                 if self._content_gate is not None else {})
+            if capture_first:
+                options['coverage_evidence_ids'] = list(self._coverage_evidence_ids)
+                # Early reveal-support frames can later become another pair's
+                # anchor. Final analysis uses the completed viewport chain.
+                options['qualified_evidence_ids'] = [key for key in options['qualified_evidence_ids']
+                    if key in self._coverage_evidence_ids]
             result = self.source.finish_manual_capture(termination_reason='COMPLETE' if complete else 'INCOMPLETE', **options)
             self._diagnose('finalization-request', result=result)
 

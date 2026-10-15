@@ -787,7 +787,8 @@ class NativeWarehouseSourceCoordinator:
             self.cancel_trigger_watch(reason)
             self._close(reason)
 
-    def finish_manual_capture(self, *, termination_reason='COMPLETE', qualified_evidence_ids=None):
+    def finish_manual_capture(self, *, termination_reason='COMPLETE', qualified_evidence_ids=None,
+                              coverage_evidence_ids=None):
         with self.intake._scope_lock, self._lock:
             if self._evidence_only:
                 return self._reply(False, 'EVIDENCE_ONLY_PROCESSING_DISABLED')
@@ -799,7 +800,7 @@ class NativeWarehouseSourceCoordinator:
                     and (p.get('contentCertificate') or {}).get('schema') == 'visible-content-support.v1'}
                 try:
                     selected_ids = list(qualified_evidence_ids)
-                    invalid_selection = (not selected_ids
+                    invalid_selection = (not selected_ids and not coverage_evidence_ids
                         or len(set(selected_ids)) != len(selected_ids)
                         or any(not isinstance(eid, str) or eid not in supported for eid in selected_ids))
                 except TypeError:
@@ -820,6 +821,8 @@ class NativeWarehouseSourceCoordinator:
             self._close('MANUAL_FINISHED')
             options = ({'qualified_evidence_ids': qualified_evidence_ids}
                 if qualified_evidence_ids is not None else {})
+            if coverage_evidence_ids is not None:
+                options['coverage_evidence_ids'] = coverage_evidence_ids
             return self.intake.finish_manual_capture(termination_reason=termination_reason, **options)
 
     def cancel_manual_capture(self):

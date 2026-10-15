@@ -49,6 +49,66 @@ class LiveRun(Run):
             'diagnostics': self.logs, 'finalizations': self.finalizations}, indent=2), encoding='utf-8')
 
 
+@unittest.skipUnless((ROOT/'build/t1-20261012/real-once-10/runtime-data/native-live-trial/warehouse-intake').is_dir(),
+    'requires the retained private once-10 SOURCE archive')
+class RealOnceTenCoverageTests(unittest.TestCase):
+    def test_saved_top_to_bottom_coverage_does_not_promote_animated_pixels_to_item_facts(self):
+        store = ROOT/'build/t1-20261012/real-once-10/runtime-data/native-live-trial'
+        manifest = next((store/'warehouse-intake').glob('*.json'))
+        pages = json.loads(manifest.read_text(encoding='utf-8'))['pages']
+        frames = {}
+        for n in range(26,40):
+            source = pages[n-1]['nativeSource']
+            raw = (store/source['relativePath']).read_bytes()
+            self.assertEqual(hashlib.sha256(raw).hexdigest(),source['sha256'])
+            frames[n] = cv2.imdecode(np.frombuffer(raw,np.uint8),cv2.IMREAD_COLOR)
+        f = LiveRun(output=ROOT/'build/t1-20261012/once10-coverage-replay',capture_first=True)
+        try:
+            f.deliver(frames[26]); f.tick(); f.deliver(frames[27])
+            for i in range(28,40,2):
+                f.scroll_ack(); f.tick(); f.deliver(frames[i])
+                f.tick(); f.deliver(frames[i+1])
+            self.assertEqual(f.auto._reason,'COMPLETE')
+            final = f.finalizations[-1]
+            self.assertEqual(len(final['coverage_evidence_ids']),7)
+            self.assertEqual(len(final['qualified_evidence_ids']),2,
+                             'background motion must not grant item identity support')
+            f.finish.stop()
+            f.source.offline_test_adapter = False
+            self.assertTrue(f.source.finish_manual_capture(**final)['ok'])
+            f.intake.wait_processing(30)
+            packet = f.intake.review_packet_copy()
+            self.assertEqual(packet['warehouseCoverage']['status'],'COMPLETE')
+            self.assertEqual(packet['warehouseCoverage']['segmentCount'],7)
+            # The five background-changing views cover pixels but add no item
+            # observations; missing the middle cannot become a complete chain.
+            unqualified = set(final['coverage_evidence_ids'])-set(final['qualified_evidence_ids'])
+            self.assertTrue(packet['tracks'])
+            for unit in packet['tracks']:
+                self.assertFalse(unqualified & {o['evidenceId'] for o in unit.get('observations',[])})
+            from native_warehouse_intake import NativeWarehouseIntake
+            fresh = NativeWarehouseIntake(draft_store=f.store,scope_provider=lambda:None,
+                source_provider=lambda:None,auto_refine=False)
+            before = f.store.history_path.read_bytes()
+            with patch.object(WarehouseCaptureHost,'_process_saved_pages',
+                    side_effect=AssertionError('reopening must reuse the saved result')):
+                self.assertTrue(fresh.recover_saved_capture(f.intake._session_id)['ok'])
+            self.assertEqual(fresh.review_packet_copy(),packet)
+            self.assertEqual(f.store.history_path.read_bytes(),before)
+            descriptors = [p['descriptor'] for p in f.source.pages_copy()
+                           if p['descriptor']['evidenceId'] in final['coverage_evidence_ids']]
+            class History:
+                def persist_warehouse_evidence(self, key, **kwargs): return {'id':key}
+            host = WarehouseCaptureHost(store_factory=lambda:f.intake.evidence_store,driver_available=False)
+            for chosen in (descriptors[:2],descriptors[1:],descriptors[:1]+descriptors[3:]):
+                result = host._process_saved_pages('match',chosen,history_store=History(),
+                    resolve_placements=False,identity_evidence_ids=[])
+                self.assertEqual(result['coverageStatus'],'PARTIAL')
+            f.saved_trace('real-once10-geometry-and-facts')
+        finally:
+            f.close()
+
+
 def viewport(offset, *, settlement_finished=True):
     """Independent physics: crop one fixed world, advance a physical scrollbar."""
     x, y, r, b = GRID

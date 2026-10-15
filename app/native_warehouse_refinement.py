@@ -17,7 +17,7 @@ ROOT = Path(__file__).resolve().parents[1]
 
 def fingerprint(manifest):
     return hashlib.sha256(json.dumps({k:manifest.get(k) for k in (
-        'sessionId','generation','scope','processingEvidenceIds','pages')},
+        'sessionId','generation','scope','processingEvidenceIds','coverageEvidenceIds','pages')},
         sort_keys=True,separators=(',',':')).encode()).hexdigest()
 
 
@@ -181,11 +181,16 @@ def analyze_saved(root, session, token):
         raise ValueError('STALE_REFINEMENT_JOB')
     intake._binding = _anchor(manifest['scope'])
     intake._session_id, intake._generation, intake._pages = session,manifest['generation'],manifest['pages']
+    intake._coverage_evidence_ids = manifest.get('coverageEvidenceIds')
     support_ids = intake._saved_support_ids() if intake._binding.get('capturePolicy') else [p['descriptor']['evidenceId'] for p in intake._pages]
     if support_ids != manifest['processingEvidenceIds']: raise ValueError('QUALIFIED_PAGE_SELECTION_UNPROVEN')
     ids = intake._saved_identity_ids() if intake._binding.get('capturePolicy') else support_ids
     intake._verify_saved_pages(intake._pages)
-    pages = [p['descriptor'] for eid in ids for p in intake._pages if p['descriptor']['evidenceId']==eid]
+    coverage_ids = manifest.get('coverageEvidenceIds')
+    selected_ids = set(ids) | set(coverage_ids or [])
+    if not selected_ids <= {p['descriptor']['evidenceId'] for p in intake._pages}:
+        raise ValueError('COVERAGE_PAGE_SELECTION_UNPROVEN')
+    pages = [p['descriptor'] for p in intake._pages if p['descriptor']['evidenceId'] in selected_ids]
     class Collector:
         evidence = None
         def persist_warehouse_evidence(self, key, **kwargs):
@@ -194,7 +199,8 @@ def analyze_saved(root, session, token):
     collector = Collector(); started = time.perf_counter()
     processor = WarehouseCaptureHost(store_factory=lambda:intake.evidence_store,driver_available=False)
     result = processor._process_saved_pages(intake._binding['recordStableKey'],pages,
-        history_store=collector,finalization_reason=manifest['terminationReason'],resolve_placements=True)
+        history_store=collector,finalization_reason=manifest['terminationReason'],resolve_placements=True,
+        identity_evidence_ids=ids if coverage_ids is not None else None)
     if not result['ok'] or collector.evidence is None: raise ValueError('REFINEMENT_ANALYSIS_FAILED')
     resolver = get_production_placement_resolver()
     summary = {'analysisSeconds':time.perf_counter()-started,'matchMetrics':resolver.match_metrics,
