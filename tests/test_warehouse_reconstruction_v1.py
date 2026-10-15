@@ -233,6 +233,47 @@ class WarehouseReconstructionV1Tests(unittest.TestCase):
                     self.assertTrue(all(unit["worldAnchor"] == {"row": None, "col": None} for unit in units))
                     self.assertTrue(all(unit["geometryEvidenceStatus"] == "UNALIGNED" for unit in units))
 
+    @unittest.skipUnless((PROJECT_ROOT / "build/t1-20261012/real-once-10/runtime-data/native-live-trial/warehouse-intake/b546a40dde6a4cac8c61383b95bd34aa.json").is_file(),
+                         "Private real-once-10 SOURCE material is not distributed")
+    def test_real_once10_verified_origins_calibrate_top_grid_without_catalog_matching(self):
+        from unittest.mock import patch
+        from native_trial_drafts import NativeTrialDraftStore
+        from native_warehouse_intake import NativeWarehouseIntake, _anchor
+        from warehouse_placement_resolver import WarehousePlacementResolver
+
+        root = PROJECT_ROOT / "build/t1-20261012/real-once-10/runtime-data/native-live-trial"
+        manifest = json.loads((root / "warehouse-intake/b546a40dde6a4cac8c61383b95bd34aa.json").read_text("utf-8"))
+        intake = NativeWarehouseIntake(draft_store=NativeTrialDraftStore(root / "canonical-history.json"),
+            scope_provider=lambda: None, source_provider=lambda: None, auto_refine=False)
+        intake._binding = _anchor(manifest["scope"])
+        intake._session_id, intake._generation = manifest["sessionId"], manifest["generation"]
+        intake._pages = manifest["pages"]
+        intake._coverage_evidence_ids = manifest["coverageEvidenceIds"]
+        identity_ids = intake._saved_identity_ids()
+        selected = set(identity_ids) | set(manifest["coverageEvidenceIds"])
+        descriptors = [p["descriptor"] for p in manifest["pages"] if p["descriptor"]["evidenceId"] in selected]
+        self.assertEqual(len(descriptors), 9)
+        resolver = WarehousePlacementResolver(manifest_path=self.root / "unused-catalog.json")
+        resolver.match_catalog_candidates = lambda *_args, **_kwargs: (0.0, [], 0)
+
+        class NoHistoryWrites:
+            packet = None
+            def persist_warehouse_evidence(self, key, **evidence):
+                self.packet = evidence["review_packet"]
+                return {"id": key}
+
+        collector = NoHistoryWrites()
+        with patch("warehouse_capture_production.get_production_placement_resolver", return_value=resolver):
+            result = WarehouseCaptureHost(store_factory=lambda: intake.evidence_store, driver_available=False)._process_saved_pages(
+                manifest["scope"]["recordStableKey"], descriptors, history_store=collector,
+                resolve_placements=True, identity_evidence_ids=identity_ids)
+        self.assertEqual(result["coverageStatus"], "COMPLETE")
+        units = collector.packet["reviewUnits"]
+        self.assertTrue(units)
+        self.assertTrue(all(unit["worldAnchor"]["row"] is not None for unit in units),
+                        "Verified real scrolling must not lose all mid-page anchors because TOP estimated the wrong grid period")
+        self.assertTrue(all(obs["evidenceId"] in identity_ids for unit in units for obs in unit["observations"]))
+
     def test_real_8_12_16_chain_is_partial_and_deduped(self):
         frames = [_load("pair_a_prev.png"), _load("pair_a_next.png"), _load("pair_b_next.png")]
         session = self._session(

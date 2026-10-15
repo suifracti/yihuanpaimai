@@ -872,6 +872,18 @@ class WarehousePlacementResolver:
             ]
             cell_h = float(np.median(h_diffs)) if h_diffs else 56.0
             cell_w = float(np.median(w_diffs)) if w_diffs else 56.0
+            # A sparse TOP image can mistake item edges for the vertical grid.
+            # Use the already verified scroll origins to put all measured grid
+            # lines in one coordinate system before choosing the row ruler.
+            trusted = [a for a in segment_analyses.values() if a["chain_ok"] and len(a["y_lines"]) >= 3]
+            if len({a["origin_y"] for a in trusted}) >= 2:
+                period = float(np.median([np.median(np.diff(a["y_lines"])) for a in trusted]))
+                phases = np.array([(a["origin_y"] + y) % period for a in trusted for y in a["y_lines"]])
+                phase = float(min(phases, key=lambda p: np.median(np.abs((phases - p + period / 2) % period - period / 2))))
+                supports = {a["origin_y"] for a in trusted if np.median(np.abs(
+                    (a["origin_y"] + np.array(a["y_lines"]) - phase + period / 2) % period - period / 2)) / period <= 0.22}
+                if len(supports) >= 2:
+                    cell_h, anchor_y_start = period, phase
         else:
             anchor_y_start = 0.0
             anchor_x_start = 3.0
