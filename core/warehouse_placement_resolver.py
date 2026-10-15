@@ -707,10 +707,13 @@ class WarehousePlacementResolver:
         physical_ledger: Mapping[str, Any],
         descriptors: Sequence[Mapping[str, Any]],
         frames: Optional[Mapping[str, np.ndarray]] = None,
+        identity_evidence_ids: Optional[Sequence[str]] = None,
     ) -> List[Dict[str, Any]]:
         raw_tracks = [t for t in (physical_ledger.get("tracks") or []) if isinstance(t, Mapping)]
         raw_segments = [s for s in (physical_ledger.get("segments") or []) if isinstance(s, Mapping)]
         desc_map = {str(d.get("evidenceId")): d for d in descriptors if isinstance(d, Mapping)}
+        identity_ids = set(identity_evidence_ids) if identity_evidence_ids is not None else None
+        unanchored = physical_ledger.get("chainStatus") == "UNANCHORED"
 
         if not raw_segments or not frames:
             return []
@@ -739,7 +742,7 @@ class WarehousePlacementResolver:
             grid = grid_obs.get("grid") or {}
             grid_status = grid.get("status")
 
-            chain_ok = bool(seg.get("chainOk", True))
+            chain_ok = bool(seg.get("chainOk", True)) and not unanchored
             if canonical_x_lines is not None and chain_ok:
                 x_lines = list(canonical_x_lines)
             else:
@@ -799,7 +802,7 @@ class WarehousePlacementResolver:
                     )
 
             origin_y = float(seg.get("originY") or 0.0)
-            chain_ok = bool(seg.get("chainOk", True))
+            chain_ok = bool(seg.get("chainOk", True)) and not unanchored
             scroll_state = seg.get("scrollState") or ("TOP" if seq == 0 else "BOTTOM" if seq == len(raw_segments) - 1 else "MIDDLE")
 
             segment_analyses[seq] = {
@@ -817,12 +820,15 @@ class WarehousePlacementResolver:
                 "chain_ok": chain_ok,
                 "insufficient_evidence": insufficient_evidence,
                 "scroll_state": scroll_state,
+                "allow_item_observations": identity_ids is None or seg_id in identity_ids,
             }
 
         # If all frames have insufficient evidence (e.g. uniform empty test frame), resolve to UNKNOWN without hallucinating items
         if segment_analyses and all(analysis.get("insufficient_evidence", False) for analysis in segment_analyses.values()):
             unknown_units: List[Dict[str, Any]] = []
             for seq, analysis in sorted(segment_analyses.items(), key=lambda item: item[0]):
+                if not analysis["allow_item_observations"]:
+                    continue
                 unknown_units.append({
                     "reviewUnitId": f"unit-unknown-seq{seq}",
                     "placementStatus": "UNKNOWN",
@@ -906,6 +912,8 @@ class WarehousePlacementResolver:
         all_hypotheses: List[Dict[str, Any]] = []
 
         for seq, analysis in segment_analyses.items():
+            if not analysis["allow_item_observations"]:
+                continue
             img = analysis["img"]
             x_lines = analysis["x_lines"]
             y_lines = analysis["y_lines"]
@@ -1143,7 +1151,7 @@ class WarehousePlacementResolver:
             # Check if an earlier frame (or adjacent frame) had a CLIPPED observation for this world placement
             if is_aligned and world_r is not None and world_c is not None:
                 for seq, analysis in segment_analyses.items():
-                    if analysis["is_aligned"] and seq not in seen_seqs:
+                    if analysis["allow_item_observations"] and analysis["is_aligned"] and seq not in seen_seqs:
                         seg_top = analysis["origin_y"] + float(analysis["y_lines"][0]) - anchor_y_start
                         r_top = seg_top / cell_h
                         if world_r < r_top < world_r + h:

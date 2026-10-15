@@ -321,7 +321,7 @@ class PhysicalComponentLedger:
             "scrollState": str(scroll_state or ""),
             "originY": float(origin_y),
             "chainId": self._chain_id,
-            "chainOk": bool(chain_ok and (self._anchored or not self._segments)),
+            "chainOk": bool(chain_ok and self._anchored and self._chain_id == 0),
             "cellAligned": bool(cell_aligned),
             "grid": dict(grid),
             "digest": digest,
@@ -648,6 +648,7 @@ class PhysicalComponentLedger:
                     "scrollState": item["scrollState"],
                     "originY": item["originY"],
                     "chainId": item["chainId"],
+                    "chainOk": item["chainOk"],
                     "observationCount": len(item["observationIds"]),
                 }
                 for item in self._segments

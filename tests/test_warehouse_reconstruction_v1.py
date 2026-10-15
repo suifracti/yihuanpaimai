@@ -182,6 +182,57 @@ class WarehouseReconstructionV1Tests(unittest.TestCase):
             self.assertEqual(snap.readonly_snapshot()["processedCount"], 0)
             self.assertIsNone(snap.packet_copy())
 
+    def test_geometry_only_pages_anchor_identity_without_contributing_items(self):
+        from unittest.mock import patch
+        from warehouse_placement_resolver import WarehousePlacementResolver
+
+        grid = {"status": "OK", "cellWidth": 10, "cellHeight": 10,
+                "xLines": list(range(0, 101, 10)), "yLines": list(range(0, 61, 10))}
+        image = np.full((60, 100, 3), 20, np.uint8)
+        image[10:40, 10:20] = (50, 80, 160)
+        frames = {name: image.copy() for name in ("top", "middle", "tail")}
+        descriptors = [{"evidenceId": name, "recordStableKey": KEY, "sha256": str(seq + 1) * 64,
+                        "kind": "warehouse-segment", "sequenceIndex": seq, "width": 100, "height": 60}
+                       for seq, name in enumerate(frames)]
+        coverage = {"recordStableKey": KEY, "coverageStatus": "COMPLETE", "finalized": True,
+                    "terminationReason": "COMPLETE", "segments": descriptors}
+
+        def observe(_frame, **_kwargs):
+            return {"grid": grid, "components": []}
+
+        for condition in ("anchored", "no_top", "broken"):
+            with self.subTest(condition=condition):
+                resolver = WarehousePlacementResolver(manifest_path=self.root / "unused-catalog.json")
+                # This is a geometry contract, not a catalog accuracy test.
+                resolver.match_catalog_candidates = lambda _roi, w, h, **_kw: (1.0 if (w, h) == (1, 3) else 0.0, [], 0)
+                processor = WarehouseReconstructionProcessor(KEY, observe_grid=observe, placement_resolver=resolver)
+                first_state = STATE_MIDDLE if condition == "no_top" else STATE_TOP
+                processor.accept_segment(frames["top"], descriptors[0], 0, _obs(first_state),
+                                         allow_item_observations=False)
+                link = {"status": "LARGE_GAP"} if condition == "broken" else {
+                    "status": "VERIFIED", "direction": "DOWN", "verticalOffsetPx": -40}
+                processor.accept_segment(frames["middle"], descriptors[1], 1, _obs(STATE_MIDDLE), link)
+                # This viewport would produce a CLIPPED observation if geometry
+                # pages were accidentally permitted to supply item evidence.
+                processor.accept_segment(frames["tail"], descriptors[2], 2, _obs(STATE_MIDDLE),
+                    {"status": "VERIFIED", "direction": "DOWN", "verticalOffsetPx": -20},
+                    allow_item_observations=False)
+                with patch("warehouse_placement_resolver.observe_warehouse_grid", side_effect=observe):
+                    processor.finalize(coverage)
+                packet = processor.packet_copy()
+                self.assertIsNotNone(packet)
+                units = packet["reviewUnits"]
+                self.assertTrue(units)
+                observed_ids = {obs["evidenceId"] for unit in units for obs in unit["observations"]}
+                self.assertEqual(observed_ids, {"middle"})
+                if condition == "anchored":
+                    self.assertEqual(len(units), 1)
+                    self.assertEqual(units[0]["worldAnchor"], {"row": 5, "col": 1})
+                    self.assertEqual(units[0]["footprint"], {"widthCells": 1, "heightCells": 3})
+                else:
+                    self.assertTrue(all(unit["worldAnchor"] == {"row": None, "col": None} for unit in units))
+                    self.assertTrue(all(unit["geometryEvidenceStatus"] == "UNALIGNED" for unit in units))
+
     def test_real_8_12_16_chain_is_partial_and_deduped(self):
         frames = [_load("pair_a_prev.png"), _load("pair_a_next.png"), _load("pair_b_next.png")]
         session = self._session(

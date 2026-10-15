@@ -58,6 +58,8 @@ class WarehouseReconstructionProcessor:
         self._descriptors: List[Dict[str, Any]] = []
         self._frames: Dict[str, Any] = {}
         self._source_origins: Dict[str, tuple[int, int]] = {}
+        self._identity_evidence_ids: List[str] = []
+        self._has_geometry_only_pages = False
         self._warnings: List[str] = []
         self._physical: Optional[PhysicalComponentLedger] = None
         self._coverage: Optional[Dict[str, Any]] = None
@@ -101,8 +103,10 @@ class WarehouseReconstructionProcessor:
         self._source_origins[evidence_id] = origin
         if frame is not None:
             self._frames[evidence_id] = frame
-        if not allow_item_observations:
-            return {"accepted": True, "reason": "COVERAGE_ONLY"}
+        if allow_item_observations:
+            self._identity_evidence_ids.append(evidence_id)
+        else:
+            self._has_geometry_only_pages = True
 
         try:
             observation = self._observe_grid(
@@ -118,6 +122,11 @@ class WarehouseReconstructionProcessor:
         if not isinstance(grid, Mapping) or grid.get("status") != GRID_OK:
             self._warnings.append("GRID_UNKNOWN")
             return {"accepted": True, "reason": "GRID_UNKNOWN"}
+
+        if not allow_item_observations:
+            # Keep TOP and every verified displacement in the physical chain,
+            # without admitting this page's components as item observations.
+            observation = {**observation, "components": []}
 
         if self._physical is None:
             self._physical = self._physical_factory(self._key)
@@ -135,7 +144,7 @@ class WarehouseReconstructionProcessor:
         except Exception:
             self._warnings.append("PHYSICAL_LEDGER_FAILED")
             return {"accepted": True, "reason": "PHYSICAL_LEDGER_FAILED"}
-        return {"accepted": True, "reason": "OK"}
+        return {"accepted": True, "reason": "OK" if allow_item_observations else "COVERAGE_ONLY"}
 
     def finalize(self, coverage_result: Optional[Mapping[str, Any]]) -> Dict[str, Any]:
         self._coverage = dict(coverage_result) if isinstance(coverage_result, Mapping) else None
@@ -172,10 +181,13 @@ class WarehouseReconstructionProcessor:
             raise WarehouseReviewPacketError("RECORD_KEY_MISMATCH")
 
         if self._placement_resolver is not None:
+            options = ({"identity_evidence_ids": self._identity_evidence_ids}
+                       if self._has_geometry_only_pages else {})
             review_units = self._placement_resolver.resolve(
                 physical_ledger=physical,
                 descriptors=self._descriptors,
                 frames=self._frames,
+                **options,
             )
             # Resolver geometry is local to the warehouse image. Public evidence
             # boxes always address the immutable source blob named by the SHA.
