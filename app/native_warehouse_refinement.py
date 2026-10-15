@@ -44,7 +44,8 @@ class SavedWarehouseRefinement:
             path = self._path(session)
             manifest = json.loads(path.read_text(encoding='utf-8'))
             previous = manifest.get('refinement') or {}
-            if manifest['state'] not in {'PARTIAL','COMPLETE'} or not manifest.get('processingEvidenceIds'):
+            if (manifest['state'] not in {'PARTIAL','COMPLETE'}
+                    or not (manifest.get('processingEvidenceIds') or manifest.get('coverageEvidenceIds'))):
                 return {'ok':False,'reason':'NO_ARCHIVED_SUPPORT_PAGES'}
             if session in self._events:
                 return {'ok':not self._events[session].is_set(),

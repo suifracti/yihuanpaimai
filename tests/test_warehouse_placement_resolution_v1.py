@@ -96,6 +96,38 @@ class TestWarehousePlacementResolutionV1(unittest.TestCase):
         for name in ("unit-world-5-0-2x2", "unit-world-5-2-2x2", "unit-world-5-4-1x2"):
             self.assertEqual(units[name]["visibility"], "FULL")
 
+    @unittest.skipUnless((PROJECT_ROOT / "build/t1-20261012/once10-identity/geometry14-actual-before.json").is_file(),
+                         "Private once-10 geometry evidence is not distributed")
+    def test_real_once10_analysis_pairs_keep_top_grid_world_coordinates(self):
+        from warehouse_scrollbar_observation import warehouse_search_roi
+
+        root = PROJECT_ROOT / "build/t1-20261012/real-once-10/runtime-data/native-live-trial"
+        manifest = json.loads((root / "warehouse-intake/b546a40dde6a4cac8c61383b95bd34aa.json").read_text("utf-8"))
+        physical = json.loads((PROJECT_ROOT / "build/t1-20261012/once10-identity/geometry14-actual-before.json").read_text("utf-8"))["physical"]
+        ids = {segment["segmentId"] for segment in physical["segments"]}
+        pages = [page for page in manifest["pages"] if page["descriptor"]["evidenceId"] in ids]
+        frames = {}
+        for page in pages:
+            descriptor = page["descriptor"]
+            path = root / descriptor["relativePath"]
+            self.assertEqual(hashlib.sha256(path.read_bytes()).hexdigest(), descriptor["sha256"])
+            image = cv2.imread(str(path))
+            x1, y1, x2, y2 = warehouse_search_roi(image.shape[1], image.shape[0])
+            frames[descriptor["evidenceId"]] = image[y1:y2, x1:x2]
+        resolver = WarehousePlacementResolver(manifest_path=self.runtime_root / "unused-catalog.json")
+        resolver.match_catalog_candidates = lambda *_a, **_kw: (0.0, [], 0)
+        units = resolver.resolve(physical_ledger=physical,
+            descriptors=[page["descriptor"] for page in pages], frames=frames, identity_evidence_ids=ids)
+        self.assertTrue(units)
+        self.assertTrue(all(unit["worldAnchor"]["row"] is not None for unit in units),
+                        "Adding independent TOP originals must not lose their verified world coordinates")
+        top_ids = {manifest["pages"][index]["descriptor"]["evidenceId"] for index in (25, 26)}
+        top_observations = [obs for unit in units for obs in unit["observations"] if obs["evidenceId"] in top_ids]
+        self.assertTrue(top_observations)
+        for obs in top_observations:
+            # Real grid borders are 56px apart, including the complete TOP view.
+            self.assertAlmostEqual((obs["bbox"][3] - obs["bbox"][1]) / obs["localGridBbox"][3], 56, delta=1)
+
     def test_placement_resolution_production_slice(self):
         """Production placement resolver creates V2 review packet from real warehouse pair."""
         key = "rec_pair_a_prod_01"

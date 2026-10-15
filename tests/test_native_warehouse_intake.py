@@ -44,6 +44,20 @@ class NativeWarehouseIntakeTests(unittest.TestCase):
         self.assertEqual(reader._saved_analysis_ids(), top_ids)
         self.assertEqual(reader._saved_support_ids(), [])  # No new SOURCE/fact certificate.
         self.assertNotIn('contentCertificate', top)
+        # A saved geometry chain can queue per-item analysis even when no whole
+        # viewport has the old global pixel certificate. Queueing is not a fact.
+        from native_warehouse_refinement import SavedWarehouseRefinement
+        manifest_path = self.store.root/'warehouse-intake'/path.name
+        manifest_path.parent.mkdir(parents=True, exist_ok=True)
+        raw_only = {**manifest, 'pages':[top_anchor,top], 'processingEvidenceIds':[],
+                    'coverageEvidenceIds':[top_ids[1]], 'state':'PARTIAL', 'refinement':{}}
+        manifest_path.write_text(json.dumps(raw_only), encoding='utf-8')
+        refiner = SavedWarehouseRefinement(self.intake)
+        with patch.object(refiner, '_run'):
+            self.assertTrue(refiner.enqueue(manifest['sessionId'],resume=True)['ok'])
+        queued = json.loads(manifest_path.read_text('utf-8'))
+        self.assertEqual(queued['refinement']['state'], 'QUEUED')
+        self.assertEqual(queued['processingEvidenceIds'], [])
         top_anchor['deliveryProof']['captureId'] = top['deliveryProof']['captureId']
         self.assertEqual(reader._saved_analysis_ids(), [])
         reader._pages = copy.deepcopy(manifest['pages'][25:27])

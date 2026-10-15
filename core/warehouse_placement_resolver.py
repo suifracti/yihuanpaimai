@@ -20,7 +20,7 @@ import cv2
 import numpy as np
 
 from catalog_validator import validate_catalog_record, validate_item_identity
-from warehouse_grid_geometry import STATUS_OK as GRID_OK, observe_warehouse_grid
+from warehouse_grid_geometry import STATUS_OK as GRID_OK, observe_warehouse_grid, _phase
 
 
 def application_asset_root() -> Path:
@@ -720,13 +720,28 @@ class WarehousePlacementResolver:
             return []
 
         # 1. Analyze grid lines and gutters for each segment frame
+        grids = {}
+        periods = []
+        for seg in raw_segments:
+            seg_id = str(seg.get("segmentId") or "")
+            img = frames.get(seg_id)
+            if img is None or img.size == 0:
+                continue
+            grid = observe_warehouse_grid(img, already_cropped=True, source_id=seg_id).get("grid") or {}
+            grids[seg_id] = grid
+            ys = grid.get("yLines") or []
+            if not unanchored and seg.get("chainOk", True) and len(ys) >= 3:
+                periods.append((float(seg.get("originY") or 0.0), float(np.median(np.diff(ys)))))
+        shared_period = float(np.median([p for _, p in periods])) if periods else None
+        if len({origin for origin, period in periods if period == shared_period}) < 2:
+            shared_period = None
+
         # Identify canonical x_lines from verified anchor if available
         canonical_x_lines = None
         for seg in sorted(raw_segments, key=lambda s: int(s.get("sequenceIndex") or 0)):
             s_img = frames.get(str(seg.get("segmentId") or ""))
             if s_img is not None and s_img.size > 0:
-                g_obs = observe_warehouse_grid(s_img, already_cropped=True, source_id=str(seg.get("segmentId") or ""))
-                g = g_obs.get("grid") or {}
+                g = grids[str(seg.get("segmentId") or "")]
                 if g.get("status") == "OK" and g.get("xLines") and len(g["xLines"]) >= 11:
                     canonical_x_lines = list(g["xLines"][:11])
                     break
@@ -739,8 +754,7 @@ class WarehousePlacementResolver:
             if img is None or img.size == 0:
                 continue
 
-            grid_obs = observe_warehouse_grid(img, already_cropped=True, source_id=seg_id)
-            grid = grid_obs.get("grid") or {}
+            grid = grids[seg_id]
             grid_status = grid.get("status")
 
             chain_ok = bool(seg.get("chainOk", True)) and not unanchored
@@ -750,6 +764,18 @@ class WarehousePlacementResolver:
                 x_lines = grid.get("xLines") or [3, 59, 115, 171, 227, 283, 339, 395, 451, 507, 563]
 
             y_lines = grid.get("yLines") or [0, 57, 114, 171, 228, 285, 342, 399, 456, 513]
+            if (chain_ok and shared_period is not None and len(y_lines) >= 3
+                    and float(np.median(np.diff(y_lines))) != shared_period):
+                # A sparse page may lock onto object detail instead of grid pitch.
+                # Re-measure its own border phase using the pitch independently
+                # observed at multiple verified scroll origins, before cutting ROIs.
+                gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+                edges = np.abs(cv2.Sobel(gray, cv2.CV_32F, 0, 1, ksize=3)).mean(axis=1)
+                origin = _phase(np.convolve(edges, np.ones(5) / 5.0, mode="same"), shared_period)
+                if origin > .45 * shared_period:
+                    origin -= shared_period
+                bottom = min(img.shape[0], y_lines[-1] + .5 * shared_period)
+                y_lines = [max(0, int(round(y))) for y in np.arange(origin, bottom, shared_period)]
 
             if len(x_lines) > 11:
                 x_lines = x_lines[:11]
