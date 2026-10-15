@@ -130,6 +130,7 @@ class WarehousePlacementResolver:
         self._foreground_cache = OrderedDict()
         self._match_cache = OrderedDict()
         self.match_metrics = {'queries': 0, 'exactCacheHits': 0, 'foregroundPreprocess': 0}
+        self.progress_callback = None
         self._load_reference_cache()
 
     def _load_reference_cache(self) -> None:
@@ -137,12 +138,13 @@ class WarehousePlacementResolver:
             return
         from visual_catalog import _catalog_reference_body
         manifest_data = json.loads(self._manifest_path.read_text(encoding="utf-8"))
+        source_images = {}
         for rec in manifest_data.get("records", []):
             cid = str(rec.get("catalogId") or "")
             rel = rec.get("cropRelativePath")
             if not cid or not rel:
                 continue
-            validate_catalog_record(rec, root=self._root)
+            validate_catalog_record(rec, root=self._root, source_images=source_images)
             crop_path = self._root / rel
             if not crop_path.is_file():
                 continue
@@ -1022,6 +1024,8 @@ class WarehousePlacementResolver:
                         catalog_score, candidates_list, best_inliers = self.match_catalog_candidates(
                             roi, w, h, is_empty=is_all_empty
                         )
+                        if self.progress_callback is not None:
+                            self.progress_callback(self.match_metrics['queries'])
 
                         if analysis["is_aligned"]:
                             y_top = origin_y + float(y_lines[r]) - anchor_y_start

@@ -158,8 +158,9 @@ def _load_default_catalog_records(
             raise
 
         cards = rdata.get("cards", []) if isinstance(rdata, dict) else []
+        source_images = {}
         for card in cards:
-            is_valid, reason = validate_verified_registry_card(card, root=base_root)
+            is_valid, reason = validate_verified_registry_card(card, root=base_root, source_images=source_images)
             if not is_valid:
                 logger.warning(
                     "CatalogAuthority: rejecting invalid registry card %s: %s",

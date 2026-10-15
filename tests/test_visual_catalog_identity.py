@@ -213,6 +213,58 @@ class VisualCatalogIdentityTests(unittest.TestCase):
 class CatalogProvenanceAndIdentityIntegrityTests(unittest.TestCase):
     """Tests enforcing strict ID-name provenance, anti-regression validation, and benchmark separation."""
 
+    def test_catalog_load_reuses_source_image_only_within_current_batch(self):
+        import tempfile
+        from unittest.mock import patch
+        from catalog_validator import get_official_item, validate_catalog_record
+        from warehouse_identity_review import CatalogAuthority
+
+        registry = json.loads((ROOT / "assets/items/verified_source_card_registry.json").read_text(encoding="utf-8"))
+        expected = {"visual-04d191b44682": "霜铁交响", "visual-bbc3262913a7": "映像机"}
+        cards = [card for card in registry["cards"] if card["catalogId"] in expected]
+        self.assertEqual(len(cards), 2)
+        self.assertEqual(cards[0]["sourceScreenshot"], cards[1]["sourceScreenshot"])
+        get_official_item("image1-0-1")  # Initialize the independent authority before observing this batch.
+        with tempfile.TemporaryDirectory(prefix="catalog-batch-", dir=ROOT / "build") as temporary:
+            root = Path(temporary)
+            source = root / cards[0]["sourceScreenshot"]
+            source.parent.mkdir(parents=True)
+            source.write_bytes((ROOT / cards[0]["sourceScreenshot"]).read_bytes())
+            registry_path = root / "batch-registry.json"
+            registry_path.write_text(json.dumps({"cards": cards}), encoding="utf-8")
+            reads = []
+            original_read = Path.read_bytes
+
+            def tracked_read(path):
+                if path == source:
+                    reads.append(path)
+                return original_read(path)
+
+            with patch.object(Path, "read_bytes", tracked_read), patch("catalog_validator.cv2.imdecode", wraps=cv2.imdecode) as decode:
+                authority = CatalogAuthority(registry_path=registry_path, root=root)
+                self.assertEqual({cid: authority.get_canonical_name(cid) for cid in expected}, expected)
+                self.assertEqual(len(reads), 1, "Cards from one screenshot must share its validated snapshot in this load")
+                self.assertEqual(decode.call_count, 1)
+
+            reads.clear()
+            with patch.object(Path, "read_bytes", tracked_read), patch("catalog_validator.cv2.imdecode", wraps=cv2.imdecode) as decode:
+                source_images = {}
+                for card in cards:
+                    self.assertTrue(validate_catalog_record(card, root=root, source_images=source_images))
+                wrong_name = {**cards[0], "name": "映像机"}
+                with self.assertRaisesRegex(ValueError, "Source card identity mismatch"):
+                    validate_catalog_record(wrong_name, root=root, source_images=source_images)
+                self.assertEqual(len(reads), 1)
+                self.assertEqual(decode.call_count, 1)
+
+            source.write_bytes(b"changed source after the prior catalog load")
+            later = CatalogAuthority(registry_path=registry_path, root=root)
+            for cid in expected:
+                self.assertIsNone(later.get(cid), "A prior batch must not authorize a changed source file")
+            for card in cards:
+                with self.assertRaisesRegex(ValueError, "SHA256 mismatch against authoritative registry"):
+                    validate_catalog_record(card, root=root, source_images={})
+
     def test_validator_rejects_genuine_name_with_wrong_id(self):
         from catalog_validator import validate_item_identity
         # Both '起司' (image1-0-1) and '柠檬气泡水' (image13-0-1) are genuine catalog names.

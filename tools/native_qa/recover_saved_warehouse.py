@@ -34,8 +34,15 @@ def main():
                 faulthandler.cancel_dump_traceback_later()
         if intake._refiner:
             try:
-                intake.wait_refinement(130)
-            except (TimeoutError, KeyboardInterrupt):
+                # The owner terminates a stalled worker. A progressing saved
+                # analysis must not be cancelled by this command's wall clock.
+                while True:
+                    try:
+                        intake.wait_refinement(1)
+                        break
+                    except TimeoutError:
+                        continue
+            except KeyboardInterrupt:
                 intake.cancel_refinement(args.session)
                 intake.wait_refinement(3)
     packet = intake.review_packet_copy() or {}

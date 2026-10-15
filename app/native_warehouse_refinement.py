@@ -11,7 +11,7 @@ import threading
 import time
 import uuid
 
-REFINEMENT_SECONDS = 120
+REFINEMENT_SECONDS = 120  # Stop an inactive worker, not a progressing finite analysis.
 ROOT = Path(__file__).resolve().parents[1]
 
 
@@ -55,7 +55,7 @@ class SavedWarehouseRefinement:
                 return {'ok':False,'reason':'REFINEMENT_QUEUE_LIMIT'}
             event = threading.Event(); token = uuid.uuid4().hex
             manifest['refinement'] = {'state':'QUEUED','jobId':token,
-                'inputFingerprint':fingerprint(manifest),'budgetSeconds':REFINEMENT_SECONDS}
+                'inputFingerprint':fingerprint(manifest),'inactivityTimeoutSeconds':REFINEMENT_SECONDS}
             manifest['placementRefinementPending'] = True
             write_manifest(path,manifest)
             self._events[session] = event
@@ -127,11 +127,15 @@ class SavedWarehouseRefinement:
             process = subprocess.Popen(command,cwd=ROOT,env=env,stdin=subprocess.DEVNULL,
                 stdout=log,stderr=subprocess.STDOUT,creationflags=subprocess.CREATE_NO_WINDOW if os.name=='nt' else 0)
             try:
+                last_progress, log_bytes = started, 0
                 while process.poll() is None:
                     if event.wait(.1):
                         return
-                    if time.perf_counter()-started > REFINEMENT_SECONDS:
-                        raise TimeoutError('REFINEMENT_TIME_LIMIT')
+                    size = os.fstat(log.fileno()).st_size
+                    if size > log_bytes:
+                        last_progress, log_bytes = time.perf_counter(), size
+                    if time.perf_counter()-last_progress > REFINEMENT_SECONDS:
+                        raise TimeoutError('REFINEMENT_TIME_LIMIT:NO_PROGRESS')
                 if process.returncode != 0:
                     raise RuntimeError('REFINEMENT_WORKER_FAILED:'+str(process.returncode))
             finally:
@@ -197,12 +201,22 @@ def analyze_saved(root, session, token):
             self.evidence = copy.deepcopy(kwargs)
             return {'id':key}
     collector = Collector(); started = time.perf_counter()
+    print(json.dumps({'phase':'prepare-catalog'}),flush=True)
+    resolver = get_production_placement_resolver()
+    last_report = [0.0]
+    def report_progress(completed):
+        now = time.perf_counter()
+        if now-last_report[0] >= 1.0:
+            print(json.dumps({'phase':'match','completedQueries':completed,
+                'elapsedSeconds':now-started}),flush=True)
+            last_report[0] = now
+    resolver.progress_callback = report_progress
     processor = WarehouseCaptureHost(store_factory=lambda:intake.evidence_store,driver_available=False)
     result = processor._process_saved_pages(intake._binding['recordStableKey'],pages,
         history_store=collector,finalization_reason=manifest['terminationReason'],resolve_placements=True,
         identity_evidence_ids=ids if coverage_ids is not None else None)
     if not result['ok'] or collector.evidence is None: raise ValueError('REFINEMENT_ANALYSIS_FAILED')
-    resolver = get_production_placement_resolver()
+    print(json.dumps({'phase':'build-saved-result'}),flush=True)
     summary = {'analysisSeconds':time.perf_counter()-started,'matchMetrics':resolver.match_metrics,
         'identitySourceEvidenceIds':ids,
         'reviewUnitCount':result['totalSlots'],'confirmedCount':result['confirmedCount'],

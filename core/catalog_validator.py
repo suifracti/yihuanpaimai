@@ -186,10 +186,28 @@ def _make_card_key(src: str | Path, bbox: Sequence[int | float]) -> str:
     return f"{norm_src}:{int(bbox[0])},{int(bbox[1])},{int(bbox[2])},{int(bbox[3])}"
 
 
+def _source_image_snapshot(src_path: Path, source_images: Optional[Dict[Path, Dict[str, Any]]]) -> Dict[str, Any]:
+    source_key = src_path.resolve()
+    snapshot = source_images.get(source_key) if source_images is not None else None
+    if snapshot is None:
+        raw_bytes = src_path.read_bytes()
+        snapshot = {"bytes": raw_bytes, "sha256": hashlib.sha256(raw_bytes).hexdigest()}
+        if source_images is not None:
+            source_images[source_key] = snapshot
+    return snapshot
+
+
+def _decode_source_snapshot(snapshot: Dict[str, Any]):
+    if "image" not in snapshot:
+        snapshot["image"] = cv2.imdecode(np.frombuffer(snapshot["bytes"], dtype=np.uint8), cv2.IMREAD_COLOR)
+    return snapshot["image"]
+
+
 def validate_card_image_and_bbox(
     record_or_item: Dict[str, Any],
     root: Optional[Path] = None,
     auth_sha: Optional[str] = None,
+    *, source_images: Optional[Dict[Path, Dict[str, Any]]] = None,
 ) -> Tuple[bool, str, Optional[Tuple[int, int]]]:
     """Validates that a source card screenshot is a decodable image and bbox has positive area within bounds."""
     base_dir = root or PROJECT_ROOT
@@ -207,15 +225,15 @@ def validate_card_image_and_bbox(
         return False, f"Source screenshot file not found: {src_path}", None
 
     try:
-        raw_bytes = src_path.read_bytes()
+        snapshot = _source_image_snapshot(src_path, source_images)
     except OSError as err:
         return False, f"Failed to read source screenshot file: {err}", None
 
-    actual_sha = hashlib.sha256(raw_bytes).hexdigest()
+    actual_sha = snapshot["sha256"]
 
     # Look up authoritative SHA from independent registry if not explicitly provided
     if auth_sha is None:
-        _init_catalog()
+        _init_catalog(source_images=source_images)
         card_key = _make_card_key(src, bbox)
         auth_card = _VERIFIED_CARD_MAP.get(card_key)
         if auth_card:
@@ -250,7 +268,7 @@ def validate_card_image_and_bbox(
 
     # Check image decodability
     try:
-        img = cv2.imdecode(np.frombuffer(raw_bytes, dtype=np.uint8), cv2.IMREAD_COLOR)
+        img = _decode_source_snapshot(snapshot)
     except Exception as ex:
         return False, f"Failed to decode source screenshot image '{src}': {ex}", None
 
@@ -279,9 +297,10 @@ def validate_card_image_and_bbox(
     return True, "OK", (img_w, img_h)
 
 
-def has_verifiable_source_evidence(record_or_item: Dict[str, Any], root: Optional[Path] = None) -> bool:
+def has_verifiable_source_evidence(record_or_item: Dict[str, Any], root: Optional[Path] = None, *,
+                                   source_images: Optional[Dict[Path, Dict[str, Any]]] = None) -> bool:
     """Verifies that an item has traceable, decodable source card evidence bound to its identity."""
-    _init_catalog()
+    _init_catalog(source_images=source_images)
     src = record_or_item.get("sourceScreenshot") or record_or_item.get("sourcePath")
     bbox = record_or_item.get("bbox") or record_or_item.get("cardBbox")
     if not src or bbox is None:
@@ -293,7 +312,7 @@ def has_verifiable_source_evidence(record_or_item: Dict[str, Any], root: Optiona
         return False
 
     auth_sha = auth_card.get("sourceScreenshotSha256")
-    valid, _, _ = validate_card_image_and_bbox(record_or_item, root=root, auth_sha=auth_sha)
+    valid, _, _ = validate_card_image_and_bbox(record_or_item, root=root, auth_sha=auth_sha, source_images=source_images)
     if not valid:
         return False
 
@@ -316,7 +335,8 @@ def has_verifiable_source_evidence(record_or_item: Dict[str, Any], root: Optiona
 
 
 def validate_verified_registry_card(
-    card: Dict[str, Any], root: Optional[Path] = None
+    card: Dict[str, Any], root: Optional[Path] = None, *,
+    source_images: Optional[Dict[Path, Dict[str, Any]]] = None,
 ) -> Tuple[bool, str]:
     """Strictly validates an independent verified source card registry entry.
 
@@ -330,6 +350,10 @@ def validate_verified_registry_card(
     7. Image decodability: file must decode to a valid image with shape.
     8. bbox within bounds: x + w <= img_w, y + h <= img_h.
     9. cropSha256: if provided in card, cut exact crop from image and verify sha256.
+
+    source_images is a snapshot shared only by one catalog load. It avoids
+    reading and decoding the same screenshot once per card; card admission
+    remains independent, and a new load must use a new snapshot dictionary.
     """
     if not isinstance(card, dict):
         return False, f"Expected dict card, got {type(card).__name__}"
@@ -364,12 +388,12 @@ def validate_verified_registry_card(
     if not src_path.is_file():
         return False, f"Source screenshot file not found: {src_path}"
 
+    source_images = {} if source_images is None else source_images
     try:
-        raw_bytes = src_path.read_bytes()
+        snapshot = _source_image_snapshot(src_path, source_images)
     except OSError as err:
         return False, f"Failed to read source screenshot file: {err}"
-
-    actual_sha = hashlib.sha256(raw_bytes).hexdigest()
+    actual_sha = snapshot["sha256"]
     if actual_sha != auth_sha:
         return (
             False,
@@ -377,7 +401,7 @@ def validate_verified_registry_card(
         )
 
     try:
-        img = cv2.imdecode(np.frombuffer(raw_bytes, dtype=np.uint8), cv2.IMREAD_COLOR)
+        img = _decode_source_snapshot(snapshot)
     except Exception as ex:
         return False, f"Failed to decode image '{src}': {ex}"
 
@@ -410,7 +434,7 @@ def validate_verified_registry_card(
 
     global _CATALOG_065_IDS, _OFFICIAL_CATALOG
     if not _CATALOG_065_IDS:
-        _init_catalog()
+        _init_catalog(source_images=source_images)
 
     if _CATALOG_065_IDS and cid in _CATALOG_065_IDS:
         official_item = _OFFICIAL_CATALOG.get(cid)
@@ -462,7 +486,7 @@ def validate_verified_registry_card(
     return True, "OK"
 
 
-def _init_catalog() -> None:
+def _init_catalog(*, source_images: Optional[Dict[Path, Dict[str, Any]]] = None) -> None:
     global _OFFICIAL_CATALOG, _VALID_NAMES_TO_IDS, _CATALOG_065_IDS, _VERIFIED_CARD_MAP, _VERIFIED_ID_TO_CARD
     if _OFFICIAL_CATALOG:
         return
@@ -491,8 +515,9 @@ def _init_catalog() -> None:
     # Never read a manifest under test to establish authority!
     if VERIFIED_SOURCE_CARD_REGISTRY.is_file():
         rdata = json.loads(VERIFIED_SOURCE_CARD_REGISTRY.read_text(encoding="utf-8"))
+        source_images = {} if source_images is None else source_images
         for card in rdata.get("cards", []):
-            is_valid, reason = validate_verified_registry_card(card, root=PROJECT_ROOT)
+            is_valid, reason = validate_verified_registry_card(card, root=PROJECT_ROOT, source_images=source_images)
             if not is_valid:
                 logger.warning("catalog_validator: rejecting unverified registry card %s: %s", card.get("catalogId"), reason)
                 continue
@@ -611,7 +636,8 @@ def validate_item_identity(
     return True
 
 
-def validate_catalog_record(record: Dict[str, Any], root: Optional[Path] = None) -> bool:
+def validate_catalog_record(record: Dict[str, Any], root: Optional[Path] = None, *,
+                            source_images: Optional[Dict[Path, Dict[str, Any]]] = None) -> bool:
     """Validates a complete catalog or review record dictionary, checking field consistency.
 
     Detects and rejects:
@@ -622,7 +648,7 @@ def validate_catalog_record(record: Dict[str, Any], root: Optional[Path] = None)
     - Non-catalog_065 catalogId lacking independent verifiable source screenshot card evidence
     - ID-name mismatch against official catalog definitions
     """
-    _init_catalog()
+    _init_catalog(source_images=source_images)
     if not isinstance(record, dict):
         raise TypeError(f"Expected dict record, got {type(record).__name__}")
 
@@ -712,7 +738,7 @@ def validate_catalog_record(record: Dict[str, Any], root: Optional[Path] = None)
         auth_card = _VERIFIED_CARD_MAP.get(card_key) if card_key else None
         auth_sha = auth_card.get("sourceScreenshotSha256") if auth_card else None
 
-        valid_card, err_msg, _ = validate_card_image_and_bbox(record, root=root, auth_sha=auth_sha)
+        valid_card, err_msg, _ = validate_card_image_and_bbox(record, root=root, auth_sha=auth_sha, source_images=source_images)
         if not valid_card:
             raise ValueError(f"Card validation failure: {err_msg}")
 
@@ -741,7 +767,7 @@ def validate_catalog_record(record: Dict[str, Any], root: Optional[Path] = None)
     if effective_cid and effective_cid not in _CATALOG_065_IDS:
         official_item = get_official_item(effective_cid)
         is_registered_with_evidence = bool(official_item and official_item.get("hasVerifiedEvidence"))
-        has_card = has_src and has_bbox and has_verifiable_source_evidence(record, root=root)
+        has_card = has_src and has_bbox and has_verifiable_source_evidence(record, root=root, source_images=source_images)
         if not is_registered_with_evidence and not has_card:
             raise ValueError(
                 f"Unverified catalog item: catalogId '{effective_cid}' is not in catalog_065.json "

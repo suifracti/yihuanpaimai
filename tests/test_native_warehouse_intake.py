@@ -421,6 +421,7 @@ class NativeWarehouseIntakeTests(unittest.TestCase):
         class ReadyProcess:
             def __init__(process,command,**kwargs):
                 process.returncode = None
+                process.log = kwargs['stdout']
                 root, sid, token = Path(command[-3]),command[-2],command[-1]
                 manifest = json.loads((root/'warehouse-intake'/f'{sid}.json').read_text())
                 output = root/'warehouse-refinement'/sid/(token+'.json')
@@ -429,13 +430,21 @@ class NativeWarehouseIntakeTests(unittest.TestCase):
                                 'review_packet':old['warehouseReviewPacket']},'summary':{'fixture':'no-new-identities'}}))
                 entered.set()
             def poll(process):
+                if not release.is_set():
+                    process.log.write('completed another finite matching query\n')
+                    process.log.flush()
                 if release.is_set(): process.returncode = 0
                 return process.returncode
             def wait(process): return process.returncode
             def kill(process): process.returncode = -1
         self.intake._refiner = SavedWarehouseRefinement(self.intake)
-        with patch('native_warehouse_refinement.subprocess.Popen',ReadyProcess):
+        with patch('native_warehouse_refinement.subprocess.Popen',ReadyProcess), \
+                patch('native_warehouse_refinement.REFINEMENT_SECONDS',.15):
             self.assertTrue(self.intake.resume_refinement(session)['ok']); self.assertTrue(entered.wait(2))
+            # A working job may outlive the inactivity interval; elapsed total
+            # time alone must not discard its eventual saved result.
+            self.assertFalse(release.wait(.4))
+            self.assertEqual(self.intake.refinement_payload(old_key)['state'],'RUNNING')
             next_record = build_canonical_match_record_v7(match_id='after_refinement',
                 played_at='2026-10-09T10:00:00Z',lifecycle_status='DRAFT',source='manual')
             next_record['dataOrigin'] = 'live-trial'; self.store.save_draft(next_record)
