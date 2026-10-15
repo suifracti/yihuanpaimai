@@ -462,6 +462,34 @@ class TestWarehouseAutoConfirmationAndPersistence(unittest.TestCase):
         self.assertEqual(res["confirmationStatus"], CONFIRMATION_STATUS_CANDIDATE)
         self.assertIn("LOW_FG_MARGIN_0.0000_MIN_0.0500", res["unconfirmedReasons"])
 
+    def test_full_saved_reanalysis_replaces_stale_auto_units_but_keeps_human_decisions(self):
+        from warehouse_review_packet import build_warehouse_review_packet_v2
+        key = 'match_saved_reanalysis'
+        rec = build_canonical_match_record_v7(match_id=key, played_at='2026-10-15T00:00:00Z',
+            lifecycle_status='DRAFT', source='test')
+        self.store.persist_record_transactional(rec, is_finalized=False)
+        descriptors = [{'evidenceId':f'ev_seg_{n}', 'recordStableKey':key,
+            'kind':'warehouse-segment', 'sha256':digest, 'width':300, 'height':300}
+            for n,digest in enumerate(self.blob_hashes[:2])]
+        coverage = {'recordStableKey':key, 'coverageStatus':'PARTIAL',
+            'terminationReason':'INCOMPLETE', 'segments':[
+                {'evidenceId':d['evidenceId'], 'sequenceIndex':n}
+                for n,d in enumerate(descriptors)]}
+        def packet(units):
+            return build_warehouse_review_packet_v2(coverage_ledger=coverage,
+                descriptors=descriptors, review_units=units)
+        old = self._sample_unit(uid='stale-auto')
+        human = self._sample_unit(uid='human')
+        human_saved = {**human, 'confirmedByHuman':True, 'confirmationStatus':'CANDIDATE_ONLY'}
+        self.store.persist_warehouse_evidence(key, review_units=[old,human_saved],
+            review_packet=packet([old,human]))
+        replacement = self._sample_unit(uid='replacement')
+        saved = self.store.persist_warehouse_evidence(key, review_units=[replacement],
+            review_packet=packet([replacement]))
+        units = saved['settlement']['reviewUnits']
+        self.assertEqual({u['reviewUnitId'] for u in units},{'replacement','human'})
+        self.assertTrue(next(u for u in units if u['reviewUnitId']=='human')['confirmedByHuman'])
+
     def test_partial_update_preserves_unpassed_human_decisions(self):
         """Passing a partial list of reviewUnits must not drop existing units or their prior human decisions."""
         match_id = "match_partial_update_001"

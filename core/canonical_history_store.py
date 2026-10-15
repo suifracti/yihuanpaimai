@@ -421,7 +421,9 @@ class CanonicalHistoryStore:
             from warehouse_identity_review import CatalogAuthority
             authority = catalog if isinstance(catalog, CatalogAuthority) else CatalogAuthority()
 
-            # 3. Merge review units preserving unprovided units and locking in human decisions
+            # Partial updates preserve unprovided units. A full reanalysis of
+            # the same saved sources replaces obsolete machine segmentation,
+            # while prior human decisions remain protected in either case.
             merged_units = None
             if review_units is not None:
                 incoming_by_id = {
@@ -436,7 +438,17 @@ class CanonicalHistoryStore:
                     if u.get("reviewUnitId")
                 }
 
-                all_uids = list(incoming_by_id.keys()) + [uid for uid in existing_by_id if uid not in incoming_by_id]
+                previous_packet = (existing.get('settlement') or {}).get('warehouseReviewPacket') or {}
+                previous_sources = {(s.get('evidenceId'),s.get('sha256'))
+                    for s in previous_packet.get('segments',[])}
+                new_sources = {(s.get('evidenceId'),s.get('sha256'))
+                    for s in (review_packet or {}).get('segments',[])}
+                snapshot_ids = {u.get('reviewUnitId') for u in (review_packet or {}).get('reviewUnits',[])}
+                full_reanalysis = (review_packet is not None and 'reviewUnits' in review_packet
+                    and snapshot_ids == set(incoming_by_id)
+                    and bool(previous_sources) and previous_sources <= new_sources)
+                all_uids = list(incoming_by_id.keys()) + [uid for uid in existing_by_id
+                    if uid not in incoming_by_id and (not full_reanalysis or uid in human_decisions)]
                 merged_units = []
                 for uid in all_uids:
                     u_item = incoming_by_id.get(uid) or existing_by_id.get(uid)
