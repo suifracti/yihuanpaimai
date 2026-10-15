@@ -47,10 +47,47 @@ def save_ui_appearance(theme: str, density: str) -> dict:
     return payload
 
 
-def appearance_script(appearance: dict) -> str:
-    theme = json.dumps(appearance.get("theme") if appearance.get("theme") in ("day", "night", "auto") else "day")
-    density = json.dumps(appearance.get("density") if appearance.get("density") in ("standard", "compact") else "standard")
-    return f"window.applyAuctionTheme&&window.applyAuctionTheme({theme},{density})"
+def appearance_script(appearance: dict, seq: int = 0) -> str:
+    """Paint the ticket directly. The page function may be a cached copy that ignores a return to day."""
+    theme = appearance.get("theme") if appearance.get("theme") in ("day", "night", "auto") else "day"
+    density = appearance.get("density") if appearance.get("density") in ("standard", "compact") else "standard"
+    choice = json.dumps(theme, ensure_ascii=False)
+    reading = json.dumps(density, ensure_ascii=False)
+    ticket = int(seq) if isinstance(seq, int) or str(seq).isdigit() else 0
+    return (
+        "(function(){"
+        f"var seq={ticket};"
+        "if(seq&&window.__yhAppearanceSeq&&seq<window.__yhAppearanceSeq)return;"
+        "if(seq)window.__yhAppearanceSeq=seq;"
+        "window.applyAuctionTheme=function(choice,density){"
+        "var dark=!!(window.matchMedia&&window.matchMedia('(prefers-color-scheme: dark)').matches);"
+        "var themeChoice=choice==='night'||choice==='auto'?choice:'day';"
+        "var theme=(themeChoice==='night'||(themeChoice==='auto'&&dark))?'night':'day';"
+        "var root=document.documentElement;"
+        "root.dataset.themeChoice=themeChoice;"
+        "root.dataset.theme=theme;"
+        "if(density==='compact'||density==='standard')root.dataset.density=density;"
+        "var day=theme!=='night';"
+        "var paper=day?'#f7f4ea':'#203839';"
+        "var accent=day?'#c84932':'#f48c6d';"
+        "var ink=day?'#192925':'#eee9d8';"
+        "root.style.setProperty('--bg-shell',paper);"
+        "root.style.setProperty('--bg',day?'#f9f7ef':'#203839');"
+        "root.style.setProperty('--text',ink);"
+        "root.style.setProperty('--muted',day?'#626d65':'#b6c3b9');"
+        "root.style.setProperty('--accent',accent);"
+        "root.style.setProperty('--gold',day?'#926528':'#e0bb7d');"
+        "root.style.setProperty('--border',day?'#cfc8b6':'#47605b');"
+        "root.style.setProperty('--border-subtle',day?'#d1d0c3':'#47605b');"
+        "var shell=document.querySelector('.shell');"
+        "if(shell){shell.style.background=paper;shell.style.color=ink;shell.style.borderTopColor=accent;}"
+        "var shown='';"
+        "try{if(shell)shown=getComputedStyle(shell).backgroundColor;}catch(e){}"
+        "try{if(window.chrome&&window.chrome.webview)window.chrome.webview.postMessage(JSON.stringify({action:'ui_appearance_applied',theme:theme,choice:themeChoice,shown:shown}));}catch(e){}"
+        "};"
+        f"window.applyAuctionTheme({choice},{reading});"
+        "})()"
+    )
 
 
 def _read_json(path: Path) -> dict:
@@ -1908,11 +1945,23 @@ def create_main_window_type(WinForms, Drawing):
             self._presentation_webview.WebMessageReceived += self._web_message_handler
             self._presentation_webview.NavigationCompleted += self._navigation_handler
             navigation_uri = resolved_html.as_uri()
+            script_stamp = int(resolved_html.with_name("main_window.js").stat().st_mtime)
             if smoke_mode:
-                navigation_uri += "?smoke=overlay-toggle"
+                navigation_uri += f"?smoke=overlay-toggle&ui={script_stamp}"
+            else:
+                navigation_uri += f"?ui={script_stamp}"
+            try:
+                disable_cache = self._presentation_webview.CallDevToolsProtocolMethodAsync(
+                    "Network.setCacheDisabled",
+                    '{"cacheDisabled":true}',
+                )
+                while not disable_cache.IsCompleted:
+                    WinForms.Application.DoEvents()
+            except Exception as exc:
+                self._log("UI", f"main cache disable skipped: {exc}")
             self._presentation_webview.Navigate(navigation_uri)
             self._loading_label.Visible = False
-            self._log("STARTUP:MAIN", f"Main presentation WebView initialized: {resolved_html}")
+            self._log("STARTUP:MAIN", f"Main presentation WebView initialized: {navigation_uri}")
 
         def execute_script(self, script: str):
             """QA-only: run script in the main presentation WebView on the UI thread."""

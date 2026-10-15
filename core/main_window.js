@@ -41,6 +41,7 @@ const dashboard = {
   mascotState: null,
   lastAutomaticMascotState: null,
   statusPollTimer: null,
+  statusRequestPending: false,
   lastMainViewState: null,
   guidebookCatalog: null,
   guidebookSources: null,
@@ -2042,7 +2043,10 @@ function applyAuctionTheme(choice, persist) {
     try { localStorage.setItem("yh.identity.theme", themeChoice); } catch (error) {}
     const density = document.documentElement.dataset.density || "standard";
     const signature = `${themeChoice}|${density}`;
+    const now = Date.now();
+    if (dashboard.lastPostedAppearance === signature && now - (dashboard.lastPostedAppearanceAt || 0) < 400) return;
     dashboard.lastPostedAppearance = signature;
+    dashboard.lastPostedAppearanceAt = now;
     postNative("set_ui_appearance", { theme: themeChoice, density });
   }
 }
@@ -5641,6 +5645,7 @@ function changeOriginalScreenshot(action, recordId, evidenceId, containerId, but
 function handleNativeMessage(event) {
   const payload = typeof event.data === "string" ? JSON.parse(event.data) : event.data;
   if (!payload || payload.type !== "app_status") return;
+  if (payload.action === "request_app_status") dashboard.statusRequestPending = false;
   if (["request_original_screenshots", "delete_original_screenshot", "restore_original_screenshot"].includes(payload.action) && payload.originalScreenshots) {
     const updatedContainers = [...originalScreenshotRequests].filter(([, request]) => request.requestId === payload.requestId).map(([id]) => id);
     renderOriginalScreenshots(payload);
@@ -6789,10 +6794,11 @@ document.addEventListener("DOMContentLoaded", () => {
       postNative("get_overlay_visibility");
       postNative("request_app_status");
       if (dashboard.statusPollTimer === null) {
-        dashboard.statusPollTimer = window.setInterval(
-          () => postNative("request_app_status"),
-          750
-        );
+        dashboard.statusPollTimer = window.setInterval(() => {
+          if (dashboard.statusRequestPending) return;
+          dashboard.statusRequestPending = true;
+          postNative("request_app_status");
+        }, 750);
       }
       setBridgeState("ready", "桌面服务已连接");
       if (new URLSearchParams(window.location.search).get("smoke") === "overlay-toggle") {

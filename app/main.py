@@ -8748,30 +8748,93 @@ def run_hud_app():
         overlay_form.InitializeComposition(env, html_path, WS_PORT)
         log_stage("STARTUP:MAIN", "DirectComposition Visual Tree & Composition Controller created (S_OK)")
 
+        appearance_gate = {"epoch": 0, "delegate": None}
+
         def push_ui_appearance(appearance=None):
-            script = appearance_script(appearance or load_ui_appearance())
+            appearance_gate["epoch"] += 1
+            epoch = appearance_gate["epoch"]
+            preview = appearance or load_ui_appearance()
+            log_stage(
+                "UI",
+                "appearance schedule "
+                f"theme={preview.get('theme')} density={preview.get('density')} epoch={epoch}",
+            )
 
             def run():
+                if epoch != appearance_gate["epoch"]:
+                    log_stage("UI", f"appearance script skipped stale epoch={epoch}")
+                    return
+                fresh = load_ui_appearance()
+                script = appearance_script(fresh, epoch)
                 try:
                     webview = getattr(overlay_form, "WebView", None)
-                    if webview is not None:
-                        webview.ExecuteScriptAsync(script)
+                    if webview is None:
+                        log_stage("UI", "appearance script skipped: no webview")
+                        return
+                    webview.ExecuteScriptAsync(script)
+                    log_stage(
+                        "UI",
+                        f"appearance script sent theme={fresh.get('theme')} epoch={epoch}",
+                    )
                 except Exception as ex:
                     log_stage("UI", f"appearance push skipped: {ex}")
+                    return
+                loop = WS_EVENT_LOOP
+                if loop is not None and loop.is_running():
+                    try:
+                        asyncio.run_coroutine_threadsafe(
+                            broadcast_ws(json.dumps({
+                                "type": "ui_appearance",
+                                "seq": epoch,
+                                "theme": fresh.get("theme"),
+                                "density": fresh.get("density"),
+                            }, ensure_ascii=False)),
+                            loop,
+                        )
+                    except Exception as ex:
+                        log_stage("UI", f"appearance broadcast skipped: {ex}")
 
             try:
-                overlay_form.BeginInvoke(WinForms.MethodInvoker(run))
+                if overlay_form.InvokeRequired:
+                    appearance_gate["delegate"] = WinForms.MethodInvoker(run)
+                    overlay_form.BeginInvoke(appearance_gate["delegate"])
+                else:
+                    run()
             except Exception as ex:
                 log_stage("UI", f"appearance schedule skipped: {ex}")
 
-        bridge = getattr(main_window, "_bridge", None)
-        if bridge is not None and hasattr(bridge, "set_ui_appearance_handler"):
-            bridge.set_ui_appearance_handler(push_ui_appearance)
         overlay_webview = getattr(overlay_form, "WebView", None)
         if overlay_webview is not None:
             def on_overlay_navigated(sender, args):
+                ok = True
+                status = ""
+                try:
+                    ok = bool(args.IsSuccess)
+                    status = str(args.WebErrorStatus)
+                except Exception as ex:
+                    status = str(ex)
+                log_stage("UI", f"overlay navigated ok={ok} status={status}")
                 push_ui_appearance()
             overlay_webview.NavigationCompleted += on_overlay_navigated
+            try:
+                stamp = int(os.path.getmtime(html_path))
+            except OSError:
+                stamp = 0
+            slash = html_path.replace("\\", "/")
+            if not slash.startswith("/"):
+                slash = "/" + slash
+            fresh_uri = f"file://{slash}?v={stamp}#wsPort={WS_PORT}"
+            try:
+                disable_cache = overlay_webview.CallDevToolsProtocolMethodAsync(
+                    "Network.setCacheDisabled",
+                    '{"cacheDisabled":true}',
+                )
+                while not disable_cache.IsCompleted:
+                    WinForms.Application.DoEvents()
+            except Exception as ex:
+                log_stage("UI", f"overlay cache disable skipped: {ex}")
+            log_stage("UI", f"overlay document {fresh_uri}")
+            overlay_webview.Navigate(fresh_uri)
 
         def on_web_message(msg_str):
             try:
@@ -8825,6 +8888,12 @@ def run_hud_app():
                     js_api.capture_overlay_preview(data.get("path"))
                 elif action == "eval_overlay_js":
                     js_api.eval_overlay_js(data.get("script"))
+                elif action == "ui_appearance_applied":
+                    log_stage(
+                        "UI",
+                        "appearance applied "
+                        f"theme={data.get('theme')} choice={data.get('choice')} shown={data.get('shown')}",
+                    )
             except Exception as ex:
                 log_stage("STARTUP:MAIN", f"WebMessage dispatch error: {ex}")
         overlay_form.WebMessageReceivedCallback += on_web_message
@@ -8982,6 +9051,12 @@ def run_hud_app():
             ),
             shutdown_started_provider=lambda: shutdown_coordinator.started,
         )
+        live_bridge = getattr(main_window, "_bridge", None)
+        if live_bridge is not None and hasattr(live_bridge, "set_ui_appearance_handler"):
+            live_bridge.set_ui_appearance_handler(push_ui_appearance)
+            log_stage("UI", "appearance handler attached")
+        else:
+            log_stage("UI", "appearance handler missing")
         js_api.set_main_window(main_window)
         main_window.Show()
         main_window.initialize_presentation(

@@ -345,7 +345,7 @@ class MainWindowLifecycleTests(unittest.TestCase):
             javascript = fh.read()
 
         self.assertIn('href="main_window.css"', html)
-        self.assertIn('src="main_window.js"', html)
+        self.assertIn('src="main_window.js', html)
         self.assertIn('src="auction_engine_v06.js"', html)
         self.assertIn("AuctionEngineV06.baseCatalogFor", javascript)
         self.assertIn("AuctionEngineV06.normalizeKnownContext", javascript)

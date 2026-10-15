@@ -1166,11 +1166,39 @@
     window.applyAuctionTheme = function (choice, density) {
       const themeChoice = choice === "night" || choice === "auto" ? choice : "day";
       const dark = window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches;
-      document.documentElement.dataset.themeChoice = themeChoice;
-      document.documentElement.dataset.theme = (themeChoice === "night" || (themeChoice === "auto" && dark)) ? "night" : "day";
-      if (density === "compact" || density === "standard") {
-        document.documentElement.dataset.density = density;
+      const theme = (themeChoice === "night" || (themeChoice === "auto" && dark)) ? "night" : "day";
+      const root = document.documentElement;
+      root.dataset.themeChoice = themeChoice;
+      root.dataset.theme = theme;
+      if (density === "compact" || density === "standard") root.dataset.density = density;
+      const day = theme !== "night";
+      const paper = day ? "#f7f4ea" : "#203839";
+      const accent = day ? "#c84932" : "#f48c6d";
+      const ink = day ? "#192925" : "#eee9d8";
+      root.style.setProperty("--bg-shell", paper);
+      root.style.setProperty("--bg", day ? "#f9f7ef" : "#203839");
+      root.style.setProperty("--text", ink);
+      root.style.setProperty("--muted", day ? "#626d65" : "#b6c3b9");
+      root.style.setProperty("--accent", accent);
+      root.style.setProperty("--gold", day ? "#926528" : "#e0bb7d");
+      root.style.setProperty("--border", day ? "#cfc8b6" : "#47605b");
+      root.style.setProperty("--border-subtle", day ? "#d1d0c3" : "#47605b");
+      const shell = document.querySelector(".shell");
+      if (shell) {
+        shell.style.background = paper;
+        shell.style.color = ink;
+        shell.style.borderTopColor = accent;
       }
+      try {
+        if (window.chrome && window.chrome.webview) {
+          window.chrome.webview.postMessage(JSON.stringify({
+            action: "ui_appearance_applied",
+            theme: theme,
+            choice: themeChoice,
+            shown: shell ? getComputedStyle(shell).backgroundColor : ""
+          }));
+        }
+      } catch (error) {}
     };
     if (window.matchMedia) {
       const themeMedia = window.matchMedia("(prefers-color-scheme: dark)");
@@ -3077,6 +3105,13 @@ function sparkleBoundsText(b) {
       ws.onmessage = (event) => {
         try {
           const d = JSON.parse(event.data);
+          if (d && d.type === "ui_appearance" && window.applyAuctionTheme) {
+            const seq = Number(d.seq) || 0;
+            if (seq && window.__yhAppearanceSeq && seq < window.__yhAppearanceSeq) return;
+            if (seq) window.__yhAppearanceSeq = seq;
+            window.applyAuctionTheme(d.theme, d.density);
+            return;
+          }
           paintVisionHealth(d);
           if (d?.type === 'vision_health') return;
           if (d?.type === 'vision_control') {
