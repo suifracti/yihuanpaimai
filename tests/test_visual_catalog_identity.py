@@ -213,6 +213,45 @@ class VisualCatalogIdentityTests(unittest.TestCase):
 class CatalogProvenanceAndIdentityIntegrityTests(unittest.TestCase):
     """Tests enforcing strict ID-name provenance, anti-regression validation, and benchmark separation."""
 
+    @unittest.skipUnless((ROOT / "build/t1-20261012/real-once-10/runtime-data/native-live-trial/warehouse-refinement/b546a40dde6a4cac8c61383b95bd34aa/f87f6910db32460badb8cdaa289bfeb6.json").is_file(),
+                         "Private once-10 SOURCE material is not distributed")
+    def test_wumeng_card_geometry_admits_its_real_one_cell_observations(self):
+        import hashlib
+        from warehouse_placement_resolver import WarehousePlacementResolver
+        from warehouse_auto_confirmation import evaluate_auto_confirmation
+
+        # The named source card shows a single lit cell and the price 1012.
+        source = ROOT / "assets/items/catalog_screenshots/1x1/{92DEEC27-CED4-4688-95EC-5A01A337AF9D}.png"
+        self.assertEqual(hashlib.sha256(source.read_bytes()).hexdigest(),
+                         "5846d029ee2213c1f19321b6baac89c770ec6cd5ba731efd34a961b403b40fad")
+        catalog = json.loads((ROOT / "assets/catalog_065.json").read_text("utf-8"))
+        item = next(row for row in catalog if row["Id"] == "image15-1-2")
+        self.assertEqual((item["Width"], item["Height"], item["Cells"], item["Value"]), (1, 1, 1, 1012))
+        for version in (1, 2):
+            manifest = json.loads((ROOT / f"assets/items/catalog_reference_manifest_v{version}.json").read_text("utf-8"))
+            reference = next(row for row in manifest["records"] if row["catalogId"] == item["Id"])
+            self.assertEqual((reference["widthCells"], reference["heightCells"]), (1, 1))
+
+        runtime = ROOT / "build/t1-20261012/real-once-10/runtime-data/native-live-trial"
+        saved = json.loads((runtime / "warehouse-refinement/b546a40dde6a4cac8c61383b95bd34aa/f87f6910db32460badb8cdaa289bfeb6.json").read_text("utf-8"))
+        unit = next(unit for unit in saved["evidence"]["review_units"] if unit["reviewUnitId"] == "unit-world-10-5-1x1")
+        resolver = WarehousePlacementResolver()
+        for observation in unit["observations"]:
+            digest = observation["sha256"]
+            raw = (runtime / "evidence/settlement_v2/blobs" / digest[:2] / (digest + ".png")).read_bytes()
+            self.assertEqual(hashlib.sha256(raw).hexdigest(), digest)
+            image = cv2.imdecode(np.frombuffer(raw, np.uint8), cv2.IMREAD_COLOR)
+            x1, y1, x2, y2 = map(int, observation["bbox"])
+            _, candidates, _ = resolver.match_catalog_candidates(image[y1:y2, x1:x2], 1, 1)
+            self.assertEqual([candidate["catalogId"] for candidate in candidates], [item["Id"]])
+            candidate = candidates[0]
+            observation.update(matchedCandidateId=candidate["catalogId"], matchedCandidateName=candidate["name"],
+                **{key: candidate.get(key) for key in ("inliers", "margin", "bestFgScore", "fgMargin")})
+            unit["candidates"] = candidates
+        confirmed = evaluate_auto_confirmation([unit], segments=saved["evidence"]["review_packet"]["segments"])[0]
+        self.assertEqual(confirmed["confirmationStatus"], "CONFIRMED")
+        self.assertEqual(confirmed["canonicalName"], "无梦果核")
+
     def test_catalog_load_reuses_source_image_only_within_current_batch(self):
         import tempfile
         from unittest.mock import patch

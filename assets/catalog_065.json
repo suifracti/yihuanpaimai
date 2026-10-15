@@ -1024,11 +1024,11 @@
     "File": "image15-1-2.png",
     "Name": "无梦果核",
     "Quality": "蓝",
-    "Width": 2,
-    "Height": 2,
-    "Cells": 3,
+    "Width": 1,
+    "Height": 1,
+    "Cells": 1,
     "Value": 1012,
-    "Shape": "1100010000000000000000000",
+    "Shape": "1000000000000000000000000",
     "LiveFiles": []
   },
   {
