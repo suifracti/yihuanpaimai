@@ -22,6 +22,37 @@ from mascot_presentation_state import MascotPresentationSnapshot
 from presentation_runtime import PresentationRuntimeSnapshot
 
 
+def load_ui_appearance() -> dict:
+    """Day/night/auto and reading density. Missing or broken files stay on the day seat."""
+    path = Path(__file__).with_name("ui_appearance.json")
+    theme, density = "day", "standard"
+    try:
+        payload = json.loads(path.read_text(encoding="utf-8"))
+        if isinstance(payload, dict):
+            if payload.get("theme") in ("day", "night", "auto"):
+                theme = payload["theme"]
+            if payload.get("density") in ("standard", "compact"):
+                density = payload["density"]
+    except (OSError, ValueError):
+        pass
+    return {"theme": theme, "density": density}
+
+
+def save_ui_appearance(theme: str, density: str) -> dict:
+    theme = theme if theme in ("day", "night", "auto") else "day"
+    density = density if density in ("standard", "compact") else "standard"
+    payload = {"theme": theme, "density": density}
+    path = Path(__file__).with_name("ui_appearance.json")
+    path.write_text(json.dumps(payload, ensure_ascii=False), encoding="utf-8")
+    return payload
+
+
+def appearance_script(appearance: dict) -> str:
+    theme = json.dumps(appearance.get("theme") if appearance.get("theme") in ("day", "night", "auto") else "day")
+    density = json.dumps(appearance.get("density") if appearance.get("density") in ("standard", "compact") else "standard")
+    return f"window.applyAuctionTheme&&window.applyAuctionTheme({theme},{density})"
+
+
 def _read_json(path: Path) -> dict:
     with path.open(encoding="utf-8") as handle:
         payload = json.load(handle)
@@ -395,6 +426,7 @@ class MainWindowBridge:
             "export_history_records",
             "export_reviewed_labels",
             "import_history_bundle",
+            "set_ui_appearance",
         )
     )
     REVIEW_CLIENT_KEYS = frozenset(
@@ -1469,7 +1501,23 @@ class MainWindowBridge:
         current_match = self.current_match_payload()
         if current_match is not None:
             response["currentMatch"] = current_match
+        if action == "set_ui_appearance":
+            response["uiAppearance"] = save_ui_appearance(
+                str(payload.get("theme") or "day"),
+                str(payload.get("density") or "standard"),
+            )
+            handler = getattr(self, "_ui_appearance_handler", None)
+            if handler is not None:
+                try:
+                    handler(response["uiAppearance"])
+                except Exception:
+                    pass
+        elif action == "request_app_status":
+            response["uiAppearance"] = load_ui_appearance()
         return response
+
+    def set_ui_appearance_handler(self, handler) -> None:
+        self._ui_appearance_handler = handler
 
     def snapshot_completion_payload(self, snapshot_result: dict) -> dict:
         """Construct narrow presentation payload for async snapshot completion."""
@@ -1554,9 +1602,9 @@ def create_main_window_type(WinForms, Drawing):
 
             self.Text = "异环拍卖助手"
             self.StartPosition = WinForms.FormStartPosition.CenterScreen
-            self.ClientSize = Drawing.Size(1280, 660)
+            self.ClientSize = Drawing.Size(1440, 900)
             self.MinimumSize = Drawing.Size(1100, 680)
-            self.BackColor = Drawing.Color.FromArgb(15, 17, 19)
+            self.BackColor = Drawing.Color.FromArgb(242, 239, 229)
             self._current_topmost = True
             self.TopMost = True
 
@@ -1981,6 +2029,8 @@ def create_main_window_type(WinForms, Drawing):
                 extra = ""
                 if isinstance(cmd, dict):
                     extra = f" capture={cmd.get('ok')} reason={cmd.get('reason')}"
+                if action == "set_ui_appearance":
+                    extra += f" theme={payload.get('theme')} density={payload.get('density')}"
                 self._log(
                     "ACTION:MAIN",
                     f"Main bridge action={response['action']} "
@@ -2324,6 +2374,7 @@ def create_main_window_type(WinForms, Drawing):
                 payload["mainPinned"] = bool(self._bridge.user_pinned)
                 payload["effectiveTopMost"] = bool(self._bridge.effective_topmost)
                 payload["captureSafetyOverride"] = bool(self._bridge.capture_safety_override)
+            payload["uiAppearance"] = load_ui_appearance()
             self._post_json(payload)
 
         def post_snapshot_result(self, snapshot_result: dict) -> None:

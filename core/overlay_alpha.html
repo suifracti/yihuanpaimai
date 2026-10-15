@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="zh-CN">
+<html lang="zh-CN" data-theme="day">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -617,7 +617,22 @@
     .bar .decision-action-badge { max-width: 100%; white-space: normal; overflow-wrap: anywhere; font-size: 12px; }
     .bar .decision-cap-wrap { display: block; }
     .bar .decision-cap-label { display: block; font-size: 12px; white-space: nowrap; }
-    .bar .decision-cap-val { display: block; font-size: clamp(28px, 8vw, 36px); line-height: 1.1; color: #96e2ce; }
+    .bar .decision-cap-val { display: block; font-size: clamp(28px, 8vw, 36px); line-height: 1.1; color: var(--accent, #c84932); }
+    html[data-theme="day"] {
+      --bg-deep: #f2efe5; --bg: #f9f7ef; --bg-shell: #f7f4ea;
+      --surface: #ebe7dc; --surface-2: #e3ddd0;
+      --border-subtle: #d1d0c3; --border: #cfc8b6;
+      --text: #192925; --muted: #626d65; --muted-dark: #7d877f;
+      --accent: #c84932; --gold: #926528; --red: #c84932;
+    }
+    html[data-theme="night"] {
+      --bg-deep: #172c2c; --bg: #203839; --bg-shell: #203839;
+      --surface: #2a4342; --surface-2: #345250;
+      --border-subtle: #47605b; --border: #47605b;
+      --text: #eee9d8; --muted: #b6c3b9;
+      --accent: #f48c6d; --gold: #e0bb7d; --red: #f48c6d;
+    }
+    .shell { border-radius: 2px; border-top: 4px solid var(--accent, #c84932); }
     .bar .center { grid-area: value; align-self: end; flex: none; padding: 0; min-width: 0; width: 132px; overflow: hidden; text-align: right; }
     .bar .center-row { justify-content: flex-end; }
     .bar .center .k { min-width: 0; max-width: 100%; overflow: hidden; text-overflow: ellipsis; font-size: 12px; white-space: nowrap; }
@@ -1147,6 +1162,24 @@
     let syncTimer = null;
     let solverTimer = null;
     let shadowRefreshTimer = null;
+
+    window.applyAuctionTheme = function (choice, density) {
+      const themeChoice = choice === "night" || choice === "auto" ? choice : "day";
+      const dark = window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches;
+      document.documentElement.dataset.themeChoice = themeChoice;
+      document.documentElement.dataset.theme = (themeChoice === "night" || (themeChoice === "auto" && dark)) ? "night" : "day";
+      if (density === "compact" || density === "standard") {
+        document.documentElement.dataset.density = density;
+      }
+    };
+    if (window.matchMedia) {
+      const themeMedia = window.matchMedia("(prefers-color-scheme: dark)");
+      const onThemeMedia = () => {
+        if (document.documentElement.dataset.themeChoice === "auto") window.applyAuctionTheme("auto");
+      };
+      if (themeMedia.addEventListener) themeMedia.addEventListener("change", onThemeMedia);
+      else if (themeMedia.addListener) themeMedia.addListener(onThemeMedia);
+    }
 
     function sendHost(payload) {
       const outgoing = { ...payload };

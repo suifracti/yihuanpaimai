@@ -2023,22 +2023,73 @@ function focusAdmissionControl(id) {
   else target.focus?.();
 }
 
+function resolvedAuctionTheme(choice) {
+  const dark = window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches;
+  return choice === "night" || (choice === "auto" && dark) ? "night" : "day";
+}
+
+function applyAuctionTheme(choice, persist) {
+  const themeChoice = choice === "night" || choice === "auto" ? choice : "day";
+  document.documentElement.dataset.themeChoice = themeChoice;
+  document.documentElement.dataset.theme = resolvedAuctionTheme(themeChoice);
+  document.querySelectorAll("[data-theme-choice]").forEach((button) => {
+    button.setAttribute("aria-pressed", String(button.dataset.themeChoice === themeChoice));
+  });
+  const status = document.getElementById("theme-status");
+  const labels = { day: "DAY · 日场", night: "NIGHT · 夜场", auto: "AUTO · 跟随系统" };
+  if (status) status.textContent = labels[themeChoice];
+  if (persist === true) {
+    try { localStorage.setItem("yh.identity.theme", themeChoice); } catch (error) {}
+    const density = document.documentElement.dataset.density || "standard";
+    const signature = `${themeChoice}|${density}`;
+    dashboard.lastPostedAppearance = signature;
+    postNative("set_ui_appearance", { theme: themeChoice, density });
+  }
+}
+
+function applyAuctionDensity(choice, persist) {
+  const density = choice === "compact" ? "compact" : "standard";
+  document.documentElement.dataset.density = density;
+  document.documentElement.classList.toggle("density-compact", density === "compact");
+  document.body.classList.toggle("density-compact", density === "compact");
+  document.querySelectorAll("[data-density]").forEach((button) => {
+    button.setAttribute("aria-pressed", String(button.dataset.density === density));
+  });
+  if (persist === true) {
+    try { localStorage.setItem("yh.identity.density", density); } catch (error) {}
+    postNative("set_ui_appearance", {
+      theme: document.documentElement.dataset.themeChoice || "day",
+      density,
+    });
+  }
+}
+
+function placeWarehouseOriginals(viewName) {
+  const node = document.getElementById("warehouse-originals");
+  if (!node) return;
+  const home = document.getElementById("live-viewfinder");
+  const mount = document.getElementById("inspection-originals-mount");
+  const target = viewName === "inspection" && mount ? mount : home;
+  if (target && node.parentElement !== target) target.appendChild(node);
+}
+
 function showView(viewName) {
   if (viewName !== "history" && dashboard.historicalWarehouseReview) resetHistoricalWarehouseReview();
   const page = document.querySelector(`[data-view-page="${viewName}"]`);
-  const nav = document.querySelector(`[data-view-target="${viewName}"]`);
-  if (!page || !nav) return;
+  const navs = document.querySelectorAll(`[data-view-target="${viewName}"]`);
+  if (!page || !navs.length) return;
   document.querySelectorAll("[data-view-page]").forEach((candidate) => {
     const active = candidate === page;
     candidate.hidden = !active;
     candidate.classList.toggle("is-active", active);
   });
   document.querySelectorAll("[data-view-target]").forEach((candidate) => {
-    const active = candidate === nav;
+    const active = candidate.dataset.viewTarget === viewName;
     candidate.classList.toggle("is-active", active);
     if (active) candidate.setAttribute("aria-current", "page");
     else candidate.removeAttribute("aria-current");
   });
+  placeWarehouseOriginals(viewName);
   dashboard.currentView = viewName;
   dashboard.wirSaveConfirmOpen = false;
   const saveConfirm = document.getElementById("wir-save-confirm");
@@ -2056,6 +2107,8 @@ function showView(viewName) {
     renderAnalysis(dashboard.lastMainViewState);
   } else if (viewName === "settings") {
     renderSettings();
+  } else if (viewName === "inspection" && dashboard.lastWarehouseCapture) {
+    renderWarehouseCapture(dashboard.lastWarehouseCapture);
   }
 }
 
@@ -3086,6 +3139,8 @@ function renderMatchFocus(currentMatch) {
 
   const round = currentMatch.bidding?.roundNo ?? currentMatch.observationRound;
   document.getElementById("match-focus-bid-round").textContent = !live || round == null ? "当前回合待观察" : `第 ${round} 回合`;
+  const liveRound = document.getElementById("live-round");
+  if (liveRound) liveRound.textContent = !live || round == null ? "—" : String(round);
   const seats = currentMatch.bidding?.seats || [];
   document.getElementById("match-focus-seats").innerHTML = !live ? "当前出价已失效，历史出价保留在本局记录"
     : !seats.length ? "本回合尚无可见出价" : seats.map(seat => {
@@ -4115,6 +4170,7 @@ function renderMatch(currentMatch, overlayVisible) {
 }
 
 function renderWarehouseCapture(capture) {
+  dashboard.lastWarehouseCapture = capture;
   const slot = document.getElementById("warehouse-capture-slot");
   const button = document.getElementById("warehouse-capture-toggle");
   const message = document.getElementById("warehouse-capture-message");
@@ -4168,7 +4224,8 @@ function renderWarehouseCapture(capture) {
 
   const review = document.getElementById("warehouse-identity-review");
   const fingerprint = capture && capture.packetFingerprint ? String(capture.packetFingerprint) : "";
-  if (review && capture && capture.packetAvailable && !dashboard.historicalWarehouseReview && dashboard.currentView === "match") {
+  const reviewVisible = dashboard.currentView === "match" || dashboard.currentView === "inspection";
+  if (review && capture && capture.packetAvailable && !dashboard.historicalWarehouseReview && reviewVisible) {
     if (review.dataset.fingerprint !== fingerprint) {
       postNative("warehouse_identity_review", { op: "open" });
       review.dataset.fingerprint = fingerprint;
@@ -4194,6 +4251,10 @@ function renderWarehouseIdentityReview(view) {
   if (!panel) return;
   const available = Boolean(view && view.available);
   panel.hidden = !available;
+  const inspectionJump = document.getElementById("inspection-jump");
+  const inspectionReady = document.getElementById("inspection-ready");
+  if (inspectionJump) inspectionJump.hidden = !available;
+  if (inspectionReady) inspectionReady.hidden = !available;
   if (!available) {
     dashboard.warehouseReview = view || { available: false };
     return;
@@ -4375,8 +4436,11 @@ function setBridgeState(kind, label) {
     status.classList.toggle("is-ready", kind === "ready");
     status.classList.toggle("is-error", kind === "error");
   }
-  if (dashboard.overlayVisible === null || kind === "error") {
-    document.getElementById("overlay-status").textContent = label;
+  const connection = document.getElementById("connection-label");
+  if (connection && (kind === "ready" || kind === "error")) connection.textContent = label;
+  const overlayStatus = document.getElementById("overlay-status");
+  if (overlayStatus && (dashboard.overlayVisible === null || kind === "error")) {
+    overlayStatus.textContent = label;
   }
 }
 
@@ -6042,9 +6106,50 @@ function handleNativeMessage(event) {
   } else {
     setBridgeState("ready", "桌面服务已连接");
   }
+  if (payload.action === "set_ui_appearance" && payload.uiAppearance && payload.uiAppearance.theme) {
+    const savedTheme = payload.uiAppearance.theme;
+    const status = document.getElementById("theme-status");
+    const labels = { day: "DAY · 日场", night: "NIGHT · 夜场", auto: "AUTO · 跟随系统" };
+    if (status) status.textContent = `${labels[savedTheme] || savedTheme} · 已记住`;
+  }
+  if (!dashboard.appearanceSynced && isBridgeReady()) {
+    dashboard.appearanceSynced = true;
+    let storedTheme = null;
+    try { storedTheme = localStorage.getItem("yh.identity.theme"); } catch (error) {}
+    if (!storedTheme && payload.uiAppearance) {
+      applyAuctionTheme(payload.uiAppearance.theme || "day", false);
+      applyAuctionDensity(payload.uiAppearance.density || "standard", false);
+      try {
+        localStorage.setItem("yh.identity.theme", document.documentElement.dataset.themeChoice || "day");
+        localStorage.setItem("yh.identity.density", document.documentElement.dataset.density || "standard");
+      } catch (error) {}
+    }
+    const signature = `${document.documentElement.dataset.themeChoice || "day"}|${document.documentElement.dataset.density || "standard"}`;
+    dashboard.lastPostedAppearance = signature;
+    postNative("set_ui_appearance", {
+      theme: document.documentElement.dataset.themeChoice || "day",
+      density: document.documentElement.dataset.density || "standard",
+    });
+  }
 }
 
 document.addEventListener("DOMContentLoaded", () => {
+  applyAuctionTheme(document.documentElement.dataset.themeChoice || "day", false);
+  applyAuctionDensity(document.documentElement.dataset.density || "standard", false);
+  document.querySelectorAll("[data-theme-choice]").forEach((button) => {
+    button.addEventListener("click", () => applyAuctionTheme(button.dataset.themeChoice, true));
+  });
+  document.querySelectorAll("[data-density]").forEach((button) => {
+    button.addEventListener("click", () => applyAuctionDensity(button.dataset.density, true));
+  });
+  if (window.matchMedia) {
+    const themeMedia = window.matchMedia("(prefers-color-scheme: dark)");
+    const onThemeMedia = () => {
+      if (document.documentElement.dataset.themeChoice === "auto") applyAuctionTheme("auto", true);
+    };
+    if (themeMedia.addEventListener) themeMedia.addEventListener("change", onThemeMedia);
+    else if (themeMedia.addListener) themeMedia.addListener(onThemeMedia);
+  }
   document.querySelectorAll("[data-view-target]").forEach((button) => {
     button.addEventListener("click", () => showView(button.dataset.viewTarget));
   });

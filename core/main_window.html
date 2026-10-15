@@ -1,45 +1,61 @@
 <!doctype html>
-<html lang="zh-CN">
+<html lang="zh-CN" data-theme="day">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta name="color-scheme" content="dark">
-  <title>异环拍卖助手 0.68 Alpha</title>
+  <meta name="color-scheme" content="light dark">
+  <title>异环拍卖 · 竞拍席</title>
+  <link rel="stylesheet" href="auction.css">
   <link rel="stylesheet" href="main_window.css">
+  <link rel="stylesheet" href="auction_host.css">
+  <script>
+    try {
+      var themeChoice = localStorage.getItem("yh.identity.theme") || "day";
+      var densityChoice = localStorage.getItem("yh.identity.density") || "standard";
+      var systemDark = window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches;
+      document.documentElement.dataset.themeChoice = themeChoice;
+      document.documentElement.dataset.theme = (themeChoice === "night" || (themeChoice === "auto" && systemDark)) ? "night" : "day";
+      document.documentElement.dataset.density = densityChoice === "compact" ? "compact" : "standard";
+    } catch (error) {
+      document.documentElement.dataset.theme = "day";
+    }
+  </script>
 </head>
 <body>
   <div class="app-shell">
     <!-- 顶部紧凑主导航 -->
-    <header class="topbar">
-      <div class="brand" aria-label="异环拍卖助手 0.68 Alpha">
-        <span class="brand-mark" aria-hidden="true"><i></i></span>
-        <span class="brand-name">异环拍卖助手</span>
-        <span class="brand-version">0.68</span>
-        <span class="alpha-badge">Alpha</span>
-      </div>
-
-      <nav class="primary-nav" aria-label="主导航">
-        <button class="nav-item" type="button" data-view-target="overview">首页</button>
-        <button class="nav-item is-active" type="button" data-view-target="match" aria-current="page">对局</button>
-        <button class="nav-item" type="button" data-view-target="history">记录</button>
-        <button class="nav-item" type="button" data-view-target="guidebook">图鉴</button>
-        <button class="nav-item" type="button" data-view-target="analysis">分析</button>
-        <button class="nav-item" type="button" data-view-target="settings">设置</button>
-      </nav>
-
-      <div class="header-actions">
-        <div class="overlay-pill" id="pin-control" data-pinned="true">
-          <span class="status-dot" id="pin-status-dot" aria-hidden="true"></span>
-          <span id="pin-status">窗口置顶开启</span>
-          <button class="overlay-toggle-btn" id="pin-toggle" type="button">取消置顶</button>
+    <header class="masthead">
+      <a class="wordmark" href="#desk" onclick="showView('match'); return false;" aria-label="异环拍卖 竞拍席">
+        <svg class="seal" viewBox="0 0 64 64" aria-hidden="true"><path d="M51 12A26 26 0 1 0 52 51" fill="none" stroke="currentColor" stroke-width="6"/><path d="M20 22h25v25H20z" fill="none" stroke="currentColor" stroke-width="4"/><path d="M36 12h18v18" fill="none" stroke="currentColor" stroke-width="6"/><path d="M35 29 53 11M21 35h24M32 23v23" fill="none" stroke="currentColor" stroke-width="3"/></svg>
+        <span class="wordmark-cn">异环<span>拍卖</span></span>
+        <span class="wordmark-en">NTE<br>AUCTION</span>
+      </a>
+      <div class="edition"><span class="edition-dot" id="pin-status-dot"></span><strong id="connection-label">等待桌面服务</strong><small id="overlay-status">悬浮票</small><small id="pin-status">窗口置顶</small></div>
+      <div class="masthead-tools">
+        <div class="theme-switch" role="group" aria-label="外观主题">
+          <button type="button" data-theme-choice="day" aria-pressed="true">日场</button>
+          <button type="button" data-theme-choice="night" aria-pressed="false">夜场</button>
+          <button type="button" data-theme-choice="auto" aria-pressed="false">自动</button>
         </div>
-        <div class="overlay-pill" id="overlay-control" data-visible="true">
-          <span class="status-dot" aria-hidden="true"></span>
-          <span id="overlay-status">悬浮窗开启</span>
-          <button class="overlay-toggle-btn" id="overlay-toggle" type="button">隐藏</button>
-        </div>
+        <div class="overlay-pill" id="pin-control" data-pinned="true"><button class="overlay-toggle-btn" id="pin-toggle" type="button">取消置顶</button></div>
+        <div class="overlay-pill" id="overlay-control" data-visible="true"><button class="overlay-toggle-btn" id="overlay-toggle" type="button">隐藏悬浮票</button></div>
       </div>
     </header>
+    <nav class="chapter-nav" aria-label="图录">
+      <button type="button" class="chapter-link is-active" data-view-target="match" aria-current="page"><span>01</span>竞拍席</button>
+      <button type="button" class="chapter-link" data-view-target="inspection"><span>02</span>开箱查验</button>
+      <button type="button" class="chapter-link" data-view-target="guidebook"><span>03</span>藏品册</button>
+      <button type="button" class="chapter-link" data-view-target="history"><span>04</span>落槌簿</button>
+      <button type="button" class="chapter-link" data-view-target="analysis"><span>05</span>估值复盘</button>
+      <button type="button" class="chapter-link" data-view-target="settings"><span>06</span>偏好</button>
+      <span class="chapter-note">看见实物，再谈价值。</span>
+    </nav>
+    <nav class="primary-nav" aria-label="主导航" hidden>
+      <button class="nav-item" type="button" data-view-target="overview">首页</button>
+      <button class="nav-item is-active" type="button" data-view-target="match" aria-current="page">对局</button>
+      <button class="nav-item" type="button" data-view-target="history">记录</button>
+      <button class="nav-item" type="button" data-view-target="analysis">分析</button>
+    </nav>
 
     <main class="dashboard">
       <!-- ======================================================= -->
@@ -105,22 +121,7 @@
               </div>
             </div>
 
-            <!-- 看板娘自然嵌入状态 (人格化状态锚点) -->
-            <section class="mascot-panel" id="mascot-panel" aria-label="看板娘状态" data-ready="false">
-              <div class="mascot-stage-wrap">
-                <div class="mascot-portrait-stage">
-                  <img id="mascot-state-image" alt="看板娘当前状态" draggable="false" hidden>
-                  <img id="mascot-portrait" alt="看板娘" draggable="false" hidden>
-                </div>
-                <div class="mascot-text-block">
-                  <div class="mascot-title-row">
-                    <h2 id="mascot-state-title">随时待命</h2>
-                    <span class="mascot-state-chip" id="mascot-state-chip">就绪</span>
-                  </div>
-                  <p id="mascot-state-description">准备陪你查看拍卖数据。</p>
-                </div>
-              </div>
-            </section>
+            <p class="muted">助手状态收在竞拍席下方，不占仓库主画面。</p>
           </div>
 
           <!-- 下半区：真实概况数据与本地归档状态 (Truthful Summary Strip) -->
@@ -153,7 +154,12 @@
       <!-- ======================================================= -->
       <!-- 2. 对局页 (Match - 连续两栏单板工作台)                  -->
       <!-- ======================================================= -->
-      <section class="view-page is-active match-page" data-view-page="match" aria-label="对局工作台">
+      <section class="view-page is-active match-page" data-view-page="match" aria-label="竞拍席">
+        <div class="page-heading">
+          <div><span class="eyebrow">THE BIDDING FLOOR / 01</span><h1>竞拍席<span class="title-stop">.</span></h1></div>
+          <p>仓库、情报、四席报价。<br>一场拍卖，一张盘面。</p>
+          <button type="button" class="text-link" onclick="showView('inspection')">打开开箱查验 <span>↗</span></button>
+        </div>
         <div class="workbench-canvas">
           <!-- 顶栏：当前对局信息与操作 -->
           <div class="workbench-header">
@@ -217,7 +223,6 @@
                 <div class="warehouse-capture-confirm" id="warehouse-manual-confirm" hidden>
                   <p>即将由人工分页截取仓库当前页并推算，是否继续？</p>
                   <div class="warehouse-capture-confirm-actions">
-                    <button type="button" id="warehouse-manual-confirm-cancel" class="btn-review-action">取消</button>
                     <button type="button" id="warehouse-manual-confirm-btn" class="btn-review-action btn-review-primary">确认继续</button>
                   </div>
                 </div>
@@ -225,108 +230,56 @@
             </div></details>
           </div>
 
-          <section class="match-focus" aria-label="当前竞拍关键信息">
-            <div class="match-lifecycle" role="status"><strong id="match-lifecycle-stage">等待观察</strong><span id="match-lifecycle-next">从真实画面确定当前阶段</span><span id="match-lifecycle-save">草稿状态待确认</span></div>
-            <div class="match-focus-top">
-              <div class="match-focus-result">
-                <div class="match-focus-kicker"><span id="match-focus-stage">等待观察</span><span id="match-focus-updated">采集时间未知</span></div>
-                <span class="match-focus-label" id="match-focus-result-type">等待有效结果</span>
-                <strong class="match-focus-amount" id="match-focus-amount">—</strong>
-                <span class="match-focus-secondary" id="match-focus-secondary">估值尚未就绪</span>
+          <section class="match-focus auction-floor" aria-label="当前竞拍关键信息">
+            <aside class="round-column">
+              <div class="section-label"><span>回合</span><span>ROUND</span></div>
+              <div class="round-number">R<span id="live-round">—</span></div>
+              <div class="round-state" id="match-lifecycle-stage">等待观察</div>
+              <p class="muted" id="match-lifecycle-next">从真实画面确定当前阶段</p>
+              <p class="muted" id="match-lifecycle-save">草稿状态待确认</p>
+              <div class="rule-register" id="match-focus-facts" aria-label="本局已知事实"></div>
+              <div class="intel-ticket">
+                <span class="eyebrow">INTELLIGENCE</span>
+                <h3>本局情报 <small id="match-focus-intel-count">0 条</small></h3>
+                <div id="match-focus-intel" class="match-focus-intel">等待游戏情报</div>
+              </div>
+            </aside>
+            <div class="warehouse-stage">
+              <div class="section-label"><span>仓库视口</span><span id="match-focus-warehouse-count">未观察</span></div>
+              <div class="viewfinder" id="live-viewfinder">
+                <div class="finder-corner tl"></div><div class="finder-corner tr"></div><div class="finder-corner bl"></div><div class="finder-corner br"></div>
+                <span class="finder-label top-label">WAREHOUSE</span>
+                <div id="match-focus-warehouse">未观察到结构化仓库槽位；不代表空仓。</div>
+                <div id="warehouse-originals">保存的截图会显示在这里；原图数量不代表仓库已经完整识别。</div>
+                <span class="finder-label bottom-label">只显示已保存的本局原图，不用目录图填空</span>
+              </div>
+              <div class="stage-caption">
+                <span class="index-square">W</span>
+                <div><strong>一仓实物，一张盘面。</strong><p id="match-focus-stage">等待观察</p></div>
+                <button type="button" class="quiet-button" onclick="requestOriginalScreenshots(dashboard.matchState.matchId, 'warehouse-originals')">刷新原图 ↗</button>
+                <button type="button" class="quiet-button" onclick="document.getElementById('match-btn-open-drawer').click()">估值依据 ↗</button>
+              </div>
+            </div>
+            <aside class="bid-docket">
+              <div class="docket-top"><span>竞价参考单</span><span>YH / BID</span></div>
+              <div class="docket-body">
+                <span class="eyebrow" id="match-focus-result-type">等待有效结果</span>
+                <strong class="bid-amount" id="match-focus-amount">—</strong>
+                <span class="currency-unit">齿轮</span>
                 <p id="match-focus-reason">进入竞拍后自动读取事实；缺项保持缺失。</p>
+                <div class="price-register">
+                  <div><span>整仓估值</span><strong id="match-focus-secondary">估值尚未就绪</strong></div>
+                  <div><span>画面更新时间</span><strong id="match-focus-updated">采集时间未知</strong></div>
+                </div>
+                <button type="button" class="underlined-link" onclick="showView('analysis')">这几个价格有什么区别？</button>
               </div>
-              <div class="match-focus-facts" id="match-focus-facts" aria-label="本局已知事实"></div>
-            </div>
-            <div class="match-focus-lower">
-              <section><h2>四席当前出价 <small id="match-focus-bid-round">回合待观察</small></h2><div id="match-focus-seats" class="match-focus-seats">等待当前回合出价</div></section>
-              <section><h2>情报原文 <small id="match-focus-intel-count">0 条</small></h2><div id="match-focus-intel" class="match-focus-intel">等待游戏情报</div></section>
-              <section><h2>局内仓库 <small id="match-focus-warehouse-count">未观察</small></h2><div id="match-focus-warehouse">未观察到结构化仓库槽位；不代表空仓。</div><button type="button" class="btn-wb-action" onclick="document.getElementById('match-btn-open-drawer').click()">查看藏品与实例核对</button></section>
-            </div>
+              <div class="docket-tear" aria-hidden="true"></div>
+              <div class="docket-tail"><span class="stamp small" id="inspection-ready" hidden>查验已就绪</span><small>报价只由有效的当前局计算。</small></div>
+            </aside>
           </section>
-
-          <details class="wir-panel">
-            <summary>本局截图原图（不等待藏品识别）</summary>
-            <button type="button" class="btn-wb-action" onclick="requestOriginalScreenshots(dashboard.matchState.matchId, 'warehouse-originals')">刷新截图</button>
-            <div id="warehouse-originals">保存的截图会显示在这里；原图数量不代表仓库已经完整识别。</div>
-          </details>
-          <section class="wir-panel" id="warehouse-identity-review" hidden>
-            <header class="wir-top">
-              <div>
-                <strong id="wir-coverage">覆盖未就绪</strong>
-                <span class="wir-caption" id="wir-coverage-caption"></span>
-              </div>
-              <div class="wir-progress">
-                <span id="wir-progress">已处理 0 / 0 · 未处理 0</span>
-                <span id="wir-track-pos">第 0 / 0 件</span>
-              </div>
-            </header>
-            <div class="wir-shell">
-              <div class="wir-left">
-                <div class="wir-hero" id="wir-hero">
-                  <img id="wir-hero-img" alt="当前藏品证据" hidden>
-                  <span id="wir-hero-missing" class="wir-missing">证据不可用</span>
-                </div>
-                <div class="wir-thumbs" id="wir-thumbs"></div>
-                <div class="wir-geom" id="wir-geom"></div>
-                <div class="wir-nav">
-                  <button type="button" id="wir-prev" class="btn-review-action">上一件</button>
-                  <button type="button" id="wir-next" class="btn-review-action">下一件</button>
-                  <label class="wir-filter"><input type="checkbox" id="wir-filter-unresolved"> 只看未处理</label>
-                </div>
-              </div>
-              <div class="wir-right">
-                <div class="wir-candidates" id="wir-candidates"></div>
-                <div class="wir-primary">
-                  <button type="button" id="wir-confirm-candidate" class="btn-review-action btn-review-primary">明确确认此候选</button>
-                </div>
-                <p class="wir-draft" id="wir-draft"></p>
-                <div class="wir-secondary">
-                  <div class="wir-secondary-quiet">
-                    <button type="button" id="wir-defer" class="btn-review-action">暂缓</button>
-                    <button type="button" id="wir-undo" class="btn-review-action">撤销本件</button>
-                  </div>
-                  <details class="wir-exception" id="wir-exception">
-                    <summary>异常处理</summary>
-                    <div class="wir-search">
-                      <input id="wir-search-input" type="search" placeholder="覆盖搜索 catalog ID / 名称" autocomplete="off">
-                      <button type="button" id="wir-search-btn" class="btn-review-action">搜索</button>
-                      <div id="wir-search-hits" class="wir-hits"></div>
-                    </div>
-                    <div class="wir-exception-actions">
-                      <button type="button" id="wir-override" class="btn-review-action">覆盖确认</button>
-                      <button type="button" id="wir-out" class="btn-review-action">目录外</button>
-                      <button type="button" id="wir-exclude" class="btn-review-action">排除误检</button>
-                      <button type="button" id="wir-flag" class="btn-review-action">几何错误</button>
-                    </div>
-                    <div class="wir-reason-box" id="wir-reason-box" hidden>
-                      <textarea id="wir-reason" rows="2" placeholder="必须填写理由后才能提交异常动作"></textarea>
-                      <select id="wir-override-reason">
-                        <option value="">覆盖理由</option>
-                        <option value="CLIPPED_GEOMETRY">边界裁剪/显示不全</option>
-                        <option value="SEGMENTATION_ERROR">连通块切分错误</option>
-                        <option value="CATALOG_GEOMETRY_MISMATCH">几何尺寸不匹配</option>
-                        <option value="HUMAN_VISUAL_IDENTIFICATION">人工视觉核准</option>
-                      </select>
-                    </div>
-                  </details>
-                </div>
-              </div>
-            </div>
-            <footer class="wir-bottom">
-              <button type="button" id="wir-finalize" class="btn-review-action btn-review-primary">生成审阅结果</button>
-              <button type="button" id="wir-save" class="btn-review-action" hidden>写入本局记录</button>
-              <span id="wir-persist" class="wir-persist">尚未写入历史记录</span>
-              <span id="wir-resolution" class="wir-caption"></span>
-              <span id="wir-message" class="wir-message"></span>
-            </footer>
-            <div class="wir-save-confirm" id="wir-save-confirm" hidden>
-              <p>将本次人工审阅结果写入本局记录；不会自动用于 Solver、算法优化或识图训练。</p>
-              <div class="wir-save-confirm-actions">
-                <button type="button" id="wir-save-cancel" class="btn-review-action">取消</button>
-                <button type="button" id="wir-save-confirm-btn" class="btn-review-action btn-review-primary">确认写入</button>
-              </div>
-            </div>
-          </section>
+          <div class="seats-heading"><span class="eyebrow">FOUR SEATS / 四席当前报价</span><small id="match-focus-bid-round">回合待观察</small></div>
+          <div class="seats" id="match-focus-seats">等待当前回合出价</div>
+          <div class="desk-bottom"><span>观察、昵称和手动纠错在下方展开，不另建一套事实。</span><button type="button" id="inspection-jump" hidden onclick="showView('inspection')">去开箱查验 →</button></div>
 
           <!-- 主体两栏连续工作面 -->
           <details class="match-advanced"><summary>细项纠错与旧工作面</summary><div class="workbench-columns">
@@ -803,6 +756,24 @@
             </div>
           </div>
           </details>
+<details class="mascot-drawer"><summary>助手</summary>
+            <!-- 看板娘自然嵌入状态 (人格化状态锚点) -->
+            <section class="mascot-panel" id="mascot-panel" aria-label="看板娘状态" data-ready="false">
+              <div class="mascot-stage-wrap">
+                <div class="mascot-portrait-stage">
+                  <img id="mascot-state-image" alt="看板娘当前状态" draggable="false" hidden>
+                  <img id="mascot-portrait" alt="看板娘" draggable="false" hidden>
+                </div>
+                <div class="mascot-text-block">
+                  <div class="mascot-title-row">
+                    <h2 id="mascot-state-title">随时待命</h2>
+                    <span class="mascot-state-chip" id="mascot-state-chip">就绪</span>
+                  </div>
+                  <p id="mascot-state-description">准备陪你查看拍卖数据。</p>
+                </div>
+              </div>
+            </section>
+</details>
         </div>
       </section>
 
@@ -958,14 +929,115 @@
         </div>
       </aside>
 
+      <section class="view-page inspection-page" data-view-page="inspection" aria-label="开箱查验" hidden>
+        <div class="page-heading">
+          <div><span class="eyebrow">AFTER THE HAMMER / 02</span><h1>开箱查验<span class="title-stop">.</span></h1></div>
+          <p>逐件核对、回到原图。<br>到底了，不等于认全了。</p>
+        </div>
+        <div class="inspection-layout">
+          <div class="inspection-canvas">
+            <div class="source-explanation">
+              <strong>本局原图</strong>
+              <p>这里显示已经保存的仓库原图。没有原图时保持空白，不用目录图填空。</p>
+              <button type="button" class="quiet-button" onclick="requestOriginalScreenshots(dashboard.matchState.matchId, 'warehouse-originals')">刷新原图</button>
+            </div>
+            <div id="inspection-originals-mount"></div>
+          <section class="wir-panel" id="warehouse-identity-review" hidden>
+            <header class="wir-top">
+              <div>
+                <strong id="wir-coverage">覆盖未就绪</strong>
+                <span class="wir-caption" id="wir-coverage-caption"></span>
+              </div>
+              <div class="wir-progress">
+                <span id="wir-progress">已处理 0 / 0 · 未处理 0</span>
+                <span id="wir-track-pos">第 0 / 0 件</span>
+              </div>
+            </header>
+            <div class="wir-shell">
+              <div class="wir-left">
+                <div class="wir-hero" id="wir-hero">
+                  <img id="wir-hero-img" alt="当前藏品证据" hidden>
+                  <span id="wir-hero-missing" class="wir-missing">证据不可用</span>
+                </div>
+                <div class="wir-thumbs" id="wir-thumbs"></div>
+                <div class="wir-geom" id="wir-geom"></div>
+                <div class="wir-nav">
+                  <button type="button" id="wir-prev" class="btn-review-action">上一件</button>
+                  <button type="button" id="wir-next" class="btn-review-action">下一件</button>
+                  <label class="wir-filter"><input type="checkbox" id="wir-filter-unresolved"> 只看未处理</label>
+                </div>
+              </div>
+              <div class="wir-right">
+                <div class="wir-candidates" id="wir-candidates"></div>
+                <div class="wir-primary">
+                  <button type="button" id="wir-confirm-candidate" class="btn-review-action btn-review-primary">明确确认此候选</button>
+                </div>
+                <p class="wir-draft" id="wir-draft"></p>
+                <div class="wir-secondary">
+                  <div class="wir-secondary-quiet">
+                    <button type="button" id="wir-defer" class="btn-review-action">暂缓</button>
+                    <button type="button" id="wir-undo" class="btn-review-action">撤销本件</button>
+                  </div>
+                  <details class="wir-exception" id="wir-exception">
+                    <summary>异常处理</summary>
+                    <div class="wir-search">
+                      <input id="wir-search-input" type="search" placeholder="覆盖搜索 catalog ID / 名称" autocomplete="off">
+                      <button type="button" id="wir-search-btn" class="btn-review-action">搜索</button>
+                      <div id="wir-search-hits" class="wir-hits"></div>
+                    </div>
+                    <div class="wir-exception-actions">
+                      <button type="button" id="wir-override" class="btn-review-action">覆盖确认</button>
+                      <button type="button" id="wir-out" class="btn-review-action">目录外</button>
+                      <button type="button" id="wir-exclude" class="btn-review-action">排除误检</button>
+                      <button type="button" id="wir-flag" class="btn-review-action">几何错误</button>
+                    </div>
+                    <div class="wir-reason-box" id="wir-reason-box" hidden>
+                      <textarea id="wir-reason" rows="2" placeholder="必须填写理由后才能提交异常动作"></textarea>
+                      <select id="wir-override-reason">
+                        <option value="">覆盖理由</option>
+                        <option value="CLIPPED_GEOMETRY">边界裁剪/显示不全</option>
+                        <option value="SEGMENTATION_ERROR">连通块切分错误</option>
+                        <option value="CATALOG_GEOMETRY_MISMATCH">几何尺寸不匹配</option>
+                        <option value="HUMAN_VISUAL_IDENTIFICATION">人工视觉核准</option>
+                      </select>
+                    </div>
+                  </details>
+                </div>
+              </div>
+            </div>
+            <footer class="wir-bottom">
+              <button type="button" id="wir-finalize" class="btn-review-action btn-review-primary">生成审阅结果</button>
+              <button type="button" id="wir-save" class="btn-review-action" hidden>写入本局记录</button>
+              <span id="wir-persist" class="wir-persist">尚未写入历史记录</span>
+              <span id="wir-resolution" class="wir-caption"></span>
+              <span id="wir-message" class="wir-message"></span>
+            </footer>
+            <div class="wir-save-confirm" id="wir-save-confirm" hidden>
+              <p>将本次人工审阅结果写入本局记录；不会自动用于 Solver、算法优化或识图训练。</p>
+              <div class="wir-save-confirm-actions">
+                <button type="button" id="wir-save-cancel" class="btn-review-action">取消</button>
+                <button type="button" id="wir-save-confirm-btn" class="btn-review-action btn-review-primary">确认写入</button>
+              </div>
+            </div>
+          </section>
+
+          </div>
+          <aside class="inspection-report">
+            <div class="section-label"><span>查验记录</span><span>INSPECTION</span></div>
+            <h2>实物入档，<br>判断留痕。</h2>
+            <p class="muted">覆盖、身份和人工确认分开留在原有审阅里。没有真实审阅包时这里保持空白。</p>
+            <button type="button" class="solid-button" onclick="showView('history')">打开落槌记录 <span>→</span></button>
+          </aside>
+        </div>
+      </section>
       <section class="view-page guidebook-page" data-view-page="guidebook" aria-label="图鉴" hidden>
         <div class="guidebook-shell">
           <header class="guidebook-header">
             <div>
-              <h1>图鉴</h1>
+              <span class="eyebrow">THE OBJECT REGISTER / 03</span><h1>藏品册<span class="title-stop">.</span></h1>
               <p>查看本地估值目录与已保存的隔离识别记录。</p>
             </div>
-            <button class="btn-primary" id="guidebook-open-assistant" type="button">进入拍卖助手</button>
+            <button class="btn-primary" id="guidebook-open-assistant" type="button">回到竞拍席</button>
           </header>
 
           <nav class="guidebook-tabs" aria-label="图鉴内容">
@@ -1045,12 +1117,15 @@
       <!-- 3. 记录页 (History - 人话优先双栏)                       -->
       <!-- ======================================================= -->
       <section class="view-page history-page" data-view-page="history" aria-label="对局历史记录" hidden>
+        <div class="page-heading">
+          <div><span class="eyebrow">THE HAMMER BOOK / 04</span><h1>落槌簿<span class="title-stop">.</span></h1></div>
+          <p>历史对局<br>导入、导出、删除和原图回看都留在这本簿子里。</p>
+        </div>
         <div class="history-layout">
           <!-- 左侧列表 -->
           <div class="history-list-pane">
             <div class="history-pane-header">
-              <h2>历史对局</h2>
-              <div style="display: flex; align-items: center; gap: 8px;">
+              <div class="history-pane-actions">
                 <button type="button" class="btn-review-action" id="history-export-btn" title="导出全部历史对局及其原始图片，自包含 ZIP">导出全部记录（含图片）</button>
                 <button type="button" class="btn-review-action" id="history-labels-export-btn" title="只导出人工确认的物品图片和标签，不启动训练">导出人工确认样本</button>
                 <span id="history-labels-export-status" role="status"></span>
@@ -1360,6 +1435,7 @@
       <!-- 4. 分析页 (Analysis - 真实算法表现与评估状态)             -->
       <!-- ======================================================= -->
       <section class="view-page analysis-page" data-view-page="analysis" aria-label="算法表现分析" hidden>
+        <div class="page-heading"><div><span class="eyebrow">VALUE, WITH A BASIS / 05</span><h1>估值复盘<span class="title-stop">.</span></h1></div><p>目录价、整仓估值、建议出价，各说各的。<br>没有正式样本时不画曲线。</p></div>
         <div class="analysis-container">
           <!-- 第一视觉层级：正式评估状态 Hero 卡片 -->
           <div class="analysis-status-card">
@@ -1447,7 +1523,16 @@
       </section>
       <section class="view-page settings-page" data-view-page="settings" aria-label="设置" hidden>
         <div class="settings-container">
-          <header><span class="settings-kicker">PREFERENCES / 设置</span><h1>让助手适合你的使用方式</h1><p>这里使用现有窗口、昵称和只读观察接口；显示状态不改写已观察事实。</p></header>
+          <div class="page-heading"><div><span class="eyebrow">MAKE YOUR SEAT COMFORTABLE / 06</span><h1>偏好<span class="title-stop">.</span></h1></div><p>日场和夜场，同一副骨架。<br>主题会记在本机，并同步到悬浮票。</p></div>
+          <div class="setting-section"><div class="section-label"><span>01 / 外观主题</span><span id="theme-status">DAY · 日场</span></div>
+            <div class="theme-swatches">
+              <button type="button" data-theme-choice="day" aria-pressed="true"><span class="swatch day"><i></i><b></b><em></em></span><strong>日场</strong><small>米白纸面 · 墨色字 · 朱红</small></button>
+              <button type="button" data-theme-choice="night" aria-pressed="false"><span class="swatch night"><i></i><b></b><em></em></span><strong>夜场</strong><small>蓝绿夜色 · 暖白字 · 珊瑚红</small></button>
+              <button type="button" data-theme-choice="auto" aria-pressed="false"><span class="swatch auto"><i></i><b></b><em></em></span><strong>跟随系统</strong><small>系统主题变化时自动更新</small></button>
+            </div>
+            <div class="setting-row"><div><h3>阅读密度</h3><p>只调整行距和留白。</p></div><div class="segmented" role="group" aria-label="阅读密度"><button type="button" data-density="standard" aria-pressed="true">舒展</button><button type="button" data-density="compact" aria-pressed="false">紧凑</button></div></div>
+          </div>
+          <header><span class="settings-kicker">PREFERENCES / 设置</span><p>窗口、昵称和只读观察仍走原来的接口。显示状态不改写已观察事实。</p><button type="button" class="quiet-button" onclick="showView('overview')">打开本地数据概况</button></header>
           <section class="settings-card"><h2>观察与身份</h2>
             <div class="settings-row"><div><strong>本人昵称</strong><p>按既有唯一匹配规则识别本人席位；不是游戏 UID。</p></div><div><span id="settings-player-name">未设置</span><button type="button" id="settings-edit-name" class="btn-wb-action">在对局页修改</button></div></div>
             <div class="settings-row"><div><strong>观察与游戏输入</strong><p>当前观察档案与运行状态来自 Main；设置页不会发送任何游戏操作。</p></div><span id="settings-observation-profile">状态待读取</span></div>
@@ -1461,6 +1546,7 @@
         </div>
       </section>
     </main>
+    <footer class="status-bar"><span id="footer-scope">异环拍卖 · 拍卖图录</span><span class="mono">NTE / AUCTION</span></footer>
   </div>
 
   <!-- 对话框：删除记录 -->

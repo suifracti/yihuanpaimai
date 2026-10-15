@@ -8633,8 +8633,10 @@ def run_hud_app():
     from main_window import (
         OverlayVisibilityController,
         ShutdownCoordinator,
+        appearance_script,
         create_main_window_type,
         load_mascot_presentation_contract,
+        load_ui_appearance,
     )
     from mascot_presentation_state import MascotPresentationStateCoordinator
 
@@ -8745,6 +8747,31 @@ def run_hud_app():
         log_stage("STARTUP:MAIN", "Initializing DirectComposition Device, Visual Target & Presentation...")
         overlay_form.InitializeComposition(env, html_path, WS_PORT)
         log_stage("STARTUP:MAIN", "DirectComposition Visual Tree & Composition Controller created (S_OK)")
+
+        def push_ui_appearance(appearance=None):
+            script = appearance_script(appearance or load_ui_appearance())
+
+            def run():
+                try:
+                    webview = getattr(overlay_form, "WebView", None)
+                    if webview is not None:
+                        webview.ExecuteScriptAsync(script)
+                except Exception as ex:
+                    log_stage("UI", f"appearance push skipped: {ex}")
+
+            try:
+                overlay_form.BeginInvoke(WinForms.MethodInvoker(run))
+            except Exception as ex:
+                log_stage("UI", f"appearance schedule skipped: {ex}")
+
+        bridge = getattr(main_window, "_bridge", None)
+        if bridge is not None and hasattr(bridge, "set_ui_appearance_handler"):
+            bridge.set_ui_appearance_handler(push_ui_appearance)
+        overlay_webview = getattr(overlay_form, "WebView", None)
+        if overlay_webview is not None:
+            def on_overlay_navigated(sender, args):
+                push_ui_appearance()
+            overlay_webview.NavigationCompleted += on_overlay_navigated
 
         def on_web_message(msg_str):
             try:
