@@ -25,6 +25,37 @@ from settlement_truth_evidence_contract import validate_settlement_evidence_orig
 
 
 class NativeWarehouseIntakeTests(unittest.TestCase):
+    def test_saved_analysis_uses_independent_same_viewport_originals_not_whole_page_equality(self):
+        from native_warehouse_intake import _anchor
+        root = ROOT / 'build/t1-20261012/real-once-10/runtime-data/native-live-trial'
+        path = root / 'warehouse-intake/b546a40dde6a4cac8c61383b95bd34aa.json'
+        if not path.is_file():
+            self.skipTest('Private once-10 SOURCE material is not distributed')
+        manifest = json.loads(path.read_text('utf-8'))
+        reader = NativeWarehouseIntake(draft_store=NativeTrialDraftStore(root/'canonical-history.json'),
+            scope_provider=lambda:None, source_provider=lambda:None, auto_refine=False)
+        reader._binding = _anchor(manifest['scope'])
+        reader._session_id, reader._generation = manifest['sessionId'], manifest['generation']
+        top_anchor, top = copy.deepcopy(manifest['pages'][25:27])
+        top_ids = [p['descriptor']['evidenceId'] for p in (top_anchor,top)]
+        reader._pages = [top_anchor,top]
+        reader._coverage_evidence_ids = [top_ids[1]]
+        self.assertEqual(reader._saved_identity_ids(), [])  # Old global certificate is absent.
+        self.assertEqual(reader._saved_analysis_ids(), top_ids)
+        self.assertEqual(reader._saved_support_ids(), [])  # No new SOURCE/fact certificate.
+        self.assertNotIn('contentCertificate', top)
+        top_anchor['deliveryProof']['captureId'] = top['deliveryProof']['captureId']
+        self.assertEqual(reader._saved_analysis_ids(), [])
+        reader._pages = copy.deepcopy(manifest['pages'][25:27])
+        reader._pages[0]['clientMap'] = 'different-window-map'
+        self.assertEqual(reader._saved_analysis_ids(), [])
+        reader._pages = copy.deepcopy(manifest['pages'][25:27])
+        reader._pages[0]['deliveryProof']['deliveryQualified'] = False
+        self.assertEqual(reader._saved_analysis_ids(), [])
+        reader._pages = copy.deepcopy(manifest['pages'][26:28])  # Actual scroll between these originals.
+        reader._coverage_evidence_ids = [reader._pages[-1]['descriptor']['evidenceId']]
+        self.assertEqual(reader._saved_analysis_ids(), [])
+
     def test_collection_retention_is_not_cut_off_at_sixteen_sources(self):
         self.frame(163, 1)
         self.assertTrue(self.intake.start_manual(retain_independent_originals=True)['ok'])

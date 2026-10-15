@@ -937,6 +937,9 @@ class WarehousePlacementResolver:
             origin_y = analysis["origin_y"]
             seg_id = analysis["seg_id"]
             empty_map = analysis["empty_map"]
+            top_gutters = [pure_valley_gutter(
+                img, y_lines[0], (x_lines[c], x_lines[c + 1]), "h")
+                for c in range(num_cols)]
 
             for w, h in candidate_shapes:
                 for r in range(num_rows - h + 1):
@@ -1093,6 +1096,11 @@ class WarehousePlacementResolver:
                             "cells": cells,
                             "group_key": group_key,
                             "is_aligned": is_hyp_aligned,
+                            # A grid line inside a scrolled item is not its top
+                            # border. Keep the visible fragment, without calling
+                            # it FULL merely because the ROI fits in the frame.
+                            "visibility": "CLIPPED" if (r == 0 and not is_top_board
+                                and all(gutter == 0.0 for gutter in top_gutters[c:c + w])) else "FULL",
                         })
 
         # 3. Aggregate hypotheses across frames by world placement
@@ -1151,7 +1159,7 @@ class WarehousePlacementResolver:
                     "sequenceIndex": seq,
                     "sha256": obs_sha,
                     "bbox": h_item["bbox"],
-                    "status": "FULL",
+                    "status": h_item["visibility"],
                     "localGridBbox": [h_item["local_r"], h_item["local_c"], w, h],
                     "matchedCandidateId": cand0.get("catalogId") if cand0 else None,
                     "matchedCandidateName": cand0.get("name") if cand0 else None,

@@ -494,6 +494,45 @@ class NativeWarehouseIntake:
         # Both originals get independently matched. A certificate is not an identity vote.
         return [p['descriptor']['evidenceId'] for p in self._pages if p['descriptor']['evidenceId'] in selected]
 
+    def _saved_analysis_ids(self):
+        """Choose saved pixels for item matching, without certifying whole-page stability.
+
+        The last independent pair at each collected viewport may contain usable
+        items despite unrelated animation elsewhere. Matching still has to prove
+        each complete item in separate originals; scrollbar agreement only
+        selects analysis inputs, never proves identity or continuous coverage.
+        """
+        from warehouse_scrollbar_observation import observe_warehouse_scrollbar
+        selected = set(self._saved_identity_ids())
+        coverage = set(self._coverage_evidence_ids or [])
+        observations = {}
+
+        def viewport(page):
+            desc = page['descriptor']
+            eid = desc['evidenceId']
+            if eid not in observations:
+                raw = self.evidence_store.load_original(desc)
+                image = cv2.imdecode(np.frombuffer(raw, np.uint8), cv2.IMREAD_COLOR)
+                observations[eid] = observe_warehouse_scrollbar(image)
+            obs = observations[eid]
+            if obs.get('scrollState') == 'UNKNOWN' or not obs.get('thumbBox') or not obs.get('trackBox'):
+                return None
+            return obs['trackBox'], obs['thumbBox']
+
+        for previous, page in zip(self._pages, self._pages[1:]):
+            if page['descriptor']['evidenceId'] not in coverage:
+                continue
+            before, after = previous.get('deliveryProof') or {}, page.get('deliveryProof') or {}
+            if (previous.get('capturePolicy') != DELIVERY or page.get('capturePolicy') != DELIVERY
+                    or before.get('deliveryQualified') is not True or after.get('deliveryQualified') is not True
+                    or not before.get('captureId') or before['captureId'] == after.get('captureId')
+                    or previous.get('clientMap') != page.get('clientMap')):
+                continue
+            location = viewport(previous)
+            if location is not None and location == viewport(page):
+                selected.update((previous['descriptor']['evidenceId'], page['descriptor']['evidenceId']))
+        return [p['descriptor']['evidenceId'] for p in self._pages if p['descriptor']['evidenceId'] in selected]
+
     def recover_saved_capture(self, session_id, *, refine_placements=False):
         """Resume a bounded durable intake without a Host or current game scope."""
         with self._scope_lock, self._lock:

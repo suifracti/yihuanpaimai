@@ -188,7 +188,7 @@ def analyze_saved(root, session, token):
     intake._coverage_evidence_ids = manifest.get('coverageEvidenceIds')
     support_ids = intake._saved_support_ids() if intake._binding.get('capturePolicy') else [p['descriptor']['evidenceId'] for p in intake._pages]
     if support_ids != manifest['processingEvidenceIds']: raise ValueError('QUALIFIED_PAGE_SELECTION_UNPROVEN')
-    ids = intake._saved_identity_ids() if intake._binding.get('capturePolicy') else support_ids
+    ids = intake._saved_analysis_ids() if intake._binding.get('capturePolicy') else support_ids
     intake._verify_saved_pages(intake._pages)
     coverage_ids = manifest.get('coverageEvidenceIds')
     selected_ids = set(ids) | set(coverage_ids or [])

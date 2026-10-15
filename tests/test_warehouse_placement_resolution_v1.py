@@ -14,6 +14,7 @@ Covers:
 from __future__ import annotations
 
 import json
+import hashlib
 import sys
 import tempfile
 import unittest
@@ -62,6 +63,38 @@ class TestWarehousePlacementResolutionV1(unittest.TestCase):
 
     def tearDown(self):
         self.temp_dir.cleanup()
+
+    @unittest.skipUnless((PROJECT_ROOT / "build/t1-20261012/once10-identity/geometry-diagnosis.json").is_file(),
+                         "Private once-10 geometry evidence is not distributed")
+    def test_real_once10_cut_fish_tail_is_clipped_but_adjacent_complete_items_are_full(self):
+        from warehouse_scrollbar_observation import warehouse_search_roi
+
+        root = PROJECT_ROOT / "build/t1-20261012/real-once-10/runtime-data/native-live-trial"
+        manifest = json.loads((root / "warehouse-intake/b546a40dde6a4cac8c61383b95bd34aa.json").read_text("utf-8"))
+        physical = json.loads((PROJECT_ROOT / "build/t1-20261012/once10-identity/geometry-diagnosis.json").read_text("utf-8"))["physical"]
+        segment_ids = {segment["segmentId"] for segment in physical["segments"]}
+        pages = [page for page in manifest["pages"] if page["descriptor"]["evidenceId"] in segment_ids]
+        frames = {}
+        for page in pages:
+            descriptor = page["descriptor"]
+            path = root / descriptor["relativePath"]
+            self.assertEqual(hashlib.sha256(path.read_bytes()).hexdigest(), descriptor["sha256"])
+            image = cv2.imread(str(path))
+            x1, y1, x2, y2 = warehouse_search_roi(image.shape[1], image.shape[0])
+            frames[descriptor["evidenceId"]] = image[y1:y2, x1:x2]
+        identity_ids = [manifest["pages"][index]["descriptor"]["evidenceId"] for index in (27, 28)]
+        resolver = WarehousePlacementResolver(manifest_path=self.runtime_root / "unused-catalog.json")
+        # Geometry alone must distinguish the visible cut from a real item border.
+        resolver.match_catalog_candidates = lambda *_a, **_kw: (0.0, [], 0)
+        units = {unit["reviewUnitId"]: unit for unit in resolver.resolve(
+            physical_ledger=physical, descriptors=[page["descriptor"] for page in pages],
+            frames=frames, identity_evidence_ids=identity_ids)}
+        for name in ("unit-world-5-5-4x2", "unit-world-5-9-1x2"):
+            with self.subTest(unit=name):
+                self.assertEqual(units[name]["visibility"], "CLIPPED")
+                self.assertEqual({obs["status"] for obs in units[name]["observations"]}, {"CLIPPED"})
+        for name in ("unit-world-5-0-2x2", "unit-world-5-2-2x2", "unit-world-5-4-1x2"):
+            self.assertEqual(units[name]["visibility"], "FULL")
 
     def test_placement_resolution_production_slice(self):
         """Production placement resolver creates V2 review packet from real warehouse pair."""
