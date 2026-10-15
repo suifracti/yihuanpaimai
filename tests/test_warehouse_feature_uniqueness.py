@@ -27,6 +27,14 @@ class FeatureUniquenessTests(unittest.TestCase):
         selected = WarehousePlacementResolver._distinct_feature_matches(matches, source, target)
         self.assertEqual([(m.queryIdx, m.trainIdx) for m in selected], [(1, 1), (3, 3)])
 
+    def test_half_pixel_boundary_is_duplicate_but_larger_distance_is_distinct(self):
+        close = self.points([(0, 0), (0, .5), (0, .50001), (2, 0)])
+        separate = self.points([(0, 0), (20, 0), (40, 0), (60, 0)])
+        matches = [self.match(i, i) for i in range(4)]
+        for source, target in ((close, separate), (separate, close)):
+            selected = WarehousePlacementResolver._distinct_feature_matches(matches, source, target)
+            self.assertEqual([(m.queryIdx, m.trainIdx) for m in selected], [(0, 0), (2, 2), (3, 3)])
+
     def resolver(self, coords):
         resolver = WarehousePlacementResolver.__new__(WarehousePlacementResolver)
         points = self.points(coords)

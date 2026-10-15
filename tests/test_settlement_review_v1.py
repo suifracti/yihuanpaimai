@@ -120,6 +120,42 @@ class TestSettlementReviewV1(unittest.TestCase):
         self.tmp.cleanup()
 
     # ----------------------------------------------------------------- gate 1
+    def test_warehouse_cards_crop_their_own_saved_observations_without_exported_crop_files(self):
+        import base64
+        import copy
+        from settlement_evidence_store_v2 import KIND_MAIN, KIND_WAREHOUSE_SEGMENT, SettlementEvidenceStoreV2
+        key = 'warehouse_card_originals'
+        evidence = SettlementEvidenceStoreV2(self.root)
+        originals = []
+        for color in ((12, 80, 220), (190, 60, 25)):
+            image = np.zeros((12, 16, 3), np.uint8)
+            image[2:8, 4:10] = color
+            _, png = cv2.imencode('.png', image)
+            desc = evidence.save_original(record_stable_key=key, kind=KIND_WAREHOUSE_SEGMENT,
+                                          image_bytes=png.tobytes())
+            originals.append((image, desc))
+        _, main_png = cv2.imencode('.png', np.full((12, 16, 3), 50, np.uint8))
+        main = evidence.save_original(record_stable_key=key, kind=KIND_MAIN, image_bytes=main_png.tobytes())
+        units = [{'reviewUnitId':f'unit-{i}', 'observations':[{
+            'observationId':f'obs-{i}', 'evidenceId':desc['evidenceId'], 'sha256':desc['sha256'],
+            'bbox':[4, 2, 10, 8], 'status':'FULL'}]} for i, (_, desc) in enumerate(originals)]
+        bad = copy.deepcopy(units[0])
+        bad['reviewUnitId'] = 'bad-binding'
+        bad['observations'][0]['sha256'] = '0' * 64
+        record = build_canonical_match_record_v7(match_id=key, played_at='2026-10-15T00:00:00Z',
+            lifecycle_status='DRAFT', source='test')
+        record['settlement']['reviewUnits'] = units + [bad]
+        self.store.persist_record_transactional(record, is_finalized=False)
+        cards = self.service.create_review_session(key)['review']['identityEvidence']
+        for card, (image, desc) in zip(cards, originals):
+            self.assertTrue(card['cropDataUrl'])
+            payload = base64.b64decode(card['cropDataUrl'].split(',', 1)[1])
+            crop = cv2.imdecode(np.frombuffer(payload, np.uint8), cv2.IMREAD_COLOR)
+            self.assertTrue(np.array_equal(crop, image[2:8, 4:10]))
+            self.assertEqual((card['parentEvidenceId'], card['parentSha256']), (desc['evidenceId'],desc['sha256']))
+            self.assertNotEqual(card['parentEvidenceId'], main['evidenceId'])
+        self.assertIsNone(cards[2]['cropDataUrl'])
+
     def test_warehouse_review_uses_catalog_prices_and_observed_size_without_defaults(self):
         from warehouse_identity_review import CatalogAuthority
         key = 'warehouse_catalog_values'

@@ -420,6 +420,7 @@ class SettlementReviewService:
 
         if is_warehouse_record and review_units:
             from warehouse_identity_review import CatalogAuthority
+            from warehouse_identity_review_session import crop_verified_observation
             from settlement_catalog_candidates import RARITY_CN_TO_CANONICAL
             rarity_names = {name:name for name in ('red','gold','purple','blue','green','white')}
             rarity_names.update(RARITY_CN_TO_CANONICAL)
@@ -429,6 +430,7 @@ class SettlementReviewService:
             catalog_valuation = {'scope':'CONFIRMED_ITEMS_ONLY', 'knownCatalogValue':0,
                 'pricedConfirmedCount':0, 'missingPriceCount':0, 'unresolvedRegionCount':0}
             proposals = []
+            descriptors_by_id = {d['evidenceId']: d for d in descriptors}
             for idx, u in enumerate(review_units):
                 uid = u.get("reviewUnitId") or f"unit_{idx}"
                 status = u.get("confirmationStatus")
@@ -470,8 +472,32 @@ class SettlementReviewService:
                     })
 
                 crop_data_url = None
+                crop_sha = u.get('cropSha256')
+                unit_parent_id, unit_parent_sha = parent_ev_id, parent_sha
+                unit_bbox = u.get('bbox') or []
+                observations = sorted(u.get('observations') or [], key=lambda o: (
+                    o.get('status') == 'FULL', o.get('observationId') == u.get('bestObservationId'),
+                    o.get('inliers') or 0), reverse=True)
+                if observations:
+                    unit_parent_id = unit_parent_sha = None
+                for observation in observations:
+                    desc = descriptors_by_id.get(observation.get('evidenceId'))
+                    if (not desc or desc.get('kind') != KIND_WAREHOUSE_SEGMENT
+                            or observation.get('sha256') != desc.get('sha256')):
+                        continue
+                    try:
+                        crop_data_url = crop_verified_observation(store=v2_store,
+                            packet={'schemaVersion':'warehouse-review-packet.v2',
+                                    'recordStableKey':record_id, 'reviewUnits':[u]},
+                            observation_id=observation['observationId'])
+                    except Exception:
+                        continue
+                    unit_parent_id, unit_parent_sha = desc['evidenceId'], desc['sha256']
+                    unit_bbox = observation['bbox']
+                    crop_sha = hashlib.sha256(base64.b64decode(crop_data_url.split(',', 1)[1])).hexdigest()
+                    break
                 crop_rel = u.get("cropPath")
-                if crop_rel:
+                if crop_data_url is None and crop_rel:
                     crop_full = self._data_root(source) / crop_rel.replace("/", os.sep)
                     if crop_full.is_file():
                         crop_bytes = crop_full.read_bytes()
@@ -488,15 +514,15 @@ class SettlementReviewService:
                     "top1Score": 1.0 if status == "CONFIRMED" else (formatted_cands[0].get("templateScore") if formatted_cands else None),
                     "cropDataUrl": crop_data_url,
                     "cropPath": u.get("cropPath"),
-                    "cropSha256": u.get("cropSha256"),
+                    "cropSha256": crop_sha,
                     "cells": u.get("cells") or [],
-                    "bbox": u.get("bbox") or [],
+                    "bbox": unit_bbox,
                     "confirmationStatus": status,
                     "canonicalName": cname,
                     "selectedCatalogId": cid,
                     "recordStableKey": record_id,
-                    "parentEvidenceId": parent_ev_id,
-                    "parentSha256": parent_sha,
+                    "parentEvidenceId": unit_parent_id,
+                    "parentSha256": unit_parent_sha,
                 })
                 grouping_hypotheses.append({
                     "groupingHypothesisId": uid,
@@ -504,10 +530,10 @@ class SettlementReviewService:
                     "rarity": rarity,
                     "gridShape": shape,
                     "cells": u.get("cells") or [],
-                    "bbox": u.get("bbox") or [],
+                    "bbox": unit_bbox,
                     "recordStableKey": record_id,
-                    "parentEvidenceId": parent_ev_id,
-                    "parentSha256": parent_sha,
+                    "parentEvidenceId": unit_parent_id,
+                    "parentSha256": unit_parent_sha,
                 })
         else:
             visible = st.get("visibleInventory") or {}

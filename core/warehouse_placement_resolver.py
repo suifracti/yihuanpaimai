@@ -177,11 +177,11 @@ class WarehousePlacementResolver:
         selected = []
         source_points, target_points = [], []
         for match in sorted(matches, key=lambda m: (m.distance, m.queryIdx, m.trainIdx)):
-            source = np.asarray(source_keypoints[match.queryIdx].pt)
-            target = np.asarray(target_keypoints[match.trainIdx].pt)
-            if any(np.linalg.norm(source - point) <= 0.5 for point in source_points):
+            source = source_keypoints[match.queryIdx].pt
+            target = target_keypoints[match.trainIdx].pt
+            if any((source[0] - point[0]) ** 2 + (source[1] - point[1]) ** 2 <= 0.25 for point in source_points):
                 continue
-            if any(np.linalg.norm(target - point) <= 0.5 for point in target_points):
+            if any((target[0] - point[0]) ** 2 + (target[1] - point[1]) ** 2 <= 0.25 for point in target_points):
                 continue
             selected.append(match)
             source_points.append(source)
