@@ -119,6 +119,7 @@ class SettlementReviewService:
             resolve_native_trial_history_path()
         )
         self._inventory_archive = inventory_archive
+        self._warehouse_catalog = None
 
     def retry_inventory_archive(self, record_id: str, source: str = "current") -> Dict[str, Any]:
         if source != "live-trial" or self._inventory_archive is None:
@@ -418,22 +419,45 @@ class SettlementReviewService:
         identity_evidences = []
 
         if is_warehouse_record and review_units:
+            from warehouse_identity_review import CatalogAuthority
+            from settlement_catalog_candidates import RARITY_CN_TO_CANONICAL
+            rarity_names = {name:name for name in ('red','gold','purple','blue','green','white')}
+            rarity_names.update(RARITY_CN_TO_CANONICAL)
+            if self._warehouse_catalog is None:
+                self._warehouse_catalog = CatalogAuthority()
+            authority = self._warehouse_catalog
+            catalog_valuation = {'scope':'CONFIRMED_ITEMS_ONLY', 'knownCatalogValue':0,
+                'pricedConfirmedCount':0, 'missingPriceCount':0, 'unresolvedRegionCount':0}
             proposals = []
             for idx, u in enumerate(review_units):
                 uid = u.get("reviewUnitId") or f"unit_{idx}"
                 status = u.get("confirmationStatus")
                 cid = u.get("selectedCatalogId")
                 cname = u.get("canonicalName")
-                rarity = u.get("rarity") or "purple"
-                shape = u.get("gridShape") or "1x1"
+                catalog_item = authority.get(cid) if status == 'CONFIRMED' else None
+                rarity = (rarity_names.get((catalog_item or {}).get('quality'))
+                          or u.get('rarity'))
+                footprint = u.get('footprint') or {}
+                width, height = footprint.get('widthCells'), footprint.get('heightCells')
+                shape = f'{width}x{height}' if width and height else u.get('gridShape')
+                if status == 'CONFIRMED':
+                    value = (catalog_item or {}).get('value')
+                    if value is not None:
+                        catalog_valuation['knownCatalogValue'] += value
+                        catalog_valuation['pricedConfirmedCount'] += 1
+                    else:
+                        catalog_valuation['missingPriceCount'] += 1
+                else:
+                    catalog_valuation['unresolvedRegionCount'] += 1
 
                 formatted_cands = []
                 for c in (u.get("candidates") or []):
+                    candidate_item = authority.get(c.get('catalogId')) or {}
                     formatted_cands.append({
                         "catalogId": c.get("catalogId"),
                         "name": c.get("name") or "待辨认",
-                        "rarity": c.get("rarity") or rarity,
-                        "value": c.get("value") or c.get("price"),
+                        "rarity": rarity_names.get(candidate_item.get('quality')) or c.get('rarity') or rarity,
+                        "value": candidate_item.get('value'),
                         "templateScore": c.get("templateScore") or c.get("score"),
                     })
                 if status == "CONFIRMED" and cid and not any(c.get("catalogId") == cid for c in formatted_cands):
@@ -441,7 +465,7 @@ class SettlementReviewService:
                         "catalogId": cid,
                         "name": cname or "待辨认",
                         "rarity": rarity,
-                        "value": None,
+                        "value": (catalog_item or {}).get('value'),
                         "templateScore": 1.0,
                     })
 
@@ -569,6 +593,8 @@ class SettlementReviewService:
         dto["groupingHypotheses"] = grouping_hypotheses
         dto["identityEvidence"] = identity_evidences
         dto["reviewUnits"] = identity_evidences
+        if is_warehouse_record and review_units:
+            dto['catalogValuation'] = catalog_valuation
         dto["reviewedItems"] = reviewed_items
         dto["settlement"]["reviewed"] = bool(reviewed_items)
         if v2_reviewed and v2_reviewed[0].get("reviewedAt"):

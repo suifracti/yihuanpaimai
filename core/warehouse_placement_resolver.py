@@ -626,7 +626,8 @@ class WarehousePlacementResolver:
             return None
         height, width = roi.shape[:2]
         pitch_x, pitch_y = width / w, height / h
-        if not (28 <= pitch_x <= 48 and 28 <= pitch_y <= 48
+        # Normal 56px warehouse cells can also lose fine detail to default SIFT.
+        if not (28 <= pitch_x <= 56 and 28 <= pitch_y <= 56
                 and .9 <= pitch_x / pitch_y <= 1.1):
             return None
         features = self._small_icon_sift.detectAndCompute(roi, None)

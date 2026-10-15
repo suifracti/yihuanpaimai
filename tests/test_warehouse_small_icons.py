@@ -47,6 +47,42 @@ class SmallIconTests(unittest.TestCase):
         for cid in ('image22-1-1', 'image2-0-0', 'image22-1-2', 'image6-1-0', 'image29-0-0'):
             self.assertGreaterEqual(len(accepted.get(cid, set())), 2)
 
+    def test_real_56px_maomao_uses_registered_fine_features(self):
+        blobs = Path(__file__).resolve().parents[1] / (
+            'build/t1-20261012/real-once-10/runtime-data/native-live-trial/'
+            'evidence/settlement_v2/blobs')
+        hashes = (
+            '1ca48654a27ca6dcd4f1c5216af0c996df3151d9d9429e3976ab517ce409a638',
+            '9278069d4024950a1f34d1d81524a4e891b8a5c330853bbdab04bba43d1b7912',
+        )
+        paths = [blobs / digest[:2] / (digest + '.png') for digest in hashes]
+        if not all(path.is_file() for path in paths):
+            self.skipTest('Private once-10 SOURCE images are not available')
+        for path, digest in zip(paths, hashes):
+            with self.subTest(source=digest):
+                raw = path.read_bytes()
+                self.assertEqual(hashlib.sha256(raw).hexdigest(), digest)
+                image = cv2.imdecode(np.frombuffer(raw, np.uint8), cv2.IMREAD_COLOR)
+                crop = image[461:517, 1596:1652].copy()
+                before = crop.copy()
+                _, candidates, _ = self.resolver.match_catalog_candidates(crop, 1, 1)
+                self.assertEqual(len(candidates), 1)
+                result = candidates[0]
+                self.assertEqual(result['catalogId'], 'image8-1-2')
+                self.assertGreaterEqual(result['inliers'], 7)
+                self.assertGreaterEqual(result['margin'], 5)
+                self.assertIn('REGISTERED_ICON_COLOR', result['matchReasons'])
+                self.assertLessEqual(result['registration']['error'], 22)
+                self.assertGreaterEqual(result['registration']['correlation'], .85)
+                self.assertTrue(np.array_equal(crop, before))
+
+        refs = [r for r in self.resolver._ref_cache.values()
+                if (r['widthCells'], r['heightCells']) == (1, 1)]
+        # The same frame's annotated warm lamp must retain its competing identity.
+        other = self.resolver._match_small_icon(image[517:573, 1820:1876], 1, 1, refs)
+        self.assertIsNotNone(other)
+        self.assertEqual(other['catalogId'], 'image16-0-1')
+
     def test_thin_object_sampling_retains_native_structure_and_hue_checks(self):
         for frame in self.frames:
             if frame['catalogId'] != 'image29-0-0':

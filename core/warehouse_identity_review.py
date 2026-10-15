@@ -179,6 +179,7 @@ def _load_default_catalog_records(
                 "Id": cid,
                 "Name": name,
                 "Quality": card.get("quality"),
+                "Value": card.get("value"),
                 "Width": w,
                 "Height": h,
                 "Cells": w * h,
@@ -206,10 +207,12 @@ class CatalogAuthority:
                 continue
             name = str(item.get("Name") or item.get("name") or "").strip()
             faults = _geometry_faults(item)
+            value = item.get("Value", item.get("value"))
             self._by_id[catalog_id] = {
                 "catalogId": catalog_id,
                 "name": name,
                 "quality": item.get("Quality") or item.get("quality"),
+                "value": value if type(value) in (int, float) and 0 <= value < float('inf') else None,
                 "width": item.get("Width") or item.get("widthCells") or item.get("width"),
                 "height": item.get("Height") or item.get("heightCells") or item.get("height"),
                 "cells": item.get("Cells") or item.get("cells"),
@@ -610,6 +613,8 @@ def _resolve_confirm(
             "catalogId": catalog_id,
             "name": record["name"],
             "quality": None if record.get("quality") in (None, "") else str(record.get("quality")),
+            "catalogValue": record.get("value"),
+            "quantity": 1,
             "action": ACTION_OVERRIDE if override else ACTION_CONFIRM,
             "packetFingerprint": str(packet.get("sourceFingerprint") or ""),
             "recordStableKey": str(packet.get("recordStableKey") or ""),
@@ -738,6 +743,8 @@ def build_auto_identity_review_artifact(
                 "catalogId": cat_id,
                 "name": auth_name,
                 "quality": None if cat_rec.get("quality") in (None, "") else str(cat_rec.get("quality")),
+                "catalogValue": cat_rec.get("value"),
+                "quantity": 1,
                 "action": "CONFIRM_CANDIDATE",
                 "packetFingerprint": fingerprint,
                 "recordStableKey": key,

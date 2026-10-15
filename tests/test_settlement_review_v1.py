@@ -120,6 +120,31 @@ class TestSettlementReviewV1(unittest.TestCase):
         self.tmp.cleanup()
 
     # ----------------------------------------------------------------- gate 1
+    def test_warehouse_review_uses_catalog_prices_and_observed_size_without_defaults(self):
+        from warehouse_identity_review import CatalogAuthority
+        key = 'warehouse_catalog_values'
+        record = build_canonical_match_record_v7(match_id=key, played_at='2026-10-15T00:00:00Z',
+            lifecycle_status='DRAFT', source='test')
+        item = {'confirmationStatus':'CONFIRMED', 'selectedCatalogId':'image26-0-0',
+            'canonicalName':'乔望尼金雕像', 'footprint':{'widthCells':4,'heightCells':5},
+            'candidates':[{'catalogId':'image26-0-0','name':'乔望尼金雕像'}]}
+        record['settlement']['reviewUnits'] = [{**item,'reviewUnitId':'one'},
+            {**item,'reviewUnitId':'two'}, {'reviewUnitId':'unknown',
+                'candidates':[{'catalogId':'missing','value':999999}]}]
+        self.store.persist_record_transactional(record, is_finalized=False)
+        self.service._warehouse_catalog = CatalogAuthority(records=[{'Id':'image26-0-0',
+            'Name':'乔望尼金雕像','Quality':'金','Value':271827,'Width':4,'Height':5}])
+        result = self.service.create_review_session(key)['review']
+        known, _, unknown = result['identityEvidence']
+        self.assertEqual((known['rarity'],known['gridShape']),('gold','4x5'))
+        self.assertEqual(known['candidates'][0]['value'],271827)
+        self.assertIsNone(unknown['rarity'])
+        self.assertIsNone(unknown['gridShape'])
+        self.assertIsNone(unknown['candidates'][0]['value'])
+        self.assertEqual(result['catalogValuation'], {'scope':'CONFIRMED_ITEMS_ONLY',
+            'knownCatalogValue':543654, 'pricedConfirmedCount':2,
+            'missingPriceCount':0, 'unresolvedRegionCount':1})
+
     def test_history_review_backend_gate(self):
         """Whitelisted review DTO: record + screenshot evidence + machine proposals."""
         match_id, rel_uri, digest = _persist_record_with_evidence(self.history_path, self.root)
