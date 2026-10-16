@@ -775,7 +775,7 @@ class MainWindowBridge:
         except Exception:
             return None
 
-    def dispatch(self, message) -> dict:
+    def dispatch(self, message, overlay_visible: Optional[bool] = None) -> dict:
         payload = json.loads(message) if isinstance(message, str) else message
         if not isinstance(payload, dict):
             raise ValueError("Main bridge message must be an object")
@@ -786,6 +786,8 @@ class MainWindowBridge:
 
         if action == "toggle_overlay":
             visible = self._overlay_controller.toggle()
+        elif overlay_visible is not None:
+            visible = bool(overlay_visible)
         else:
             visible = self._overlay_controller.visible
 
@@ -1634,6 +1636,8 @@ def create_main_window_type(WinForms, Drawing):
             self._dcomp_target = None
             self._dcomp_root_visual = None
             self._is_composition_host = False
+            self._bridge_call_lock = threading.Lock()
+            self._status_job_active = False
 
             BaseForm.__init__(self)
 
@@ -2039,6 +2043,63 @@ def create_main_window_type(WinForms, Drawing):
             self._web_message_handler = None
             self._navigation_handler = None
 
+        def _start_status_job(self, message: str) -> None:
+            """Status reads the whole history. Keep that off the UI thread so the title bar can move."""
+            if self._status_job_active or self._bridge is None:
+                return
+            self._status_job_active = True
+            overlay_visible = bool(self._overlay_visible)
+            bridge = self._bridge
+
+            def work() -> None:
+                response = None
+                encoded = None
+                error = None
+                try:
+                    with self._bridge_call_lock:
+                        response = bridge.dispatch(message, overlay_visible=overlay_visible)
+                    if isinstance(response, dict):
+                        response["mascotPresentation"] = self._mascot_presentation
+                        encoded = json.dumps(response, ensure_ascii=False)
+                except Exception as exc:
+                    error = exc
+
+                def publish() -> None:
+                    self._status_job_active = False
+                    if error is not None or encoded is None or not isinstance(response, dict):
+                        self._log("ACTION:MAIN", f"Main bridge rejected message: {error}")
+                        self._post_json({
+                            "type": "app_status",
+                            "action": "request_app_status",
+                            "overlayVisible": bool(self._overlay_visible),
+                            "applicationState": "ready",
+                            "solverOwner": "overlay_runtime",
+                            "settlementReview": {
+                                "ok": False,
+                                "status": "BRIDGE_ERROR",
+                                "message": f"操作失败：{error}",
+                            },
+                        })
+                        return
+                    self._overlay_visible = bool(response.get("overlayVisible"))
+                    self._log(
+                        "ACTION:MAIN",
+                        "Main bridge action="
+                        f"{response.get('action')} overlayVisible={response.get('overlayVisible')}",
+                    )
+                    self._post_encoded(encoded)
+
+                try:
+                    if getattr(self, "InvokeRequired", False):
+                        from System import Action
+                        self.BeginInvoke(Action(publish))
+                    else:
+                        publish()
+                except Exception:
+                    self._status_job_active = False
+
+            threading.Thread(target=work, name="main-status", daemon=True).start()
+
         def _handle_web_message(self, message: str) -> None:
             if not self._accepting_commands or self._bridge is None:
                 return
@@ -2071,7 +2132,12 @@ def create_main_window_type(WinForms, Drawing):
                     self._open_file_dialog(action, payload)
                     return
 
-                response = self._bridge.dispatch(message)
+                if action == "request_app_status":
+                    self._start_status_job(message)
+                    return
+
+                with self._bridge_call_lock:
+                    response = self._bridge.dispatch(message)
                 self._overlay_visible = bool(response["overlayVisible"])
                 response["mascotPresentation"] = self._mascot_presentation
                 cmd = response.get("warehouseCaptureCommand")
@@ -2434,19 +2500,20 @@ def create_main_window_type(WinForms, Drawing):
             self._post_json(payload)
 
         def _post_json(self, payload: dict) -> None:
+            self._post_encoded(json.dumps(payload, ensure_ascii=False))
+
+        def _post_encoded(self, encoded: str) -> None:
             if self._presentation_webview is None:
                 return
             if getattr(self, "InvokeRequired", False):
                 try:
                     from System import Action
-                    self.BeginInvoke(Action(lambda: self._post_json(payload)))
+                    self.BeginInvoke(Action(lambda: self._post_encoded(encoded)))
                     return
                 except Exception:
                     pass
             try:
-                self._presentation_webview.PostWebMessageAsJson(
-                    json.dumps(payload, ensure_ascii=False)
-                )
+                self._presentation_webview.PostWebMessageAsJson(encoded)
             except Exception as exc:
                 self._log("ACTION:MAIN", f"Main status publish failed: {exc}")
 
