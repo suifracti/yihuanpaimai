@@ -118,6 +118,34 @@ class MainWindowLifecycleTests(unittest.TestCase):
             },
         )
 
+    def test_window_action_skips_history_projection_and_status_can_request_it(self):
+        reads = []
+
+        def history():
+            reads.append("history")
+            return unavailable_main_view_state_snapshot("UNAVAILABLE", "TEST")
+
+        bridge = MainWindowBridge(
+            OverlayVisibilityController(_FakeOverlay()),
+            main_view_state_provider=history,
+        )
+        quick = bridge.dispatch(
+            {"action": "get_overlay_visibility"}, include_snapshots=False
+        )
+        self.assertTrue(quick["overlayVisible"])
+        self.assertNotIn("mainViewState", quick)
+        self.assertEqual(reads, [])
+
+        light_status = bridge.dispatch(
+            {"action": "request_app_status"}, include_history=False
+        )
+        self.assertNotIn("mainViewState", light_status)
+        self.assertEqual(reads, [])
+
+        complete_status = bridge.dispatch({"action": "request_app_status"})
+        self.assertIn("mainViewState", complete_status)
+        self.assertEqual(reads, ["history"])
+
     def test_main_bridge_rejects_non_presentation_authority(self):
         bridge = MainWindowBridge(OverlayVisibilityController(_FakeOverlay()))
         for action in ("solve", "set_current_match", "load_solver", "run_ocr"):
