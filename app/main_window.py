@@ -1682,6 +1682,13 @@ def create_main_window_type(WinForms, Drawing):
         def set_topmost(self, enable: bool) -> None:
             """Explicit, idempotent TopMost control using SWP_NOACTIVATE."""
             enable = bool(enable)
+            if getattr(self, "InvokeRequired", False):
+                try:
+                    from System import Action
+                    self.BeginInvoke(Action(lambda: self.set_topmost(enable)))
+                except Exception as exc:
+                    self._log("ACTION:MAIN", f"Topmost marshal failed: {exc}")
+                return
             if self._current_topmost == enable:
                 return
             self._current_topmost = enable
@@ -2276,7 +2283,8 @@ def create_main_window_type(WinForms, Drawing):
 
                         request_message, request_payload, request_generation = job
                         try:
-                            response = self._bridge.dispatch(request_message)
+                            with self._bridge_call_lock:
+                                response = self._bridge.dispatch(request_message, include_snapshots=False)
                             finished = response.get("settlementReview") or {
                                 "ok": False,
                                 "status": "NO_RESULT",
@@ -2509,6 +2517,7 @@ def create_main_window_type(WinForms, Drawing):
             self._post_status(reason, application_state)
 
         def _post_status(self, reason: str, application_state: str = "ready") -> None:
+            # Inform the page without rebuilding the history projection on the mouse pump.
             payload = {
                 "type": "app_status",
                 "reason": reason,
