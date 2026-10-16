@@ -2114,6 +2114,11 @@ function showView(viewName) {
   } else if (viewName === "inspection" && dashboard.lastWarehouseCapture) {
     renderWarehouseCapture(dashboard.lastWarehouseCapture);
   }
+  // Fetch fresh history only on the pages that actually need it.
+  if (dashboard.bridgeReady && (viewName === "history" || viewName === "analysis")) {
+    dashboard.lastHistoryPollAt = Date.now();
+    postNative("request_app_status", { includeHistory: true });
+  }
 }
 
 function renderSettings() {
@@ -2149,6 +2154,7 @@ function postNative(action, payload = {}) {
     commandPayload.expectedRound ??= dashboard.lastCurrentMatch?.observationRound ?? null;
     commandPayload.expectedTargetInstance ??= dashboard.lastCurrentMatch?.observationTarget ?? null;
   }
+  if (action === "request_app_status") dashboard.statusRequestPending = true;
   window.chrome.webview.postMessage(JSON.stringify({
     action,
     ...commandPayload,
@@ -5645,7 +5651,6 @@ function changeOriginalScreenshot(action, recordId, evidenceId, containerId, but
 function handleNativeMessage(event) {
   const payload = typeof event.data === "string" ? JSON.parse(event.data) : event.data;
   if (!payload || payload.type !== "app_status") return;
-  if (payload.action === "request_app_status") dashboard.statusRequestPending = false;
   if (["request_original_screenshots", "delete_original_screenshot", "restore_original_screenshot"].includes(payload.action) && payload.originalScreenshots) {
     const updatedContainers = [...originalScreenshotRequests].filter(([, request]) => request.requestId === payload.requestId).map(([id]) => id);
     renderOriginalScreenshots(payload);
@@ -6033,8 +6038,9 @@ function handleNativeMessage(event) {
   if (payload.mainViewState) {
     dashboard.lastMainViewState = payload.mainViewState;
     renderOverview(payload.mainViewState);
-    renderHistory(payload.mainViewState);
-    renderAnalysis(payload.mainViewState);
+    // Do not rebuild hidden heavy history/analysis pages on every status reply.
+    if (dashboard.currentView === "history") renderHistory(payload.mainViewState);
+    if (dashboard.currentView === "analysis") renderAnalysis(payload.mainViewState);
   }
   if (payload.currentMatch) {
     renderMatch(payload.currentMatch, dashboard.overlayVisible);
@@ -6136,6 +6142,8 @@ function handleNativeMessage(event) {
       density: document.documentElement.dataset.density || "standard",
     });
   }
+  // Keep the request pending while native reply and its visible DOM changes run.
+  if (payload.action === "request_app_status") dashboard.statusRequestPending = false;
 }
 
 document.addEventListener("DOMContentLoaded", () => {
@@ -6792,13 +6800,16 @@ document.addEventListener("DOMContentLoaded", () => {
       dashboard.bridgeReady = true;
       window.chrome.webview.addEventListener("message", handleNativeMessage);
       postNative("get_overlay_visibility");
-      postNative("request_app_status");
+      postNative("request_app_status", { includeHistory: true });
       if (dashboard.statusPollTimer === null) {
         dashboard.statusPollTimer = window.setInterval(() => {
           if (dashboard.statusRequestPending) return;
-          dashboard.statusRequestPending = true;
-          postNative("request_app_status");
-        }, 750);
+          const onHistory = dashboard.currentView === "history" || dashboard.currentView === "analysis";
+          const now = Date.now();
+          const includeHistory = onHistory && (!dashboard.lastHistoryPollAt || now - dashboard.lastHistoryPollAt >= 10000);
+          if (includeHistory) dashboard.lastHistoryPollAt = now;
+          postNative("request_app_status", { includeHistory });
+        }, 1500);
       }
       setBridgeState("ready", "桌面服务已连接");
       if (new URLSearchParams(window.location.search).get("smoke") === "overlay-toggle") {
