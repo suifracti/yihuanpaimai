@@ -5949,7 +5949,7 @@ function handleNativeMessage(event) {
       } else if (payload.deleteResult.isLegacy) {
         postNative("request_legacy_archive");
       }
-      postNative("request_app_status");
+      postNative("request_app_status", { includeHistory: true });
     } else {
       const errorEl = document.getElementById("delete-modal-error");
       if (errorEl) {
@@ -6005,7 +6005,7 @@ function handleNativeMessage(event) {
       if (status) status.textContent = res.message || `已删除 ${res.deletedCount || 0} 条对局记录。`;
       if (payload.legacyArchive) renderLegacyArchive(payload.legacyArchive);
       else if (res.legacyDeleted) postNative("request_legacy_archive");
-      postNative("request_app_status");
+      postNative("request_app_status", { includeHistory: true });
     } else {
       const errorEl = document.getElementById("delete-modal-error");
       if (errorEl) {
@@ -6027,7 +6027,7 @@ function handleNativeMessage(event) {
         status.textContent = `已导入 ${res.importedRecordCount || 0} 条新对局，跳过 ${res.skippedRecordCount || 0} 条重复记录，关联 ${res.imageCount || 0} 张图片。`;
         // Refresh only the history snapshot. Import must not trigger a live
         // vision force-refresh while the user is playing.
-        postNative("request_app_status");
+        postNative("request_app_status", { includeHistory: true });
       } else if (res.status === "CANCELLED") {
         status.textContent = "已取消导入。";
       } else {
