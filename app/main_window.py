@@ -2099,13 +2099,22 @@ def create_main_window_type(WinForms, Drawing):
                             },
                         })
                         return
-                    self._overlay_visible = bool(response.get("overlayVisible"))
+                    # A theme/overlay click may complete while this status job runs.
+                    # Never replace the current native state with the older snapshot.
+                    latest_visible = bool(self._overlay_visible)
                     self._log(
                         "ACTION:MAIN",
                         "Main bridge action="
                         f"{response.get('action')} overlayVisible={response.get('overlayVisible')}",
                     )
                     self._post_encoded(encoded)
+                    if bool(response.get("overlayVisible")) != latest_visible:
+                        self._post_json({
+                            "type": "app_status",
+                            "action": "overlay_visibility_changed",
+                            "overlayVisible": latest_visible,
+                            "applicationState": "ready",
+                        })
 
                 try:
                     if getattr(self, "InvokeRequired", False):
