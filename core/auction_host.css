@@ -188,7 +188,7 @@ h1, h2, .page-heading h1, .guidebook-header h1, .overview-hero-title, .object-ti
 .match-tools, .match-advanced, .mascot-drawer, .provenance-details { border-top: 1px solid var(--line); margin-top: 8px; }
 .match-tools > summary, .match-advanced > summary, .mascot-drawer > summary { cursor: pointer; padding: 10px 0; color: var(--muted); }
 
-.match-page .viewfinder { height: auto; min-height: 280px; display: block; padding: 36px 18px 16px; }
+.match-page .viewfinder { overflow: auto; }
 .match-page .viewfinder img, #warehouse-originals img, #history-originals img, #wir-hero-img {
   max-height: 280px; width: auto; max-width: 100%; margin: 8px auto; object-fit: contain;
 }
@@ -251,7 +251,7 @@ h1, h2, .page-heading h1, .guidebook-header h1, .overview-hero-title, .object-ti
 .modal-overlay { background: #102424cc; }
 .modal-card { border: 1px solid var(--strong-line); }
 
-.match-page .page-heading { padding: 12px 0 8px; }
+.match-page .page-heading { padding: 22px 0 18px; }
 .match-page .workbench-header {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
@@ -260,8 +260,7 @@ h1, h2, .page-heading h1, .guidebook-header h1, .overview-hero-title, .object-ti
 }
 .match-page .workbench-primary-actions { grid-column: 1 / -1; margin-left: 0; font-size: 12px; }
 .match-page .workbench-primary-actions [role="status"] { flex: 1 1 240px; max-width: 360px; }
-.match-focus.auction-floor { min-height: 300px; }
-.match-page .viewfinder { min-height: 168px; padding-top: 28px; }
+.match-focus.auction-floor { min-height: 465px; }
 .match-focus-intel, .match-focus-intel p, .match-focus-intel small { color: var(--muted); border-color: var(--line); }
 .match-focus-intel span { color: var(--ink); }
 .match-tools > summary, .match-advanced > summary, .mascot-drawer > summary {
@@ -271,10 +270,13 @@ h1, h2, .page-heading h1, .guidebook-header h1, .overview-hero-title, .object-ti
   border-radius: 0;
 }
 .history-page { height: auto; overflow: visible; }
-.history-layout {
-  grid-template-columns: minmax(320px, 390px) minmax(0, 1fr);
-  height: calc(100vh - 248px);
-  min-height: 460px;
+.history-layout.record-spread {
+  grid-template-columns: 230px minmax(370px, 1fr) 250px;
+  gap: 28px;
+  height: auto;
+  min-height: 0;
+  align-items: start;
+  border-top: 2px solid var(--ink);
 }
 .history-list-pane, .history-detail-pane {
   background: var(--canvas);
@@ -302,8 +304,44 @@ h1, h2, .page-heading h1, .guidebook-header h1, .overview-hero-title, .object-ti
 
 @media (max-width: 1120px) {
   .dashboard { padding: 0 18px 24px; }
-  .guidebook-catalog-layout, .history-layout, .wir-shell, .guidebook-character-list { grid-template-columns: 1fr; }
+  .guidebook-catalog-layout, .wir-shell, .guidebook-character-list { grid-template-columns: 1fr; }
   .page-heading h1, .guidebook-header h1, .settings-container > header h1 { font-size: 36px; }
   .match-focus-seat strong { font-size: 20px; }
   .history-layout { height: auto; }
 }
+
+.catalog-index #guidebook-catalog-grid {
+  display: flex;
+  flex-direction: column;
+  max-height: 635px;
+  overflow: auto;
+  border-right: 0;
+  gap: 0;
+}
+.record-spread .history-list-pane,
+.record-spread .history-detail-pane {
+  height: auto;
+  overflow: visible;
+  border: 0;
+  background: transparent;
+  padding: 0;
+}
+.record-spread .history-list { max-height: 640px; overflow: auto; }
+#history-detail-card.hammer-receipt {
+  margin: 0;
+  padding: 30px 30px 20px;
+  background: var(--canvas);
+  border: 1px solid var(--strong-line);
+  box-shadow: 5px 6px 0 -2px var(--surface);
+}
+#history-detail-card.hammer-receipt .detail-section,
+#history-detail-card.hammer-receipt .detail-header {
+  background: transparent;
+  border: 0;
+  box-shadow: none;
+  padding: 0;
+  margin: 0;
+}
+#history-detail-card .receipt-head { text-align: center; }
+#history-detail-card .detail-actions { margin-top: 12px; }
+.record-annotations .detail-section { background: transparent; border: 0; padding: 0; }

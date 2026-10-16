@@ -856,6 +856,8 @@ function renderHistoryDetail(record) {
     placeholder.hidden = false;
     detailCard.hidden = true;
     dashboard.selectedRecord = null;
+    const margin = document.getElementById("history-margin-body");
+    if (margin) margin.innerHTML = "<p>选择一局后，这里只写本局已经记下的摘要。</p>";
     return;
   }
 
@@ -889,20 +891,11 @@ function renderHistoryDetail(record) {
   document.getElementById("detail-played-at").textContent = `对局时间：${record.localPlayedAt || record.playedAt || "未知时间"}`;
 
   const lifecycleBadge = document.getElementById("detail-lifecycle-badge");
-  lifecycleBadge.className = "badge";
-  if (record.lifecycle === "FINALIZED") {
-    lifecycleBadge.classList.add("badge-finalized");
-    lifecycleBadge.textContent = "已完成";
-  } else if (record.lifecycle === "CANCELLED") {
-    lifecycleBadge.classList.add("badge-cancelled");
-    lifecycleBadge.textContent = "已放弃";
-  } else if (record.lifecycle === "DRAFT") {
-    lifecycleBadge.classList.add("badge-draft");
-    lifecycleBadge.textContent = "草稿";
-  } else {
-    lifecycleBadge.classList.add("badge-unknown");
-    lifecycleBadge.textContent = record.lifecycle || "未指定";
-  }
+  lifecycleBadge.className = "stamp small";
+  if (record.lifecycle === "FINALIZED") lifecycleBadge.textContent = "已完成";
+  else if (record.lifecycle === "CANCELLED") lifecycleBadge.textContent = "已放弃";
+  else if (record.lifecycle === "DRAFT") lifecycleBadge.textContent = "草稿";
+  else lifecycleBadge.textContent = record.lifecycle || "未指定";
 
   const admissionBadge = document.getElementById("detail-admission-badge");
   if (admissionBadge) {
@@ -1052,7 +1045,7 @@ function renderHistoryDetail(record) {
   const settlementFields = document.getElementById("detail-settlement-fields");
   const settlementAbsent = document.getElementById("detail-settlement-absent");
   const isSettled = settlement.isSettled === true;
-  if (settlementFields) settlementFields.hidden = !isSettled;
+  if (settlementFields) settlementFields.hidden = false;
   if (settlementAbsent) settlementAbsent.hidden = isSettled;
   setText("detail-clearing-price", isSettled ? formatCurrency(settlement.clearingPrice) : "未记录");
   setText("detail-actual-total", isSettled ? formatCurrency(settlement.actualTotal) : "未记录");
@@ -1105,6 +1098,16 @@ function renderHistoryDetail(record) {
   );
   if (!isReviewLoaded && !isReviewPending) {
     loadSettlementReview(record.id, recordSource);
+  }
+  const margin = document.getElementById("history-margin-body");
+  if (margin) {
+    const summaryVal = typeof record.matchSummary === "string" ? record.matchSummary.trim() : "";
+    const notes = [
+      ["本局摘要", summaryVal || "这条记录没有单独的文字摘要。"],
+      ["成交与费用", record.costSummary || "费用未记录"],
+      ["仓库", warehouseText],
+    ];
+    margin.innerHTML = `<ol>${notes.map(([title, body]) => `<li><strong>${escapeHtml(title)}</strong><p>${escapeHtml(body)}</p></li>`).join("")}</ol>`;
   }
 }
 
@@ -1334,7 +1337,7 @@ function showLegacyReviewDetail(legacyKey) {
 
   const lifecycleBadge = document.getElementById("detail-lifecycle-badge");
   if (lifecycleBadge) {
-    lifecycleBadge.className = "badge badge-legacy";
+    lifecycleBadge.className = "stamp small";
     lifecycleBadge.textContent = "历史归档";
     lifecycleBadge.hidden = false;
   }
@@ -1357,6 +1360,12 @@ function showLegacyReviewDetail(legacyKey) {
   sections.forEach((section) => {
     if (section.id !== "detail-review-section") section.hidden = true;
   });
+  const legacyTools = document.getElementById("history-record-tools");
+  if (legacyTools) legacyTools.open = true;
+  const legacyMargin = document.getElementById("history-margin-body");
+  if (legacyMargin) {
+    legacyMargin.innerHTML = `<ol><li><strong>历史归档</strong><p>${escapeHtml(`${rec.venue || "旧档"}${rec.box ? ` · ${rec.box}` : ""}`)}。只读回看，不补造新的成交账单。</p></li></ol>`;
+  }
   loadSettlementReview(legacyKey, "legacy");
 }
 
@@ -1461,15 +1470,71 @@ function guidebookSourceImagesMarkup(source) {
   }).join("")}</div>`;
 }
 
+function guidebookImageUri(item) {
+  if (!item) return "";
+  return (item.sourceRecords || []).find(source => source.thumbnailUri)?.thumbnailUri
+    || dashboard.guidebookSources?.catalogImages?.[item.name] || "";
+}
+
 function guidebookThumbnailMarkup(item, detail = false) {
-  const uri = (item.sourceRecords || []).find(source => source.thumbnailUri)?.thumbnailUri
-    || dashboard.guidebookSources?.catalogImages?.[item.name];
+  const uri = guidebookImageUri(item);
   return uri ? `<img class="guidebook-item-image${detail ? " is-detail" : ""}" src="${escapeHtml(uri)}" alt="${escapeHtml(item.name)}" loading="lazy">`
     : `<span class="guidebook-image-missing">暂无图片</span>`;
 }
 
+function guidebookShapeGrid(footprint) {
+  const match = /^(\d+)\s*[x×]\s*(\d+)$/i.exec(String(footprint || ""));
+  if (!match) return "";
+  const cols = Math.min(Number(match[1]), 12);
+  const rows = Math.min(Number(match[2]), 12);
+  return `<div class="shape-grid" style="--cols:${cols}" aria-label="藏品尺寸示意">${"<span></span>".repeat(cols * rows)}</div>`;
+}
+
+function guidebookCatalogPriceText(item) {
+  if (!item) return "—";
+  const source = (item.sourceRecords || [])[0];
+  if (item.sourceOnly) {
+    return source?.sourcePriceStatus === "VISUALLY_CONFIRMED_1_4_SOURCE" && source.sourcePrice != null
+      ? formatCurrency(source.sourcePrice) : "未知";
+  }
+  return item.price == null ? "未知" : formatCurrency(item.price);
+}
+
+function fillGuidebookPlate(item, filtered) {
+  const nameEl = document.getElementById("object-name");
+  if (!nameEl) return;
+  const set = (id, value) => {
+    const el = document.getElementById(id);
+    if (el) el.textContent = value;
+  };
+  const index = item ? filtered.findIndex(row => row.key === item.key) : -1;
+  set("object-no", index >= 0 ? String(index + 1).padStart(2, "0") : "—");
+  set("object-category", item ? ((item.sourceRecords || [])[0]?.category || (item.sourceOnly ? "来源资料" : "现有目录")) : "目录");
+  set("object-name", item?.name || "没有匹配条目");
+  const rarityEl = document.getElementById("object-rarity");
+  if (rarityEl) {
+    rarityEl.textContent = item ? (GUIDEBOOK_RARITY_LABELS[item.rarity] || "品质未确认") : "品质";
+    rarityEl.className = `quality ${item?.rarity || "neutral"}`;
+  }
+  const img = document.getElementById("object-photo");
+  const missing = document.getElementById("object-photo-missing");
+  const uri = guidebookImageUri(item);
+  if (img && missing) {
+    if (uri) {
+      img.hidden = false;
+      img.src = uri;
+      img.alt = item.name || "";
+      missing.hidden = true;
+    } else {
+      img.hidden = true;
+      img.removeAttribute("src");
+      missing.hidden = false;
+    }
+  }
+}
+
 function guidebookCatalogDetailMarkup(item) {
-  if (!item) return `<span class="tag">本地目录</span><h2>没有匹配条目</h2><p>可清除搜索词或更换筛选条件。</p>`;
+  if (!item) return `<div class="section-label"><span>藏品档案</span><span>FICHE</span></div><label class="eyebrow">现有目录参考价</label><div class="catalog-price">—</div><span class="currency-unit">齿轮 · 不等于实际成交价</span><p>可清除搜索词或更换筛选条件。</p>`;
   const sources = item.sourceRecords || [];
   const source = sources[0] || null;
   const sourceLabel = source
@@ -1488,8 +1553,9 @@ function guidebookCatalogDetailMarkup(item) {
     ? `<p class="guidebook-conflict">相似求解条目：${escapeHtml(source.solverCandidate.name)}；身份尚未确认，不自动关联。</p>` : "";
   const imageMarkup = sources.map(guidebookSourceImagesMarkup).join("");
   const sourceStatus = item.sourceOnly ? "1.4 来源资料 · 仅展示" : "现有求解目录条目";
-  const rarityLabel = GUIDEBOOK_RARITY_LABELS[item.rarity] || "品质未确认";
-  return `${guidebookThumbnailMarkup(item, true)}<span class="${GUIDEBOOK_RARITY_LABELS[item.rarity] ? `rarity-tag is-${item.rarity}` : "tag"}">${rarityLabel}</span><h2>${escapeHtml(item.name)}</h2><p class="guidebook-source-status">${sourceStatus}</p>${solverValue}${sourceLabel}${sourceValue}<p>${item.footprint && item.footprint !== "unknown" ? `现有目录规格：${escapeHtml(item.footprint)}。` : "目录规格未知。"}目录条目不代表本局已经识别或确认了该藏品。</p>${candidateMarkup}${conflictMarkup}${imageMarkup}<small>目录版本：${escapeHtml(item.catalogVersion || "未知")}${source?.visualCatalogId ? ` · 稳定图鉴 ID：${escapeHtml(source.visualCatalogId)}` : ""}</small>`;
+  const sizeLabel = item.footprint && item.footprint !== "unknown" ? item.footprint : "未知";
+  const priceLabel = item.sourceOnly ? "1.4 原图价签" : "现有目录参考价";
+  return `<div class="section-label"><span>藏品档案</span><span>FICHE</span></div><label class="eyebrow">${priceLabel}</label><div class="catalog-price">${escapeHtml(guidebookCatalogPriceText(item))}</div><span class="currency-unit">齿轮 · 不等于实际成交价</span><div class="shape-title"><span>目录规格</span><strong>${escapeHtml(sizeLabel)}</strong></div>${guidebookShapeGrid(item.footprint)}<p class="shape-caption">只示意目录宽高，不推断本局摆放位置。${item.footprint && item.footprint !== "unknown" ? "" : "目录规格未知。"}</p><details class="provenance-details"><summary>来源与字段差异</summary><div><p class="guidebook-source-status">${sourceStatus}</p>${solverValue}${sourceLabel}${sourceValue}<p>目录条目不代表本局已经识别或确认了该藏品。</p>${candidateMarkup}${conflictMarkup}${imageMarkup}<small>目录版本：${escapeHtml(item.catalogVersion || "未知")}${source?.visualCatalogId ? ` · 稳定图鉴 ID：${escapeHtml(source.visualCatalogId)}` : ""}</small></div></details>`;
 }
 
 function renderGuidebookCatalog() {
@@ -1552,12 +1618,27 @@ function renderGuidebookCatalog() {
       const value = item.sourceOnly
         ? (source?.sourcePriceStatus === "VISUALLY_CONFIRMED_1_4_SOURCE" && source.sourcePrice != null ? `原图 ${formatCurrency(source.sourcePrice)} · 仅展示` : "来源字段待确认 · 仅展示")
         : (item.price == null ? "目录未提供参考价" : `目录参考 ${formatCurrency(item.price)}`);
-      return `<button type="button" role="listitem" class="guidebook-item-card${item.key === dashboard.guidebookSelectedItem ? " is-selected" : ""}" data-guidebook-item-index="${index}" aria-pressed="${item.key === dashboard.guidebookSelectedItem}">${guidebookThumbnailMarkup(item)}<span class="rarity-tag${GUIDEBOOK_RARITY_LABELS[item.rarity] ? ` is-${item.rarity}` : ""}">${rarityLabel}</span><strong>${escapeHtml(item.name)}</strong><small>${escapeHtml(subtitle)}</small><small>${escapeHtml(value)}</small></button>`;
+      const thumb = guidebookImageUri(item)
+        ? `<img src="${escapeHtml(guidebookImageUri(item))}" alt="" loading="lazy">`
+        : `<span class="no-image-mini" aria-hidden="true">·</span>`;
+      return `<button type="button" role="listitem" class="catalog-row${item.key === dashboard.guidebookSelectedItem ? " is-selected" : ""}" data-guidebook-item-index="${index}" aria-pressed="${item.key === dashboard.guidebookSelectedItem}">${thumb}<div><strong>${escapeHtml(item.name)}</strong><small>${escapeHtml(rarityLabel)} · ${escapeHtml(subtitle)}</small></div><span>${escapeHtml(value)}</span></button>`;
     }).join("")
     : `<p class="guidebook-empty">${rows.length ? "没有符合筛选条件的藏品。" : escapeHtml(dashboard.guidebookSourcesError || "正在读取本地目录与 1.4 来源资料。")}</p>`;
   const selected = filtered.find(item => item.key === dashboard.guidebookSelectedItem) || filtered[0] || null;
   if (selected) dashboard.guidebookSelectedItem = selected.key;
+  fillGuidebookPlate(selected, filtered);
   detail.innerHTML = guidebookCatalogDetailMarkup(selected);
+  const stepGuidebook = (delta) => {
+    if (!filtered.length) return;
+    const index = Math.max(0, filtered.findIndex(item => item.key === dashboard.guidebookSelectedItem));
+    const item = filtered[(index + delta + filtered.length) % filtered.length];
+    dashboard.guidebookSelectedItem = item.key;
+    renderGuidebookCatalog();
+  };
+  const prevObject = document.getElementById("guidebook-prev-object");
+  const nextObject = document.getElementById("guidebook-next-object");
+  if (prevObject) prevObject.onclick = () => stepGuidebook(-1);
+  if (nextObject) nextObject.onclick = () => stepGuidebook(1);
   grid.querySelectorAll("[data-guidebook-item-index]").forEach(button => {
     button.addEventListener("click", () => {
       const item = filtered[Number(button.dataset.guidebookItemIndex)];
@@ -3152,11 +3233,21 @@ function renderMatchFocus(currentMatch) {
   const liveRound = document.getElementById("live-round");
   if (liveRound) liveRound.textContent = !live || round == null ? "—" : String(round);
   const seats = currentMatch.bidding?.seats || [];
-  document.getElementById("match-focus-seats").innerHTML = !live ? "当前出价已失效，历史出价保留在本局记录"
-    : !seats.length ? "本回合尚无可见出价" : seats.map(seat => {
-      const bid = seat.currentBid ?? seat.bid;
-      return `<div class="match-focus-seat"><span>${escapeHtml(seat.name || `座位 ${seat.slot ?? seat.seat ?? "?"}`)}${seat.isMe ? " · 本人" : ""}</span><strong>${currentMatch.bidding?.hiddenBids ? "金额隐藏" : bid == null ? "— · 未观察" : formatCurrency(bid)}</strong></div>`;
-    }).join("");
+  document.getElementById("match-focus-seats").innerHTML = [0, 1, 2, 3].map(index => {
+    const seat = seats[index];
+    const no = String(index + 1).padStart(2, "0");
+    if (!seat || !live) {
+      return `<article class="seat"><span class="seat-no">${no}</span><div><strong>席位待观察</strong><small>${!live ? "出价已失效" : "本回合未见"}</small></div><strong class="seat-amount">—</strong></article>`;
+    }
+    const bid = seat.currentBid ?? seat.bid;
+    const amount = currentMatch.bidding?.hiddenBids ? "隐藏" : bid == null ? "—" : formatCurrency(bid);
+    return `<article class="seat"><span class="seat-no">${no}</span><div><strong>${escapeHtml(seat.name || `座位 ${seat.slot ?? seat.seat ?? no}`)}${seat.isMe ? " · 本人" : ""}</strong><small>当前回合</small></div><strong class="seat-amount">${escapeHtml(String(amount))}</strong></article>`;
+  }).join("");
+  const seatNote = document.getElementById("match-focus-seat-note");
+  if (seatNote) {
+    seatNote.hidden = live && seats.length > 0;
+    seatNote.textContent = !live ? "当前出价已失效，历史出价保留在本局记录" : "本回合尚无可见出价";
+  }
   const intel = currentMatch.publicIntel?.timeline?.observations || [];
   document.getElementById("match-focus-intel-count").textContent = `${intel.length} 条原文`;
   document.getElementById("match-focus-intel").innerHTML = !intel.length ? "尚无情报原文"

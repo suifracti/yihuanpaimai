@@ -161,75 +161,6 @@
           <button type="button" class="text-link" onclick="showView('inspection')">打开开箱查验 <span>↗</span></button>
         </div>
         <div class="workbench-canvas">
-          <!-- 顶栏：当前对局信息与操作 -->
-          <div class="workbench-header">
-            <div class="workbench-title-area">
-              <span class="workbench-venue-title" id="match-live-heading">会场与宝箱待观察</span>
-              <span class="badge badge-rule" id="match-live-rule-tag">规则待确认</span>
-              <span class="badge badge-lifecycle" id="match-live-status-badge">正在收集情报</span>
-              <span class="workbench-meta-sub"><code id="match-live-id" hidden>--</code><span id="match-live-completeness-text">输入待完善</span></span>
-            </div>
-            <div class="workbench-primary-actions">
-              <span id="isolated-trial-label" role="status" hidden>隔离试用 · 数据单独保存</span>
-              <span id="vision-health-status" role="status" hidden></span>
-              <label id="observation-window-mode-control" class="btn-wb-action" hidden><input id="observation-background-readonly" type="checkbox" onchange="requestObservationWindowMode(this.checked ? 'background-readonly' : 'foreground')"> 后台只读识别</label>
-              <span id="observation-window-mode-status" role="status" hidden></span>
-              <label id="capture-delivery-control" class="btn-wb-action" hidden title="不能证明请求后渲染或来源绝对年龄；仍可能有上游迟交或重放"><input id="capture-delivery-enabled" type="checkbox" onchange="requestCaptureFreshnessPolicy(this.checked ? 'wgc-delivery-v1' : 'wgc-origin-strict-v1')"> 交付时序自动观察</label>
-              <span id="capture-delivery-status" role="status" hidden></span>
-              <label id="native-auto-warehouse-control" class="btn-wb-action" hidden><input id="native-auto-warehouse-enabled" type="checkbox" onchange="requestNativeAutoWarehouse(this.checked)"> 结算自动收页</label>
-              <span id="native-auto-warehouse-status" role="status" hidden></span>
-              <button class="btn-wb-action" id="restore-vision-btn" type="button" hidden onclick="postNative('start_live_vision', {resumeSameMatch: this.dataset.resumeSameMatch === 'true'})">恢复识别</button>
-              <button class="btn-wb-action" id="start-new-vision-btn" type="button" hidden onclick="postNative('start_live_vision', {resumeSameMatch: false})">开始新局观察</button>
-            </div>
-            <details class="match-tools"><summary>昵称、观察与采集工具</summary><div class="workbench-actions">
-              <button class="btn-wb-action" id="recognition-mode-toggle" type="button" data-mode="manual" onclick="postNative('manual_facts', {facts:{recognitionMode:this.dataset.mode === 'auto' ? 'manual' : 'auto'}})">手动识别</button>
-              <label for="player-display-name">本人昵称</label>
-              <span id="manual-command-status" role="status" aria-live="polite" hidden></span>
-              <input class="form-control" id="player-display-name" type="text" maxlength="64" placeholder="游戏内昵称（非数字UID）" style="width:180px" autocomplete="off">
-              <button class="btn-wb-action" id="save-player-display-name" type="button">保存昵称</button>
-              <span id="player-display-name-status" role="status">未设置，使用画面姓名；清空后保存可恢复</span>
-              <button class="btn-wb-action" id="match-btn-next" type="button" title="开始新一局">
-                <svg class="icon-svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>
-                <span>新一局</span>
-              </button>
-              <button class="btn-wb-action btn-wb-settle" id="match-btn-settle" type="button" title="结算本局并保存">
-                <svg class="icon-svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M16 8h-6a2 2 0 1 0 0 4h4a2 2 0 1 1 0 4H8"/><path d="M12 18V6"/></svg>
-                <span>结算本局</span>
-              </button>
-              <button class="btn-wb-action" id="match-btn-save-settlement-screenshot" type="button" title="只保存当前结算原图，不等待识别或填写结算表">保存结算截图</button>
-              <span class="warehouse-capture-message" id="match-settlement-screenshot-status" role="status" aria-live="polite"></span>
-              <button class="btn-wb-action btn-wb-settle" id="match-btn-save-game-screenshot" type="button" title="任意时刻只截取异环游戏客户区，直接保存到当前对局；不检查场景、不等待识别">手动截图（异环）</button>
-              <span class="warehouse-capture-message" id="match-game-screenshot-status" role="status" aria-live="polite"></span>
-              <div class="warehouse-capture-slot" id="warehouse-capture-slot" data-available="false">
-                <button class="btn-wb-action" id="warehouse-capture-toggle" type="button" disabled>采集完整仓库</button>
-                <span class="warehouse-capture-message" id="warehouse-capture-message"></span>
-                <div class="warehouse-capture-confirm" id="warehouse-capture-confirm" hidden>
-                  <p>程序仅在结算页滚动仓库；按 Esc、点击、滚轮或任意按键会立即停止；不会点击、出价或返回顶部；未完整覆盖会保存为部分。</p>
-                  <div class="warehouse-capture-confirm-actions">
-                    <button type="button" id="warehouse-capture-cancel" class="btn-review-action">取消</button>
-                    <button type="button" id="warehouse-capture-confirm-btn" class="btn-review-action btn-review-primary">确认开始</button>
-                  </div>
-                </div>
-              </div>
-              <div class="warehouse-manual-slot" id="warehouse-manual-slot">
-                <button class="btn-wb-action" id="warehouse-manual-start-btn" type="button" title="由人工手动滚动并分页截取仓库">手动接管采集</button>
-                <span class="warehouse-capture-message" id="warehouse-manual-message"></span>
-                <div class="warehouse-manual-controls" id="warehouse-manual-controls" hidden>
-                  <button type="button" id="warehouse-manual-snap-btn" class="btn-review-action btn-review-primary">截取当前页</button>
-                  <button type="button" id="warehouse-manual-finish-btn" class="btn-review-action btn-review-save">完成采集</button>
-                  <button type="button" id="warehouse-manual-cancel-btn" class="btn-review-action btn-review-danger">放弃</button>
-                  <span id="warehouse-manual-page-counter" class="warehouse-capture-message">已采集 0 页</span>
-                </div>
-                <div class="warehouse-capture-confirm" id="warehouse-manual-confirm" hidden>
-                  <p>即将由人工分页截取仓库当前页并推算，是否继续？</p>
-                  <div class="warehouse-capture-confirm-actions">
-                    <button type="button" id="warehouse-manual-confirm-btn" class="btn-review-action btn-review-primary">确认继续</button>
-                  </div>
-                </div>
-              </div>
-            </div></details>
-          </div>
-
           <section class="match-focus auction-floor" aria-label="当前竞拍关键信息">
             <aside class="round-column">
               <div class="section-label"><span>回合</span><span>ROUND</span></div>
@@ -278,8 +209,81 @@
             </aside>
           </section>
           <div class="seats-heading"><span class="eyebrow">FOUR SEATS / 四席当前报价</span><small id="match-focus-bid-round">回合待观察</small></div>
-          <div class="seats" id="match-focus-seats">等待当前回合出价</div>
+          <div class="seats" id="match-focus-seats"></div>
+          <p class="muted" id="match-focus-seat-note" hidden></p>
           <div class="desk-bottom"><span>观察、昵称和手动纠错在下方展开，不另建一套事实。</span><button type="button" id="inspection-jump" hidden onclick="showView('inspection')">去开箱查验 →</button></div>
+
+          <details class="match-tools"><summary>观察、昵称与采集</summary>
+          <!-- 顶栏：当前对局信息与操作 -->
+          <div class="workbench-header">
+            <div class="workbench-title-area">
+              <span class="workbench-venue-title" id="match-live-heading">会场与宝箱待观察</span>
+              <span class="badge badge-rule" id="match-live-rule-tag">规则待确认</span>
+              <span class="badge badge-lifecycle" id="match-live-status-badge">正在收集情报</span>
+              <span class="workbench-meta-sub"><code id="match-live-id" hidden>--</code><span id="match-live-completeness-text">输入待完善</span></span>
+            </div>
+            <div class="workbench-primary-actions">
+              <span id="isolated-trial-label" role="status" hidden>隔离试用 · 数据单独保存</span>
+              <span id="vision-health-status" role="status" hidden></span>
+              <label id="observation-window-mode-control" class="btn-wb-action" hidden><input id="observation-background-readonly" type="checkbox" onchange="requestObservationWindowMode(this.checked ? 'background-readonly' : 'foreground')"> 后台只读识别</label>
+              <span id="observation-window-mode-status" role="status" hidden></span>
+              <label id="capture-delivery-control" class="btn-wb-action" hidden title="不能证明请求后渲染或来源绝对年龄；仍可能有上游迟交或重放"><input id="capture-delivery-enabled" type="checkbox" onchange="requestCaptureFreshnessPolicy(this.checked ? 'wgc-delivery-v1' : 'wgc-origin-strict-v1')"> 交付时序自动观察</label>
+              <span id="capture-delivery-status" role="status" hidden></span>
+              <label id="native-auto-warehouse-control" class="btn-wb-action" hidden><input id="native-auto-warehouse-enabled" type="checkbox" onchange="requestNativeAutoWarehouse(this.checked)"> 结算自动收页</label>
+              <span id="native-auto-warehouse-status" role="status" hidden></span>
+              <button class="btn-wb-action" id="restore-vision-btn" type="button" hidden onclick="postNative('start_live_vision', {resumeSameMatch: this.dataset.resumeSameMatch === 'true'})">恢复识别</button>
+              <button class="btn-wb-action" id="start-new-vision-btn" type="button" hidden onclick="postNative('start_live_vision', {resumeSameMatch: false})">开始新局观察</button>
+            </div>
+            <div class="workbench-actions">
+              <button class="btn-wb-action" id="recognition-mode-toggle" type="button" data-mode="manual" onclick="postNative('manual_facts', {facts:{recognitionMode:this.dataset.mode === 'auto' ? 'manual' : 'auto'}})">手动识别</button>
+              <label for="player-display-name">本人昵称</label>
+              <span id="manual-command-status" role="status" aria-live="polite" hidden></span>
+              <input class="form-control" id="player-display-name" type="text" maxlength="64" placeholder="游戏内昵称（非数字UID）" style="width:180px" autocomplete="off">
+              <button class="btn-wb-action" id="save-player-display-name" type="button">保存昵称</button>
+              <span id="player-display-name-status" role="status">未设置，使用画面姓名；清空后保存可恢复</span>
+              <button class="btn-wb-action" id="match-btn-next" type="button" title="开始新一局">
+                <svg class="icon-svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>
+                <span>新一局</span>
+              </button>
+              <button class="btn-wb-action btn-wb-settle" id="match-btn-settle" type="button" title="结算本局并保存">
+                <svg class="icon-svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M16 8h-6a2 2 0 1 0 0 4h4a2 2 0 1 1 0 4H8"/><path d="M12 18V6"/></svg>
+                <span>结算本局</span>
+              </button>
+              <button class="btn-wb-action" id="match-btn-save-settlement-screenshot" type="button" title="只保存当前结算原图，不等待识别或填写结算表">保存结算截图</button>
+              <span class="warehouse-capture-message" id="match-settlement-screenshot-status" role="status" aria-live="polite"></span>
+              <button class="btn-wb-action btn-wb-settle" id="match-btn-save-game-screenshot" type="button" title="任意时刻只截取异环游戏客户区，直接保存到当前对局；不检查场景、不等待识别">手动截图（异环）</button>
+              <span class="warehouse-capture-message" id="match-game-screenshot-status" role="status" aria-live="polite"></span>
+              <div class="warehouse-capture-slot" id="warehouse-capture-slot" data-available="false">
+                <button class="btn-wb-action" id="warehouse-capture-toggle" type="button" disabled>采集完整仓库</button>
+                <span class="warehouse-capture-message" id="warehouse-capture-message"></span>
+                <div class="warehouse-capture-confirm" id="warehouse-capture-confirm" hidden>
+                  <p>程序仅在结算页滚动仓库；按 Esc、点击、滚轮或任意按键会立即停止；不会点击、出价或返回顶部；未完整覆盖会保存为部分。</p>
+                  <div class="warehouse-capture-confirm-actions">
+                    <button type="button" id="warehouse-capture-cancel" class="btn-review-action">取消</button>
+                    <button type="button" id="warehouse-capture-confirm-btn" class="btn-review-action btn-review-primary">确认开始</button>
+                  </div>
+                </div>
+              </div>
+              <div class="warehouse-manual-slot" id="warehouse-manual-slot">
+                <button class="btn-wb-action" id="warehouse-manual-start-btn" type="button" title="由人工手动滚动并分页截取仓库">手动接管采集</button>
+                <span class="warehouse-capture-message" id="warehouse-manual-message"></span>
+                <div class="warehouse-manual-controls" id="warehouse-manual-controls" hidden>
+                  <button type="button" id="warehouse-manual-snap-btn" class="btn-review-action btn-review-primary">截取当前页</button>
+                  <button type="button" id="warehouse-manual-finish-btn" class="btn-review-action btn-review-save">完成采集</button>
+                  <button type="button" id="warehouse-manual-cancel-btn" class="btn-review-action btn-review-danger">放弃</button>
+                  <span id="warehouse-manual-page-counter" class="warehouse-capture-message">已采集 0 页</span>
+                </div>
+                <div class="warehouse-capture-confirm" id="warehouse-manual-confirm" hidden>
+                  <p>即将由人工分页截取仓库当前页并推算，是否继续？</p>
+                  <div class="warehouse-capture-confirm-actions">
+                    <button type="button" id="warehouse-manual-confirm-btn" class="btn-review-action btn-review-primary">确认继续</button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+          </details>
+
 
           <!-- 主体两栏连续工作面 -->
           <details class="match-advanced"><summary>细项纠错与旧工作面</summary><div class="workbench-columns">
@@ -942,6 +946,10 @@
               <button type="button" class="quiet-button" onclick="requestOriginalScreenshots(dashboard.matchState.matchId, 'warehouse-originals')">刷新原图</button>
             </div>
             <div id="inspection-originals-mount"></div>
+            <div class="review-register-heading">
+              <span class="eyebrow">ITEM REGISTER</span>
+              <p>逐件审阅只在有本局原图和身份证据时展开。没有原图，就不编造裁片。</p>
+            </div>
           <section class="wir-panel" id="warehouse-identity-review" hidden>
             <header class="wir-top">
               <div>
@@ -1032,12 +1040,12 @@
       </section>
       <section class="view-page guidebook-page" data-view-page="guidebook" aria-label="图鉴" hidden>
         <div class="guidebook-shell">
-          <header class="guidebook-header">
+          <header class="page-heading">
             <div>
               <span class="eyebrow">THE OBJECT REGISTER / 03</span><h1>藏品册<span class="title-stop">.</span></h1>
-              <p>查看本地估值目录与已保存的隔离识别记录。</p>
             </div>
-            <button class="btn-primary" id="guidebook-open-assistant" type="button">回到竞拍席</button>
+            <p>名字、形状、价签，各有出处。<br>目录不是你已经拥有的仓库。</p>
+            <button class="text-link" id="guidebook-open-assistant" type="button">回到竞拍席 <span>↗</span></button>
           </header>
 
           <nav class="guidebook-tabs" aria-label="图鉴内容">
@@ -1047,7 +1055,7 @@
           </nav>
 
           <section class="guidebook-panel" id="guidebook-catalog-panel" aria-label="藏品图鉴">
-            <div class="guidebook-toolbar">
+            <div class="guidebook-toolbar catalog-tools">
               <label class="guidebook-search-label" for="guidebook-catalog-search">搜索藏品</label>
               <input class="form-control" id="guidebook-catalog-search" type="search" placeholder="按名称筛选" autocomplete="off">
               <label class="guidebook-search-label" for="guidebook-category-filter">分类</label>
@@ -1076,12 +1084,35 @@
               <button type="button" data-guidebook-rarity="green">绿</button>
               <button type="button" data-guidebook-rarity="white">白</button>
             </div>
-            <div class="guidebook-catalog-layout">
-              <div class="guidebook-catalog-grid" id="guidebook-catalog-grid" role="list"></div>
-              <aside class="guidebook-item-detail" id="guidebook-item-detail" aria-live="polite">
-                <span class="tag">本地目录</span>
-                <h2>选择一件藏品</h2>
-                <p>目录价格是求解器使用的基础参考值；本局估值仍受已确认规则与事实约束。</p>
+            <div class="catalog-spread" id="guidebook-catalog-spread">
+              <div class="catalog-index">
+                <div class="section-label"><span>藏品索引</span><span>INDEX</span></div>
+                <div class="guidebook-catalog-grid" id="guidebook-catalog-grid" role="list"></div>
+              </div>
+              <article class="object-plate" id="object-plate">
+                <div class="plate-running-head"><span id="object-no">—</span><span id="object-category">目录</span></div>
+                <div class="object-title"><span id="object-rarity" class="quality">品质</span><h2 id="object-name">选择一件藏品</h2></div>
+                <div class="object-artbox">
+                  <span class="object-grid" aria-hidden="true"></span>
+                  <button type="button" id="object-photo-button" aria-label="藏品目录图">
+                    <span class="no-image-large" id="object-photo-missing">暂无图片</span>
+                    <img id="object-photo" alt="" hidden>
+                  </button>
+                  <span class="plate-registration top"></span>
+                  <span class="plate-registration bottom"></span>
+                  <span class="plate-note">目录细节 · 非实局观察</span>
+                </div>
+                <div class="plate-footer">
+                  <button type="button" class="arrow-button" id="guidebook-prev-object" aria-label="上一件藏品">←</button>
+                  <span>逐件查验 · 看图识物</span>
+                  <button type="button" class="arrow-button" id="guidebook-next-object" aria-label="下一件藏品">→</button>
+                </div>
+              </article>
+              <aside class="object-dossier" id="guidebook-item-detail" aria-live="polite">
+                <div class="section-label"><span>藏品档案</span><span>FICHE</span></div>
+                <label class="eyebrow">现有目录参考价</label>
+                <div class="catalog-price">—</div>
+                <span class="currency-unit">齿轮 · 不等于实际成交价</span>
               </aside>
             </div>
             <p class="guidebook-source-note" id="guidebook-catalog-source">来源：与现有估值路径相同的本地 AuctionEngine 目录。只读浏览，不会改变当前对局。</p>
@@ -1121,10 +1152,11 @@
           <div><span class="eyebrow">THE HAMMER BOOK / 04</span><h1>落槌簿<span class="title-stop">.</span></h1></div>
           <p>历史对局<br>导入、导出、删除和原图回看都留在这本簿子里。</p>
         </div>
-        <div class="history-layout">
+        <div class="history-layout record-spread">
           <!-- 左侧列表 -->
           <div class="history-list-pane">
             <div class="history-pane-header">
+              <details class="provenance-details"><summary>导入、导出与删除</summary>
               <div class="history-pane-actions">
                 <button type="button" class="btn-review-action" id="history-export-btn" title="导出全部历史对局及其原始图片，自包含 ZIP">导出全部记录（含图片）</button>
                 <button type="button" class="btn-review-action" id="history-labels-export-btn" title="只导出人工确认的物品图片和标签，不启动训练">导出人工确认样本</button>
@@ -1139,6 +1171,7 @@
                   <input type="checkbox" id="filter-debug" /> 调试记录
                 </label>
               </div>
+              </details>
             </div>
 
             <p class="history-export-status" id="history-export-status" role="status" aria-live="polite">导出全部历史对局，包含各局原始图片。</p>
@@ -1269,24 +1302,20 @@
               <div style="font-size: 12px; color: var(--text-muted);">查看该局环境、观测事实、当时预测快照与结算结果。</div>
             </div>
 
-            <div class="history-detail-card" id="history-detail-card" hidden>
-              <div class="detail-header">
-                <div class="detail-title-row">
-                  <div class="detail-title-group">
-                    <span class="detail-main-title" id="detail-match-title">对局详情</span>
-                    <span class="detail-badges">
-                      <span class="badge badge-lifecycle" id="detail-lifecycle-badge">--</span>
-                      <span class="badge badge-admission" id="detail-admission-badge">--</span>
-                      <span class="badge badge-draft" id="detail-draft-save-status" hidden>--</span>
-                    </span>
-                  </div>
-                  <div class="detail-actions">
-                    <button type="button" class="btn-delete-record" id="detail-delete-btn" title="删除此条记录">删除记录</button>
-                  </div>
+            <article class="history-detail-card hammer-receipt" id="history-detail-card" hidden>
+              <div class="detail-header receipt-head">
+                <svg class="small-seal" viewBox="0 0 64 64" aria-hidden="true"><path d="M51 12A26 26 0 1 0 52 51" fill="none" stroke="currentColor" stroke-width="6"/><path d="M20 22h25v25H20zM36 12h18v18M35 29 53 11" fill="none" stroke="currentColor" stroke-width="4"/></svg>
+                <span class="eyebrow">AUCTION RECORD</span>
+                <h2 id="detail-match-title">落槌记录</h2>
+                <p id="detail-played-at">选择一局后显示时间</p>
+                <span class="receipt-scope" id="detail-match-id">—</span>
+                <div class="detail-badges">
+                  <span class="stamp small" id="detail-lifecycle-badge">--</span>
+                  <span class="badge badge-admission" id="detail-admission-badge">--</span>
+                  <span class="badge badge-draft" id="detail-draft-save-status" hidden>--</span>
                 </div>
-                <div class="detail-meta-row">
-                  <span class="detail-time" id="detail-played-at">--</span>
-                  <code id="detail-match-id" hidden>--</code>
+                <div class="detail-actions">
+                  <button type="button" class="quiet-button" id="detail-delete-btn" title="删除此条记录">删除记录</button>
                 </div>
               </div>
 
@@ -1298,27 +1327,37 @@
                 <img id="history-native-raw-partial-image" alt="经校验的本地原始仓库页预览" hidden style="display:block;max-width:100%;max-height:460px;object-fit:contain;background:#0b1220;border-radius:6px;" />
               </div>
 
-              <!-- 区域 0：本局总结 (自然语义摘要) -->
-              <div class="detail-section detail-section-summary" id="detail-summary-section" hidden>
-                <div class="detail-section-title">本局总结</div>
-                <div class="summary-text" id="detail-match-summary" style="font-size: 13px; line-height: 1.6; color: var(--text);"></div>
-              </div>
-
-              <!-- 区域 1：实际结算结果 (第一视觉核心) -->
               <div class="detail-section detail-section-settlement">
-                <div class="detail-section-title">对局结算结果</div>
-                <p id="detail-cost-summary">费用未记录</p>
-                <div class="detail-grid-4" id="detail-settlement-fields">
-                  <div class="detail-field"><span class="field-label">最终成交价</span><strong class="field-value" id="detail-clearing-price">--</strong></div>
-                  <div class="detail-field"><span class="field-label">实际总价值</span><strong class="field-value text-accent" id="detail-actual-total">--</strong></div>
-                  <div class="detail-field"><span class="field-label">游戏显示收益（非本人净收益）</span><strong class="field-value text-green" id="detail-profit">--</strong></div>
-                  <div class="detail-field"><span class="field-label">拍下方</span><strong class="field-value" id="detail-acquired">--</strong></div>
-                  <div class="detail-field" id="detail-sell-selection-field" style="grid-column: 1 / -1;"><span class="field-label">底部品质出售勾选</span><strong class="field-value" id="detail-sell-selection">--</strong></div>
+                <div class="receipt-columns">
+                  <div>
+                    <small>最终成交价 · 不是目录价</small>
+                    <strong id="detail-clearing-price">--</strong>
+                    <p id="detail-cost-summary">费用未记录</p>
+                  </div>
+                  <div class="receipt-status">
+                    <p id="detail-settlement-absent" hidden>尚未产生结算凭证（草稿或未完成对局）</p>
+                  </div>
                 </div>
-                <div class="settlement-absent-notice" id="detail-settlement-absent" hidden>尚未产生结算凭证（草稿或未完成对局）</div>
+                <dl class="receipt-rows" id="detail-settlement-fields">
+                  <div><dt>实际总价值</dt><dd id="detail-actual-total">--</dd></div>
+                  <div><dt>游戏显示收益（非本人净收益）</dt><dd id="detail-profit">--</dd></div>
+                  <div><dt>拍下方</dt><dd id="detail-acquired">--</dd></div>
+                  <div id="detail-sell-selection-field"><dt>底部品质出售勾选</dt><dd id="detail-sell-selection">--</dd></div>
+                </dl>
+                <div class="receipt-tear"></div>
               </div>
 
-              <!-- 区域 2：结算审阅与逐件核对 -->
+              <div class="detail-section">
+                <div class="receipt-result-grid">
+                  <div><small>保守估值 P20</small><strong id="detail-p20">--</strong></div>
+                  <div><small>中位估值 P50</small><strong id="detail-p50">--</strong></div>
+                  <div><small>乐观估值 P80</small><strong id="detail-p80">--</strong></div>
+                </div>
+                <p id="detail-prediction-link" class="detail-time">未记录同局事前预测；不可做误差对照。</p>
+                <p class="detail-time">建议出价上限 <strong id="detail-rec-max">--</strong></p>
+              </div>
+
+              <details class="provenance-details" id="history-record-tools"><summary>结算审阅与原图</summary>
               <div class="detail-section detail-section-review" id="detail-review-section" hidden>
                 <div class="review-section-header">
                   <div class="detail-section-title">结算凭证与逐件核对</div>
@@ -1370,20 +1409,9 @@
                 <div class="review-proposals" id="review-proposals"></div>
                 <div class="review-empty" id="review-empty" hidden>请先选择一局对局以加载结算审阅。</div>
               </div>
+              </details>
 
-              <!-- 区域 3：当时预测快照 -->
-              <div class="detail-section">
-                <div class="detail-section-title">当局预测快照</div>
-                <div class="detail-grid-4">
-                  <div class="detail-field"><span class="field-label">保守估值 (P20)</span><strong class="field-value" id="detail-p20">--</strong></div>
-                  <div class="detail-field"><span class="field-label">中位估值 (P50)</span><strong class="field-value" id="detail-p50">--</strong></div>
-                  <div class="detail-field"><span class="field-label">乐观估值 (P80)</span><strong class="field-value" id="detail-p80">--</strong></div>
-                  <div class="detail-field"><span class="field-label">建议出价上限</span><strong class="field-value text-green" id="detail-rec-max">--</strong></div>
-                </div>
-                <p id="detail-prediction-link" class="detail-time">未记录同局事前预测；不可做误差对照。</p>
-              </div>
-
-              <!-- 区域 4：环境与观测事实 -->
+              <details class="provenance-details" id="history-facts-drawer"><summary>环境与观测事实</summary>
               <div class="detail-section">
                 <div class="detail-section-title">环境与观测事实</div>
                 <div class="detail-grid-3">
@@ -1426,8 +1454,17 @@
                   <div class="detail-field" style="grid-column:1/-1"><span class="field-label">情报识别记录</span><div class="field-value" id="detail-intel-evidence" style="white-space:pre-wrap;overflow-wrap:anywhere;text-align:left">未记录情报识别证据</div></div>
                 </div>
               </div>
-            </div>
+              </details>
+            </article>
           </div>
+          <aside class="record-annotations" id="history-margin-notes">
+            <span class="eyebrow">MARGIN NOTES</span>
+            <h3>这局记下了什么</h3>
+            <div class="detail-section detail-section-summary" id="detail-summary-section" hidden>
+              <div class="summary-text" id="detail-match-summary"></div>
+            </div>
+            <div id="history-margin-body"><p>选择一局后，这里只写本局已经记下的摘要。</p></div>
+          </aside>
         </div>
       </section>
 
@@ -1436,6 +1473,20 @@
       <!-- ======================================================= -->
       <section class="view-page analysis-page" data-view-page="analysis" aria-label="算法表现分析" hidden>
         <div class="page-heading"><div><span class="eyebrow">VALUE, WITH A BASIS / 05</span><h1>估值复盘<span class="title-stop">.</span></h1></div><p>目录价、整仓估值、建议出价，各说各的。<br>没有正式样本时不画曲线。</p></div>
+        <div class="analysis-spread">
+          <article class="analysis-editorial">
+            <span class="eyebrow">估值 ≠ 报价 ≠ 实付</span>
+            <h2>这三个价格，<br>不能共用<br><em>一个名字。</em></h2>
+            <div class="editorial-rule"></div>
+            <p>图鉴告诉你一件东西的参考值；Solver 推算整仓；策略才决定这轮应该出到哪里。</p>
+            <button type="button" class="underlined-link" onclick="showView('guidebook')">先看一件真实藏品 ↗</button>
+          </article>
+          <div class="value-definitions">
+            <section><span class="definition-no">01</span><div><h3>目录参考价</h3><p>已确认身份的物品，对应哪条目录记录、哪份价签。</p><div class="definition-evidence">目录价留在藏品册。这里不把它写成整仓估值。</div></div></section>
+            <section><span class="definition-no">02</span><div><h3>整仓估值</h3><p>把已知情报、身份、品质与空间约束一起计算；未知不填成零。P50 是分位数，不是准确率。</p><div class="definition-evidence muted">没有有效快照时，下面不显示估出来的数字。</div></div></section>
+            <section><span class="definition-no">03</span><div><h3>建议出价 / 实际支付</h3><p>建议上限是策略；游戏接受、落槌归属和付款还需要各自的记录。</p><div class="definition-evidence muted">没有对应证据时，不给出“保证不亏”或模拟收益。</div></div></section>
+          </div>
+        </div>
         <div class="analysis-container">
           <!-- 第一视觉层级：正式评估状态 Hero 卡片 -->
           <div class="analysis-status-card">
@@ -1524,7 +1575,15 @@
       <section class="view-page settings-page" data-view-page="settings" aria-label="设置" hidden>
         <div class="settings-container">
           <div class="page-heading"><div><span class="eyebrow">MAKE YOUR SEAT COMFORTABLE / 06</span><h1>偏好<span class="title-stop">.</span></h1></div><p>日场和夜场，同一副骨架。<br>主题会记在本机，并同步到悬浮票。</p></div>
-          <div class="setting-section"><div class="section-label"><span>01 / 外观主题</span><span id="theme-status">DAY · 日场</span></div>
+          <div class="settings-spread">
+            <aside class="settings-margin">
+              <div class="setting-symbol" aria-hidden="true">◐</div>
+              <h2>让拍卖席<br>适合此刻。</h2>
+              <p>顶部随时切换。<br>当前选择会记在本机，并同步到悬浮票。</p>
+              <span class="mono" id="theme-status">DAY · 日场</span>
+            </aside>
+            <div class="settings-body">
+          <div class="setting-section"><div class="section-label"><span>01 / 外观主题</span><span>APPEARANCE</span></div>
             <div class="theme-swatches">
               <button type="button" data-theme-choice="day" aria-pressed="true"><span class="swatch day"><i></i><b></b><em></em></span><strong>日场</strong><small>米白纸面 · 墨色字 · 朱红</small></button>
               <button type="button" data-theme-choice="night" aria-pressed="false"><span class="swatch night"><i></i><b></b><em></em></span><strong>夜场</strong><small>蓝绿夜色 · 暖白字 · 珊瑚红</small></button>
@@ -1543,6 +1602,8 @@
             <div class="settings-row"><div><strong>悬浮窗</strong><p>局内当前结果与失效状态；详细纠错请在对局页完成。</p></div><button type="button" id="settings-overlay-toggle" class="btn-wb-action">读取中</button></div>
           </section>
           <section class="settings-card"><h2>数据与诊断</h2><p id="settings-diagnostic">等待运行状态</p><p>正式 History 与隔离草稿分开。结算原图和实例决定请在对应记录查看。</p></section>
+            </div>
+          </div>
         </div>
       </section>
     </main>
