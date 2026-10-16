@@ -8,6 +8,7 @@ import hashlib
 import io
 import json
 import os
+import queue
 import threading
 import time
 from ctypes import wintypes
@@ -775,7 +776,8 @@ class MainWindowBridge:
         except Exception:
             return None
 
-    def dispatch(self, message, overlay_visible: Optional[bool] = None) -> dict:
+    def dispatch(self, message, overlay_visible: Optional[bool] = None, *,
+                 include_snapshots: bool = True, include_history: bool = True) -> dict:
         payload = json.loads(message) if isinstance(message, str) else message
         if not isinstance(payload, dict):
             raise ValueError("Main bridge message must be an object")
@@ -804,8 +806,8 @@ class MainWindowBridge:
                 "mixed" if self._main_view_state_provider is not None else "mock"
             ),
             "solverOwner": "overlay_runtime",
-            "presentationRuntime": self.presentation_runtime_payload(),
-            "warehouseCapture": self.warehouse_capture_payload(),
+            "presentationRuntime": self.presentation_runtime_payload() if include_snapshots else None,
+            "warehouseCapture": self.warehouse_capture_payload() if include_snapshots else None,
         }
 
         if action == "toggle_main_pin":
@@ -1531,15 +1533,17 @@ class MainWindowBridge:
                     "message": f"导入失败：{exc}",
                 }
 
-        main_view_state = self.main_view_state_payload()
-        if main_view_state is not None:
-            response["mainViewState"] = main_view_state
-        mascot_state = self.mascot_state_payload("ready")
-        if mascot_state is not None:
-            response["mascotState"] = mascot_state
-        current_match = self.current_match_payload()
-        if current_match is not None:
-            response["currentMatch"] = current_match
+        if include_snapshots and include_history:
+            main_view_state = self.main_view_state_payload()
+            if main_view_state is not None:
+                response["mainViewState"] = main_view_state
+        if include_snapshots:
+            mascot_state = self.mascot_state_payload("ready")
+            if mascot_state is not None:
+                response["mascotState"] = mascot_state
+            current_match = self.current_match_payload()
+            if current_match is not None:
+                response["currentMatch"] = current_match
         if action == "set_ui_appearance":
             response["uiAppearance"] = save_ui_appearance(
                 str(payload.get("theme") or "day"),
@@ -1637,6 +1641,8 @@ def create_main_window_type(WinForms, Drawing):
             self._dcomp_root_visual = None
             self._is_composition_host = False
             self._bridge_call_lock = threading.Lock()
+            self._action_queue = queue.Queue()
+            self._action_worker_active = False
             self._status_job_active = False
 
             BaseForm.__init__(self)
@@ -2011,6 +2017,7 @@ def create_main_window_type(WinForms, Drawing):
 
         def begin_shutdown(self) -> None:
             self._accepting_commands = False
+            self._action_queue.put(None)
             self.set_topmost(False)
             self._post_status("shutdown_started", application_state="shutting_down")
 
@@ -2019,6 +2026,7 @@ def create_main_window_type(WinForms, Drawing):
                 return
             self._presentation_closed = True
             self._accepting_commands = False
+            self._action_queue.put(None)
             self.set_topmost(False)
             webview = self._presentation_webview
             if webview is not None:
@@ -2056,8 +2064,11 @@ def create_main_window_type(WinForms, Drawing):
                 encoded = None
                 error = None
                 try:
+                    request = json.loads(message)
+                    include_history = bool(request.get("includeHistory")) if isinstance(request, dict) else False
                     with self._bridge_call_lock:
-                        response = bridge.dispatch(message, overlay_visible=overlay_visible)
+                        response = bridge.dispatch(message, overlay_visible=overlay_visible,
+                                                   include_history=include_history)
                     if isinstance(response, dict):
                         response["mascotPresentation"] = self._mascot_presentation
                         encoded = json.dumps(response, ensure_ascii=False)
@@ -2100,6 +2111,42 @@ def create_main_window_type(WinForms, Drawing):
 
             threading.Thread(target=work, name="main-status", daemon=True).start()
 
+        def _queue_bridge_action(self, message: str, payload: dict) -> None:
+            """Serialize non-window actions off the WinForms pump; never wait for status on a click."""
+            self._action_queue.put((message, payload))
+            if self._action_worker_active:
+                return
+            self._action_worker_active = True
+
+            def work() -> None:
+                try:
+                    while True:
+                        job = self._action_queue.get()
+                        if job is None or not self._accepting_commands:
+                            return
+                        request_message, request = job
+                        try:
+                            with self._bridge_call_lock:
+                                result = self._bridge.dispatch(request_message, include_snapshots=False)
+                            result["mascotPresentation"] = self._mascot_presentation
+                        except Exception as exc:
+                            result = {
+                                "type": "app_status",
+                                "action": request.get("action") or "unknown",
+                                "requestId": request.get("requestId"),
+                                "applicationState": "ready",
+                                "settlementReview": {
+                                    "ok": False, "status": "BRIDGE_ERROR",
+                                    "message": f"操作失败：{exc}",
+                                },
+                            }
+                        encoded = json.dumps(result, ensure_ascii=False)
+                        self._post_encoded(encoded)
+                finally:
+                    self._action_worker_active = False
+
+            threading.Thread(target=work, name="main-actions", daemon=True).start()
+
         def _handle_web_message(self, message: str) -> None:
             if not self._accepting_commands or self._bridge is None:
                 return
@@ -2136,8 +2183,15 @@ def create_main_window_type(WinForms, Drawing):
                     self._start_status_job(message)
                     return
 
-                with self._bridge_call_lock:
-                    response = self._bridge.dispatch(message)
+                # Only native-window operations run immediately, with no history rebuild.
+                # All other actions use one serial worker instead of blocking the mouse pump.
+                if action not in {
+                    "toggle_overlay", "get_overlay_visibility",
+                    "toggle_main_pin", "set_main_pin", "set_ui_appearance",
+                }:
+                    self._queue_bridge_action(message, payload)
+                    return
+                response = self._bridge.dispatch(message, include_snapshots=False)
                 self._overlay_visible = bool(response["overlayVisible"])
                 response["mascotPresentation"] = self._mascot_presentation
                 cmd = response.get("warehouseCaptureCommand")
@@ -2470,9 +2524,8 @@ def create_main_window_type(WinForms, Drawing):
                 ),
             }
             if self._bridge is not None:
-                main_view_state = self._bridge.main_view_state_payload()
-                if main_view_state is not None:
-                    payload["mainViewState"] = main_view_state
+                # Startup/visibility notifications must never rebuild history on the UI thread.
+                # The page requests the full initial snapshot asynchronously.
                 mascot_state = self._bridge.mascot_state_payload(application_state)
                 if mascot_state is not None:
                     payload["mascotState"] = mascot_state
