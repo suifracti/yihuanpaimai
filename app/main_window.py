@@ -1643,6 +1643,8 @@ def create_main_window_type(WinForms, Drawing):
             self._bridge_call_lock = threading.Lock()
             self._action_queue = queue.Queue()
             self._action_worker_active = False
+            self._status_lock = threading.Lock()
+            self._status_pending_message = None
             self._status_job_active = False
 
             BaseForm.__init__(self)
@@ -2058,74 +2060,111 @@ def create_main_window_type(WinForms, Drawing):
             self._web_message_handler = None
             self._navigation_handler = None
 
+        def _status_requests_history(self, message: str) -> bool:
+            try:
+                request = json.loads(message)
+            except Exception:
+                return False
+            return isinstance(request, dict) and bool(request.get("includeHistory"))
+
         def _start_status_job(self, message: str) -> None:
-            """Status reads the whole history. Keep that off the UI thread so the title bar can move."""
-            if self._status_job_active or self._bridge is None:
+            """Status reads history off the UI thread. A newer request waits, it is not dropped.
+
+            A lightweight poll must not replace a queued history refresh. Delete and
+            import depend on that refresh, and the next history poll may be 10s away.
+            """
+            if self._bridge is None:
                 return
-            self._status_job_active = True
-            overlay_visible = bool(self._overlay_visible)
-            bridge = self._bridge
+            start = False
+            with self._status_lock:
+                queued = self._status_pending_message
+                if not (
+                    queued
+                    and self._status_requests_history(queued)
+                    and not self._status_requests_history(message)
+                ):
+                    self._status_pending_message = message
+                if not self._status_job_active:
+                    self._status_job_active = True
+                    start = True
+            if start:
+                threading.Thread(target=self._run_status_jobs, name="main-status", daemon=True).start()
 
-            def work() -> None:
-                response = None
-                encoded = None
-                error = None
-                try:
-                    request = json.loads(message)
-                    include_history = bool(request.get("includeHistory")) if isinstance(request, dict) else False
-                    with self._bridge_call_lock:
-                        response = bridge.dispatch(message, overlay_visible=overlay_visible,
-                                                   include_history=include_history)
-                    if isinstance(response, dict):
-                        response["mascotPresentation"] = self._mascot_presentation
-                        encoded = json.dumps(response, ensure_ascii=False)
-                except Exception as exc:
-                    error = exc
-
-                def publish() -> None:
-                    self._status_job_active = False
-                    if error is not None or encoded is None or not isinstance(response, dict):
-                        self._log("ACTION:MAIN", f"Main bridge rejected message: {error}")
-                        self._post_json({
-                            "type": "app_status",
-                            "action": "request_app_status",
-                            "overlayVisible": bool(self._overlay_visible),
-                            "applicationState": "ready",
-                            "solverOwner": "overlay_runtime",
-                            "settlementReview": {
-                                "ok": False,
-                                "status": "BRIDGE_ERROR",
-                                "message": f"操作失败：{error}",
-                            },
-                        })
+        def _run_status_jobs(self) -> None:
+            while self._accepting_commands:
+                with self._status_lock:
+                    message = self._status_pending_message
+                    self._status_pending_message = None
+                    if message is None:
+                        self._status_job_active = False
                         return
-                    # A theme/overlay click may complete while this status job runs.
-                    # Never replace the current native state with the older snapshot.
-                    latest_visible = bool(self._overlay_visible)
-                    self._log(
-                        "ACTION:MAIN",
-                        "Main bridge action="
-                        f"{response.get('action')} overlayVisible={response.get('overlayVisible')}",
-                    )
-                    self._post_encoded(encoded)
-                    if bool(response.get("overlayVisible")) != latest_visible:
-                        self._post_json({
-                            "type": "app_status",
-                            "action": "overlay_visibility_changed",
-                            "overlayVisible": latest_visible,
-                            "applicationState": "ready",
-                        })
-
                 try:
-                    if getattr(self, "InvokeRequired", False):
-                        from System import Action
-                        self.BeginInvoke(Action(publish))
-                    else:
-                        publish()
-                except Exception:
-                    self._status_job_active = False
+                    self._publish_status_message(message)
+                except Exception as exc:
+                    self._log("ACTION:MAIN", f"Main bridge rejected message: {exc}")
 
-            threading.Thread(target=work, name="main-status", daemon=True).start()
+        def _publish_status_message(self, message: str) -> None:
+            response = None
+            encoded = None
+            error = None
+            include_history = False
+            try:
+                request = json.loads(message)
+                include_history = bool(request.get("includeHistory")) if isinstance(request, dict) else False
+                overlay_visible = bool(self._overlay_visible)
+                with self._bridge_call_lock:
+                    response = self._bridge.dispatch(
+                        message,
+                        overlay_visible=overlay_visible,
+                        include_history=include_history,
+                    )
+                if isinstance(response, dict):
+                    response["mascotPresentation"] = self._mascot_presentation
+                    encoded = json.dumps(response, ensure_ascii=False)
+            except Exception as exc:
+                error = exc
+            with self._status_lock:
+                newer = self._status_pending_message
+                # Deliver a finished history snapshot even if a poll arrived while
+                # it was built. Dropping it leaves the list stale for up to 10s.
+                deliver_history = (
+                    include_history
+                    and encoded is not None
+                    and newer is not None
+                    and not self._status_requests_history(newer)
+                )
+                if newer is not None and not deliver_history:
+                    return
+            if error is not None or encoded is None or not isinstance(response, dict):
+                self._log("ACTION:MAIN", f"Main bridge rejected message: {error}")
+                self._post_json({
+                    "type": "app_status",
+                    "action": "request_app_status",
+                    "overlayVisible": bool(self._overlay_visible),
+                    "applicationState": "ready",
+                    "solverOwner": "overlay_runtime",
+                    "settlementReview": {
+                        "ok": False,
+                        "status": "BRIDGE_ERROR",
+                        "message": f"操作失败：{error}",
+                    },
+                })
+                return
+            # A theme or overlay click may finish while this snapshot is built.
+            latest_visible = bool(self._overlay_visible)
+            self._log(
+                "ACTION:MAIN",
+                "Main bridge action="
+                f"{response.get('action')} overlayVisible={response.get('overlayVisible')}",
+            )
+            self._post_encoded(encoded)
+            if bool(response.get("overlayVisible")) != latest_visible:
+                self._post_json({
+                    "type": "app_status",
+                    "action": "overlay_visibility_changed",
+                    "overlayVisible": latest_visible,
+                    "applicationState": "ready",
+                })
 
         def _queue_bridge_action(self, message: str, payload: dict) -> None:
             """Serialize non-window actions off the WinForms pump; never wait for status on a click."""
