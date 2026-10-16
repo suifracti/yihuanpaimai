@@ -135,7 +135,10 @@ console.log(JSON.stringify(cases));
         path = os.path.join(PROJECT_ROOT, "core", "main_window.js")
         with open(path, encoding="utf-8") as handle:
             source = handle.read()
-        self.assertIn('postNative("request_app_status")', source)
+        self.assertIn('postNative("request_app_status", { includeHistory:', source)
+        self.assertIn('dashboard.statusRequestPending = true', source)
+        self.assertIn('dashboard.statusRequestPending = false', source)
+        self.assertIn('}, 1500);', source)
         self.assertIn('payload.applicationState === "shutting_down"', source)
         self.assertIn("dashboard.mascotPresentation === null", source)
         self.assertIn("window.clearInterval(dashboard.statusPollTimer)", source)
