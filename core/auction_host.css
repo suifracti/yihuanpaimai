@@ -87,7 +87,8 @@ html[data-theme="night"] {
 
 html, body { background: var(--paper); color: var(--ink); }
 body { font-family: "Microsoft YaHei UI", "Microsoft YaHei", sans-serif; }
-.app-shell { display: flex; flex-direction: column; background: var(--paper); min-height: 100vh; }
+/* 1200px still sets align-items:start. On this column flex that shrink-wraps the masthead. */
+.app-shell { display: flex; flex-direction: column; align-items: stretch; background: var(--paper); min-height: 100vh; }
 .wordmark .seal { width: 58px; height: 58px; stroke: currentColor; }
 .btn-primary:hover, .btn-review-primary:hover, .btn-review-save:hover, .solid-button:hover,
 .theme-switch button[aria-pressed="true"]:hover { color: var(--canvas); }
