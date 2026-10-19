@@ -60,13 +60,23 @@ class Source:
     def close_source(self, reason):
         self.actions.append(('CLOSE', reason))
         self.state, self.reason = 'CLOSED', reason
-    def finish_manual_capture(self, *, termination_reason):
+    def finish_manual_capture(self, *, termination_reason, qualified_evidence_ids=None):
         self.actions.append(('PROCESS', termination_reason))
         self.intake_state = 'ALIGNING'
         return {'ok': True}
-    def cancel_manual_capture(self):
+    def cancel_manual_capture(self, *, reason='USER_CANCEL'):
         self.actions.append(('CANCEL',))
-        return {'ok': True}
+        self.intake_state, self.reason = 'CANCELLED', reason
+        return {'ok': True, 'reason': reason}
+    def end_collection(self, reason):
+        # Same revocation as NativeWarehouseIntake.end_collection: saved
+        # terminal work stays; a live capture with pages finishes incomplete;
+        # anything else cancels. bf4e8df calls this after close_source.
+        if self.intake_state in {'ALIGNING', 'PARTIAL', 'COMPLETE', 'ERROR'}:
+            return {'ok': True, 'reason': self.reason}
+        if self.intake_state == 'MANUAL_CAPTURING' and self.pages:
+            return self.finish_manual_capture(termination_reason='INCOMPLETE')
+        return self.cancel_manual_capture(reason=reason)
 
 
 class NativeAutoTests(unittest.TestCase):
@@ -157,7 +167,7 @@ class NativeAutoTests(unittest.TestCase):
         self.assertFalse(router.confirm(token)['ok'])
         self.assertEqual(source.actions, [])
         router.stop()
-        self.assertEqual(source.actions, [('CANCEL',)])
+        self.assertEqual(source.actions, [('CLOSE', 'USER_STOP'), ('CANCEL',)])
         from main_window import MainWindowBridge
         from types import SimpleNamespace
         changes = []
