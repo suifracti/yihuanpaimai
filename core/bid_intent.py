@@ -37,6 +37,46 @@ def admitted(current):
             and current.get('sourceQualified') is True)
 
 
+def per_match_fund_cap(config):
+    """None means the default: send the Solver suggestion, still within funds.
+
+    A positive int is the configured per-match ceiling. Anything else is refused.
+    """
+    if not isinstance(config, dict):
+        raise ValueError('PER_MATCH_FUND_CAP_INVALID')
+    bid = config.get('bid') if isinstance(config.get('bid'), dict) else {}
+    cap = bid.get('perMatchFundCap', None)
+    if cap is None:
+        return None
+    if type(cap) is not int or isinstance(cap, bool) or cap <= 0:
+        raise ValueError('PER_MATCH_FUND_CAP_INVALID')
+    return cap
+
+
+def solver_suggestion(intent):
+    """The Solver suggestion is the READY maxSafeBid. It is not a point estimate."""
+    if not isinstance(intent, dict) or intent.get('status') != 'READY' or intent.get('executionEnabled') is not False:
+        return None
+    cap = intent.get('maxSafeBid')
+    if type(cap) is not int or isinstance(cap, bool) or cap <= 0:
+        return None
+    return cap
+
+
+def capped_send_amount(suggestion, configured_cap, current_funds):
+    """Default to the suggestion. Never exceed it, the configured cap, or current funds."""
+    if type(suggestion) is not int or isinstance(suggestion, bool) or suggestion <= 0:
+        return None
+    ceiling = suggestion if configured_cap is None else configured_cap
+    if (type(ceiling) is not int or isinstance(ceiling, bool) or ceiling <= 0
+            or type(current_funds) is not int or isinstance(current_funds, bool) or current_funds < 0):
+        return None
+    amount = min(suggestion, ceiling, current_funds)
+    if amount <= 0:
+        return None
+    return amount
+
+
 def intent_id(intent):
     identity = {k: intent[k] for k in ('binding', 'source', 'maxSafeBid', 'requestedBid', 'deadlineMs', 'valuationBasis', 'costs')}
     return 'bid_' + hashlib.sha256(json.dumps(identity, sort_keys=True, ensure_ascii=False).encode()).hexdigest()

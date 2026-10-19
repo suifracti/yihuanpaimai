@@ -38,5 +38,9 @@
   "archiver": {
     "autoSave": true,
     "dedupIntervalSeconds": 60
+  },
+  "bid": {
+    "perMatchFundCap": null,
+    "comment_perMatchFundCap": "null 表示默认采用 Solver 建议出价。正整数是本局上限。实际发送额还不超过当前资金，也不超过建议。"
   }
 }
