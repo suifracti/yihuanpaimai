@@ -3097,6 +3097,306 @@ def _native_dispatch_claimed_bid_to_host() -> bool:
     return bool(bridge.send_control(envelope))
 
 
+def _native_domain_action_dispatch_rejected(event: Dict[str, Any]) -> Dict[str, Any]:
+    """Keep a host refusal off the observation-health path. It is not a frame."""
+    with _MANUAL_STATE_LOCK:
+        LATEST_PAYLOAD["domainActionDispatchRejected"] = {
+            "reason": event.get("reason"),
+            "intentId": event.get("intentId"),
+            "observationSessionId": event.get("observationSessionId"),
+            "decoder": event.get("decoder"),
+        }
+    return {"type": "domain_action_dispatch_rejected", "reason": event.get("reason")}
+
+
+def _advance_authorized_live_domain_loop(data: Dict[str, Any], frame: Dict[str, Any]) -> None:
+    """Env-gated pass of the authorized bid, return, and next-match loop.
+
+    NTE_DOMAIN_LIVE_LOOP must be exactly \"1\". The bid is the Solver suggestion
+    capped by bid.perMatchFundCap and by the single integer read from 我的资产.
+    Unknown results are not sent again. This does not paint a window.
+    """
+    global _LIVE_DOMAIN_LOOP, _LIVE_FEE_CONFIRM_SENT
+    if os.environ.get("NTE_DOMAIN_LIVE_LOOP") != "1":
+        return
+    try:
+        from domain_action_session import (
+            advance_live_domain_loop,
+            fresh_live_domain_state,
+            live_domain_loop_public,
+        )
+        from scene_anchors import published_domain_scene, read_asset_funds
+        if _LIVE_DOMAIN_LOOP is None:
+            _LIVE_DOMAIN_LOOP = fresh_live_domain_state()
+        image = _live_loop_frame_image(frame)
+        published = published_domain_scene(image)
+        if _live_loop_waiting_to_send(_LIVE_DOMAIN_LOOP, published):
+            _park_assistant_and_focus_game(data.get("target"))
+        _live_fee_confirm_if_visible(image, data.get("target"))
+        phase = _LIVE_DOMAIN_LOOP.get("phase")
+        if image is not None and phase == "idle" and published == "AUCTION":
+            funds = read_asset_funds(image)
+        else:
+            funds = _LIVE_DOMAIN_LOOP.get("funds")
+        view = _live_loop_view(data, published, funds)
+        if view is None:
+            return
+
+        def send(owner, envelope):
+            if owner is not None and not _native_bind_claimed_bid_obligation_owner(owner):
+                return False
+            if not _park_assistant_and_focus_game(data.get("target")):
+                return False
+            bridge = NATIVE_OBSERVATION_BRIDGE
+            return bool(bridge is not None and bridge.running and bridge.send_control(envelope))
+
+        before = _LIVE_DOMAIN_LOOP.get("phase")
+        _LIVE_DOMAIN_LOOP = advance_live_domain_loop(_LIVE_DOMAIN_LOOP, view, send)
+        public = live_domain_loop_public(_LIVE_DOMAIN_LOOP)
+        data["liveDomainLoop"] = public
+        current = data.get("currentMatch")
+        if isinstance(current, dict):
+            current["liveDomainLoop"] = public
+        LATEST_PAYLOAD["liveDomainLoop"] = public
+        if _LIVE_DOMAIN_LOOP.get("phase") != before:
+            _record_live_domain_loop(public, view)
+    except Exception as exc:
+        log_stage("PRESENTATION:NATIVE", f"live domain loop failed: {type(exc).__name__}: {exc}")
+
+
+def _live_loop_waiting_to_send(state: Dict[str, Any], published: Optional[str]) -> bool:
+    phase = state.get("phase")
+    return ((phase == "idle" and published == "AUCTION")
+            or (phase == "bid_confirmed" and published == "SETTLEMENT")
+            or (phase == "return_confirmed" and published == "LOBBY"))
+
+
+def _live_loop_frame_image(frame: Dict[str, Any]):
+    path = frame.get("rawFramePath") if isinstance(frame, dict) else None
+    if not isinstance(path, str) or not path:
+        return None
+    try:
+        import numpy as np
+        import cv2
+        return cv2.imdecode(np.fromfile(path, dtype=np.uint8), cv2.IMREAD_COLOR)
+    except Exception:
+        return None
+
+
+def _live_loop_view(data: Dict[str, Any], published: Optional[str], funds) -> Optional[Dict[str, Any]]:
+    from bid_intent import per_match_fund_cap
+    facts_round = CURRENT_MATCH.facts.get("roundNo")
+    if type(facts_round) is not int:
+        facts_round = 0
+    try:
+        generation = int(data.get("sourceMatchGeneration"))
+        revision = int(data.get("factsRevision"))
+    except (TypeError, ValueError):
+        return None
+    match_id = str(data.get("matchId") or "")
+    session_id = str(data.get("observationSessionId") or "")
+    if not match_id or not session_id or generation <= 0 or revision < 0:
+        return None
+    target = data.get("target") if isinstance(data.get("target"), dict) else {}
+    identity = target.get("identity") if isinstance(target.get("identity"), dict) else {}
+    token = identity.get("ProcessInstanceToken", identity.get("processInstanceToken"))
+    try:
+        window = {
+            "hwnd": int(target.get("targetHwnd")),
+            "pid": int(target.get("targetPid")),
+            "processInstanceToken": int(token),
+            "focusEpoch": 0,
+        }
+    except (TypeError, ValueError):
+        return None
+    try:
+        configured_cap = per_match_fund_cap(CONFIG)
+    except ValueError:
+        return None
+    now_ms = int(time.time() * 1000)
+    now_ns = time.monotonic_ns()
+    horizon_ns = 15 * 60 * 1_000_000_000
+    scope = {
+        "matchId": match_id,
+        "matchGeneration": generation,
+        "observationSessionId": session_id,
+        "round": facts_round,
+        "factsRevision": revision,
+    }
+    proposal_event = {
+        **scope,
+        "scene": "IN_AUCTION",
+        "predictionSnapshot": data.get("predictionSnapshot"),
+        "frozenPrediction": data.get("frozenPrediction") or {},
+    }
+    current = {
+        **scope,
+        "scene": "IN_AUCTION",
+        "decisionEligible": True,
+        "sourceQualified": data.get("observationStatus") == "FRAME" and data.get("scene") == "IN_AUCTION",
+    }
+    directory = os.environ.get("NTE_DOMAIN_LIVE_DIR") or ""
+    return {
+        "publishedScene": published,
+        "foreground": _game_is_foreground(target),
+        "userConfirmed": True,
+        "currentFunds": funds if type(funds) is int else None,
+        "configuredCap": configured_cap,
+        "engine": scope,
+        "proposalEvent": proposal_event,
+        "current": current,
+        "window": window,
+        "approvalId": "goal-20261019-authorized",
+        "bootId": _NATIVE_DOMAIN_ACTION_BOOT_ID,
+        "leaseId": "live-" + match_id,
+        "ledgerPath": os.path.join(directory, "bid-ledger.json") if directory else "",
+        "nowMs": now_ms,
+        "nowNs": now_ns,
+        "deadlineMs": now_ms + 15 * 60 * 1000,
+        "deadlineNs": now_ns + horizon_ns,
+        "bidReceipt": LATEST_PAYLOAD.get("bidActionReceipt"),
+        "sessionReceipt": LATEST_PAYLOAD.get("domainActionReceipt"),
+    }
+
+
+def _record_live_domain_loop(public: Dict[str, Any], view: Dict[str, Any]) -> None:
+    directory = os.environ.get("NTE_DOMAIN_LIVE_DIR")
+    if not directory:
+        return
+    try:
+        os.makedirs(directory, exist_ok=True)
+        row = {
+            "at": time.strftime("%Y-%m-%dT%H:%M:%S"),
+            "loop": public,
+            "publishedScene": view.get("publishedScene"),
+            "engine": view.get("engine"),
+            "funds": view.get("currentFunds"),
+        }
+        with open(os.path.join(directory, "live-loop.jsonl"), "a", encoding="utf-8") as stream:
+            stream.write(json.dumps(row, ensure_ascii=False) + "\n")
+    except OSError as exc:
+        log_stage("PRESENTATION:NATIVE", f"live domain loop record failed: {type(exc).__name__}")
+
+
+def _park_assistant_and_focus_game(target: Any) -> bool:
+    """Move assistant windows off the game, then foreground HTGame.
+
+    Domain clicks are absolute input. Minimizing uses ShowWindow, not
+    SetWindowPos(SWP_FRAMECHANGED). A failed focus must not send.
+    """
+    if not isinstance(target, dict):
+        return False
+    try:
+        hwnd = int(target.get("targetHwnd"))
+    except (TypeError, ValueError):
+        return False
+    if hwnd <= 0:
+        return False
+    import ctypes
+    from ctypes import wintypes
+    user32 = ctypes.windll.user32
+    SW_SHOWMINNOACTIVE = 7
+
+    @ctypes.WINFUNCTYPE(ctypes.c_bool, wintypes.HWND, wintypes.LPARAM)
+    def visit(window, _lparam):
+        if window == hwnd:
+            return True
+        length = user32.GetWindowTextLengthW(window)
+        if length <= 0:
+            return True
+        buf = ctypes.create_unicode_buffer(length + 1)
+        user32.GetWindowTextW(window, buf, length + 1)
+        title = buf.value or ""
+        if "异环拍卖助手" in title or "战术助手" in title:
+            user32.ShowWindow(window, SW_SHOWMINNOACTIVE)
+        return True
+
+    user32.EnumWindows(visit, 0)
+    return _focus_window(hwnd)
+
+
+def _focus_window(hwnd: int) -> bool:
+    import ctypes
+    from ctypes import wintypes
+    user32 = ctypes.windll.user32
+    kernel32 = ctypes.windll.kernel32
+    if user32.GetForegroundWindow() == hwnd:
+        return True
+    foreground = user32.GetForegroundWindow()
+    current_thread = kernel32.GetCurrentThreadId()
+    foreground_thread = user32.GetWindowThreadProcessId(foreground, None)
+    target_thread = user32.GetWindowThreadProcessId(hwnd, None)
+    user32.AttachThreadInput(current_thread, foreground_thread, True)
+    user32.AttachThreadInput(current_thread, target_thread, True)
+    user32.BringWindowToTop(hwnd)
+    user32.SetForegroundWindow(hwnd)
+    user32.AttachThreadInput(current_thread, foreground_thread, False)
+    user32.AttachThreadInput(current_thread, target_thread, False)
+    return user32.GetForegroundWindow() == hwnd
+
+
+def _game_is_foreground(target: Any) -> bool:
+    if not isinstance(target, dict):
+        return False
+    try:
+        hwnd = int(target.get("targetHwnd"))
+    except (TypeError, ValueError):
+        return False
+    if hwnd <= 0:
+        return False
+    import ctypes
+    return ctypes.windll.user32.GetForegroundWindow() == hwnd
+
+
+def _live_fee_confirm_if_visible(image, target: Any) -> None:
+    """Dismiss the entry-fee dialog with the already proven client point.
+
+    Only after StartNextMatch has been dispatched, and only once. The point
+    is the fee confirm control, not a bid or a new coordinate system.
+    """
+    global _LIVE_FEE_CONFIRM_SENT
+    if _LIVE_FEE_CONFIRM_SENT or image is None or _LIVE_DOMAIN_LOOP is None:
+        return
+    if _LIVE_DOMAIN_LOOP.get("phase") not in ("start_dispatched", "done"):
+        return
+    height, width = image.shape[:2]
+    x = round(1160 * width / 1920)
+    y = round(712 * height / 1080)
+    if not (0 <= y < height and 0 <= x < width):
+        return
+    blue, green, red = (int(value) for value in image[y, x][:3])
+    if min(red, green, blue) < 180 or max(red, green, blue) - min(red, green, blue) > 40:
+        return
+    try:
+        hwnd = int((target or {}).get("targetHwnd"))
+    except (TypeError, ValueError):
+        return
+    if hwnd > 0 and _send_client_click(hwnd, x, y):
+        _LIVE_FEE_CONFIRM_SENT = True
+        _record_live_domain_loop({"phase": _LIVE_DOMAIN_LOOP.get("phase"), "reason": "FEE_CONFIRM_CLICKED",
+                                  "amount": _LIVE_DOMAIN_LOOP.get("amount"), "resendAllowed": False},
+                                 {"publishedScene": "LOBBY"})
+
+
+def _send_client_click(hwnd: int, x: int, y: int) -> bool:
+    import ctypes
+    from ctypes import wintypes
+    user32 = ctypes.windll.user32
+    user32.SendMessageTimeoutW.argtypes = [
+        wintypes.HWND, wintypes.UINT, wintypes.WPARAM, wintypes.LPARAM,
+        wintypes.UINT, wintypes.UINT, ctypes.POINTER(ctypes.c_size_t),
+    ]
+    user32.SendMessageTimeoutW.restype = ctypes.c_void_p
+    packed = (int(y) << 16) | (int(x) & 0xFFFF)
+    result = ctypes.c_size_t()
+    flags = 0x23
+    delivered = True
+    for message, wparam in ((0x0200, 0), (0x0201, 1), (0x0202, 0)):
+        returned = user32.SendMessageTimeoutW(hwnd, message, wparam, packed, flags, 100, ctypes.byref(result))
+        delivered = delivered and bool(returned)
+    return delivered
+
+
 def _native_observation_event(event: Dict[str, Any]) -> Optional[Dict[str, Any]]:
     """Consume one versioned native Host line and project it into Main/HUD."""
     global _NATIVE_OBSERVATION_RECEIVER, _NATIVE_OBSERVATION_SESSION
@@ -3113,6 +3413,8 @@ def _native_observation_event(event: Dict[str, Any]) -> Optional[Dict[str, Any]]
         return
     if event.get("type") == "domain.action.receipt":
         return _native_domain_action_receipt_event(event)
+    if event.get("type") == "domain.action.dispatch.rejected":
+        return _native_domain_action_dispatch_rejected(event)
     if event.get("sourceKind") != "native_wgc" or event.get("inputActions") is not False:
         _native_publish_health({
             "status": "ERROR",
@@ -3829,6 +4131,7 @@ def _native_observation_event(event: Dict[str, Any]) -> Optional[Dict[str, Any]]
             LATEST_VISION_PAYLOAD.clear()
             LATEST_VISION_PAYLOAD.update(data)
             LATEST_PAYLOAD.update(data)
+            _advance_authorized_live_domain_loop(data, frame)
             PRESENTATION_RUNTIME.observe_transport(data)
             _NATIVE_OBSERVATION_LAST_FRAME_NS = capture_ns
             # Metadata only: a page is copied solely on an explicit manual command.
@@ -5358,6 +5661,8 @@ _LIVE_VISION_ACTIVE = False
 _LIVE_VISION_MATCH_ID: Optional[str] = None
 _NATIVE_DOMAIN_ACTION_SESSION = None
 _NATIVE_DOMAIN_ACTION_SESSION_KEY: Optional[tuple[str, str, int]] = None
+_LIVE_DOMAIN_LOOP = None
+_LIVE_FEE_CONFIRM_SENT = False
 _NATIVE_DURABLE_BID_OBLIGATION_OWNER = None
 _NATIVE_DOMAIN_ACTION_BOOT_ID: Optional[str] = None
 _LIVE_VISION_EXIT_SCENES = frozenset({

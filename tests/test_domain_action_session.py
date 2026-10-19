@@ -1,8 +1,12 @@
 import json
 from pathlib import Path
+import tempfile
 import unittest
 
-from domain_action_session import DomainActionSession, NextMatchAdmission, claimed_bid_to_domain_intent
+from domain_action_session import (
+    DomainActionSession, NextMatchAdmission, advance_live_domain_loop,
+    claimed_bid_to_domain_intent, fresh_live_domain_state,
+)
 from session_fsm import AuctionSessionFSM, SessionState
 from vision_contract import VisionObservation, VisionSettlement
 
@@ -152,3 +156,143 @@ class DomainActionSessionTests(unittest.TestCase):
         self.assertTrue(self.session.accept_receipt(workflow[5], now_ns=1_100_000_003))
         self.assertEqual(self.session.match_id, "match-2")
         self.assertEqual(self.fsm.state, SessionState.AUCTION_R1)
+
+
+class AuthorizedLiveDomainLoopTests(unittest.TestCase):
+    def view(self, *, funds, scene, round_no, directory, **extra):
+        from test_bid_intent_contract import current, event
+        scope = current()
+        scope["round"] = round_no
+        proposal = event()
+        proposal.update(scope)
+        proposal["predictionSnapshot"]["matchId"] = scope["matchId"]
+        proposal["predictionSnapshot"]["round"] = round_no
+        proposal["predictionSnapshot"]["input"]["normalizedFacts"]["round"] = round_no
+        base = dict(
+            publishedScene=scene, foreground=True, userConfirmed=True, currentFunds=funds,
+            configuredCap=None, engine=dict(scope), proposalEvent=proposal, current=dict(scope),
+            window=dict(hwnd=10, pid=20, processInstanceToken=30, focusEpoch=40),
+            approvalId="goal-20261019-authorized", bootId="boot-live",
+            leaseId="live-" + scope["matchId"], ledgerPath=str(Path(directory) / "bid-ledger.json"),
+            nowMs=100, nowNs=1_000_000, deadlineMs=800, deadlineNs=701_000_000,
+            bidReceipt=None, sessionReceipt=None,
+        )
+        base.update(extra)
+        return base
+
+    def test_authorized_live_loop_sends_each_step_once(self):
+        with tempfile.TemporaryDirectory() as directory:
+            sent = []
+            state = fresh_live_domain_state()
+            refused = self.view(funds=None, scene="AUCTION", round_no=2, directory=directory, foreground=False)
+            state = advance_live_domain_loop(state, refused, lambda owner, envelope: sent.append(envelope) or True)
+            self.assertEqual(sent, [])
+            self.assertEqual(state["phase"], "idle")
+            capped_dir = directory + "-cap"
+            Path(capped_dir).mkdir()
+            capped_sent = []
+            advance_live_domain_loop(
+                fresh_live_domain_state(),
+                self.view(funds=100, scene="AUCTION", round_no=2, directory=capped_dir),
+                lambda owner, envelope: capped_sent.append(envelope) or True)
+            self.assertEqual(capped_sent[0]["intent"]["amount"], 100)
+            self.assertEqual(capped_sent[0]["intent"]["window"]["focusEpoch"], 0)
+            self.assertEqual(capped_sent[0]["intent"]["takeoverGeneration"], 0)
+
+            state = advance_live_domain_loop(
+                state, self.view(funds=100000, scene="AUCTION", round_no=2, directory=directory),
+                lambda owner, envelope: sent.append((owner, envelope)) or True)
+            self.assertEqual(state["phase"], "bid_dispatched")
+            self.assertEqual(len(sent), 1)
+            bid = sent[0][1]
+            self.assertEqual(bid["type"], "domain.action.dispatch")
+            self.assertEqual(bid["intent"]["kind"], "Bid")
+            self.assertEqual(bid["intent"]["amount"], 58000)
+            self.assertEqual(bid["intent"]["window"]["focusEpoch"], 0)
+            self.assertEqual(bid["intent"]["takeoverGeneration"], 0)
+            self.assertLessEqual(bid["intent"]["amount"], bid["intent"]["maxSafeBid"])
+            self.assertFalse(state["resendAllowed"])
+            pending = self.view(funds=100000, scene="AUCTION", round_no=2, directory=directory,
+                                bidReceipt=dict(intentId=bid["intent"]["intentId"], kind="Bid",
+                                                status="SENT_PENDING_CONFIRMATION"))
+            state = advance_live_domain_loop(state, pending, lambda owner, envelope: sent.append(envelope) or True)
+            self.assertEqual(len(sent), 1)
+            confirmed = self.view(funds=100000, scene="SETTLEMENT", round_no=2, directory=directory,
+                                  bidReceipt=dict(intentId=bid["intent"]["intentId"], kind="Bid", status="CONFIRMED"))
+            state = advance_live_domain_loop(state, confirmed, lambda owner, envelope: sent.append(envelope) or True)
+            self.assertEqual(state["phase"], "return_dispatched")
+            returned = sent[1]
+            self.assertIsNone(returned["intent"]["amount"])
+            self.assertEqual(returned["intent"]["kind"], "ReturnLobby")
+            self.assertEqual(returned["intent"]["round"], 2)
+            self.assertEqual(returned["intent"]["window"]["focusEpoch"], 0)
+            lobby = self.view(funds=100000, scene="LOBBY", round_no=0, directory=directory,
+                              sessionReceipt=dict(intentId=returned["intent"]["intentId"], kind="ReturnLobby",
+                                                  status="CONFIRMED"))
+            state = advance_live_domain_loop(state, lobby, lambda owner, envelope: sent.append(envelope) or True)
+            self.assertEqual(state["phase"], "start_dispatched")
+            started = sent[2]
+            self.assertEqual(started["intent"]["kind"], "StartNextMatch")
+            self.assertEqual(started["intent"]["round"], 0)
+            self.assertIsNone(started["intent"]["amount"])
+            done = self.view(funds=100000, scene="AUCTION", round_no=1, directory=directory,
+                             sessionReceipt=dict(intentId=started["intent"]["intentId"], kind="StartNextMatch",
+                                                 status="CONFIRMED", newMatchId="match-2", newMatchGeneration=2))
+            state = advance_live_domain_loop(state, done, lambda owner, envelope: sent.append(envelope) or True)
+            self.assertEqual(state["phase"], "done")
+            self.assertEqual(len(sent), 3)
+            self.assertFalse(state["resendAllowed"])
+
+    def test_authorized_live_loop_unknown_or_not_sent_does_not_resend(self):
+        with tempfile.TemporaryDirectory() as directory:
+            sent = []
+
+            def send(owner, envelope):
+                sent.append(envelope)
+                return True
+
+            state = advance_live_domain_loop(
+                fresh_live_domain_state(),
+                self.view(funds=100000, scene="AUCTION", round_no=2, directory=directory), send)
+            bid_id = sent[0]["intent"]["intentId"]
+            unknown = self.view(funds=100000, scene="SETTLEMENT", round_no=2, directory=directory,
+                                bidReceipt=dict(intentId=bid_id, kind="Bid", status="UNKNOWN"))
+            state = advance_live_domain_loop(state, unknown, send)
+            self.assertEqual(state["phase"], "stopped")
+            self.assertEqual(state["reason"], "UNKNOWN")
+            self.assertFalse(state["resendAllowed"])
+            again = advance_live_domain_loop(state, unknown, send)
+            self.assertEqual(len(sent), 1)
+            self.assertEqual(again["phase"], "stopped")
+
+        with tempfile.TemporaryDirectory() as directory:
+            sent = []
+            state = advance_live_domain_loop(
+                fresh_live_domain_state(),
+                self.view(funds=100000, scene="AUCTION", round_no=2, directory=directory),
+                lambda owner, envelope: sent.append(envelope) or True)
+            blocked = self.view(funds=100000, scene="SETTLEMENT", round_no=2, directory=directory,
+                                bidReceipt=dict(intentId=sent[0]["intent"]["intentId"], kind="Bid", status="NOT_SENT"))
+            state = advance_live_domain_loop(state, blocked, lambda owner, envelope: sent.append(envelope) or True)
+            self.assertEqual(state["phase"], "stopped")
+            self.assertEqual(state["reason"], "NOT_SENT")
+            self.assertEqual(len(sent), 1)
+            self.assertFalse(state["resendAllowed"])
+
+    def test_published_bid_control_and_asset_integer_gate(self):
+        import cv2
+        import numpy as np
+        from scene_anchors import one_asset_integer, published_domain_scene, read_asset_funds
+        from visual_catalog import asset_root
+        blank = np.zeros((1080, 1920, 3), np.uint8)
+        self.assertIsNone(published_domain_scene(blank))
+        self.assertIsNone(one_asset_integer(["我的资产", "推荐 300,000", "2,802,874"]))
+        self.assertEqual(one_asset_integer(["我的资产 2,802,874"]), 2802874)
+        self.assertIsNone(read_asset_funds(blank))
+        template = cv2.imdecode(np.fromfile(
+            asset_root() / "assets/scene_anchors/bid_confirm_label.png", np.uint8), cv2.IMREAD_COLOR)
+        self.assertIsNotNone(template)
+        frame = blank.copy()
+        y, x = 926, 1189
+        frame[y:y + template.shape[0], x:x + template.shape[1]] = template
+        self.assertEqual(published_domain_scene(frame), "AUCTION")

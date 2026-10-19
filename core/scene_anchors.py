@@ -1,6 +1,7 @@
 """Cheap text-shape anchors before weak navigation color heuristics."""
 from functools import lru_cache
 import hashlib
+import json
 import cv2
 import numpy as np
 
@@ -132,6 +133,98 @@ def frame_digest(frame):
 def _bid_ocr():
     from rapidocr_onnxruntime import RapidOCR
     return RapidOCR()
+
+
+def published_domain_scene(frame):
+    """Scene the ticketed host can act on, using the published control templates.
+
+    Priority matches SceneAnchorGameDecoder: settlement witness and exit,
+    otherwise the lobby start control, otherwise the bid confirm control.
+    Search boxes are not click coordinates. A frame that is not the catalog
+    size returns None so a scaled mismatch cannot authorize a send.
+    """
+    if frame is None or getattr(frame, "size", 0) == 0 or frame.shape[1] != 1920 or frame.shape[0] != 1080:
+        return None
+    catalog, templates = _domain_control_catalog()
+    if catalog is None:
+        return None
+    gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY) if frame.ndim == 3 else frame
+    scenes = {row["scene"]: row for row in catalog["scenes"]}
+    threshold = float(catalog["threshold"])
+
+    def hit(name, box):
+        template = templates.get(name)
+        return template is not None and _template_in_box(gray, template, box, threshold)
+
+    settlement = scenes.get("SETTLEMENT") or {}
+    if (all(hit(row["template"], row["search"]) for row in settlement.get("witnesses") or [])
+            and all(hit(row["template"], row["search"]) for row in settlement.get("controls") or [])
+            and (settlement.get("witnesses") or settlement.get("controls"))):
+        return "SETTLEMENT"
+    lobby = scenes.get("LOBBY") or {}
+    if lobby.get("controls") and all(hit(row["template"], row["search"]) for row in lobby["controls"]):
+        return "LOBBY"
+    auction = scenes.get("AUCTION") or {}
+    if auction.get("controls") and all(hit(row["template"], row["search"]) for row in auction["controls"]):
+        return "AUCTION"
+    return None
+
+
+def one_asset_integer(texts):
+    """The current-funds gate: exactly one non-negative integer, or nothing."""
+    import re
+    found = []
+    for text in texts or []:
+        for token in re.findall(r"\d[\d,，]*", str(text)):
+            found.append(int(token.replace(",", "").replace("，", "")))
+    if len(found) != 1 or found[0] < 0:
+        return None
+    return found[0]
+
+
+def read_asset_funds(frame):
+    """Read 我的资产 from the top-right of a 1920x1080 frame.
+
+    Zero integers or more than one integer refuses the send. This does not
+    invent a balance from the Solver suggestion.
+    """
+    if frame is None or getattr(frame, "size", 0) == 0 or frame.shape[1] != 1920 or frame.shape[0] != 1080:
+        return None
+    crop = frame[0:86, 1380:1920]
+    if crop.size == 0:
+        return None
+    rows, _ = _bid_ocr()(crop)
+    return one_asset_integer(str(row[1]) for row in (rows or []))
+
+
+@lru_cache(maxsize=1)
+def _domain_control_catalog():
+    path = asset_root() / "assets/scene_anchors/domain_controls.json"
+    if not path.is_file():
+        return None, {}
+    catalog = json.loads(path.read_text(encoding="utf-8"))
+    templates = {}
+    for scene in catalog.get("scenes") or []:
+        for row in list(scene.get("witnesses") or []) + list(scene.get("controls") or []):
+            name = row.get("template")
+            if not name or name in templates:
+                continue
+            image = asset_root() / "assets/scene_anchors" / name
+            decoded = cv2.imdecode(np.fromfile(image, np.uint8), cv2.IMREAD_GRAYSCALE) if image.is_file() else None
+            templates[name] = decoded
+    return catalog, templates
+
+
+def _template_in_box(gray, template, box, threshold):
+    x, y, right, bottom = (int(v) for v in box)
+    if template is None or right <= x or bottom <= y:
+        return False
+    crop = gray[y:bottom, x:right]
+    if crop.size == 0 or crop.shape[0] < template.shape[0] or crop.shape[1] < template.shape[1]:
+        return False
+    score = cv2.matchTemplate(crop, template, cv2.TM_CCOEFF_NORMED)
+    best = float(score.max()) if score.size else 0.0
+    return bool(np.isfinite(best) and best >= threshold)
 
 
 def committed_bid_amounts(frame):

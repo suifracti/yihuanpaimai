@@ -394,3 +394,334 @@ def commit_domain_receipt(book, receipt: dict, *, independently_qualified: bool,
     result = book.receipt(receipt, qualified=independently_qualified, now_ms=now_ms,
                           expected_revision=expected_revision)
     return result.get("ok") is True and result.get("state") == expected
+
+
+def fresh_live_domain_state():
+    """One authorized pass: bid, return, then the next match. Unknown is terminal."""
+    return {
+        "phase": "idle",
+        "resendAllowed": False,
+        "reason": None,
+        "amount": None,
+        "funds": None,
+        "bidIntentId": None,
+        "returnIntentId": None,
+        "startIntentId": None,
+    }
+
+
+def live_domain_loop_public(state):
+    """Field for the main window. Claude binds it; this process does not paint it.
+
+    liveDomainLoop: {phase, reason, amount, resendAllowed}. phase is idle,
+    bid_dispatched, bid_confirmed, return_dispatched, return_confirmed,
+    start_dispatched, done, or stopped. amount is the capped Solver suggestion
+    once a bid is prepared, otherwise null. resendAllowed stays false.
+    """
+    if not isinstance(state, dict):
+        return None
+    return {
+        "phase": state.get("phase"),
+        "reason": state.get("reason"),
+        "amount": state.get("amount"),
+        "resendAllowed": False,
+    }
+
+
+def advance_live_domain_loop(state, view, send):
+    """Move the authorized loop by one observation. send(owner, envelope) -> bool.
+
+    A false or missing send does not try a second envelope. UNKNOWN and NOT_SENT
+    stop the loop. The bid uses the existing once-only ledger; return and the
+    next match are session envelopes with amount null, focus epoch 0, and
+    takeover 0. The caller supplies the host's engine scope, not a private one.
+    """
+    if not isinstance(state, dict) or state.get("phase") is None:
+        raise ValueError("LIVE_LOOP_STATE_REQUIRED")
+    if not isinstance(view, dict) or not callable(send):
+        raise ValueError("LIVE_LOOP_VIEW_REQUIRED")
+    if state.get("phase") in ("done", "stopped"):
+        return state
+    _consume_live_receipt(state, view)
+    if state.get("phase") in ("done", "stopped"):
+        return state
+    if state.get("phase") == "idle":
+        return _dispatch_live_bid(state, view, send)
+    if state.get("phase") == "bid_confirmed":
+        return _dispatch_live_session(state, view, send, "ReturnLobby")
+    if state.get("phase") == "return_confirmed":
+        return _dispatch_live_session(state, view, send, "StartNextMatch")
+    return state
+
+
+def _consume_live_receipt(state, view):
+    phase = state.get("phase")
+    if phase == "bid_dispatched":
+        receipt, intent_id = view.get("bidReceipt"), state.get("bidIntentId")
+    elif phase == "return_dispatched":
+        receipt, intent_id = view.get("sessionReceipt"), state.get("returnIntentId")
+    elif phase == "start_dispatched":
+        receipt, intent_id = view.get("sessionReceipt"), state.get("startIntentId")
+    else:
+        return
+    if not isinstance(receipt, dict) or receipt.get("intentId") != intent_id:
+        return
+    status = receipt.get("status")
+    if status == "SENT_PENDING_CONFIRMATION":
+        state["reason"] = "WAITING_VISIBLE_RESULT"
+        return
+    if status == "CONFIRMED":
+        if phase == "bid_dispatched":
+            state["phase"] = "bid_confirmed"
+            state["reason"] = None
+        elif phase == "return_dispatched":
+            state["phase"] = "return_confirmed"
+            state["reason"] = None
+        else:
+            new_id = receipt.get("newMatchId")
+            engine = view.get("engine") or {}
+            new_generation = receipt.get("newMatchGeneration")
+            current_generation = engine.get("matchGeneration")
+            if (isinstance(new_id, str) and new_id and new_id != engine.get("matchId")
+                    and type(new_generation) is int and type(current_generation) is int
+                    and new_generation > current_generation):
+                state["phase"] = "done"
+                state["reason"] = None
+            else:
+                state["phase"] = "stopped"
+                state["reason"] = "NEXT_MATCH_IDENTITY_MISSING"
+        state["resendAllowed"] = False
+        return
+    if status in ("UNKNOWN", "NOT_SENT"):
+        state["phase"] = "stopped"
+        state["reason"] = status
+        state["resendAllowed"] = False
+
+
+def _dispatch_live_bid(state, view, send):
+    if view.get("foreground") is not True:
+        state["reason"] = "GAME_NOT_FOREGROUND"
+        return state
+    if view.get("publishedScene") != "AUCTION":
+        state["reason"] = "WAITING_BID_PANEL"
+        return state
+    if view.get("userConfirmed") is not True:
+        state["reason"] = "USER_CONFIRMATION_REQUIRED"
+        return state
+    funds = view.get("currentFunds")
+    if type(funds) is not int or isinstance(funds, bool) or funds < 0:
+        state["reason"] = "FUNDS_NOT_ONE_INTEGER"
+        return state
+    engine = _live_engine(view)
+    if engine is None:
+        state["reason"] = "ENGINE_SCOPE_INCOMPLETE"
+        return state
+    if engine["round"] not in range(1, 6):
+        state["reason"] = "BID_ROUND_UNUSABLE"
+        return state
+    proposal_event = view.get("proposalEvent")
+    current = view.get("current")
+    if not isinstance(proposal_event, dict) or not isinstance(current, dict):
+        state["reason"] = "NO_SOLVER_SUGGESTION"
+        return state
+    from bid_intent import build_bid_intent, capped_send_amount, solver_suggestion
+    now_ms, deadline_ms = view.get("nowMs"), view.get("deadlineMs")
+    try:
+        proposal = build_bid_intent(proposal_event, current, now_ms=now_ms, deadline_ms=deadline_ms, requested_bid=None)
+    except (TypeError, ValueError):
+        state["reason"] = "NO_SOLVER_SUGGESTION"
+        return state
+    suggestion = solver_suggestion(proposal)
+    amount = None if suggestion is None else capped_send_amount(suggestion, view.get("configuredCap"), funds)
+    if amount is None:
+        state["reason"] = "FUND_CAP_BLOCKS_SEND" if suggestion is not None else "NO_SOLVER_SUGGESTION"
+        return state
+    if proposal.get("binding") != {key: engine[key] for key in
+                                   ("matchId", "matchGeneration", "observationSessionId", "round", "factsRevision")}:
+        state["reason"] = "ENGINE_SCOPE_MISMATCH"
+        return state
+    ledger_path = view.get("ledgerPath")
+    approval_id = view.get("approvalId")
+    boot_id = view.get("bootId")
+    if (not isinstance(ledger_path, str) or not ledger_path.strip()
+            or not isinstance(approval_id, str) or not approval_id.strip()
+            or not isinstance(boot_id, str) or not boot_id.strip()):
+        state["reason"] = "LIVE_LOOP_IDENTITY_INCOMPLETE"
+        return state
+    from pathlib import Path
+    path = Path(ledger_path)
+    if path.exists() or path.with_name(path.name + ".owner").exists():
+        state["phase"] = "stopped"
+        state["reason"] = "RESEND_BLOCKED"
+        state["resendAllowed"] = False
+        return state
+    confirmed = build_bid_intent(proposal_event, current, now_ms=now_ms, deadline_ms=deadline_ms, requested_bid=amount)
+    if solver_suggestion(confirmed) != suggestion or confirmed.get("requestedBid") != amount:
+        state["reason"] = "SUGGESTION_NOT_SENDABLE"
+        return state
+    scope = _live_native_scope(view, engine, funds)
+    if scope is None:
+        state["reason"] = "LIVE_LOOP_IDENTITY_INCOMPLETE"
+        return state
+    from durable_bid_obligations import DurableBidIntentBook
+    from native_domain_action_obligations import NativeBidObligationOwner
+    budget = _bid_budget(current, approval_id, funds, amount, deadline_ms)
+    try:
+        book = DurableBidIntentBook.create(path, ledger_id=boot_id, budget=budget, clock_id=boot_id)
+        reserved = book.reserve(confirmed, current, now_ms=now_ms)
+        claim = book.claim(confirmed["intentId"], current, now_ms=now_ms) if reserved.get("ok") is True else reserved
+        if claim.get("ok") is not True or claim.get("state") != "CLAIMED":
+            state["phase"] = "stopped"
+            state["reason"] = claim.get("reason") or "CLAIM_REFUSED"
+            state["resendAllowed"] = False
+            return state
+        domain = claimed_bid_to_domain_intent(claim, scope, now_ms=now_ms, now_ns=view["nowNs"])
+        owner = NativeBidObligationOwner(
+            book, domain, current_provider=lambda current=current: current,
+            native_scope_provider=lambda scope=scope: scope,
+            now_ms=lambda now_ms=now_ms: now_ms, now_ns=lambda now_ns=view["nowNs"]: now_ns,
+            boot_id=boot_id)
+        envelope = owner.dispatch_envelope("dispatch-" + domain["intentId"])
+    except (OSError, TypeError, ValueError, KeyError, RuntimeError) as exc:
+        state["phase"] = "stopped"
+        state["reason"] = type(exc).__name__
+        state["resendAllowed"] = False
+        return state
+    state["amount"] = amount
+    state["funds"] = funds
+    state["bidIntentId"] = domain["intentId"]
+    if send(owner, envelope) is not True:
+        state["phase"] = "stopped"
+        state["reason"] = "DISPATCH_NOT_ACCEPTED"
+        state["resendAllowed"] = False
+        return state
+    state["phase"] = "bid_dispatched"
+    state["reason"] = "WAITING_VISIBLE_RESULT"
+    state["resendAllowed"] = False
+    return state
+
+
+def _dispatch_live_session(state, view, send, kind):
+    if view.get("foreground") is not True:
+        state["reason"] = "GAME_NOT_FOREGROUND"
+        return state
+    expected = "SETTLEMENT" if kind == "ReturnLobby" else "LOBBY"
+    if view.get("publishedScene") != expected:
+        state["reason"] = "WAITING_" + expected
+        return state
+    engine = _live_engine(view)
+    if engine is None:
+        state["reason"] = "ENGINE_SCOPE_INCOMPLETE"
+        return state
+    if kind == "StartNextMatch" and engine["round"] != 0:
+        state["reason"] = "LOBBY_ROUND_NOT_ZERO"
+        return state
+    if kind == "ReturnLobby" and engine["round"] not in range(0, 6):
+        state["reason"] = "SETTLEMENT_ROUND_UNUSABLE"
+        return state
+    funds = state.get("funds")
+    if type(funds) is not int or isinstance(funds, bool) or funds <= 0:
+        state["reason"] = "FUNDS_NOT_ONE_INTEGER"
+        return state
+    scope = _live_native_scope(view, engine, funds)
+    if scope is None or view.get("userConfirmed") is not True:
+        state["reason"] = "LIVE_LOOP_IDENTITY_INCOMPLETE"
+        return state
+    intent_id = ("return-" if kind == "ReturnLobby" else "start-") + engine["matchId"]
+    intent = {
+        "intentId": intent_id,
+        "kind": kind,
+        "matchId": engine["matchId"],
+        "round": 0 if kind == "StartNextMatch" else engine["round"],
+        "factsRevision": engine["factsRevision"],
+        "amount": None,
+        "budget": funds,
+        "deadlineNs": scope["leaseExpiresNs"],
+        "takeoverGeneration": 0,
+        "leaseId": scope["leaseId"],
+        "window": scope["window"],
+        "matchGeneration": engine["matchGeneration"],
+        "observationSessionId": engine["observationSessionId"],
+        "maxSafeBid": 0,
+        "approvalId": view.get("approvalId"),
+    }
+    envelope = {
+        "type": "domain.action.dispatch",
+        "protocolVersion": 1,
+        "requestId": "dispatch-" + intent_id,
+        "bootId": view.get("bootId"),
+        "observationSessionId": engine["observationSessionId"],
+        "intent": intent,
+    }
+    if kind == "ReturnLobby":
+        state["returnIntentId"] = intent_id
+    else:
+        state["startIntentId"] = intent_id
+    if send(None, envelope) is not True:
+        state["phase"] = "stopped"
+        state["reason"] = "DISPATCH_NOT_ACCEPTED"
+        state["resendAllowed"] = False
+        return state
+    state["phase"] = "return_dispatched" if kind == "ReturnLobby" else "start_dispatched"
+    state["reason"] = "WAITING_VISIBLE_RESULT"
+    state["resendAllowed"] = False
+    return state
+
+
+def _live_engine(view):
+    engine = view.get("engine")
+    if not isinstance(engine, dict):
+        return None
+    match_id = engine.get("matchId")
+    session_id = engine.get("observationSessionId")
+    generation = engine.get("matchGeneration")
+    round_no = engine.get("round")
+    revision = engine.get("factsRevision")
+    if (not isinstance(match_id, str) or not match_id.strip()
+            or not isinstance(session_id, str) or not session_id.strip()
+            or type(generation) is not int or isinstance(generation, bool) or generation <= 0
+            or type(round_no) is not int or isinstance(round_no, bool) or round_no < 0
+            or type(revision) is not int or isinstance(revision, bool) or revision < 0):
+        return None
+    return {
+        "matchId": match_id,
+        "matchGeneration": generation,
+        "observationSessionId": session_id,
+        "round": round_no,
+        "factsRevision": revision,
+    }
+
+
+def _live_native_scope(view, engine, funds):
+    window = view.get("window")
+    if not isinstance(window, dict):
+        return None
+    try:
+        hwnd = int(window.get("hwnd"))
+        pid = int(window.get("pid"))
+        token = int(window.get("processInstanceToken"))
+    except (TypeError, ValueError):
+        return None
+    lease_id = view.get("leaseId")
+    now_ns = view.get("nowNs")
+    deadline_ns = view.get("deadlineNs")
+    boot_id = view.get("bootId")
+    if (hwnd <= 0 or pid <= 0 or token <= 0
+            or not isinstance(lease_id, str) or not lease_id.strip()
+            or not isinstance(boot_id, str) or not boot_id.strip()
+            or type(now_ns) is not int or type(deadline_ns) is not int
+            or now_ns >= deadline_ns):
+        return None
+    return {
+        **engine,
+        "budget": funds,
+        "leaseExpiresNs": deadline_ns,
+        "takeoverGeneration": 0,
+        "leaseId": lease_id,
+        "window": {
+            "hwnd": hwnd,
+            "pid": pid,
+            "processInstanceToken": token,
+            "focusEpoch": 0,
+        },
+    }
