@@ -151,12 +151,15 @@ jobs:
             exit 1
           }
           $result = Get-Content build/ci-issue24-integrated-python.json -Raw | ConvertFrom-Json
-          $expectedPrivateSkip = 'test_native_sparse_overlap.SparseOverlapTests.test_identity_checked_real_sequence_has_pixel_continuity'
-          $unexpectedSkips = @($result.skipped | Where-Object { $_[0] -ne $expectedPrivateSkip })
-          if ($testExitCode -ne 0 -or $result.failures.Count -gt 0 -or $result.errors.Count -gt 0 -or $result.tests -ne 7 -or $unexpectedSkips.Count -gt 0 -or $result.skipped.Count -gt 1) {
+          $expectedPrivateSkips = @(
+            'test_native_sparse_overlap.SparseOverlapTests.test_identity_checked_real_sequence_has_pixel_continuity',
+            'test_native_sparse_overlap.SparseOverlapTests.test_real_single_notch_clipped_edge_enters_independent_support_wait'
+          )
+          $unexpectedSkips = @($result.skipped | Where-Object { $expectedPrivateSkips -notcontains $_[0] })
+          if ($testExitCode -ne 0 -or $result.failures.Count -gt 0 -or $result.errors.Count -gt 0 -or $result.tests -lt 8 -or $unexpectedSkips.Count -gt 0 -or $result.skipped.Count -gt $expectedPrivateSkips.Count) {
             $status = 'FAIL'
-          } elseif ($result.skipped.Count -eq 1) {
-            $status = 'PASS (private Issue #31 replay SKIP)'
+          } elseif ($result.skipped.Count -gt 0) {
+            $status = 'PASS (private SOURCE replay SKIP)'
           } else {
             $status = 'PASS'
           }
@@ -283,7 +286,7 @@ jobs:
             'Issue #46 bid intent: NOT_RUN (no result file)' | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Append -Encoding utf8
           } else {
             $result = Get-Content $outputPath -Raw | ConvertFrom-Json
-            if ($testExitCode -ne 0 -or $result.tests -ne 17 -or $result.failures.Count -gt 0 -or $result.errors.Count -gt 0 -or $result.skipped.Count -gt 0) {
+            if ($testExitCode -ne 0 -or $result.tests -lt 18 -or $result.failures.Count -gt 0 -or $result.errors.Count -gt 0 -or $result.skipped.Count -gt 0) {
               $status = 'FAIL'
             } else { $status = 'PASS' }
             "Issue #46 bid intent: $status; tests=$($result.tests); failures=$($result.failures.Count); errors=$($result.errors.Count); skipped=$($result.skipped.Count)" | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Append -Encoding utf8
