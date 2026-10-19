@@ -257,10 +257,14 @@ class HalfViewportFlowTests(unittest.TestCase):
         try:
             f.source._host_limits['skipAnimationSupported'] = True
             marker = Mock(spec=RevealMarker)
-            marker.observe.return_value = {'status': 'PRESENT'}
-            marker.skip_button.return_value = {'clickable': True}
+            marker.observe.return_value = {'status': 'PRESENT', 'animationState': 'UNKNOWN'}
+            marker.skip_button.side_effect = [{'clickable': False}, {'clickable': True}]
             f.auto._marker = marker
-            f.deliver(viewport(0))
+            f.deliver(scene(0, revealing=True))
+            self.assertEqual(f.auto._phase, 'WAIT_STABLE')
+            f.tick()
+            f.deliver(scene(0, revealing=True))
+            self.assertEqual(f.sent[-1]['operation'], 'SKIP_ANIMATION')
             command = copy.deepcopy(f.source._pending)
             ack = f.event('SKIP_ANIMATION_RESULT', command, inputActions=True,
                 reason='SKIP_ANIMATION_SENT', details={'classification': 'SENT',
