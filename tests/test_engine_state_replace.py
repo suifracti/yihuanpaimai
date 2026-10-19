@@ -1,6 +1,7 @@
 """engine_state.json replace must survive one Windows sharing refusal."""
 import importlib
 import json
+import os
 import sys
 import tempfile
 import unittest
@@ -48,6 +49,49 @@ class EngineStateReplaceTests(unittest.TestCase):
                 self.assertFalse(path.exists())
         finally:
             engine.os.replace = original
+
+    def test_live_bid_loop_skips_warehouse_identity_and_keeps_settlement(self):
+        seen = []
+
+        class Host:
+            _identity_analyzer = None
+
+            def __init__(self, kind):
+                self.kind = kind
+
+            def _identity_scope_kind(self, context):
+                return self.kind
+
+            def _identity_generation(self):
+                seen.append(self.kind)
+                return 3
+
+            def log(self, *args, **kwargs):
+                seen.append("log")
+
+            @property
+            def pipeline(self):
+                kind = self.kind
+                return type("Pipe", (), {
+                    "take_deferred_identity": staticmethod(lambda: {"kind": kind, "round": 1}),
+                })()
+
+        Host._submit_deferred_identity = engine.RealEngine._submit_deferred_identity
+        previous = os.environ.get("NTE_DOMAIN_LIVE_LOOP")
+        os.environ["NTE_DOMAIN_LIVE_LOOP"] = "1"
+        try:
+            Host("warehouse")._submit_deferred_identity({}, {"scene": "IN_AUCTION"})
+            self.assertEqual(seen, [])
+            Host("settlement")._submit_deferred_identity({}, {"scene": "SETTLEMENT"})
+            self.assertEqual(seen[:2], ["settlement", "log"])
+        finally:
+            if previous is None:
+                os.environ.pop("NTE_DOMAIN_LIVE_LOOP", None)
+            else:
+                os.environ["NTE_DOMAIN_LIVE_LOOP"] = previous
+        seen.clear()
+        Host("warehouse")._submit_deferred_identity({}, {"scene": "IN_AUCTION"})
+        self.assertEqual(seen[:2], ["warehouse", "log"])
 
 
 if __name__ == "__main__":
