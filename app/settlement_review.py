@@ -621,6 +621,9 @@ class SettlementReviewService:
         dto["reviewUnits"] = identity_evidences
         if is_warehouse_record and review_units:
             dto['catalogValuation'] = catalog_valuation
+        stored_valuation = st.get('remainingValuation') if isinstance(st, dict) else None
+        if isinstance(stored_valuation, dict):
+            dto['remainingValuation'] = copy.deepcopy(stored_valuation)
         dto["reviewedItems"] = reviewed_items
         dto["settlement"]["reviewed"] = bool(reviewed_items)
         if v2_reviewed and v2_reviewed[0].get("reviewedAt"):
