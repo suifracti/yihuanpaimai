@@ -53,6 +53,7 @@ function createTestContext() {
       querySelectorAll: () => [],
       createElement: (tag) => new MockElement(tag),
       activeElement: null,
+      documentElement: { dataset: {} },
     },
     window: {
       addEventListener() {},
@@ -105,7 +106,7 @@ console.log('=== Running Nickname State Machine & Race Tests ===');
   // Initial state: empty / not set
   vm.runInContext('renderMatch({ configuredPlayerName: "" })', sandbox);
   assert.equal(status.textContent, '未设置，使用画面姓名；清空后保存可恢复');
-  assert.equal(status.style.color, '#94a3b8');
+  assert.equal(status.style.color, 'var(--muted)');
   assert.equal(input.value, '');
   assert.equal(btn.disabled, false);
 
@@ -120,7 +121,7 @@ console.log('=== Running Nickname State Machine & Race Tests ===');
   assert.equal(vm.runInContext('dashboard.pendingPlayerName', sandbox), '秋星祭测试');
   assert.equal(btn.disabled, true);
   assert.equal(status.textContent, '正在保存…');
-  assert.equal(status.style.color, '#94a3b8');
+  assert.equal(status.style.color, 'var(--muted)');
   assert.equal(sentNative.length, 1);
   assert.equal(sentNative[0].action, 'manual_facts');
   assert.equal(sentNative[0].facts.configuredPlayerName, '秋星祭测试');
@@ -140,7 +141,7 @@ console.log('=== Running Nickname State Machine & Race Tests ===');
   assert.equal(vm.runInContext('dashboard.pendingPlayerName', sandbox), null, 'pendingPlayerName must be cleared');
   assert.equal(vm.runInContext('dashboard.isPlayerNameEditing', sandbox), false, 'isPlayerNameEditing must be reset');
   assert.equal(status.textContent, '已设置：秋星祭测试', 'Status must immediately show configured name');
-  assert.equal(status.style.color, '#34d399', 'Status color must be green');
+  assert.equal(status.style.color, 'var(--good)', 'Status color must be green');
   assert.equal(input.value, '秋星祭测试', 'Input value must remain clean configured name');
   assert.equal(btn.disabled, false, 'Save button must be re-enabled');
 
@@ -172,7 +173,7 @@ console.log('=== Running Nickname State Machine & Race Tests ===');
   vm.runInContext('renderMatch({ configuredPlayerName: "" })', sandbox);
   assert.equal(vm.runInContext('dashboard.isSavingPlayerName', sandbox), false);
   assert.equal(status.textContent, '未设置，使用画面姓名；清空后保存可恢复');
-  assert.equal(status.style.color, '#94a3b8');
+  assert.equal(status.style.color, 'var(--muted)');
   assert.equal(input.value, '');
   assert.equal(btn.disabled, false);
 
@@ -206,7 +207,7 @@ console.log('=== Running Nickname State Machine & Race Tests ===');
   assert.equal(vm.runInContext('dashboard.isSavingPlayerName', sandbox), false);
   assert.equal(vm.runInContext('dashboard.pendingPlayerName', sandbox), null);
   assert.equal(status.textContent, '保存失败：写入失败：文件只读');
-  assert.equal(status.style.color, '#f87171');
+  assert.equal(status.style.color, 'var(--brand-ink)');
   assert(!status.textContent.includes('已设置'), 'Failure must never display "已设置"');
   assert.equal(btn.disabled, false);
 
@@ -224,7 +225,7 @@ console.log('=== Running Nickname State Machine & Race Tests ===');
   // On cold start, the first payload loaded from persisted storage
   vm.runInContext('renderMatch({ configuredPlayerName: "秋星祭测试" })', sandbox);
   assert.equal(status.textContent, '已设置：秋星祭测试');
-  assert.equal(status.style.color, '#34d399');
+  assert.equal(status.style.color, 'var(--good)');
   assert.equal(input.value, '秋星祭测试');
 
   console.log('Test 4 (Restart recovery): PASS');

@@ -92,6 +92,7 @@ const tabs = ["catalog", "records"].map(name => {
 });
 const rarityButtons = [];
 const document = {
+  documentElement: { dataset: {} },
   getElementById: get,
   createElement(tagName) { const element = new FakeElement(); element.tagName = String(tagName).toUpperCase(); return element; },
   querySelector(selector) {
@@ -104,6 +105,8 @@ const document = {
   querySelectorAll(selector) {
     if (selector === "[data-view-page]") return pages;
     if (selector === "[data-view-target]") return navs;
+    const target = selector.match(/^\[data-view-target="([^"]+)"\]$/);
+    if (target) return navs.filter(nav => nav.dataset.viewTarget === target[1]);
     if (selector === "[data-guidebook-tab]") return tabs;
     if (selector === "[data-guidebook-rarity]") return rarityButtons;
     return [];
@@ -195,7 +198,7 @@ sandbox.handleNativeMessage({ data: {
 assert.match(get("guidebook-item-detail").innerHTML, /基础参考价/);
 assert.match(get("guidebook-item-detail").innerHTML, /查看来源原图/);
 assert.match(get("guidebook-catalog-grid").innerHTML, /class="guidebook-item-image" src="data:image\/jpeg;base64,reference-card"/);
-assert.match(get("guidebook-item-detail").innerHTML, /class="guidebook-item-image is-detail"/);
+assert.equal(get("object-photo").src, "data:image/jpeg;base64,reference-card");
 vm.runInContext(`dashboard.guidebookSources.roles.unshift({ name: "小吱", portraitUri: "data:image/jpeg;base64,xiaozhi", sourceImage: { uri: "file:///xiaozhi-skills.png" } });`, sandbox);
 sandbox.renderGuidebookCharacters();
 assert.match(get("guidebook-character-list").innerHTML, /黑羽/);
@@ -554,6 +557,6 @@ sandbox.showView("settings");
 assert.equal(get("settings-player-name").textContent, "PLAYER_LOCAL");
 assert.match(get("settings-observation-profile").textContent, /只读识别/);
 assert.equal(get("settings-pin-toggle").textContent, "关闭置顶");
-assert.equal(get("settings-overlay-toggle").textContent, "显示悬浮窗");
+assert.equal(get("settings-overlay-toggle").textContent, "显示悬浮票");
 
 console.log("guidebook categories and dimensions, source-only pricing, role provenance, isolated records and selectable frame provenance: passed");
