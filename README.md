@@ -85,6 +85,6 @@ GitHub `main` 是源码主线；**个人配置、正式历史、游戏原图、�
 
 本项目的**最新实际进度与长期决定**记录在有权限的 Obsidian Vault：`03-项目与工程/异环拍卖助手/README.md` → `Handoff.md` → `Decisions.md`；此公开 README 只说明可供外部理解的项目现状。已关闭的 [Issue #19](https://github.com/suifracti/yihuanpaimai/issues/19) 只用于历史追溯，不是当前待办清单。
 
-**2026-10-20 收尾：** A 的剩余估值在 `d1c2998082ac4c2ebdf0eb67c6486b0228b01da3`。B 的仓库收齐在 `build/goal-20261019-b/match-5`，代码是 `70c6654703e93c51ae6142091f978a0b14b2201d`，直推 CI [39309944087](https://github.com/suifracti/yihuanpaimai/actions/runs/39309944087) 成功。C 的离线确认在 `8380dc08d6924d7d925c365ce4f906f6b5d1e2b9`，直推 CI [39292177883](https://github.com/suifracti/yihuanpaimai/actions/runs/39292177883) 成功。实机出价闭环停在 Host 的 `GAME_DECODER_NOT_CONNECTED`：现有链路只记不发送，不能当成成交、返回或下一局。本段不写入自己的提交号；读回后的提交号在 Handoff 第 2 节。2026-10-16 的暂停已经结束。更早「停在大厅」的说明不是这次仓库结果。
+**2026-10-20 收尾：** A 的剩余估值在 `d1c2998082ac4c2ebdf0eb67c6486b0228b01da3`。B 的仓库收齐在 `build/goal-20261019-b/match-5`，代码是 `70c6654703e93c51ae6142091f978a0b14b2201d`，直推 CI [39309944087](https://github.com/suifracti/yihuanpaimai/actions/runs/39309944087) 成功。C 的离线确认在 `8380dc08d6924d7d925c365ce4f906f6b5d1e2b9`，直推 CI [39292177883](https://github.com/suifracti/yihuanpaimai/actions/runs/39292177883) 成功。实机出价闭环停在 Host 的 `GAME_DECODER_NOT_CONNECTED`：现有链路只记不发送，不能当成成交、返回或下一局。本段不写入自己的提交号；读回后的提交号在 Handoff 第 2 节。`028274582b17d08b92bca257b8052432373ec11c` 的主题沿用了仓库修复标题，那一笔 diff 只有当时的 README 当前状态。2026-10-16 的暂停已经结束。更早「停在大厅」的说明不是这次仓库结果。
 
 *本项目非《异环》官方产品。游戏名称及参考图像相关权利归原权利人所有；演示素材不代表官方授权或实时游戏事实。*
