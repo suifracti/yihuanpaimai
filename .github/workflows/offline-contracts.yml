@@ -114,7 +114,7 @@ jobs:
             $failureCount = @($result.failures).Count
             $errorCount = @($result.errors).Count
             $skipCount = @($result.skipped).Count
-            if ($testExitCode -ne 0 -or $tests -ne 15 -or $failureCount -ne 0 -or $errorCount -ne 0 -or $skipCount -ne 0) {
+            if ($testExitCode -ne 0 -or $tests -lt 18 -or $failureCount -ne 0 -or $errorCount -ne 0 -or $skipCount -ne 0) {
               $status = 'FAIL'
             } else {
               $status = 'PASS'
@@ -489,7 +489,7 @@ jobs:
           "Observe-stage / scene-loading regressions: $observeStatus" | Tee-Object -FilePath $env:GITHUB_STEP_SUMMARY -Append
           if ($env:DELIVERY_OUTCOME -eq 'skipped' -or $env:SETUP_OUTCOME -ne 'success' -or $env:DEPS_OUTCOME -ne 'success') {
             $deliveryStatus = 'NOT_RUN'
-          } elseif ($env:DELIVERY_OUTCOME -eq 'success' -and $env:DELIVERY_STATUS -eq 'PASS' -and $env:DELIVERY_TESTS -eq '15' -and $env:DELIVERY_FAILURES -eq '0' -and $env:DELIVERY_ERRORS -eq '0' -and $env:DELIVERY_SKIPPED -eq '0') {
+          } elseif ($env:DELIVERY_OUTCOME -eq 'success' -and $env:DELIVERY_STATUS -eq 'PASS' -and [int]$env:DELIVERY_TESTS -ge 18 -and $env:DELIVERY_FAILURES -eq '0' -and $env:DELIVERY_ERRORS -eq '0' -and $env:DELIVERY_SKIPPED -eq '0') {
             $deliveryStatus = 'PASS'
           } else {
             $deliveryStatus = 'FAIL'
