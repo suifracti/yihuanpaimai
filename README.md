@@ -46,8 +46,8 @@
 ## 当前状态与限制
 
 - **已具备的基础**：指定窗口观察、图像/OCR 处理、结算原图保存、仓库滚动与部分覆盖分析、目录参考和具体藏品审阅、历史读写/回看、估值求解与界面/HUD。real-once-10 已写入同局剩余估值：43 件已确认，目录小计 935775，剩余范围 0–0。梦中萤记为缺素材，梦中茧记为 METADATA。
-- **已有的实测边界**：曾实机收取多张独立原图并观察到底部，但原实机连续覆盖结果仍标为 `PARTIAL`；后续离线重建的 `COMPLETE` 不替代真实整场验收。2026-10-19 新的一局目录是 `build/goal-20261019-b/match-1`，助手已看到拍卖大厅，结果仍是 `PARTIAL`。点击「开始匹配」的注入操作没有改变画面，UI Automation 也看不到这个按钮。
-- **尚未完成的目标**：同一版本下从大厅进入对局后的完整连续实机验收，以及实机上的出价、结算收仓、返回和自动下一局。离线已经接上「确认 → 发送 → 新画面回执」，结果未知时不重发；每局资金上限默认取 Solver 建议，且不超过当前资金。实机闭环还没有跑成。离线实现提交是 `8380dc08d6924d7d925c365ce4f906f6b5d1e2b9`，状态说明提交是 `b3336edfe1c86d517f2431ec2d3925b274e6bbe6`。直推 CI [39292177883](https://github.com/suifracti/yihuanpaimai/actions/runs/39292177883) 和 [39293391815](https://github.com/suifracti/yihuanpaimai/actions/runs/39293391815) 的两个离线 job 都成功。
+- **已有的实测边界**：2026-10-20 实机目录 `build/goal-20261019-b/match-5` 的仓库收齐是 `COMPLETE`（`finalizationReason` 为 `COMPLETE`，保存 36 页，滚动 6 次，`coveragePending` 为空）。观察因 `COLLECTION_COMPLETE` 停止，Host 进程退出已确认。match-1 到 match-4 仍是 `PARTIAL`，目录和原图保留。match-5 的结算记录没有 `remainingValuation`。回看读的是 real-once-10 已经写入的同局估值，没有重跑 896 秒识别。
+- **尚未完成的目标**：实机「出价 → 结算收仓 → 返回 → 自动进入下一局」没有跑成。Live Host 收到 `domain.action.dispatch` 后不发送输入。没有已连接的游戏解码器时，出价回执是 `NOT_SENT` / `GAME_DECODER_NOT_CONNECTED`。返回和下一局因为种类不是 Bid，被 `DISPATCH_SCOPE_INVALID` 拒绝。生产代码里没有可用的 `IGameDomainFrameDecoder`。本轮不新做出价模块，也不另找点击坐标。离线「确认 → 发送 → 新画面回执」和「结果未知不重发」在 `8380dc08d6924d7d925c365ce4f906f6b5d1e2b9`。仓库空尾一格修复在 `70c6654703e93c51ae6142091f978a0b14b2201d`，直推 CI [39309944087](https://github.com/suifracti/yihuanpaimai/actions/runs/39309944087) 的两个离线 job 都成功。
 - **关于费用与风险**：估值、目录价、报价建议、游戏实际付款和收益是不同数据；证据不足时应显示未知，不能推断保本或获利。
 
 最终产品方向仍是 **进入拍卖 → 识别与估值 → 有界出价及游戏确认 → 结算收仓 → 归档 → 返回 / 下一局**。目前不能把这些目标当成已交付能力。
@@ -85,6 +85,6 @@ GitHub `main` 是源码主线；**个人配置、正式历史、游戏原图、�
 
 本项目的**最新实际进度与长期决定**记录在有权限的 Obsidian Vault：`03-项目与工程/异环拍卖助手/README.md` → `Handoff.md` → `Decisions.md`；此公开 README 只说明可供外部理解的项目现状。已关闭的 [Issue #19](https://github.com/suifracti/yihuanpaimai/issues/19) 只用于历史追溯，不是当前待办清单。
 
-**2026-10-19 收尾：** 离线实现提交是 `8380dc08d6924d7d925c365ce4f906f6b5d1e2b9`。状态说明先记在 `b3336edfe1c86d517f2431ec2d3925b274e6bbe6`。直推 CI [39292177883](https://github.com/suifracti/yihuanpaimai/actions/runs/39292177883) 和 [39293391815](https://github.com/suifracti/yihuanpaimai/actions/runs/39293391815) 的两个离线 job 都成功。剩余估值和出价确认的离线链路已落地。实机整局停在拍卖大厅，游戏不接受注入的入场操作，所以出价到下一局的实机闭环没有开始。2026-10-16 的暂停已经结束；暂停记录不等于这次验收通过。最新 HEAD 以 Handoff 第 2 节为准。
+**2026-10-20 收尾：** A 的剩余估值在 `d1c2998082ac4c2ebdf0eb67c6486b0228b01da3`。B 的仓库收齐在 `build/goal-20261019-b/match-5`，代码是 `70c6654703e93c51ae6142091f978a0b14b2201d`，直推 CI [39309944087](https://github.com/suifracti/yihuanpaimai/actions/runs/39309944087) 成功。C 的离线确认在 `8380dc08d6924d7d925c365ce4f906f6b5d1e2b9`，直推 CI [39292177883](https://github.com/suifracti/yihuanpaimai/actions/runs/39292177883) 成功。实机出价闭环停在 Host 的 `GAME_DECODER_NOT_CONNECTED`：现有链路只记不发送，不能当成成交、返回或下一局。本段不写入自己的提交号；读回后的提交号在 Handoff 第 2 节。2026-10-16 的暂停已经结束。更早「停在大厅」的说明不是这次仓库结果。
 
 *本项目非《异环》官方产品。游戏名称及参考图像相关权利归原权利人所有；演示素材不代表官方授权或实时游戏事实。*
