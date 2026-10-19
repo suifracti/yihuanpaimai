@@ -98,7 +98,9 @@ class OneShotTests(unittest.TestCase):
         with patch('websockets.connect', return_value=socket):
             result = asyncio.run(runner.monitor({'port': 1}, self.root,
                 lambda kind, **data: rows.append({'kind': kind, **data})))
-        self.assertFalse(result)
+        reason, exit_confirmed = result
+        self.assertEqual(reason, 'COLLECTION_PARTIAL:TARGET_UNKNOWN')
+        self.assertTrue(exit_confirmed)
         self.assertEqual(sum(r['kind'] == 'capture-ended' for r in rows), 1)
         self.assertTrue(rows[-1]['processExitConfirmed'])
         self.assertEqual(socket.sent, [{'type': 'stop_live_vision'}])
@@ -167,8 +169,10 @@ class OneShotTests(unittest.TestCase):
                 socket = Socket([first, event, {'type': 'native_stop_receipt', 'processExitConfirmed': True}])
                 rows = []
                 with patch('websockets.connect', return_value=socket):
-                    self.assertFalse(asyncio.run(runner.monitor({'port': 1}, self.root,
-                        lambda kind, **data: rows.append({'kind': kind, **data}))))
+                    stopped, exit_confirmed = asyncio.run(runner.monitor({'port': 1}, self.root,
+                        lambda kind, **data: rows.append({'kind': kind, **data})))
+                self.assertEqual(stopped, reason)
+                self.assertTrue(exit_confirmed)
                 self.assertEqual(next(r['reason'] for r in rows if r['kind'] == 'observation-ended'), reason)
                 self.assertEqual(socket.sent, [{'type': 'stop_live_vision'}])
 
@@ -286,7 +290,7 @@ class OneShotTests(unittest.TestCase):
         rows = []
         with patch.object(runner, 'ROOT', self.root), patch.object(runner, 'Recorder',
                 return_value=lambda kind, **data: rows.append({'kind': kind, **data})), \
-                patch.object(runner, 'monitor', return_value=False), \
+                patch.object(runner, 'monitor', return_value=('USER_STOP', False)), \
                 patch.object(runner, 'close_owned_assistant', new=unconfirmed), \
                 patch.object(runner, 'port_released', return_value=False):
             result = asyncio.run(runner.start(SimpleNamespace(start=launch), {'port': 1}, manifest,
@@ -311,15 +315,18 @@ class OneShotTests(unittest.TestCase):
         rows = []
         with patch.object(runner, 'ROOT', self.root), patch.object(runner, 'Recorder',
                 return_value=lambda kind, **data: rows.append({'kind': kind, **data})), \
-                patch.object(runner, 'monitor', return_value=True), \
+                patch.object(runner, 'monitor', return_value=('COLLECTION_COMPLETE', True)), \
                 patch.object(runner, 'close_owned_assistant', new=exited), \
                 patch.object(runner, 'port_released', return_value=False):
             result = asyncio.run(runner.start(SimpleNamespace(start=launch), {'port': 1}, manifest,
                                                receipt, self.root / 'build/run'))
-        self.assertEqual(result, 1)
-        self.assertEqual(config.read_bytes(), original)
-        self.assertTrue(rows[-1]['assistantExitConfirmed'])
-        self.assertTrue(rows[-1]['configRestored'])
+        # 892525a: a confirmed complete stop leaves main open for review.
+        # An occupied port is recorded and does not close or restore it.
+        self.assertEqual(result, 0)
+        self.assertNotEqual(config.read_bytes(), original)
+        self.assertTrue(rows[-1]['assistantLeftOpen'])
+        self.assertFalse(rows[-1]['assistantExitConfirmed'])
+        self.assertFalse(rows[-1]['configRestored'])
         self.assertFalse(rows[-1]['portReleased'])
 
     def test_start_cleanup_and_return_status_are_not_false_pass(self):
@@ -333,7 +340,7 @@ class OneShotTests(unittest.TestCase):
         rows = []
         with patch.object(runner, 'ROOT', self.root), patch.object(runner, 'Recorder',
                 return_value=lambda kind, **data: rows.append({'kind': kind, **data})), \
-                patch.object(runner, 'monitor', return_value=False), patch.object(runner, 'port_released', return_value=True):
+                patch.object(runner, 'monitor', return_value=('USER_STOP', False)), patch.object(runner, 'port_released', return_value=True):
             result = asyncio.run(runner.start(SimpleNamespace(start=launch), {'port': 1}, manifest,
                                                receipt, self.root / 'build/run'))
         self.assertEqual(result, 1)
@@ -360,17 +367,20 @@ class OneShotTests(unittest.TestCase):
         shutdown_socket = Shutdown()
         receipt = {'candidateManifest': str(candidate), 'existingAssistantBusOccupied': False, 'candidateId': 'test'}
         def released(port):
-            self.assertEqual(child.poll(), 0)
-            self.assertEqual(config.read_bytes(), original)
-            return True
+            self.assertIsNone(child.poll())
+            self.assertNotEqual(config.read_bytes(), original)
+            return False
         with patch.object(runner, 'ROOT', self.root), patch('websockets.connect',
                 side_effect=[stop_socket, shutdown_socket]), patch.object(runner, 'port_released', side_effect=released):
             self.assertEqual(asyncio.run(runner.start(SimpleNamespace(start=launch), {'port': 1}, manifest,
                 receipt, self.root / 'build/run')), 1)
         self.assertEqual(stop_socket.sent, [{'type': 'stop_live_vision'}])
-        self.assertEqual(len(shutdown_socket.sent), 1)
+        self.assertEqual(shutdown_socket.sent, [])
         result = json.loads((self.root / 'build/run/acceptance-events.jsonl').read_text().splitlines()[-1])
-        self.assertTrue(result['assistantExitConfirmed'] and result['configRestored'] and result['portReleased'])
+        self.assertTrue(result['assistantLeftOpen'])
+        self.assertFalse(result['assistantExitConfirmed'])
+        self.assertFalse(result['configRestored'])
+        self.assertFalse(result['portReleased'])
 
     def test_cancelled_start_restores_config_without_game_retry(self):
         candidate, config, original, manifest = self.make_config()
