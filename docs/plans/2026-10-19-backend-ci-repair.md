@@ -20,6 +20,8 @@
 
 ### T1 `.NET` — SOURCE 额度断言过时（已验证修法）
 
+状态：已由 #53 完成。
+
 - 失败：`tests/native_scroll_diagnostics/ContentRecheckChecks.cs:176` → `SOURCE budget is not reset`；同文件 `:159` 有同类断言。
 - 原因：`WarehouseEvidenceLease.cs:67` 已改为 `MaxSources = int.MaxValue; // no collection quota`，`remainingSourcePages` 恒为哨兵值。测试仍按 16 页倒数。
 - 修法：两处断言改为 `== WarehouseEvidenceLease.MaxSources`，说明文字改成“SOURCE 额度保持不限”。同一断言中“不重置/不续期 deadline”的其余检查保持不变。
@@ -28,12 +30,16 @@
 
 ### T2 Python — 自动收仓停止路径的测试替身缺方法
 
+状态：已由 #53 完成。
+
 - 失败：`test_native_delivery_contract …test_business_close_after_admission_late_frame_and_durable_attempt_do_not_duplicate` → `'Source' object has no attribute 'end_collection'`。
 - 原因：`bf4e8df` 让 `NativeWarehouseAutoCapture.stop()`（`app/native_warehouse_auto_capture.py:817-825`）在未激活时先 `close_source('USER_STOP')` 再 `intake.end_collection('USER_STOP')`。测试替身 `tests/test_native_warehouse_auto_capture.py` 的 `class Source`（`self.intake = self`）没有 `end_collection`。
 - 修法：给替身补 `end_collection(reason)`，**模拟真实语义**（参考 `app/native_warehouse_intake.py:437`）：没有页时走 `cancel_manual_capture`，有页时走 `finish_manual_capture('INCOMPLETE')`。不要只返回 `{'ok': True}`。
 - 需要决定：补完后 `test_native_route_never_calls_legacy_and_changed_scope_rejects_confirmation` 的期望会从 `[('CANCEL',)]` 变成 `[('CLOSE','USER_STOP'), ('CANCEL',)]`。如果 `bf4e8df` 停止时先关 source 是有意行为，就更新期望并在提交里引用 `bf4e8df`；如果不是有意的，停下来交用户决定。
 
 ### T3 Python — 跳过动画回执测试的驱动顺序过时
+
+状态：已由 #53 完成。
 
 - 失败：`test_native_half_viewport_flow …test_skip_animation_receipt_cannot_cross_match_or_claim_completion` → `command` 为 `None`（第 268 行）。
 - 原因：现在流程是 `WAIT_STABLE → tick → 再 deliver` 后才发 `SKIP_ANIMATION`。另外 fd26eb1 规定“可见内容已稳定时即使粉色按钮在也继续滚动”。所以只投 `viewport(0)` 时，不会产生跳过命令，而是会走 `SCROLL`。
@@ -42,11 +48,15 @@
 
 ### T4 Python — 一次性启动器 `monitor()` 返回值改成二元组
 
+状态：已由 #53 完成。
+
 - 失败（CI 的 M1 步骤）：`test_native_one_shot_runner` 的三个用例 → `cannot unpack non-iterable bool object`。
 - 原因：`892525a` 把 `tools/start_native_delivery_candidate.py` 中 `monitor()` 改为返回 `(reason, exit_confirmed)`，`start()` 在第 384 行解包。测试仍 `patch.object(runner, 'monitor', return_value=False/True)`；第 170 行还在 `assertFalse(monitor(...))`，而元组永远为真。
 - 修法：替身返回二元组，例如成功用 `('COLLECTION_COMPLETE', True)`，失败或未确认用 `('USER_STOP', False)` 等，按每个用例原本的语义选择。第 170 行改为分别断言 `reason` 与 `exit_confirmed`。
 
 ### T5 workflow — DELIVERY 用例数写死
+
+状态：已由 #53 完成。
 
 - `offline-contracts.yml` 的 “Full Native DELIVERY contract” 要求 `DELIVERY_TESTS == 15`，现在实际有 18 个。
 - 修法：先确认新增的 3 个用例是有意加入的，再把期望改成 18。更好的做法是改成 `>= 18` 并保留 `failures/errors/skipped == 0`，避免以后每加一个用例就要改 workflow；二选一，在 PR 里说明。
