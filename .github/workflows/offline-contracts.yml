@@ -5,12 +5,15 @@ on:
     branches:
       - main
       - codex/issue-11-current-source
+  push:
+    branches:
+      - main
 
 permissions:
   contents: read
 
 concurrency:
-  group: offline-contracts-${{ github.event.pull_request.number }}
+  group: offline-contracts-${{ github.event_name }}-${{ github.event.pull_request.number || github.sha }}
   cancel-in-progress: true
 
 jobs:
