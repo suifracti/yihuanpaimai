@@ -27,6 +27,8 @@ _MAIN_FUNCTIONS = {
     "_native_target_instance", "_native_observation_target_instance",
     "native_observation_window_mode", "_native_confirm_window_mode",
     "_native_source_frame_rejection", "_native_observation_event",
+    "_native_domain_action_dispatch_rejected",
+    "_advance_authorized_live_domain_loop",
     "_native_domain_action_session_observe_locked",
     "_native_background_source_current", "handle_observation_window_mode",
     "_native_accept_observation_locked", "_native_solver_lease_matches_locked",
