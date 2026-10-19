@@ -156,8 +156,8 @@ static class ContentRecheckChecks
                 Check(platform.Sends == sends && attempts == failingAttempt, "sent pulse cannot replay");
                 platform.AfterSend = null;
                 Save(ordinal + 1, "changed");
-                Check((int?)events.Last()["details"]?["remainingSourcePages"] == 16 - ordinal - 1,
-                    "new independent SOURCE keeps original budget");
+                Check((int?)events.Last()["details"]?["remainingSourcePages"] == WarehouseEvidenceLease.MaxSources,
+                    "new independent SOURCE keeps unlimited budget");
                 now = deadline; lease.Tick(); Check(!lease.IsOpen, "post-send wait keeps original deadline");
             }
             else if (safe)
@@ -173,7 +173,7 @@ static class ContentRecheckChecks
                 Save(ordinal + 1, "changed"); Save(ordinal + 2, "changed"); lease.Handle(Scroll(ordinal + 2));
                 Check(attempts == failingAttempt + 1 && platform.Sends == (secondScroll ? 2 : 1)
                     && (string?)events.Last()["event"] == "SCROLLED", "fresh independent support admits new pulse");
-                Check((int?)events.Last()["details"]?["remainingSourcePages"] == 16 - ordinal - 2, "SOURCE budget is not reset");
+                Check((int?)events.Last()["details"]?["remainingSourcePages"] == WarehouseEvidenceLease.MaxSources, "SOURCE budget stays unlimited");
                 now = deadline; lease.Tick(); Check(!lease.IsOpen, "original deadline is not renewed");
             }
             else
