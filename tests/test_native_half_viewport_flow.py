@@ -367,6 +367,78 @@ class HalfViewportFlowTests(unittest.TestCase):
             finally:
                 f.close()
 
+    def test_capture_first_step_stays_inside_retained_content_bands(self):
+        """A half-viewport wheel must not be sent when the anchor cannot retain it.
+
+        The saved 2026-10-20 settlement anchor still shows the last item row.
+        Its retention limit is below the 280px half-viewport prediction, and a
+        271px shift of that same anchor does not verify. The wheel that
+        production sends has to stay inside the limit the anchor actually has.
+        """
+        from warehouse_scrollbar_observation import WarehouseScrollbarObserver
+        from warehouse_segment_overlap import content_retention_limit
+
+        def assert_capped(auto, anchor, observation, unit):
+            limit = content_retention_limit(anchor)
+            self.assertIsInstance(limit, (int, float))
+            self.assertGreater(limit, 0)
+            visible = observation['trackBox'][3] - observation['trackBox'][1]
+            half = 0.5 * visible
+            self.assertLess(limit, half)
+            auto._anchor = anchor
+            auto._observation = observation
+            auto._pixels_per_notch = unit
+            uncapped = -120 * max(1, min(12, int(half / unit)))
+            delta = auto._scroll_delta()
+            predicted = abs(delta) / 120 * unit
+            self.assertLess(delta, 0)
+            self.assertEqual(delta % 120, 0)
+            self.assertGreater(abs(uncapped), abs(delta))
+            if limit >= unit:
+                self.assertLessEqual(predicted, limit)
+            else:
+                self.assertEqual(delta, -120)
+            again = auto._scroll_delta()
+            self.assertEqual(again, delta)
+
+        f = LiveRun(output=ROOT / 'build/t1-20261012/capture-first-retention', capture_first=True)
+        self.addCleanup(f.close)
+        anchor = np.zeros((636, 600, 3), np.uint8)
+        anchor[:] = (18, 22, 20)
+        rng = np.random.default_rng(4)
+        for index, y0 in enumerate((6, 44, 82, 120, 158)):
+            patch = np.zeros((32, 90, 3), np.uint8)
+            patch[:, :, index % 3] = 220
+            patch += rng.integers(0, 35, patch.shape, dtype=np.uint8)
+            anchor[y0:y0 + 32, 70:160] = np.clip(patch, 0, 255)
+        observation = {
+            'trackBox': [580, 10, 596, 570],
+            'thumbBox': [580, 40, 596, 160],
+            'scrollState': 'MIDDLE',
+        }
+        assert_capped(f.auto, anchor, observation, 30)
+        saved = (ROOT / 'build/goal-20261019-b/match-1/runtime-data/native-live-trial'
+                 / 'evidence/settlement_v2/blobs/9d'
+                 / '9d84fb8b4955bd42abb52e9c0d11551a59f61d0d8e1a50a3e996d57da5ad582c.png')
+        if not saved.is_file():
+            return
+        frame = cv2.imdecode(np.frombuffer(saved.read_bytes(), np.uint8), cv2.IMREAD_COLOR)
+        x, y, r, b = warehouse_search_roi(1920, 1080)
+        crop = frame[y:b, x:r]
+        observed = WarehouseScrollbarObserver().observe(frame, source_id='goal-20261019-b-page4')
+        self.assertEqual(observed['scrollState'], 'MIDDLE')
+        assert_capped(f.auto, crop, observed, 271 / 9)
+        shifted = crop.copy()
+        content_h, content_w = int(crop.shape[0] * 0.88), int(crop.shape[1] * 0.88)
+        band = crop[:content_h, :content_w]
+        moved = np.zeros_like(band)
+        shift = 271
+        moved[:-shift] = band[shift:]
+        moved[-shift:] = band[-1]
+        shifted[:content_h, :content_w] = moved
+        unverified = align_warehouse_segments(crop, shifted, required_direction='DOWN', prev_id='p4', next_id='jump')
+        self.assertNotEqual(unverified['status'], 'VERIFIED', unverified)
+
     @unittest.skipUnless(os.environ.get('YH_T1_CAPTURE_ROOT'), 'private T1 SOURCE opt-in')
     def test_capture_first_real_sparse_page_keeps_useful_step(self):
         root = Path(os.environ['YH_T1_CAPTURE_ROOT'])

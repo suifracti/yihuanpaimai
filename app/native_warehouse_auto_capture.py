@@ -602,10 +602,19 @@ class NativeWarehouseAutoCapture:
         if self._collect_first():
             # Content density cannot make a reversible wheel operation stall.
             # Keep roughly half a viewport for later overlap review; only real
-            # pixel matches calibrate this prediction. A failed middle pulse
-            # gets at most two retries, each based on newly saved originals.
+            # pixel matches calibrate this prediction. A positive retention
+            # limit is the farthest shift that still leaves two localizable
+            # bands in the current anchor. Ignoring it repeats a half-viewport
+            # wheel after the last row is already shorter than that prediction,
+            # and the next frame then has no overlap. Zero and None grant no
+            # tighter cap: an empty page has no such bands. A failed middle
+            # pulse gets at most two retries, each based on newly saved originals.
+            limit = content_retention_limit(self._anchor)
+            if isinstance(limit, (int, float)) and not isinstance(limit, bool) and limit > 0:
+                target = min(target, float(limit))
             delta = -120 * max(1, min(12, int(target / unit)))
             self._diagnose('capture-first-step', wheelDelta=delta, predictedStepPx=target,
+                contentRetentionLimitPx=limit,
                 coverageQualified=False, consecutiveNoProgress=self._no_progress)
             return delta
         limit = content_retention_limit(self._anchor)
