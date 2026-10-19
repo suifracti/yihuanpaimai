@@ -14,7 +14,8 @@ import cv2
 import numpy as np
 
 from warehouse_scrollbar_observation import WarehouseScrollbarObserver, warehouse_search_roi
-from warehouse_segment_overlap import align_warehouse_segments, DIR_DOWN, TerminalContinuity, content_retention_limit
+from warehouse_segment_overlap import (
+    align_warehouse_segments, DIR_DOWN, REASON_NO_MOVEMENT, TerminalContinuity, content_retention_limit)
 from warehouse_support_frame import stationary_support_proof
 from scene_anchors import settlement_title_visible, settlement_controls_visible, settlement_reveal_progress
 from native_warehouse_content_stability import content_stability
@@ -405,7 +406,12 @@ class NativeWarehouseAutoCapture:
                     if not self._collect_first():
                         self._stop('OVERLAP_OR_SCROLL_PROGRESS_UNVERIFIED')
                         return
-                    self._coverage_pending.append({'pageOrdinal': self._seen_pages, 'alignment': motion})
+                    # Identical content is not a skipped viewport. A one-pixel
+                    # thumb jitter at the bottom still reports DOWN, and
+                    # recording that stationary pair as a hole keeps an
+                    # otherwise continuous capture incomplete.
+                    if motion.get('reason') != REASON_NO_MOVEMENT:
+                        self._coverage_pending.append({'pageOrdinal': self._seen_pages, 'alignment': motion})
                 else:
                     self._pixels_per_notch = abs(offset) / (abs(self._last_wheel_delta) / 120)
                 # Only proven pixel progress permits a later sparse probe.
@@ -606,10 +612,19 @@ class NativeWarehouseAutoCapture:
             # limit is the farthest shift that still leaves two localizable
             # bands in the current anchor. Ignoring it repeats a half-viewport
             # wheel after the last row is already shorter than that prediction,
-            # and the next frame then has no overlap. Zero and None grant no
-            # tighter cap: an empty page has no such bands. A failed middle
-            # pulse gets at most two retries, each based on newly saved originals.
+            # and the next frame then has no overlap. Zero is not that cap: a
+            # sparse page whose second band starts at y=0 must keep the large
+            # step. None means there is no band at all. A half-viewport wheel
+            # then moves the thumb like a full content step while the empty
+            # grid moves much less, and that pair cannot be certified from the
+            # smaller calibration. One notch stays inside the proof and repeats.
             limit = content_retention_limit(self._anchor)
+            if limit is None:
+                delta = -120
+                self._diagnose('capture-first-step', wheelDelta=delta, predictedStepPx=unit,
+                    contentRetentionLimitPx=limit,
+                    coverageQualified=False, consecutiveNoProgress=self._no_progress)
+                return delta
             if isinstance(limit, (int, float)) and not isinstance(limit, bool) and limit > 0:
                 target = min(target, float(limit))
             delta = -120 * max(1, min(12, int(target / unit)))

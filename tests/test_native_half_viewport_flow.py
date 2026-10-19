@@ -439,6 +439,100 @@ class HalfViewportFlowTests(unittest.TestCase):
         unverified = align_warehouse_segments(crop, shifted, required_direction='DOWN', prev_id='p4', next_id='jump')
         self.assertNotEqual(unverified['status'], 'VERIFIED', unverified)
 
+    def test_capture_first_empty_page_repeats_one_notch(self):
+        """No localizable band cannot be given a half-viewport wheel.
+
+        The 2026-10-20 empty tail sent -1080. The thumb moved as far as the
+        270px content calibration while the grid moved about 45px, so the
+        pair is not a continuity proof. One notch stays inside the smaller
+        calibration and is allowed to repeat. A limit of zero is a different
+        page and keeps the large step.
+        """
+        from native_capture_delivery import DELIVERY
+        from tests.test_native_sparse_overlap import sparse_world
+        from warehouse_segment_overlap import content_retention_limit
+        anchor = sparse_world(400)
+        self.assertIsNone(content_retention_limit(anchor))
+        f = LiveRun(output=ROOT / 'build/t1-20261012/capture-first-empty-notch', capture_first=True)
+        self.addCleanup(f.close)
+        f.auto._retry_scope = {'capturePolicy': DELIVERY}
+        f.auto._anchor = anchor
+        f.auto._observation = {
+            'trackBox': [569, 0, 575, 560],
+            'thumbBox': [569, 127, 575, 346],
+            'scrollState': 'MIDDLE',
+        }
+        f.auto._pixels_per_notch = 30
+        self.assertTrue(f.auto._collect_first())
+        self.assertEqual(f.auto._scroll_delta(), -120)
+        self.assertEqual(f.auto._scroll_delta(), -120)
+
+    def test_empty_tail_large_thumb_step_is_not_continuity(self):
+        """Match-3 crops 19→20 are a real -1080 whose pixels moved about 45px.
+
+        Certifying that pair as the calibrated -271px content step would
+        record a skipped viewport that the originals do not contain.
+        """
+        evidence = (ROOT / 'build/goal-20261019-b/match-3/runtime-data/native-live-trial'
+                    / 'evidence/settlement_v2/index/replayfile_d574151acb169b0a1b9d.json')
+        if not evidence.is_file():
+            return
+        from warehouse_scrollbar_observation import WarehouseScrollbarObserver
+        from warehouse_segment_overlap import TerminalContinuity, content_retention_limit
+        payload = json.loads(evidence.read_text(encoding='utf-8'))
+        trial = evidence.parents[3]
+        x, y, r, b = warehouse_search_roi(1920, 1080)
+        frames, crops = [], []
+        for item in payload['items']:
+            frame = cv2.imdecode(np.frombuffer((trial / item['relativePath']).read_bytes(), np.uint8),
+                                 cv2.IMREAD_COLOR)
+            frames.append(frame)
+            crops.append(frame[y:b, x:r])
+        self.assertIsNone(content_retention_limit(crops[19]))
+        observed = WarehouseScrollbarObserver().observe(frames[19], source_id='match3-19')
+        self.assertEqual(observed['scrollState'], 'MIDDLE')
+        context = TerminalContinuity()
+        for left, right, offset in ((15, 16, -270), (17, 18, -30)):
+            calibrated = align_warehouse_segments(crops[left], crops[right], prev_id=str(left),
+                next_id=str(right), required_direction='DOWN', terminal_continuity=context)
+            self.assertEqual(calibrated['status'], 'VERIFIED', calibrated)
+            self.assertEqual(calibrated['verticalOffsetPx'], offset)
+        empty = align_warehouse_segments(crops[19], crops[20], prev_id='19', next_id='20',
+            required_direction='DOWN', terminal_continuity=context)
+        self.assertNotEqual(empty['status'], 'VERIFIED', empty)
+        self.assertNotEqual(empty.get('verticalOffsetPx'), -271)
+        skipped = align_warehouse_segments(crops[19], crops[22], prev_id='19', next_id='22',
+            required_direction='DOWN', terminal_continuity=context)
+        self.assertNotEqual(skipped['status'], 'VERIFIED', skipped)
+
+    def test_stationary_bottom_jitter_is_not_a_coverage_hole(self):
+        """A one-pixel thumb move with the same pixels is not a skipped view."""
+        f = LiveRun(output=ROOT / 'build/t1-20261012/capture-first-stationary', capture_first=True)
+        self.addCleanup(f.close)
+
+        def pair(frame):
+            f.deliver(frame)
+            f.tick()
+            f.deliver(frame.copy())
+
+        pair(viewport(0))
+        f.scroll_ack()
+        f.tick()
+        pair(viewport(180))
+        self.assertEqual(f.auto._phase, 'WAIT_SCROLL', f.logs[-2:])
+        self.assertFalse(f.auto._coverage_pending)
+        base = viewport(180)
+        jitter = base.copy()
+        jitter[214:776, 1882:1894] = 45
+        thumb = 214 + round(362 * 180 / 360) + 1
+        jitter[thumb:thumb + 200, 1882:1894] = 210
+        f.scroll_ack()
+        f.tick()
+        f.deliver(jitter)
+        overlap = next(p for p in reversed(f.logs) if p['kind'] == 'image-overlap')['alignment']
+        self.assertEqual(overlap['reason'], 'NO_MOVEMENT', overlap)
+        self.assertFalse(f.auto._coverage_pending, f.auto._coverage_pending)
+
     @unittest.skipUnless(os.environ.get('YH_T1_CAPTURE_ROOT'), 'private T1 SOURCE opt-in')
     def test_capture_first_real_sparse_page_keeps_useful_step(self):
         root = Path(os.environ['YH_T1_CAPTURE_ROOT'])

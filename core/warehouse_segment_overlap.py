@@ -398,8 +398,9 @@ class TerminalContinuity:
     """Same-chain pixel/scrollbar calibration; never learns from grid aliases.
 
     Two content matches starting at TOP bound the scale. Integer pixel and
-    thumb localization each have one-pixel uncertainty. A sparse terminal
-    step may interpolate within both observed steps, but cannot extrapolate,
+    thumb localization each have one-pixel uncertainty. A later sparse step,
+    including one that is still in the middle, may interpolate within the
+    smaller observed thumb step. It cannot reuse the larger content step,
     reconnect a skipped viewport, or establish the physical bottom.
     """
     def __init__(self):
@@ -446,7 +447,8 @@ class TerminalContinuity:
         if len(self.samples) < 2 or a.shape != self.shape or b.shape != a.shape:
             return {}
         before, after = self._observations(a, b)
-        if (after.get('scrollState') != 'BOTTOM' or before.get('scrollState') not in {'MIDDLE', 'BOTTOM'}
+        if (after.get('scrollState') not in {'MIDDLE', 'BOTTOM'}
+                or before.get('scrollState') not in {'MIDDLE', 'BOTTOM'}
                 or not self._same_geometry(before, after)
                 or not self._same_geometry(self.end, before)
                 or before['thumbBox'] != self.end['thumbBox']):
