@@ -445,8 +445,7 @@ class HalfViewportFlowTests(unittest.TestCase):
         The 2026-10-20 empty tail sent -1080. The thumb moved as far as the
         270px content calibration while the grid moved about 45px, so the
         pair is not a continuity proof. One notch stays inside the smaller
-        calibration and is allowed to repeat. A limit of zero is a different
-        page and keeps the large step.
+        calibration and is allowed to repeat.
         """
         from native_capture_delivery import DELIVERY
         from tests.test_native_sparse_overlap import sparse_world
@@ -464,6 +463,65 @@ class HalfViewportFlowTests(unittest.TestCase):
         }
         f.auto._pixels_per_notch = 30
         self.assertTrue(f.auto._collect_first())
+        self.assertEqual(f.auto._scroll_delta(), -120)
+        self.assertEqual(f.auto._scroll_delta(), -120)
+
+    def test_capture_first_zero_retention_repeats_one_notch(self):
+        """A top-edge-only icon reports retention 0 and must not take a half viewport.
+
+        Match-4 page 36 returned 0. The following -840 wheel moved the thumb
+        79px and the pixels about 41px, then the ledger stayed incomplete.
+        """
+        from native_capture_delivery import DELIVERY
+        from warehouse_segment_overlap import content_retention_limit
+        anchor = np.full((636, 600, 3), (18, 16, 14), np.uint8)
+        rng = np.random.RandomState(7)
+        anchor[0:36, 40:88] = rng.randint(80, 230, (36, 48, 3), np.uint8)
+        self.assertEqual(content_retention_limit(anchor), 0)
+        f = LiveRun(output=ROOT / 'build/t1-20261012/capture-first-zero-notch', capture_first=True)
+        self.addCleanup(f.close)
+        f.auto._retry_scope = {'capturePolicy': DELIVERY}
+        f.auto._anchor = anchor
+        f.auto._observation = {
+            'trackBox': [569, 0, 575, 560],
+            'thumbBox': [569, 251, 575, 469],
+            'scrollState': 'MIDDLE',
+        }
+        f.auto._pixels_per_notch = 30
+        self.assertTrue(f.auto._collect_first())
+        self.assertEqual(f.auto._scroll_delta(), -120)
+        self.assertEqual(f.auto._scroll_delta(), -120)
+
+    def test_match4_zero_limit_pair_is_not_a_certified_skip(self):
+        """The real -840 pair stays unverified, and the same anchor now steps one notch."""
+        before = (ROOT / 'build/goal-20261019-b/match-4/runtime-data/native-live-trial'
+                  / 'evidence/settlement_v2/blobs/d5'
+                  / 'd51fe9bcd5681908e3108364c5f294d85b43f194933eadcdd27ad747fd8ba027.png')
+        after = (ROOT / 'build/goal-20261019-b/match-4/runtime-data/native-live-trial'
+                 / 'evidence/settlement_v2/blobs/05'
+                 / '058954acd090becbb5f3618161939efd863c9b42de5afbb98d616101e6481177.png')
+        if not before.is_file() or not after.is_file():
+            return
+        from native_capture_delivery import DELIVERY
+        from warehouse_scrollbar_observation import WarehouseScrollbarObserver
+        from warehouse_segment_overlap import content_retention_limit
+        x, y, r, b = warehouse_search_roi(1920, 1080)
+        frame_a = cv2.imdecode(np.frombuffer(before.read_bytes(), np.uint8), cv2.IMREAD_COLOR)
+        frame_b = cv2.imdecode(np.frombuffer(after.read_bytes(), np.uint8), cv2.IMREAD_COLOR)
+        crop_a, crop_b = frame_a[y:b, x:r], frame_b[y:b, x:r]
+        self.assertEqual(content_retention_limit(crop_a), 0)
+        observed = WarehouseScrollbarObserver().observe(frame_a, source_id='match4-36')
+        self.assertEqual(observed['scrollState'], 'MIDDLE')
+        motion = align_warehouse_segments(crop_a, crop_b, prev_id='36', next_id='37',
+            required_direction='DOWN')
+        self.assertNotEqual(motion['status'], 'VERIFIED', motion)
+        self.assertNotEqual(motion.get('verticalOffsetPx'), -271)
+        f = LiveRun(output=ROOT / 'build/t1-20261012/capture-first-match4-zero', capture_first=True)
+        self.addCleanup(f.close)
+        f.auto._retry_scope = {'capturePolicy': DELIVERY}
+        f.auto._anchor = crop_a
+        f.auto._observation = observed
+        f.auto._pixels_per_notch = 30
         self.assertEqual(f.auto._scroll_delta(), -120)
         self.assertEqual(f.auto._scroll_delta(), -120)
 
@@ -550,13 +608,19 @@ class HalfViewportFlowTests(unittest.TestCase):
         for capture_first in (False, True):
             f = LiveRun(output=ROOT / 'build/t1-20261012/capture-first-python', capture_first=capture_first)
             try:
+                if capture_first:
+                    from native_capture_delivery import DELIVERY
+                    f.auto._retry_scope = {'capturePolicy': DELIVERY}
                 f.auto._anchor = crop
                 f.auto._observation = WarehouseScrollbarObserver().observe(frame, source_id='real-last')
                 self.assertEqual(f.auto._observation['scrollState'], 'MIDDLE')
                 f.auto._pixels_per_notch = 30  # measured real -120 receipt and -30px correspondence
                 steps = [f.auto._scroll_delta(), f.auto._scroll_delta()]
                 if capture_first:
-                    self.assertTrue(all(-1440 <= step <= -960 for step in steps), steps)
+                    # Limit 0 used to keep a half-viewport wheel. Match-4 showed
+                    # that wheel is not a certifiable content step, so capture-first
+                    # now repeats one notch instead of stalling or jumping.
+                    self.assertEqual(steps, [-120, -120], steps)
                 else:
                     self.assertEqual(steps, [-120, 0])  # preserved actual old stop cause
             finally:

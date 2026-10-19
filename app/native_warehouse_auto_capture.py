@@ -612,14 +612,13 @@ class NativeWarehouseAutoCapture:
             # limit is the farthest shift that still leaves two localizable
             # bands in the current anchor. Ignoring it repeats a half-viewport
             # wheel after the last row is already shorter than that prediction,
-            # and the next frame then has no overlap. Zero is not that cap: a
-            # sparse page whose second band starts at y=0 must keep the large
-            # step. None means there is no band at all. A half-viewport wheel
-            # then moves the thumb like a full content step while the empty
-            # grid moves much less, and that pair cannot be certified from the
-            # smaller calibration. One notch stays inside the proof and repeats.
+            # and the next frame then has no overlap. Zero is not a retained
+            # shift either: the second unique strip is already at the top edge.
+            # Match-4's last item row returned 0, a -840 wheel moved the thumb
+            # 79px, and the pixels moved about 41px. That pair is outside the
+            # smaller calibration. None and zero both repeat one notch.
             limit = content_retention_limit(self._anchor)
-            if limit is None:
+            if limit is None or limit == 0:
                 delta = -120
                 self._diagnose('capture-first-step', wheelDelta=delta, predictedStepPx=unit,
                     contentRetentionLimitPx=limit,
