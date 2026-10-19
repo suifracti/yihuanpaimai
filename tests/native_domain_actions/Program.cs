@@ -191,7 +191,98 @@ static class Program
                 File.WriteAllText(args[0], JsonSerializer.Serialize(workflow, options));
             }
         });
+        Case("scene anchors locate the published controls and stay disconnected without the operator gate", () => {
+            Require(!SceneAnchorGameDecoder.OperatorAllowsGameInput(null)
+                && !SceneAnchorGameDecoder.OperatorAllowsGameInput("true")
+                && !SceneAnchorGameDecoder.OperatorAllowsGameInput("0")
+                && SceneAnchorGameDecoder.OperatorAllowsGameInput("1"), "OPERATOR_GATE");
+            var directory = AnchorDirectory();
+            var decoder = SceneAnchorGameDecoder.Load(directory);
+            Require(decoder.Ready, "ANCHOR_CATALOG");
+            Require(!SceneAnchorGameDecoder.Load(Path.Combine(directory, "missing")).Ready, "MISSING_CATALOG_STAYS_DISCONNECTED");
+            const int width = 1920, height = 1080;
+            NativeDomainFrame Blank(string scene, int round)
+            {
+                var window = new WindowBinding(1, 2, 3, 0);
+                var scope = new ActionScope("anchor-match", round, 1, 100, 100, scene, "lease", 2_000_000_000,
+                    window, 1, 7, 1_000_000_000, true, true, true, true, false, false)
+                    { MatchGeneration = 4, ObservationSessionId = "anchor-obs", ApprovalId = "anchor-approval" };
+                return new(scope, new(width, height, 0, 0), new byte[width * height * 4], width * 4);
+            }
+            SceneAnchorGameDecoder.GrayImage RequireTemplate(string name)
+            {
+                Require(decoder.TryGetTemplate(name, out var image), "TEMPLATE " + name);
+                return image;
+            }
+            var exit = RequireTemplate("settlement_exit_label.png");
+            var sale = RequireTemplate("settlement_sale_label.png");
+            var confirm = RequireTemplate("bid_confirm_label.png");
+            var start = RequireTemplate("lobby_start_label.png");
+            var exitOnly = Blank("SETTLEMENT", 5);
+            var exitPixels = exitOnly.Pixels.ToArray();
+            SceneAnchorGameDecoder.PaintGray(exitPixels, exitOnly.Stride, 1675, 977, exit);
+            Require(decoder.Decode(new NativeDomainFrame(exitOnly.Scope, exitOnly.Geometry, exitPixels, exitOnly.Stride)) is null,
+                "EXIT_WITHOUT_SALE_WITNESS");
+            var settlementPixels = exitPixels.ToArray();
+            SceneAnchorGameDecoder.PaintGray(settlementPixels, exitOnly.Stride, 1328, 851, sale);
+            var settlement = decoder.Decode(new NativeDomainFrame(exitOnly.Scope, exitOnly.Geometry, settlementPixels, exitOnly.Stride));
+            var back = settlement?.Controls.SingleOrDefault(control => control.Primitive == DomainPrimitive.ReturnLobby);
+            Require(settlement?.Scene == "SETTLEMENT" && back is { Left: 1675, Top: 977, Width: 52, Height: 30 }
+                && back.ControlProfile == SceneAnchorGameDecoder.VerifiedGameProfile, "RETURN_ANCHOR " + back);
+            var bidPixels = new byte[width * height * 4];
+            SceneAnchorGameDecoder.PaintGray(bidPixels, width * 4, 1189, 926, confirm);
+            var digit = new SceneAnchorGameDecoder.GrayImage(Enumerable.Repeat((byte)255, 20 * 30).ToArray(), 20, 30);
+            SceneAnchorGameDecoder.PaintGray(bidPixels, width * 4, 1300, 760, digit);
+            var bidFrame = Blank("AUCTION", 1);
+            var bid = decoder.Decode(new NativeDomainFrame(bidFrame.Scope, bidFrame.Geometry, bidPixels, bidFrame.Stride));
+            var submit = bid?.Controls.Single(control => control.Primitive == DomainPrimitive.SubmitBid);
+            var focus = bid?.Controls.Single(control => control.Primitive == DomainPrimitive.FocusAmountField);
+            Require(bid?.Scene == "AUCTION" && submit is { Left: 1189, Top: 926 }
+                && submit.Left + submit.Width / 2 > (883 + 1459) / 2 + 40, "CONFIRM_NOT_CLEAR_BUTTON");
+            Require(focus is { Left: 1300, Top: 760, Width: 20, Height: 30 }, "AMOUNT_FOCUS_FOLLOWS_GLYPH " + focus);
+            var lobbyPixels = new byte[width * height * 4];
+            SceneAnchorGameDecoder.PaintGray(lobbyPixels, width * 4, 1208, 961, start);
+            var lobbyFrame = Blank("LOBBY", 0);
+            var lobby = decoder.Decode(new NativeDomainFrame(lobbyFrame.Scope, lobbyFrame.Geometry, lobbyPixels, lobbyFrame.Stride));
+            var next = lobby?.Controls.SingleOrDefault(control => control.Primitive == DomainPrimitive.StartNextMatch);
+            Require(lobby?.Scene == "LOBBY" && next is { Left: 1208, Top: 961 }
+                && !lobby.Controls.Any(control => control.Primitive == DomainPrimitive.ReturnLobby), "START_ANCHOR");
+            var closed = new byte[width * height * 4];
+            for (int y = 200; y < 700; y += 2)
+                for (int x = 40; x < 500; x += 2)
+                {
+                    int pixel = (y * width + x) * 4;
+                    closed[pixel] = closed[pixel + 1] = closed[pixel + 2] = 220;
+                }
+            int readX = -1, readY = -1, readW = -1, readH = -1;
+            decoder.ReadCommittedAmount = (_, _, _, _, x, y, w, h) =>
+            {
+                readX = x; readY = y; readW = w; readH = h; return 300000;
+            };
+            var closedFrame = Blank("AUCTION", 1);
+            var closedView = decoder.Decode(new NativeDomainFrame(closedFrame.Scope, closedFrame.Geometry, closed, closedFrame.Stride));
+            Require(closedView?.Scene == "AUCTION_R1" && closedView.OwnBid?.Amount == 300000
+                && readX == 1382 && readY == 864 && readW == 1901 - 1382 && readH == 1069 - 864
+                && readX + readW <= width && readY + readH <= height, "COMMITTED_SEARCH_BOX " + readX + "," + readY + " " + readW + "x" + readH);
+            decoder.ReadCommittedAmount = null;
+            Require(decoder.Decode(Blank("AUCTION", 1)) is null, "BLANK_FRAME_STAYS_UNCONNECTED");
+        });
         ReceiptPathChecks.Run();
         Console.WriteLine($"PASS {cases} scenarios (fake input only)");
+    }
+
+    static string AnchorDirectory()
+    {
+        foreach (var start in new[] { AppContext.BaseDirectory, Directory.GetCurrentDirectory() })
+        {
+            var dir = new DirectoryInfo(start);
+            while (dir is not null)
+            {
+                var candidate = Path.Combine(dir.FullName, "assets", "scene_anchors");
+                if (File.Exists(Path.Combine(candidate, "domain_controls.json"))) return candidate;
+                dir = dir.Parent;
+            }
+        }
+        throw new Exception("SCENE_ANCHOR_DIR_NOT_FOUND");
     }
 }

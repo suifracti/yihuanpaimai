@@ -134,6 +134,7 @@ internal static class NativeObservationService
             formalHistoryWriter = false,
         });
 
+        TicketedSceneAnchorDispatch? sceneAnchorDispatch = null;
         try
         {
             using var monitor = new WindowMonitor(new WindowMonitorOptions
@@ -250,10 +251,14 @@ internal static class NativeObservationService
                 AcceptTimeoutMs = 15000,
             });
 
+            string domainDecoderLabel = "NOT_CONNECTED";
+            string domainExecutionLabel = "OFF";
             void ShutdownObservation()
             {
                 stop.Cancel();
                 evidenceLease.SignalStop();
+                sceneAnchorDispatch?.Dispose();
+                sceneAnchorDispatch = null;
                 capture.Dispose();
                 trace.Event("observation.capture.final", session.GenerationId, capture.Statistics());
                 session.ControlledShutdown();
@@ -291,7 +296,7 @@ internal static class NativeObservationService
                     {
                         requestNs = request.Gate, comparisonNs, sourceSequence = original.AcquisitionSequence,
                         captureScopeEpoch = original.CaptureScopeEpoch, qualified = domainFrame is not null,
-                        actionInput = "OFF", decoder = "NOT_CONNECTED",
+                        actionInput = "OFF", decoder = domainDecoderLabel,
                     });
                     trace.Event("warehouse.source.v2.delivery", session.GenerationId,
                         new { scope = evidenceLease.PendingRequestDiagnosticContext,
@@ -305,12 +310,45 @@ internal static class NativeObservationService
                     && capture.IsClientAreaMappingCurrent(),
                 ex => trace.Event("warehouse.source.v2.failed", session.GenerationId, new { error = ex.ToString(), diagnostic = capture.LastRequestClockDiagnosticsJson }),
                 reason => EmitStatus(sessionId, "ERROR", reason, new { exitConfirmed = false })) : null;
+            if (SceneAnchorGameDecoder.OperatorAllowsGameInput(
+                    Environment.GetEnvironmentVariable("NTE_DOMAIN_ALLOW_GAME_INPUT")))
+            {
+                var anchorDirectory = Environment.GetEnvironmentVariable("NTE_SCENE_ANCHOR_DIR");
+                sceneAnchorDispatch = string.IsNullOrWhiteSpace(anchorDirectory)
+                    ? null
+                    : TicketedSceneAnchorDispatch.TryCreate(anchorDirectory, sessionId, target.TargetHwnd, EmitLine);
+                domainDecoderLabel = sceneAnchorDispatch is null ? "SCENE_ANCHOR_UNAVAILABLE" : "SCENE_ANCHOR";
+                domainExecutionLabel = sceneAnchorDispatch is null ? "OFF" : "OPERATOR_GATE";
+            }
+            NativeDomainFrame? CaptureDomainFrame()
+            {
+                var requestNs = ProtocolClock.NowNs();
+                CapturedBgraFrame original;
+                try
+                {
+                    original = capture.CaptureAfterRequest(1500, requestNs, requestNs + 2_000_000_000,
+                        () => stop.IsCancellationRequested);
+                }
+                catch { return null; }
+                var comparisonNs = ProtocolClock.NowNs();
+                var currentTarget = monitor.Snapshot();
+                if (!capture.IsFrameCurrent(original)
+                    || !IsObservationIdentityUsable(currentTarget, observationWindowMode)
+                    || !BackgroundObservationPolicy.IsSameObservationTarget(currentTarget, target))
+                    return null;
+                var state = ReadJsonObject(Path.Combine(workDir, "engine_state.json"));
+                var generation = (long?)state?["lastFrame"]?["matchGeneration"]
+                    ?? (long?)state?["currentMatch"]?["matchGeneration"] ?? 0;
+                var sceneName = (string?)state?["pipelineContext"]?["scene"] ?? "UNKNOWN";
+                return AdaptIndependentDomainCapture(original, state, generation, sceneName, sessionId,
+                    requestNs, comparisonNs, currentTarget, capture);
+            }
             Volatile.Write(ref observationReady, 1);
             EmitStatus(sessionId, "READY", "engine-ready", new
             {
                 domainActionBootId,
-                domainActionDecoder = "NOT_CONNECTED",
-                domainActionExecution = "OFF",
+                domainActionDecoder = domainDecoderLabel,
+                domainActionExecution = domainExecutionLabel,
                 target = TargetEvidence(target),
                 engineReadiness = handshake.EngineReadiness,
                 engineBusinessReady = handshake.EngineBusinessReady,
@@ -370,11 +408,21 @@ internal static class NativeObservationService
             while (maxFrames <= 0 || acceptedFrames < maxFrames)
             {
                 if (stop.IsCancellationRequested || DrainControls(controlQueue, session, sessionId,
-                    monitor, target, observationWindowMode, domainActionBootId, actionAcknowledgements))
+                    monitor, target, observationWindowMode, domainActionBootId, actionAcknowledgements,
+                    sceneAnchorDispatch, _ => CaptureDomainFrame()))
                 {
                     ShutdownObservation();
                     EmitStatus(sessionId, "STOPPED", string.IsNullOrEmpty(stopReason) ? "explicit-stop" : Volatile.Read(ref stopReason), new { acceptedFrames });
                     return 0;
+                }
+                if (sceneAnchorDispatch is { AwaitingVisibleResult: true })
+                {
+                    try
+                    {
+                        var domainFrame = CaptureDomainFrame();
+                        if (domainFrame is not null) sceneAnchorDispatch.Observe(domainFrame);
+                    }
+                    catch { }
                 }
                 if (capture.PendingOrdinaryExpiry is { } ownerDiscard) ordinaryRecovery.Begin(ownerDiscard);
                 // Admit queued SOURCE/wheel commands only after the next
@@ -659,7 +707,7 @@ internal static class NativeObservationService
                     {
                         requestNs = domainRequestNs, comparisonNs = domainComparisonNs,
                         sourceSequence = frame.AcquisitionSequence, captureScopeEpoch = frame.CaptureScopeEpoch,
-                        qualified = domainFrame is not null, actionInput = "OFF", decoder = "NOT_CONNECTED",
+                        qualified = domainFrame is not null, actionInput = "OFF", decoder = domainDecoderLabel,
                     });
                 }
                 if (scene == "UNKNOWN")
@@ -901,6 +949,7 @@ internal static class NativeObservationService
         catch (OperationCanceledException) when (stop.IsCancellationRequested)
         {
             evidenceLease.SignalStop();
+            sceneAnchorDispatch?.Dispose();
             EmitStatus(sessionId, "STOPPED", Volatile.Read(ref stopReason), new { inputActions = false });
             return 0;
         }
@@ -908,6 +957,7 @@ internal static class NativeObservationService
         {
             stop.Cancel();
             evidenceLease.SignalStop();
+            sceneAnchorDispatch?.Dispose();
             EmitStatus(sessionId, "ERROR", CaptureFailure.Reason(ex, "native-observation-failed"), new
             {
                 error = ex.ToString(),
@@ -1167,7 +1217,9 @@ internal static class NativeObservationService
         WindowMonitorSnapshot sessionTarget,
         string observationWindowMode,
         string domainActionBootId,
-        DomainActionAcknowledgementRouter actionAcknowledgements)
+        DomainActionAcknowledgementRouter actionAcknowledgements,
+        TicketedSceneAnchorDispatch? sceneAnchorDispatch = null,
+        Func<DomainIntent, NativeDomainFrame?>? domainCapture = null)
     {
         void EmitStatus(string id, string status, string reason, object? details) =>
             NativeObservationService.EmitStatus(id, status, reason, details, observationWindowMode);
@@ -1176,8 +1228,12 @@ internal static class NativeObservationService
             var type = (string?)message["type"];
             if (string.Equals(type, "domain.action.dispatch", StringComparison.Ordinal))
             {
-                RejectUnconnectedDomainDispatch(message, sessionId, sessionTarget,
-                    domainActionBootId, actionAcknowledgements);
+                if (sceneAnchorDispatch is not null && domainCapture is not null)
+                    sceneAnchorDispatch.TryHandle(message, domainActionBootId, monitor.Snapshot(),
+                        actionAcknowledgements, domainCapture, EmitLine);
+                else
+                    RejectUnconnectedDomainDispatch(message, sessionId, sessionTarget,
+                        domainActionBootId, actionAcknowledgements);
                 continue;
             }
             if (string.Equals(type, "native_stop", StringComparison.Ordinal))

@@ -1,0 +1,31 @@
+{
+  "referenceWidth": 1920,
+  "referenceHeight": 1080,
+  "threshold": 0.88,
+  "comment": "Search boxes are the published scene-anchor regions. A click is the center of the matched template, computed by WindowsTicketedDomainBackend, never the center of the search box.",
+  "scenes": [
+    {
+      "scene": "SETTLEMENT",
+      "witnesses": [
+        {"template": "settlement_sale_label.png", "search": [1328, 851, 1465, 911]}
+      ],
+      "controls": [
+        {"primitive": "ReturnLobby", "template": "settlement_exit_label.png", "search": [1665, 969, 1750, 1032]}
+      ]
+    },
+    {
+      "scene": "AUCTION",
+      "controls": [
+        {"primitive": "SubmitBid", "template": "bid_confirm_label.png", "search": [883, 896, 1459, 1004]}
+      ],
+      "amountAboveSubmit": {"dx": 40, "dy": -180, "width": 180, "height": 140}
+    },
+    {
+      "scene": "LOBBY",
+      "controls": [
+        {"primitive": "StartNextMatch", "template": "lobby_start_label.png", "search": [1208, 940, 1852, 1060]}
+      ]
+    }
+  ],
+  "committedSearch": [1382, 864, 1901, 1069]
+}

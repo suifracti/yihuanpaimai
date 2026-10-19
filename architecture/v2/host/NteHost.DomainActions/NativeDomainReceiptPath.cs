@@ -97,7 +97,7 @@ public sealed class NativeVisibleResultProducer
         if (intent.Kind == DomainActionKind.Bid)
         {
             if (s.MatchId != intent.MatchId || s.MatchGeneration != intent.MatchGeneration || s.Round != intent.Round
-                || view.Scene != "AUCTION" || ownSeat == null || view.OwnBid == null
+                || view.Scene is not ("AUCTION" or "AUCTION_R1") || ownSeat == null || view.OwnBid == null
                 || !view.OwnBid.AcceptanceVisible || view.OwnBid.Slot != ownSeat.Slot
                 || string.IsNullOrWhiteSpace(ownSeat.PlayerIdentity) || view.OwnBid.PlayerIdentity != ownSeat.PlayerIdentity
                 || view.OwnBid.EvidenceRef != frame.EvidenceRef || view.OwnBid.Amount != intent.Amount) return null;

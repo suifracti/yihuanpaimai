@@ -143,7 +143,7 @@ public sealed class DomainActionCoordinator
                 && evidence.SourceSequence <= current.SourceSequence && evidence.CapturedNs <= current.CapturedNs;
             matches &= i.Kind switch
             {
-                DomainActionKind.Bid => evidence.Scene == "AUCTION" && evidence.AcceptedOwnAmount == i.Amount,
+                DomainActionKind.Bid => (evidence.Scene is "AUCTION" or "AUCTION_R1") && evidence.AcceptedOwnAmount == i.Amount,
                 DomainActionKind.ReturnLobby => evidence.Scene == "LOBBY",
                 DomainActionKind.StartNextMatch => evidence.Scene == "AUCTION_R1"
                     && !string.IsNullOrWhiteSpace(evidence.NewMatchId) && evidence.NewMatchId != i.MatchId
