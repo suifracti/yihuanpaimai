@@ -3365,17 +3365,41 @@ def _live_fee_confirm_if_visible(image, target: Any) -> None:
     if not (0 <= y < height and 0 <= x < width):
         return
     blue, green, red = (int(value) for value in image[y, x][:3])
-    if min(red, green, blue) < 180 or max(red, green, blue) - min(red, green, blue) > 40:
+    from scene_anchors import fee_confirm_pixel
+    if not fee_confirm_pixel(red, green, blue):
+        return
+    if not _park_assistant_and_focus_game(target):
         return
     try:
         hwnd = int((target or {}).get("targetHwnd"))
     except (TypeError, ValueError):
         return
-    if hwnd > 0 and _send_client_click(hwnd, x, y):
+    if hwnd > 0 and _send_foreground_client_click(hwnd, x, y):
         _LIVE_FEE_CONFIRM_SENT = True
         _record_live_domain_loop({"phase": _LIVE_DOMAIN_LOOP.get("phase"), "reason": "FEE_CONFIRM_CLICKED",
                                   "amount": _LIVE_DOMAIN_LOOP.get("amount"), "resendAllowed": False},
                                  {"publishedScene": "LOBBY"})
+
+
+def _send_foreground_client_click(hwnd: int, x: int, y: int) -> bool:
+    """One real cursor click. SendMessage reaches the fee dialog and does not dismiss it."""
+    import ctypes
+    from ctypes import wintypes
+    user32 = ctypes.windll.user32
+    origin = wintypes.POINT(0, 0)
+    if not user32.ClientToScreen(hwnd, ctypes.byref(origin)):
+        return False
+    sx, sy = int(origin.x) + int(x), int(origin.y) + int(y)
+    user32.SetCursorPos(sx, sy)
+    time.sleep(0.05)
+    if int(user32.WindowFromPoint(wintypes.POINT(sx, sy))) != int(hwnd):
+        return False
+    if int(user32.GetForegroundWindow()) != int(hwnd):
+        return False
+    user32.mouse_event(0x0002, 0, 0, 0, 0)
+    time.sleep(0.05)
+    user32.mouse_event(0x0004, 0, 0, 0, 0)
+    return True
 
 
 def _send_client_click(hwnd: int, x: int, y: int) -> bool:

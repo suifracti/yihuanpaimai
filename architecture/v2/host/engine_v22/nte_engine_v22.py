@@ -182,7 +182,18 @@ def _atomic_json(path: Path, value: Any) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     tmp = path.with_name(path.name + ".tmp")
     tmp.write_text(json.dumps(_safe(value), ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
-    os.replace(tmp, path)
+    # The host can still have engine_state.json open. Windows then refuses the
+    # replace with PermissionError and the perception worker exits. Retry the
+    # same temp file; this is not a second observation.
+    delay = 0.02
+    for attempt in range(6):
+        try:
+            os.replace(tmp, path)
+            return
+        except PermissionError:
+            if attempt == 5:
+                raise
+            time.sleep(delay)
 
 
 class FrameMapReader:

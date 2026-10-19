@@ -170,6 +170,17 @@ def published_domain_scene(frame):
     return None
 
 
+def fee_confirm_pixel(red, green, blue):
+    """The entry-fee confirm pill is pink. Gray dialog fill is not that control.
+
+    The live pill sampled RGB (242, 81, 145). A cream or gray gate at the same
+    client point accepts the dialog body and does not dismiss it.
+    """
+    if type(red) is not int or type(green) is not int or type(blue) is not int:
+        return False
+    return red >= 180 and green <= 140 and red - green >= 60
+
+
 def one_asset_integer(texts):
     """The current-funds gate: exactly one non-negative integer, or nothing."""
     import re

@@ -296,3 +296,11 @@ class AuthorizedLiveDomainLoopTests(unittest.TestCase):
         y, x = 926, 1189
         frame[y:y + template.shape[0], x:x + template.shape[1]] = template
         self.assertEqual(published_domain_scene(frame), "AUCTION")
+
+    def test_fee_confirm_pixel_accepts_the_live_pill_and_rejects_gray(self):
+        from scene_anchors import fee_confirm_pixel
+        self.assertTrue(fee_confirm_pixel(242, 81, 145))
+        self.assertTrue(fee_confirm_pixel(234, 87, 142))
+        self.assertFalse(fee_confirm_pixel(213, 213, 213))
+        self.assertFalse(fee_confirm_pixel(180, 180, 180))
+        self.assertFalse(fee_confirm_pixel(True, 81, 145))
