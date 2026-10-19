@@ -30,6 +30,9 @@ _MAIN_FUNCTIONS = {
     "_native_domain_action_dispatch_rejected",
     "_advance_authorized_live_domain_loop",
     "_live_loop_frame_image",
+    "_live_loop_view",
+    "_game_is_foreground",
+    "_native_observed_solver_facts",
     "_native_domain_action_session_observe_locked",
     "_native_background_source_current", "handle_observation_window_mode",
     "_native_accept_observation_locked", "_native_solver_lease_matches_locked",
@@ -422,6 +425,76 @@ class NativeBackgroundObservationTests(unittest.TestCase):
         self.assertEqual(opened, [])
         self.assertIsNotNone(image)
         self.assertEqual(image.shape[2], 3)
+
+    def test_live_loop_uses_the_observed_frame_round(self):
+        ns, _, _ = _isolated_main("background-readonly")
+        fresh = CurrentMatch()
+        fresh.id = "live-match"
+        ns["CURRENT_MATCH"] = fresh
+        ns["_NATIVE_DOMAIN_ACTION_BOOT_ID"] = "boot-live"
+        ns["time"].time = lambda: 1_000
+        ns["LATEST_PAYLOAD"] = {}
+        data = {
+            "round": 2,
+            "sourceMatchGeneration": 3,
+            "factsRevision": 4,
+            "matchId": "live-match",
+            "observationSessionId": "sess-live",
+            "observationStatus": "FRAME",
+            "scene": "IN_AUCTION",
+            "target": {
+                "targetHwnd": 7,
+                "targetPid": 8,
+                "identity": {"ProcessInstanceToken": 9},
+            },
+            "predictionSnapshot": None,
+            "frozenPrediction": {},
+        }
+        view = ns["_live_loop_view"](data, "AUCTION", 2432426)
+        self.assertIsNotNone(view)
+        self.assertEqual(view["engine"]["round"], 2)
+        self.assertIsNone(fresh.facts.get("roundNo"))
+
+    def test_solver_admission_reads_the_engine_snapshot(self):
+        from venue_box_catalog import load_catalog, solver_context_translation
+        ns, _, _ = _isolated_main("background-readonly")
+        tree = ast.parse((ROOT / "app/main.py").read_text(encoding="utf-8"))
+        nodes = [node for node in tree.body
+                 if isinstance(node, ast.FunctionDef)
+                 and node.name in {"_native_solver_admission", "_native_solver_admission_details"}]
+        module = ast.Module(body=[ast.ImportFrom(
+            module="__future__", names=[ast.alias(name="annotations")], level=0), *nodes], type_ignores=[])
+        admission_ns = {
+            "solver_context_translation": solver_context_translation,
+            "VENUE_BOX_CATALOG": load_catalog(None),
+        }
+        exec(compile(ast.fix_missing_locations(module), str(ROOT / "app/main.py"), "exec"), admission_ns)
+        snapshot = {
+            "schemaVersion": 7,
+            "venueId": "venue-shanhu",
+            "venue": "中级场 · 珊瑚场",
+            "boxId": "box-shanhu-mother-of-pearl",
+            "box": "螺钿宝箱",
+            "entryCost": 5000,
+            "fieldCondition": "standard",
+            "q": 23,
+            "goldAvg": 44317,
+            "roundNo": 2,
+        }
+        merged = ns["_native_observed_solver_facts"]({}, snapshot)
+        mapped, reason = admission_ns["_native_solver_admission"](merged)
+        self.assertIsNone(reason)
+        self.assertEqual(mapped.get("status"), "COMPATIBILITY_TRANSLATION")
+        self.assertEqual(merged["q"], 23)
+        self.assertEqual(merged["goldAvg"], 44317)
+        self.assertEqual(merged["box"], "螺钿宝箱")
+        kept = ns["_native_observed_solver_facts"]({"q": 17}, snapshot)
+        self.assertEqual(kept["q"], 17)
+        self.assertEqual(kept["goldAvg"], 44317)
+        missing_average = dict(merged)
+        missing_average["goldAvg"] = None
+        _, blocked = admission_ns["_native_solver_admission"](missing_average)
+        self.assertEqual(blocked, "缺失金色均价")
 
 
 class NativeHostExitReceiptTests(unittest.TestCase):

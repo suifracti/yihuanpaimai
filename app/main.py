@@ -2902,6 +2902,27 @@ def _native_solver_admission_details(
     return mapped, reason, details
 
 
+def _native_observed_solver_facts(match_facts: Any, snapshot: Any) -> Dict[str, Any]:
+    """Use the engine match when this frame never reached the vision sync.
+
+    Native observation does not call sync_vision_to_current_match. The engine
+    currentMatch on the same frame already carries venue, box, entry cost, q,
+    and goldAvg. A value already stored on the app match stays.
+    """
+    base = dict(match_facts) if isinstance(match_facts, dict) else {}
+    if not isinstance(snapshot, dict):
+        return base
+    for key in (
+        "venueId", "venue", "boxId", "box", "entryCost",
+        "fieldCondition", "fieldConditionName", "q", "goldAvg",
+    ):
+        if base.get(key) is None and snapshot.get(key) is not None:
+            base[key] = snapshot.get(key)
+    if base.get("goldAvg") is None and snapshot.get("avg") is not None:
+        base["goldAvg"] = snapshot.get("avg")
+    return base
+
+
 def _native_solver_admission(facts: Dict[str, Any]) -> tuple[Optional[Dict[str, Any]], Optional[str]]:
     """Keep the established admission API while sharing its UI explanation."""
     mapped, reason, _details = _native_solver_admission_details(facts)
@@ -3230,8 +3251,12 @@ def _live_loop_frame_image(frame: Dict[str, Any], target: Any = None):
 
 def _live_loop_view(data: Dict[str, Any], published: Optional[str], funds) -> Optional[Dict[str, Any]]:
     from bid_intent import per_match_fund_cap
-    facts_round = CURRENT_MATCH.facts.get("roundNo")
-    if type(facts_round) is not int:
+    facts_round = data.get("round")
+    if type(facts_round) is not int or isinstance(facts_round, bool):
+        facts_round = data.get("roundNo")
+    if type(facts_round) is not int or isinstance(facts_round, bool):
+        facts_round = CURRENT_MATCH.facts.get("roundNo")
+    if type(facts_round) is not int or isinstance(facts_round, bool):
         facts_round = 0
     try:
         generation = int(data.get("sourceMatchGeneration"))
@@ -4126,7 +4151,8 @@ def _native_observation_event(event: Dict[str, Any]) -> Optional[Dict[str, Any]]
             if preparation_waiting:
                 mapped, missing_reason = None, "下一局设置正在等待本局 worker 回执"
             else:
-                mapped, missing_reason = _native_solver_admission(facts)
+                solver_facts = _native_observed_solver_facts(facts, snapshot)
+                mapped, missing_reason = _native_solver_admission(solver_facts)
             data.update(
                 predictionSnapshot=None, frozenPrediction=None, probabilityProfile=None,
                 solverStatus="incomplete", solverMissingReason=missing_reason,
@@ -4158,9 +4184,19 @@ def _native_observation_event(event: Dict[str, Any]) -> Optional[Dict[str, Any]]
                     knownPurple=adapter_input.get("knownPurple") or "",
                     knownRed=adapter_input.get("knownRed") or "",
                 )
+                observed_costs = costs_from_facts(solver_facts)
+                current_costs = solver_ctx.get("costs") if isinstance(solver_ctx.get("costs"), dict) else {}
+                if current_costs.get("sunkCost") is None and observed_costs.get("sunkCost") is not None:
+                    solver_ctx["costs"] = {**current_costs, **observed_costs}
+                if solver_ctx.get("targetProfit") is None:
+                    solver_ctx["targetProfit"] = MANUAL_VISIBLE_TARGET_PROFIT_DEFAULT
                 solver_ctx.update(
                     venue=mapped.get("venue"), lobbyVenue=mapped.get("venue"),
-                    box=mapped.get("box"), avg=facts.get("goldAvg"),
+                    box=mapped.get("box"),
+                    q=solver_facts.get("q"),
+                    goldAvg=solver_facts.get("goldAvg"),
+                    avg=solver_facts.get("goldAvg"),
+                    fieldCondition=solver_facts.get("fieldCondition") or solver_ctx.get("fieldCondition"),
                     presentationSource="live_vision",
                 )
                 shadow = attach_live_shadow(solver_ctx, db_path=CANONICAL_DATABASE)
