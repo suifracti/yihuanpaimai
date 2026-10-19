@@ -657,7 +657,9 @@ function renderHistoryList(items) {
   // Group items by Shanghai date
   const groups = {};
   items.forEach((it) => {
-    const rawTime = it.localPlayedAt || it.playedAt || "";
+    // localPlayedAt is already Shanghai wall time; only a zoned instant may be converted.
+    const zoned = /(Z|[+-]\d{2}:?\d{2})$/.test(String(it.playedAt || ""));
+    const rawTime = zoned ? it.playedAt : (it.localPlayedAt || it.playedAt || "");
     const parts = getRecordShanghaiParts(rawTime);
     it._shParts = parts;
     const key = parts.dateStr || "其他日期";
@@ -1618,10 +1620,13 @@ function renderGuidebookCatalog() {
       const value = item.sourceOnly
         ? (source?.sourcePriceStatus === "VISUALLY_CONFIRMED_1_4_SOURCE" && source.sourcePrice != null ? `原图 ${formatCurrency(source.sourcePrice)} · 仅展示` : "来源字段待确认 · 仅展示")
         : (item.price == null ? "目录未提供参考价" : `目录参考 ${formatCurrency(item.price)}`);
+      const shortValue = item.sourceOnly
+        ? (source?.sourcePriceStatus === "VISUALLY_CONFIRMED_1_4_SOURCE" && source.sourcePrice != null ? formatCurrency(source.sourcePrice) : "仅展示")
+        : (item.price == null ? "—" : formatCurrency(item.price));
       const thumb = guidebookImageUri(item)
-        ? `<img src="${escapeHtml(guidebookImageUri(item))}" alt="" loading="lazy">`
+        ? `<img class="guidebook-item-image" src="${escapeHtml(guidebookImageUri(item))}" alt="" loading="lazy">`
         : `<span class="no-image-mini" aria-hidden="true">·</span>`;
-      return `<button type="button" role="listitem" class="catalog-row${item.key === dashboard.guidebookSelectedItem ? " is-selected" : ""}" data-guidebook-item-index="${index}" aria-pressed="${item.key === dashboard.guidebookSelectedItem}">${thumb}<div><strong>${escapeHtml(item.name)}</strong><small>${escapeHtml(rarityLabel)} · ${escapeHtml(subtitle)}</small></div><span>${escapeHtml(value)}</span></button>`;
+      return `<button type="button" role="listitem" class="catalog-row${item.key === dashboard.guidebookSelectedItem ? " is-selected" : ""}" data-guidebook-item-index="${index}" aria-pressed="${item.key === dashboard.guidebookSelectedItem}">${thumb}<div><strong>${escapeHtml(item.name)}</strong><small>${escapeHtml(rarityLabel)} · ${escapeHtml(subtitle)}</small></div><span title="${escapeHtml(value)}">${escapeHtml(shortValue)}</span></button>`;
     }).join("")
     : `<p class="guidebook-empty">${rows.length ? "没有符合筛选条件的藏品。" : escapeHtml(dashboard.guidebookSourcesError || "正在读取本地目录与 1.4 来源资料。")}</p>`;
   const selected = filtered.find(item => item.key === dashboard.guidebookSelectedItem) || filtered[0] || null;
@@ -1877,14 +1882,17 @@ function renderGuidebookCharacters() {
     list.innerHTML = "";
     return;
   }
-  list.innerHTML = roles.map(role => {
+  list.innerHTML = roles.map((role, index) => {
     const revelations = Array.isArray(role.revelations) && role.revelations.length
       ? `<ul class="guidebook-character-revelations">${role.revelations.map(text => `<li>${escapeHtml(text)}</li>`).join("")}</ul>` : "";
     const image = role.sourceImage?.uri
       ? `<details class="guidebook-role-source"${role.portraitUri ? "" : " open"}><summary>查看角色来源原图</summary><img src="${escapeHtml(role.sourceImage.uri)}" alt="${escapeHtml(role.name)}技能来源原图" loading="lazy"><small>${escapeHtml(role.sourceImage.path || "")}</small></details>`
       : `<p class="guidebook-source-missing">角色来源原图暂不可读取。</p>`;
-    const portrait = role.portraitUri ? `<img class="guidebook-character-portrait" src="${escapeHtml(role.portraitUri)}" alt="${escapeHtml(role.name)}头像" loading="lazy">` : "";
-    return `<article class="guidebook-character-card">${portrait}<div class="guidebook-character-heading"><h3>${escapeHtml(role.name)}</h3>${role.newInThisBatch ? `<span class="tag">本批素材新增</span>` : ""}</div>${role.flavor ? `<p class="guidebook-character-flavor">${escapeHtml(role.flavor)}</p>` : ""}<strong>${escapeHtml(role.skillName || "技能资料待确认")}</strong><p>${escapeHtml(role.skillDescription || "技能说明待确认")}</p>${revelations}${role.integrationNote ? `<p class="guidebook-identity-note">${escapeHtml(role.integrationNote)}</p>` : ""}${image}</article>`;
+    const portrait = role.portraitUri
+      ? `<img class="guidebook-character-portrait" src="${escapeHtml(role.portraitUri)}" alt="${escapeHtml(role.name)}头像" loading="lazy">`
+      : `<span class="missing-role" aria-hidden="true">${escapeHtml(String(role.name || "?").slice(0, 1))}</span>`;
+    const no = String(index + 1).padStart(2, "0");
+    return `<article class="guidebook-character-card role-fiche"><div class="role-head">${portrait}<div class="guidebook-character-heading"><small>SEAT NOTE / ${no}${role.newInThisBatch ? " · 本批素材新增" : ""}</small><h2>${escapeHtml(role.name)}</h2></div></div>${role.flavor ? `<p class="guidebook-character-flavor">${escapeHtml(role.flavor)}</p>` : ""}<h3>${escapeHtml(role.skillName || "技能资料待确认")}</h3><p>${escapeHtml(role.skillDescription || "技能说明待确认")}</p>${revelations}${role.integrationNote ? `<p class="guidebook-identity-note">${escapeHtml(role.integrationNote)}</p>` : ""}${image}</article>`;
   }).join("");
 }
 
@@ -2216,7 +2224,7 @@ function renderSettings() {
     ? `场景 ${match.scene || "UNKNOWN"} · ${match.visionHealth.status || "状态未知"} · ${match.visionHealth.reason || "无额外原因"} · 草稿 ${match.draftSaveStatus || "未知"}`
     : "尚无观察诊断；不据此推断游戏状态";
   if (pin) pin.textContent = dashboard.mainPinned == null ? "读取中" : dashboard.mainPinned ? "关闭置顶" : "开启置顶";
-  if (overlay) overlay.textContent = dashboard.overlayVisible == null ? "读取中" : dashboard.overlayVisible ? "隐藏悬浮窗" : "显示悬浮窗";
+  if (overlay) overlay.textContent = dashboard.overlayVisible == null ? "读取中" : dashboard.overlayVisible ? "隐藏悬浮票" : "显示悬浮票";
 }
 
 function isBridgeReady() {
@@ -2365,7 +2373,7 @@ function updateNextMatchPreparationBoxDropdown(venueId) {
     `<div class="dropdown-item" data-box-id="${escapeHtml(box.boxId)}" data-box-name="${escapeHtml(box.displayName)}">${escapeHtml(box.displayName)}</div>`
   ).join("");
   if (!boxes.length) {
-    menu.innerHTML = `<div class="dropdown-item" style="color:#64748b;cursor:default">请先选择会场</div>`;
+    menu.innerHTML = `<div class="dropdown-item" style="color:var(--muted);cursor:default">请先选择会场</div>`;
     if (display) display.textContent = "请选择宝箱";
   }
 }
@@ -2516,7 +2524,7 @@ function updateMatchBoxDropdown(venueId) {
   }
   
   if (!boxes.length) {
-    boxMenu.innerHTML = `<div class="dropdown-item" style="color: #64748b; cursor: default;">请先选择会场</div>`;
+    boxMenu.innerHTML = `<div class="dropdown-item" style="color: var(--muted); cursor: default;">请先选择会场</div>`;
     if (boxProtected) {
       boxMenu.innerHTML += `<div class="dropdown-item" data-restore-auto="box,boxId">恢复自动</div>`;
     }
@@ -2911,7 +2919,7 @@ function openSettleMatchModal() {
   const profitEl = document.getElementById("settle-summary-profit");
   if (profitEl) {
     profitEl.textContent = profit != null ? ((profit >= 0 ? "+" : "") + formatCurrency(profit)) : "--";
-    profitEl.style.color = profit != null ? (profit >= 0 ? "#34d399" : "#f87171") : "#f59e0b";
+    profitEl.style.color = profit != null ? (profit >= 0 ? "var(--good)" : "var(--brand-ink)") : "var(--warn)";
   }
   const acquiredEl = document.getElementById("settle-summary-acquired");
   if (acquiredEl) acquiredEl.textContent = isSelf != null ? (isSelf ? "是" : "否") : "未知";
@@ -3044,7 +3052,7 @@ function updatePlayerDisplayNameStatus(name, options = {}) {
     if (saveBtn) saveBtn.disabled = true;
     if (playerNameStatus) {
       playerNameStatus.textContent = "正在保存…";
-      playerNameStatus.style.color = "#94a3b8";
+      playerNameStatus.style.color = "var(--muted)";
     }
     return;
   }
@@ -3054,16 +3062,16 @@ function updatePlayerDisplayNameStatus(name, options = {}) {
   if (!playerNameStatus) return;
   if (options.error) {
     playerNameStatus.textContent = `保存失败：${options.error}`;
-    playerNameStatus.style.color = "#f87171";
+    playerNameStatus.style.color = "var(--brand-ink)";
     return;
   }
   const cleanName = (name || "").trim();
   if (cleanName) {
     playerNameStatus.textContent = `已设置：${cleanName}`;
-    playerNameStatus.style.color = "#34d399";
+    playerNameStatus.style.color = "var(--good)";
   } else {
     playerNameStatus.textContent = "未设置，使用画面姓名；清空后保存可恢复";
-    playerNameStatus.style.color = "#94a3b8";
+    playerNameStatus.style.color = "var(--muted)";
   }
 }
 
@@ -3098,13 +3106,13 @@ function renderManualCommandReceipt(result) {
   }[reason] || reason;
   if (status === "PENDING" || status === "SENT") {
     statusEl.textContent = "修改已发送，等待观察 worker 确认";
-    statusEl.style.color = "#f59e0b";
+    statusEl.style.color = "var(--warn)";
   } else if (status === "ACK" || status === "ACCEPTED") {
     statusEl.textContent = "观察 worker 已确认修改";
-    statusEl.style.color = "#34d399";
+    statusEl.style.color = "var(--good)";
   } else if (["REJECT", "REJECTED", "ERROR", "TIMEOUT"].includes(status)) {
     statusEl.textContent = `修改未生效：${reasonText || "当前状态不允许修改"}`;
-    statusEl.style.color = "#f87171";
+    statusEl.style.color = "var(--brand-ink)";
   } else {
     statusEl.textContent = "";
   }
@@ -3203,7 +3211,9 @@ function renderMatchFocus(currentMatch) {
   const center = valid ? (pred.p50 ?? pred.structuralCenter ?? pred.ev) : null;
   document.getElementById("match-focus-stage").textContent = settled ? "结算" : currentMatch.scene === "IN_AUCTION" ? "竞拍中" : currentMatch.scene === "AUCTION_LOBBY" ? "大厅" : "等待竞拍";
   document.getElementById("match-focus-result-type").textContent = type;
-  document.getElementById("match-focus-amount").textContent = amount == null ? "—" : formatCurrency(amount);
+  const amountEl = document.getElementById("match-focus-amount");
+  amountEl.textContent = amount == null ? "—" : formatCurrency(amount);
+  amountEl.dataset.long = String(amountEl.textContent.length > 7);
   document.getElementById("match-focus-secondary").textContent = center == null ? "整仓估值未就绪"
     : `${pred.p50 != null ? "整仓 P50" : "结构估值（非整仓 P50）"} ${formatCurrency(center)}`;
   document.getElementById("match-focus-reason").textContent = settled ? "本局结果只用于结算复核，不继续报价。"
@@ -3454,7 +3464,7 @@ function renderWarehouseInstanceReviewPanel() {
       const images = (candidate.sourceImages || []).filter(row => row?.available && row.uri).slice(0, 2)
         .map(row => `<img src="${escapeHtml(row.uri)}" alt="图鉴来源：${escapeHtml(candidate.name || "候选条目")}" style="width:64px;height:64px;object-fit:contain;background:#0b1220;border-radius:5px;">`).join("");
       const sourceStatus = images ? "图鉴来源图片" : "图鉴来源图片暂不可用";
-      return `<article style="padding:7px;border:1px solid ${selected ? "#60a5fa" : "var(--border-subtle, #334155)"};border-radius:6px;"><div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;"><strong>${escapeHtml(candidate.name || candidate.Name || "待辨认")}</strong><span>${selected ? "当前选择" : ""}${rejected ? " · 已在本实例排除" : ""}</span><button type="button" class="btn-wb-action" data-wh-review-select="${escapeHtml(id)}">选择此候选</button></div><div style="font-size:11px;opacity:.8;margin:4px 0;">目录 ID：${escapeHtml(id)} · ${sourceStatus}</div><div style="display:flex;gap:5px;">${images}</div></article>`;
+      return `<article style="padding:7px;border:1px solid ${selected ? "var(--brand)" : "var(--border-subtle, #334155)"};border-radius:6px;"><div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;"><strong>${escapeHtml(candidate.name || candidate.Name || "待辨认")}</strong><span>${selected ? "当前选择" : ""}${rejected ? " · 已在本实例排除" : ""}</span><button type="button" class="btn-wb-action" data-wh-review-select="${escapeHtml(id)}">选择此候选</button></div><div style="font-size:11px;opacity:.8;margin:4px 0;">目录 ID：${escapeHtml(id)} · ${sourceStatus}</div><div style="display:flex;gap:5px;">${images}</div></article>`;
     }).join("") : `<div style="font-size:12px;opacity:.75;">此槽位没有可供人工确认的候选；未知信息保持未知。</div>`;
     candidateList.querySelectorAll("[data-wh-review-select]").forEach(button => button.addEventListener("click", () => {
       review.selectedCandidateId = button.dataset.whReviewSelect;
@@ -3728,7 +3738,7 @@ function renderMatch(currentMatch, overlayVisible) {
     completeEl.className = `badge ${currentMatch.isComplete ? "badge-admission is-admitted" : "badge-admission is-excluded"}`;
   }
   if (btnTextEl) {
-    btnTextEl.textContent = overlayVisible ? "隐藏局内悬浮窗" : "打开局内悬浮窗";
+    btnTextEl.textContent = overlayVisible ? "隐藏悬浮票" : "显示悬浮票";
   }
 
   // Populate options
@@ -3927,10 +3937,10 @@ function renderMatch(currentMatch, overlayVisible) {
         el.textContent = field === "futureIncrementalCost"
           ? `预计 ${formatCurrency(val)}（非已付）`
           : `已记录 ${formatCurrency(val)}（支付未核验）`;
-        el.style.color = "#38bdf8";
+        el.style.color = "var(--brand-ink)";
       } else {
         el.textContent = "未知 / 暂无自动数据";
-        el.style.color = "#94a3b8";
+        el.style.color = "var(--muted)";
       }
     }
   };
@@ -4025,7 +4035,7 @@ function renderMatch(currentMatch, overlayVisible) {
       }
       if (snapHintText && lastRes) {
         snapHintText.textContent = lastRes.summary || (lastRes.ok ? "✓ 快照识别成功" : "⚠️ 未识别到对局事实");
-        snapHintText.style.color = lastRes.ok ? "#34d399" : "#f87171";
+        snapHintText.style.color = lastRes.ok ? "var(--good)" : "var(--brand-ink)";
       }
     }
   }
@@ -4345,6 +4355,25 @@ function wirEscape(value) {
     .replace(/'/g, "&#39;");
 }
 
+function renderInspectionReport(view) {
+  const stamp = document.getElementById("inspection-stamp");
+  const coverage = document.getElementById("inspection-line-coverage");
+  const identity = document.getElementById("inspection-line-identity");
+  const persist = document.getElementById("inspection-line-persist");
+  if (!coverage || !identity || !persist) return;
+  const status = view?.coverageStatus;
+  if (stamp) {
+    stamp.hidden = status !== "COMPLETE" && status !== "PARTIAL";
+    stamp.textContent = status === "COMPLETE" ? "COMPLETE" : "PARTIAL";
+  }
+  coverage.className = status === "COMPLETE" ? "positive" : status === "PARTIAL" ? "caution" : "";
+  coverage.textContent = !view ? "未提供"
+    : status === "COMPLETE" ? "仓库滚动覆盖完整"
+    : status === "PARTIAL" ? "PARTIAL · 只代表已看到的藏品" : "覆盖未就绪";
+  identity.textContent = view ? `已处理 ${view.processedCount || 0} / ${view.trackCount || 0} 件 · 未处理 ${view.unresolvedCount || 0}` : "未提供";
+  persist.textContent = view ? (view.persistenceCaption || (view.persisted ? "已写入本局记录" : "尚未写入历史记录")) : "未提供";
+}
+
 function renderWarehouseIdentityReview(view) {
   if (dashboard.historicalWarehouseReview && view?.recordStableKey &&
       view.recordStableKey !== dashboard.historicalWarehouseReview) return;
@@ -4356,6 +4385,7 @@ function renderWarehouseIdentityReview(view) {
   const inspectionReady = document.getElementById("inspection-ready");
   if (inspectionJump) inspectionJump.hidden = !available;
   if (inspectionReady) inspectionReady.hidden = !available;
+  renderInspectionReport(available ? view : null);
   if (!available) {
     dashboard.warehouseReview = view || { available: false };
     return;
@@ -4523,9 +4553,9 @@ function renderOverlayState(visible) {
   const status = document.getElementById("overlay-status");
   const button = document.getElementById("overlay-toggle");
   if (control) control.dataset.visible = String(dashboard.overlayVisible);
-  if (status) status.textContent = dashboard.overlayVisible ? "Overlay 已显示" : "Overlay 已隐藏";
+  if (status) status.textContent = dashboard.overlayVisible ? "悬浮票显示中" : "悬浮票已隐藏";
   if (button) {
-    button.textContent = dashboard.overlayVisible ? "隐藏" : "显示";
+    button.textContent = dashboard.overlayVisible ? "隐藏悬浮票" : "显示悬浮票";
     button.disabled = false;
   }
   if (dashboard.currentView === "settings") renderSettings();
@@ -4540,8 +4570,10 @@ function setBridgeState(kind, label) {
   const connection = document.getElementById("connection-label");
   if (connection && (kind === "ready" || kind === "error")) connection.textContent = label;
   const overlayStatus = document.getElementById("overlay-status");
-  if (overlayStatus && (dashboard.overlayVisible === null || kind === "error")) {
-    overlayStatus.textContent = label;
+  if (overlayStatus && kind === "error") {
+    overlayStatus.textContent = "悬浮票不可用";
+  } else if (overlayStatus && dashboard.overlayVisible === null) {
+    overlayStatus.textContent = "悬浮票状态待确认";
   }
 }
 
@@ -5561,7 +5593,7 @@ function renderSnapshotAssistResult(result) {
     } else {
       textEl.textContent = result.summary || (result.ok ? "✓ 快照识别成功" : "⚠️ 未识别到对局事实");
       statusEl.style.borderColor = result.ok ? "rgba(52, 211, 153, 0.4)" : "rgba(248, 113, 113, 0.4)";
-      statusEl.style.color = result.ok ? "#34d399" : "#f87171";
+      statusEl.style.color = result.ok ? "var(--good)" : "var(--brand-ink)";
     }
   }
 }
@@ -5854,10 +5886,10 @@ function handleNativeMessage(event) {
     if (status) {
       if (result.ok) {
         status.textContent = `已保存原图 · ${result.width || "?"}×${result.height || "?"} · ${result.relativePath || "已关联当前对局"}`;
-        status.style.color = "#34d399";
+        status.style.color = "var(--good)";
       } else if (result.status === "NOT_SETTLEMENT") {
-        status.innerHTML = `未检测到结算画面；可点击「<a href="javascript:void(0)" id="switch-to-manual-capture-link" style="color:#60a5fa;text-decoration:underline">手动截图（异环）</a>」直接采集`;
-        status.style.color = "#f87171";
+        status.innerHTML = `未检测到结算画面；可点击「<a href="javascript:void(0)" id="switch-to-manual-capture-link" style="color:var(--brand-ink);text-decoration:underline">手动截图（异环）</a>」直接采集`;
+        status.style.color = "var(--brand-ink)";
         const link = document.getElementById("switch-to-manual-capture-link");
         if (link) {
           link.addEventListener("click", () => {
@@ -5867,7 +5899,7 @@ function handleNativeMessage(event) {
         }
       } else {
         status.textContent = result.message || "保存结算原图失败";
-        status.style.color = "#f87171";
+        status.style.color = "var(--brand-ink)";
       }
     }
   }
@@ -5882,13 +5914,13 @@ function handleNativeMessage(event) {
     if (status) {
       if (result.status === "DUPLICATE_IGNORED" || result.duplicate) {
         status.textContent = result.message || "该截图与上一张完全相同，未重复追加；请滚动仓库后再截取。";
-        status.style.color = "#f59e0b";
+        status.style.color = "var(--warn)";
       } else if (result.ok) {
         status.textContent = result.message || `已保存异环原图 · ${result.width || "?"}×${result.height || "?"} · ${result.sha256 ? result.sha256.slice(0, 8) : ""}`;
-        status.style.color = "#34d399";
+        status.style.color = "var(--good)";
       } else {
         status.textContent = result.message || "保存异环截图失败";
-        status.style.color = "#f87171";
+        status.style.color = "var(--brand-ink)";
       }
     }
   }

@@ -209,7 +209,7 @@
             </aside>
           </section>
           <div class="seats-heading"><span class="eyebrow">FOUR SEATS / 四席当前报价</span><small id="match-focus-bid-round">回合待观察</small></div>
-          <div class="seats" id="match-focus-seats"></div>
+          <div class="seats" id="match-focus-seats"><article class="seat"><span class="seat-no">01</span><div><strong>席位待观察</strong><small>等待桌面服务</small></div><strong class="seat-amount">—</strong></article><article class="seat"><span class="seat-no">02</span><div><strong>席位待观察</strong><small>等待桌面服务</small></div><strong class="seat-amount">—</strong></article><article class="seat"><span class="seat-no">03</span><div><strong>席位待观察</strong><small>等待桌面服务</small></div><strong class="seat-amount">—</strong></article><article class="seat"><span class="seat-no">04</span><div><strong>席位待观察</strong><small>等待桌面服务</small></div><strong class="seat-amount">—</strong></article></div>
           <p class="muted" id="match-focus-seat-note" hidden></p>
           <div class="desk-bottom"><span>观察、昵称和手动纠错在下方展开，不另建一套事实。</span><button type="button" id="inspection-jump" hidden onclick="showView('inspection')">去开箱查验 →</button></div>
 
@@ -421,15 +421,15 @@
                 <div class="form-grid-4" style="margin-bottom: 8px;">
                   <div class="form-field">
                     <label class="form-field-label">情报费用</label>
-                    <div class="form-control readonly-display" id="match-display-intel-cost" style="background:rgba(255,255,255,0.04);color:#94a3b8;cursor:default;line-height:26px;">未知 / 暂无自动数据</div>
+                    <div class="form-control readonly-display" id="match-display-intel-cost" style="background:var(--surface);color:var(--muted);cursor:default;line-height:26px;">未知 / 暂无自动数据</div>
                   </div>
                   <div class="form-field">
                     <label class="form-field-label">其他已付费用</label>
-                    <div class="form-control readonly-display" id="match-display-other-cost" style="background:rgba(255,255,255,0.04);color:#94a3b8;cursor:default;line-height:26px;">未知 / 暂无自动数据</div>
+                    <div class="form-control readonly-display" id="match-display-other-cost" style="background:var(--surface);color:var(--muted);cursor:default;line-height:26px;">未知 / 暂无自动数据</div>
                   </div>
                   <div class="form-field">
                     <label class="form-field-label">预计后续费用</label>
-                    <div class="form-control readonly-display" id="match-display-future-cost" style="background:rgba(255,255,255,0.04);color:#94a3b8;cursor:default;line-height:26px;">未知 / 暂无自动数据</div>
+                    <div class="form-control readonly-display" id="match-display-future-cost" style="background:var(--surface);color:var(--muted);cursor:default;line-height:26px;">未知 / 暂无自动数据</div>
                   </div>
                   <div class="form-field">
                     <label class="form-field-label" for="match-input-welfare-received">福利金实际到账</label>
@@ -913,7 +913,7 @@
               </div>
             </div>
             <div class="warehouse-slots-list" id="match-wh-slots-list" style="margin-top: 8px; display: flex; flex-direction: column; gap: 6px;"></div>
-            <section id="match-wh-instance-review" hidden aria-label="活动藏品实例复核" style="margin-top: 10px; padding: 10px; border: 1px solid var(--border-subtle, #334155); border-radius: 8px; background: rgba(15,23,42,.55);">
+            <section id="match-wh-instance-review" hidden aria-label="活动藏品实例复核" style="margin-top: 10px; padding: 10px; border: 1px solid var(--border-subtle, #334155); border-radius: 8px; background: var(--paper);">
               <div style="display:flex; justify-content:space-between; align-items:center; gap:8px;">
                 <strong id="match-wh-instance-review-title">活动藏品复核</strong>
                 <button type="button" class="btn-wb-action" id="match-wh-instance-review-close">关闭</button>
@@ -1032,8 +1032,11 @@
           </div>
           <aside class="inspection-report">
             <div class="section-label"><span>查验记录</span><span>INSPECTION</span></div>
+            <div class="stamp" id="inspection-stamp" hidden>PARTIAL</div>
             <h2>实物入档，<br>判断留痕。</h2>
-            <p class="muted">覆盖、身份和人工确认分开留在原有审阅里。没有真实审阅包时这里保持空白。</p>
+            <div class="inspection-line"><span class="index-dot">1</span><div><h3>连续覆盖</h3><strong id="inspection-line-coverage">未提供</strong><p>到底不等于覆盖完整；相邻原图未证明衔接时记 PARTIAL。</p></div></div>
+            <div class="inspection-line"><span class="index-dot">2</span><div><h3>具体身份</h3><strong id="inspection-line-identity">未提供</strong><p>算法候选不等于人工确认，每件单独核对。</p></div></div>
+            <div class="inspection-line"><span class="index-dot">3</span><div><h3>写入记录</h3><strong id="inspection-line-persist">未提供</strong><p>审阅结果只写本局记录，不自动用于报价或训练。</p></div></div>
             <button type="button" class="solid-button" onclick="showView('history')">打开落槌记录 <span>→</span></button>
           </aside>
         </div>
@@ -1045,21 +1048,20 @@
               <span class="eyebrow">THE OBJECT REGISTER / 03</span><h1>藏品册<span class="title-stop">.</span></h1>
             </div>
             <p>名字、形状、价签，各有出处。<br>目录不是你已经拥有的仓库。</p>
-            <button class="text-link" id="guidebook-open-assistant" type="button">回到竞拍席 <span>↗</span></button>
+            <nav class="segmented guidebook-tabs" aria-label="藏品册类型">
+              <button class="guidebook-tab is-active" type="button" data-guidebook-tab="catalog" aria-current="page">藏品</button>
+              <button class="guidebook-tab" type="button" data-guidebook-tab="characters">竞拍角色</button>
+              <button class="guidebook-tab" type="button" data-guidebook-tab="records">识别记录</button>
+            </nav>
           </header>
-
-          <nav class="guidebook-tabs" aria-label="图鉴内容">
-            <button class="guidebook-tab is-active" type="button" data-guidebook-tab="catalog" aria-current="page">藏品图鉴</button>
-            <button class="guidebook-tab" type="button" data-guidebook-tab="characters">竞拍角色</button>
-            <button class="guidebook-tab" type="button" data-guidebook-tab="records">识别记录</button>
-          </nav>
 
           <section class="guidebook-panel" id="guidebook-catalog-panel" aria-label="藏品图鉴">
             <div class="guidebook-toolbar catalog-tools">
-              <label class="guidebook-search-label" for="guidebook-catalog-search">搜索藏品</label>
-              <input class="form-control" id="guidebook-catalog-search" type="search" placeholder="按名称筛选" autocomplete="off">
-              <label class="guidebook-search-label" for="guidebook-category-filter">分类</label>
-              <select class="form-control guidebook-filter-select" id="guidebook-category-filter" aria-label="按用户分类筛选">
+              <label class="search-field" for="guidebook-catalog-search">
+                <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="10.5" cy="10.5" r="6.5"/><path d="m15.5 15.5 5 5"/></svg>
+                <input id="guidebook-catalog-search" type="search" placeholder="找一件藏品：名字 / 编号" autocomplete="off" aria-label="搜索藏品">
+              </label>
+              <select class="guidebook-filter-select" id="guidebook-category-filter" aria-label="按用户分类筛选">
                 <option value="all">全部分类</option>
                 <option value="古董">古董</option>
                 <option value="科技">科技</option>
@@ -1069,20 +1071,19 @@
                 <option value="珠宝">珠宝</option>
                 <option value="other">其他现有目录</option>
               </select>
-              <label class="guidebook-search-label" for="guidebook-grid-filter">格子尺寸</label>
-              <select class="form-control guidebook-filter-select" id="guidebook-grid-filter" aria-label="按格子宽高筛选">
+              <select class="guidebook-filter-select" id="guidebook-grid-filter" aria-label="按格子宽高筛选">
                 <option value="all">全部尺寸</option>
               </select>
-              <span class="tag" id="guidebook-catalog-count">加载本地目录中</span>
-            </div>
-            <div class="guidebook-rarity-filters" role="group" aria-label="按品质筛选">
-              <button type="button" class="is-active" data-guidebook-rarity="all">全部</button>
-              <button type="button" data-guidebook-rarity="gold">金</button>
-              <button type="button" data-guidebook-rarity="purple">紫</button>
-              <button type="button" data-guidebook-rarity="red">红</button>
-              <button type="button" data-guidebook-rarity="blue">蓝</button>
-              <button type="button" data-guidebook-rarity="green">绿</button>
-              <button type="button" data-guidebook-rarity="white">白</button>
+              <div class="guidebook-rarity-filters" role="group" aria-label="按品质筛选">
+                <button type="button" class="is-active" data-guidebook-rarity="all">全部</button>
+                <button type="button" data-guidebook-rarity="gold">金</button>
+                <button type="button" data-guidebook-rarity="purple">紫</button>
+                <button type="button" data-guidebook-rarity="red">红</button>
+                <button type="button" data-guidebook-rarity="blue">蓝</button>
+                <button type="button" data-guidebook-rarity="green">绿</button>
+                <button type="button" data-guidebook-rarity="white">白</button>
+              </div>
+              <span class="mono" id="guidebook-catalog-count">加载本地目录中</span>
             </div>
             <div class="catalog-spread" id="guidebook-catalog-spread">
               <div class="catalog-index">
@@ -1150,31 +1151,12 @@
       <section class="view-page history-page" data-view-page="history" aria-label="对局历史记录" hidden>
         <div class="page-heading">
           <div><span class="eyebrow">THE HAMMER BOOK / 04</span><h1>落槌簿<span class="title-stop">.</span></h1></div>
-          <p>历史对局<br>导入、导出、删除和原图回看都留在这本簿子里。</p>
+          <p>保存每一仓，也保存未完成。<br>原图、识别与价值，逐项留档；导入导出也在这里。</p>
         </div>
         <div class="history-layout record-spread">
           <!-- 左侧列表 -->
           <div class="history-list-pane">
-            <div class="history-pane-header">
-              <details class="provenance-details"><summary>导入、导出与删除</summary>
-              <div class="history-pane-actions">
-                <button type="button" class="btn-review-action" id="history-export-btn" title="导出全部历史对局及其原始图片，自包含 ZIP">导出全部记录（含图片）</button>
-                <button type="button" class="btn-review-action" id="history-labels-export-btn" title="只导出人工确认的物品图片和标签，不启动训练">导出人工确认样本</button>
-                <span id="history-labels-export-status" role="status"></span>
-                <button type="button" class="btn-review-action" id="history-import-btn" title="导入对局数据包及其原始图片">导入对局包</button>
-                <label class="history-select-all" title="选择当前筛选结果中的全部对局">
-                  <input type="checkbox" id="history-select-all" /> 全选
-                </label>
-                <button type="button" class="btn-review-action btn-delete-selected" id="history-delete-selected-btn" disabled title="删除选中的对局记录">删除所选</button>
-                <span class="history-count-badge" id="history-count-badge">0 条</span>
-                <label class="debug-toggle" title="显示草稿 / 排除 / 调试记录">
-                  <input type="checkbox" id="filter-debug" /> 调试记录
-                </label>
-              </div>
-              </details>
-            </div>
-
-            <p class="history-export-status" id="history-export-status" role="status" aria-live="polite">导出全部历史对局，包含各局原始图片。</p>
+            <div class="section-label history-index-label"><span>对局记录</span><span class="history-count-badge" id="history-count-badge">0 条</span></div>
             <div class="history-filter-bar">
               <!-- 主筛选 Tabs -->
               <div class="history-main-tabs">
@@ -1290,6 +1272,25 @@
               <div class="legacy-empty" id="legacy-empty" hidden>未找到旧版历史文件</div>
               <div class="history-list legacy-list" id="legacy-list" role="listbox" aria-label="历史归档列表"></div>
             </div>
+            <div class="history-pane-header">
+              <details class="provenance-details"><summary>导入、导出与删除</summary>
+              <div class="history-pane-actions">
+                <button type="button" class="btn-review-action" id="history-export-btn" title="导出全部历史对局及其原始图片，自包含 ZIP">导出全部记录（含图片）</button>
+                <button type="button" class="btn-review-action" id="history-labels-export-btn" title="只导出人工确认的物品图片和标签，不启动训练">导出人工确认样本</button>
+                <span id="history-labels-export-status" role="status"></span>
+                <button type="button" class="btn-review-action" id="history-import-btn" title="导入对局数据包及其原始图片">导入对局包</button>
+                <label class="history-select-all" title="选择当前筛选结果中的全部对局">
+                  <input type="checkbox" id="history-select-all" /> 全选
+                </label>
+                <button type="button" class="btn-review-action btn-delete-selected" id="history-delete-selected-btn" disabled title="删除选中的对局记录">删除所选</button>
+                <label class="debug-toggle" title="显示草稿 / 排除 / 调试记录">
+                  <input type="checkbox" id="filter-debug" /> 调试记录
+                </label>
+              </div>
+              <p class="history-export-status" id="history-export-status" role="status" aria-live="polite">导出全部历史对局，包含各局原始图片。</p>
+              </details>
+            </div>
+
           </div>
 
           <!-- 右侧详情 -->
@@ -1591,17 +1592,19 @@
             </div>
             <div class="setting-row"><div><h3>阅读密度</h3><p>只调整行距和留白。</p></div><div class="segmented" role="group" aria-label="阅读密度"><button type="button" data-density="standard" aria-pressed="true">舒展</button><button type="button" data-density="compact" aria-pressed="false">紧凑</button></div></div>
           </div>
-          <header><span class="settings-kicker">PREFERENCES / 设置</span><p>窗口、昵称和只读观察仍走原来的接口。显示状态不改写已观察事实。</p><button type="button" class="quiet-button" onclick="showView('overview')">打开本地数据概况</button></header>
-          <section class="settings-card"><h2>观察与身份</h2>
-            <div class="settings-row"><div><strong>本人昵称</strong><p>按既有唯一匹配规则识别本人席位；不是游戏 UID。</p></div><div><span id="settings-player-name">未设置</span><button type="button" id="settings-edit-name" class="btn-wb-action">在对局页修改</button></div></div>
-            <div class="settings-row"><div><strong>观察与游戏输入</strong><p>当前观察档案与运行状态来自 Main；设置页不会发送任何游戏操作。</p></div><span id="settings-observation-profile">状态待读取</span></div>
-            <div class="settings-row"><div><strong>目标变化保护</strong><p>目标失效立即停止观察；后台只读模式允许窗口失焦，恢复仍须新鲜有效帧。</p></div><span>始终启用</span></div>
-          </section>
-          <section class="settings-card"><h2>窗口与悬浮窗</h2>
-            <div class="settings-row"><div><strong>主窗口置顶</strong><p>通过现有窗口控制接口切换。</p></div><button type="button" id="settings-pin-toggle" class="btn-wb-action">读取中</button></div>
-            <div class="settings-row"><div><strong>悬浮窗</strong><p>局内当前结果与失效状态；详细纠错请在对局页完成。</p></div><button type="button" id="settings-overlay-toggle" class="btn-wb-action">读取中</button></div>
-          </section>
-          <section class="settings-card"><h2>数据与诊断</h2><p id="settings-diagnostic">等待运行状态</p><p>正式 History 与隔离草稿分开。结算原图和实例决定请在对应记录查看。</p></section>
+          <div class="setting-section"><div class="section-label"><span>02 / 观察与身份</span><span>IDENTITY</span></div>
+            <div class="setting-row"><div><h3>本人昵称</h3><p>按既有唯一匹配规则识别本人席位；不是游戏 UID。</p></div><div class="setting-control"><span class="setting-value" id="settings-player-name">未设置</span><button type="button" id="settings-edit-name" class="outline-button">在竞拍席修改</button></div></div>
+            <div class="setting-row"><div><h3>观察与游戏输入</h3><p>当前观察档案与运行状态来自 Main；偏好页不会发送任何游戏操作。</p></div><span class="setting-value" id="settings-observation-profile">状态待读取</span></div>
+            <div class="setting-row"><div><h3>目标变化保护</h3><p>目标失效立即停止观察；后台只读模式允许窗口失焦，恢复仍须新鲜有效帧。</p></div><span class="setting-value">始终启用</span></div>
+          </div>
+          <div class="setting-section"><div class="section-label"><span>03 / 窗口与悬浮票</span><span>WINDOW</span></div>
+            <div class="setting-row"><div><h3>主窗口置顶</h3><p>通过现有窗口控制接口切换。</p></div><button type="button" id="settings-pin-toggle" class="outline-button">读取中</button></div>
+            <div class="setting-row"><div><h3>悬浮票</h3><p>把当前建议与失效状态压成一张票；详细纠错请在竞拍席完成。</p></div><button type="button" id="settings-overlay-toggle" class="outline-button">读取中</button></div>
+          </div>
+          <div class="setting-section"><div class="section-label"><span>04 / 数据与诊断</span><span>DATA</span></div>
+            <div class="setting-row"><div><h3>运行诊断</h3><p id="settings-diagnostic">等待运行状态</p></div><button type="button" class="outline-button" onclick="showView('overview')">本地数据概况 ↗</button></div>
+            <p class="setting-footnote">正式 History 与隔离草稿分开。结算原图和实例决定请在对应记录查看。窗口、昵称和只读观察仍走原来的接口，显示状态不改写已观察事实。</p>
+          </div>
             </div>
           </div>
         </div>
@@ -1654,21 +1657,21 @@
       </div>
       <div class="modal-body">
         <!-- 默认只读识别结果卡片 -->
-        <div id="settle-summary-card" style="background: rgba(15, 23, 42, 0.6); border: 1px solid rgba(148, 163, 184, 0.2); border-radius: 8px; padding: 12px 14px; margin-bottom: 12px;">
+        <div id="settle-summary-card" style="background: var(--paper); border: 1px solid var(--line); border-radius: 8px; padding: 12px 14px; margin-bottom: 12px;">
           <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px; font-size: 13px;">
-            <div><span style="color: #94a3b8;">竞得者：</span><strong id="settle-summary-winner" style="color: #e2e8f0;">--</strong></div>
-            <div><span style="color: #94a3b8;">最终成交价：</span><strong id="settle-summary-clearing" style="color: #38bdf8;">--</strong></div>
-            <div><span style="color: #94a3b8;">实际价值：</span><strong id="settle-summary-actual" style="color: #34d399;">--</strong></div>
-            <div><span style="color: #94a3b8;">收益：</span><strong id="settle-summary-profit" style="color: #f59e0b;">--</strong></div>
-            <div><span style="color: #94a3b8;">本人拍下：</span><strong id="settle-summary-acquired" style="color: #e2e8f0;">--</strong></div>
-            <div><span style="color: #94a3b8;">竞拍帮手：</span><strong id="settle-summary-assistant" style="color: #c084fc;">--</strong></div>
+            <div><span style="color: var(--muted);">竞得者：</span><strong id="settle-summary-winner" style="color: var(--ink);">--</strong></div>
+            <div><span style="color: var(--muted);">最终成交价：</span><strong id="settle-summary-clearing" style="color: var(--brand-ink);">--</strong></div>
+            <div><span style="color: var(--muted);">实际价值：</span><strong id="settle-summary-actual" style="color: var(--good);">--</strong></div>
+            <div><span style="color: var(--muted);">收益：</span><strong id="settle-summary-profit" style="color: var(--warn);">--</strong></div>
+            <div><span style="color: var(--muted);">本人拍下：</span><strong id="settle-summary-acquired" style="color: var(--ink);">--</strong></div>
+            <div><span style="color: var(--muted);">竞拍帮手：</span><strong id="settle-summary-assistant" style="color: var(--ink);">--</strong></div>
           </div>
-          <div id="settle-summary-hint" style="margin-top: 8px; font-size: 12px; color: #34d399;" hidden>✓ 关键结算数据已通过画面高可信识别</div>
+          <div id="settle-summary-hint" style="margin-top: 8px; font-size: 12px; color: var(--good);" hidden>✓ 关键结算数据已通过画面高可信识别</div>
         </div>
 
         <!-- 修正识别结果输入区（默认折叠，缺失/冲突或手动点击时展开） -->
         <div id="settle-manual-edit-container" hidden>
-          <div style="font-size: 12px; color: #94a3b8; margin-bottom: 8px;">手动修正字段：</div>
+          <div style="font-size: 12px; color: var(--muted); margin-bottom: 8px;">手动修正字段：</div>
           <div style="display: flex; flex-direction: column; gap: 8px; margin-bottom: 10px;">
             <div class="form-field">
               <label class="form-field-label" for="settle-clearing-price">最终成交价</label>
@@ -1696,7 +1699,7 @@
         <div class="modal-error-text" id="settle-modal-error" hidden></div>
       </div>
       <div class="modal-actions" style="display: flex; justify-content: space-between; align-items: center;">
-        <button type="button" class="modal-btn" id="settle-modal-toggle-edit-btn" style="background: rgba(255, 255, 255, 0.08); color: #94a3b8; font-size: 12px; padding: 6px 12px;">修正识别结果</button>
+        <button type="button" class="modal-btn" id="settle-modal-toggle-edit-btn" style="background: transparent; color: var(--muted); font-size: 12px; padding: 6px 12px;">修正识别结果</button>
         <div style="display: flex; gap: 8px;">
           <button type="button" class="modal-btn modal-btn-cancel" id="settle-modal-cancel-btn">取消</button>
           <button type="button" class="modal-btn modal-btn-confirm" id="settle-modal-confirm-btn">确认保存并开始下一局</button>
@@ -1707,6 +1710,6 @@
 
   <script src="mascot_runtime_binding.js"></script>
   <script src="auction_engine_v06.js"></script>
-  <script src="main_window.js?v=20261016f"></script>
+  <script src="main_window.js?v=20261019a"></script>
 </body>
 </html>
