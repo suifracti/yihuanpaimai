@@ -3128,10 +3128,8 @@ def _advance_authorized_live_domain_loop(data: Dict[str, Any], frame: Dict[str, 
         from scene_anchors import published_domain_scene, read_asset_funds
         if _LIVE_DOMAIN_LOOP is None:
             _LIVE_DOMAIN_LOOP = fresh_live_domain_state()
-        image = _live_loop_frame_image(frame)
+        image = _live_loop_frame_image(frame, data.get("target"))
         published = published_domain_scene(image)
-        if _live_loop_waiting_to_send(_LIVE_DOMAIN_LOOP, published):
-            _park_assistant_and_focus_game(data.get("target"))
         _live_fee_confirm_if_visible(image, data.get("target"))
         phase = _LIVE_DOMAIN_LOOP.get("phase")
         if image is not None and phase == "idle" and published == "AUCTION":
@@ -3153,11 +3151,12 @@ def _advance_authorized_live_domain_loop(data: Dict[str, Any], frame: Dict[str, 
         before = _LIVE_DOMAIN_LOOP.get("phase")
         _LIVE_DOMAIN_LOOP = advance_live_domain_loop(_LIVE_DOMAIN_LOOP, view, send)
         public = live_domain_loop_public(_LIVE_DOMAIN_LOOP)
-        data["liveDomainLoop"] = public
-        current = data.get("currentMatch")
-        if isinstance(current, dict):
-            current["liveDomainLoop"] = public
-        LATEST_PAYLOAD["liveDomainLoop"] = public
+        with _MANUAL_STATE_LOCK:
+            data["liveDomainLoop"] = public
+            current = data.get("currentMatch")
+            if isinstance(current, dict):
+                current["liveDomainLoop"] = public
+            LATEST_PAYLOAD["liveDomainLoop"] = public
         if _LIVE_DOMAIN_LOOP.get("phase") != before:
             _record_live_domain_loop(public, view)
     except Exception as exc:
@@ -3171,14 +3170,60 @@ def _live_loop_waiting_to_send(state: Dict[str, Any], published: Optional[str]) 
             or (phase == "return_confirmed" and published == "LOBBY"))
 
 
-def _live_loop_frame_image(frame: Dict[str, Any]):
-    path = frame.get("rawFramePath") if isinstance(frame, dict) else None
-    if not isinstance(path, str) or not path:
+def _live_loop_frame_image(frame: Dict[str, Any], target: Any = None):
+    """Screen sample of the game client. Never opens the Host's live bmp.
+
+    WriteBmp creates latest-business-frame.bmp with no sharing. Reading that
+    path from the observation callback collides with the next frame and stops
+    capture. Window calls here must not wait on the assistant UI thread.
+    """
+    del frame
+    if not isinstance(target, dict):
         return None
     try:
-        import numpy as np
+        hwnd = int(target.get("targetHwnd"))
+    except (TypeError, ValueError):
+        return None
+    if hwnd <= 0:
+        return None
+    try:
+        import ctypes
+        from ctypes import wintypes
         import cv2
-        return cv2.imdecode(np.fromfile(path, dtype=np.uint8), cv2.IMREAD_COLOR)
+        import numpy as np
+        from PIL import ImageGrab
+        user32 = ctypes.windll.user32
+        if not user32.IsWindow(hwnd):
+            return None
+        hwnd_bottom = 1
+        async_behind = 0x0001 | 0x0002 | 0x0010 | 0x4000
+
+        @ctypes.WINFUNCTYPE(ctypes.c_bool, wintypes.HWND, wintypes.LPARAM)
+        def visit(window, _lparam):
+            if window == hwnd or not user32.IsWindowVisible(window):
+                return True
+            length = user32.GetWindowTextLengthW(window)
+            if length <= 0:
+                return True
+            buf = ctypes.create_unicode_buffer(length + 1)
+            user32.GetWindowTextW(window, buf, length + 1)
+            title = buf.value or ""
+            if "异环拍卖助手" in title or "战术助手" in title:
+                user32.SetWindowPos(window, hwnd_bottom, 0, 0, 0, 0, async_behind)
+            return True
+
+        user32.EnumWindows(visit, 0)
+        rect = wintypes.RECT()
+        origin = wintypes.POINT(0, 0)
+        if not user32.GetClientRect(hwnd, ctypes.byref(rect)):
+            return None
+        if not user32.ClientToScreen(hwnd, ctypes.byref(origin)):
+            return None
+        width, height = int(rect.right), int(rect.bottom)
+        if width < 64 or height < 64:
+            return None
+        image = ImageGrab.grab(bbox=(origin.x, origin.y, origin.x + width, origin.y + height))
+        return cv2.cvtColor(np.array(image), cv2.COLOR_RGB2BGR)
     except Exception:
         return None
 
@@ -3858,6 +3903,7 @@ def _native_observation_event(event: Dict[str, Any]) -> Optional[Dict[str, Any]]
         })
         return
     from live_match_transport import LiveMatchReceiver
+    live_loop_data = None
     with _MANUAL_STATE_LOCK:
         prior = LATEST_PAYLOAD if LATEST_PAYLOAD.get("observationSessionId") == session_id else {}
         prior_engine_revision = prior.get("engineFactsRevision")
@@ -4155,7 +4201,7 @@ def _native_observation_event(event: Dict[str, Any]) -> Optional[Dict[str, Any]]
             LATEST_VISION_PAYLOAD.clear()
             LATEST_VISION_PAYLOAD.update(data)
             LATEST_PAYLOAD.update(data)
-            _advance_authorized_live_domain_loop(data, frame)
+            live_loop_data = data
             PRESENTATION_RUNTIME.observe_transport(data)
             _NATIVE_OBSERVATION_LAST_FRAME_NS = capture_ns
             # Metadata only: a page is copied solely on an explicit manual command.
@@ -4208,6 +4254,8 @@ def _native_observation_event(event: Dict[str, Any]) -> Optional[Dict[str, Any]]
                 )
             )
 
+    if live_loop_data is not None:
+        _advance_authorized_live_domain_loop(live_loop_data, frame)
     if stale_frame:
         _native_publish_health({
             "status": "ERROR",

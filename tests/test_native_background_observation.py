@@ -29,6 +29,7 @@ _MAIN_FUNCTIONS = {
     "_native_source_frame_rejection", "_native_observation_event",
     "_native_domain_action_dispatch_rejected",
     "_advance_authorized_live_domain_loop",
+    "_live_loop_frame_image",
     "_native_domain_action_session_observe_locked",
     "_native_background_source_current", "handle_observation_window_mode",
     "_native_accept_observation_locked", "_native_solver_lease_matches_locked",
@@ -368,6 +369,59 @@ class NativeBackgroundObservationTests(unittest.TestCase):
         self.assertEqual(ns["CONFIG"], before)
         self.assertEqual(ns["_NATIVE_WINDOW_MODE"], "foreground")
         self.assertFalse(ns["handle_observation_window_mode"]("unknown")["ok"])
+
+    def test_live_domain_loop_runs_after_the_manual_lock_is_released(self):
+        # The UI thread takes this lock to paint status. Focusing or sampling
+        # while the observation thread still holds it stops both threads.
+        ns, _, _ = _isolated_main("background-readonly")
+        _confirmed_start(ns)
+        seen = {}
+
+        def probe(data, frame):
+            del data, frame
+            lock = ns["_MANUAL_STATE_LOCK"]
+            acquired = []
+
+            def ui_thread():
+                got = lock.acquire(timeout=0.4)
+                acquired.append(got)
+                if got:
+                    lock.release()
+
+            thread = threading.Thread(target=ui_thread)
+            thread.start()
+            thread.join(1.0)
+            seen["called"] = True
+            seen["ui_acquired_lock"] = bool(acquired and acquired[0] and not thread.is_alive())
+
+        ns["_advance_authorized_live_domain_loop"] = probe
+        ns["_native_observation_event"](_frame(ns))
+        self.assertTrue(seen.get("called"))
+        self.assertTrue(seen.get("ui_acquired_lock"))
+
+    def test_live_loop_frame_does_not_open_the_host_bmp(self):
+        import ctypes
+        import numpy as np
+        ns, _, _ = _isolated_main("background-readonly")
+        opened = []
+        original = np.fromfile
+
+        def spy(path, *args, **kwargs):
+            opened.append(str(path))
+            return original(path, *args, **kwargs)
+
+        np.fromfile = spy
+        try:
+            hwnd = int(ctypes.windll.user32.GetDesktopWindow())
+            image = ns["_live_loop_frame_image"](
+                {"rawFramePath": r"D:\unused\latest-business-frame.bmp"},
+                {"targetHwnd": hwnd},
+            )
+        finally:
+            np.fromfile = original
+        self.assertEqual(opened, [])
+        self.assertIsNotNone(image)
+        self.assertEqual(image.shape[2], 3)
 
 
 class NativeHostExitReceiptTests(unittest.TestCase):
