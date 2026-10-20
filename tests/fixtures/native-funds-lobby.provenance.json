@@ -1,0 +1,12 @@
+{
+  "source": "build/native-observation/session-e785e0aa9edc4fdb8926a10cf6ba1b03/first-frame.bmp",
+  "sha256": "b438b66c00a702cf9b1ef7d7e55cba0877bf4064b7bb8cd1f19d857946f5eec6",
+  "crop": [
+    1340,
+    20,
+    1510,
+    85
+  ],
+  "expected": 2588053,
+  "note": "Only anonymous virtual-currency numerals. Real WGC saved pixels; crop is not a qualified SOURCE or a fresh balance."
+}

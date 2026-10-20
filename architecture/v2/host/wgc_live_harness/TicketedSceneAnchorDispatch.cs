@@ -70,8 +70,7 @@ sealed class TicketedSceneAnchorDispatch : IDisposable
             ObservationSessionId = sessionId };
         var held = new NativeDomainFrame(scope, geometry, frame.Pixels, frame.Stride);
         var view = decoder.Decode(held);
-        var funds = frame.Width == 1920 && frame.Height == 1080
-            ? SceneAnchorOcr.Read(held.Pixels, frame.Width, frame.Height, frame.Stride, 1380, 0, 540, 86) : null;
+        var funds = SceneAnchorOcr.ReadAssets(held.Pixels, frame.Width, frame.Height, frame.Stride, view?.Scene);
         return new JsonObject { ["schemaVersion"] = "domain-planning-view.v1", ["planningOnly"] = true,
             ["inputActions"] = false, ["frameSequence"] = frameSequence,
             ["readbackNs"] = frame.CaptureTimestampNs, ["matchId"] = scope.MatchId,

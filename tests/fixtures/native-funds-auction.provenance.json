@@ -1,0 +1,12 @@
+{
+  "source": "build/goal-20261019-c/match-12/after-use.jpg",
+  "sha256": "b6fe219074f2590396ce9abc336f4de97c76df4c1551e1c2d8f506fcb7db0a7f",
+  "crop": [
+    1695,
+    25,
+    1875,
+    90
+  ],
+  "expected": 2524575,
+  "note": "Real saved auction numeric pixels only; not a SOURCE, fresh balance or OCR accuracy dataset."
+}
