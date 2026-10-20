@@ -178,6 +178,8 @@ internal static class Program
     {
         try
         {
+            if (args.Contains("--domain-timing-only")) return DomainTimingChecks.Run();
+
             if (args.Any(arg => string.Equals(arg, "--offline-cleanup", StringComparison.Ordinal)))
             {
                 return LiveRunner.RunOfflineCleanup(args);

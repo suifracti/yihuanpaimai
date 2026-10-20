@@ -892,9 +892,7 @@ public sealed class InputSafetyGuard : ISendInputTicketAuthority
                 return reason;
             }
 
-            if (action.IsDomain)
-                _ledger.RegisterDomain(action);
-            else
+            if (!action.IsDomain)
             {
                 ulong intentId = _ledger.Register(action.Kind, 0, 0, 0);
                 _trace.Write(TracePhase.SelfIntentRegistered, $"{action.Fingerprint};intent={intentId}");
@@ -938,7 +936,12 @@ public sealed class InputSafetyGuard : ISendInputTicketAuthority
                 if (TraceClock.NowNs() >= ticket.ExpiresNs) return InputSafetyReasons.TicketExpired;
             }
 
-            return ticket.TryConsume() ? InputSafetyReasons.Ok : InputSafetyReasons.TicketReused;
+            if (!ticket.TryConsume()) return InputSafetyReasons.TicketReused;
+            // Independent capture/decoding above can exceed the self-event TTL.
+            // Register only after it, just before the executor's raw call, so
+            // our own input does not look like user takeover. TTL stays 250ms.
+            if (action.IsDomain) _ledger.RegisterDomain(action);
+            return InputSafetyReasons.Ok;
         }
     }
 
