@@ -177,7 +177,7 @@ public sealed class SceneAnchorGameDecoder : IGameDomainFrameDecoder
             : null;
         bool goldVisible = catalog.GoldAverage is { } gold && Match(gray, frame.Geometry.Width, frame.Geometry.Height,
             gold.Image, Scale(gold.Search, frame.Geometry.Width, frame.Geometry.Height, catalog), catalog.Threshold, out _, out _);
-        var stock = scene is "TOOL_SETUP" or "TOOL_REFILL_CONFIRM" ? ReadInstruments?.Invoke(frame, scene) : null;
+        var stock = scene is "LOBBY" or "TOOL_SETUP" or "TOOL_REFILL_CONFIRM" ? ReadInstruments?.Invoke(frame, scene) : null;
         if (scene == "TOOL_SETUP" && stock is not null && TryGetTemplate("tool_used_badge.png", out var used))
         {
             bool Used(Box box) => Match(gray, frame.Geometry.Width, frame.Geometry.Height, used,

@@ -92,6 +92,7 @@ def advance(state, view, send, config):
                   kind=kind, amount=cost, budget=max(1, funds-floor), minimumFunds=floor,
                   goldStockBefore=stock.get('before', 0), deadlineNs=view['nowNs']+3_000_000_000,
                   purpleStockBefore=stock.get('purpleBefore', 0),
+                  fundsBefore=funds,
                   takeoverGeneration=0, leaseId='lobby', window=view['window'],
                   approvalId=view['approvalId'])
     stock['pending'] = intent

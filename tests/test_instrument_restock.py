@@ -3,6 +3,23 @@ from instrument_restock import advance
 
 
 class InstrumentRestockTests(unittest.TestCase):
+    def test_purchase_returns_to_lobby_then_rereads_stock_before_entry(self):
+        state, sent = {'phase':'idle'}, []
+        send = lambda _, e: sent.append(e['intent']) or True
+        advance(state,self.view(),send,{})
+        steps=[('TOOL_SETUP',dict(goldAverage=0,refillCost=5000),'RequestToolRefill'),
+               ('TOOL_REFILL_CONFIRM',dict(refillCost=5000),'ConfirmToolRefill'),
+               ('LOBBY',{},'OpenToolSetup'),
+               ('TOOL_SETUP',dict(goldAverage=1,refillCost=0),'CloseToolSetup')]
+        for scene,stock,expected in steps:
+            receipt=dict(sent[-1],status='CONFIRMED')
+            self.assertFalse(advance(state,self.view(scene,instruments=stock,preparationReceipt=receipt),send,{}))
+            self.assertEqual(sent[-1]['kind'],expected)
+            self.assertFalse(state['restock'].get('ready',False))
+        self.assertTrue(advance(state,self.view(preparationReceipt=dict(sent[-1],status='CONFIRMED')),send,{}))
+        self.assertEqual(state['restock']['spent'],5000)
+        self.assertEqual(sum(i['kind']=='ConfirmToolRefill' for i in sent),1)
+
     def view(self, scene='LOBBY', **extra):
         return dict(publishedScene=scene, currentFunds=200000, foreground=True,
             engine=dict(matchId='old', matchGeneration=3, round=1, factsRevision=0, observationSessionId='obs'),

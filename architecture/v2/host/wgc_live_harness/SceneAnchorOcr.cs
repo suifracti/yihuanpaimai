@@ -32,6 +32,8 @@ static class SceneAnchorOcr
 
     public static InstrumentStock ReadInstruments(NativeDomainFrame f, string scene)
     {
+        if (scene == "LOBBY") return new(null, null, null,
+            ReadAssets(f.Pixels, f.Geometry.Width, f.Geometry.Height, f.Stride, scene));
         long? Price(int x,int y,int w,int h) => ParseSingleAmount(Regex.Replace(
             ReadText(f.Pixels,f.Geometry.Width,f.Geometry.Height,f.Stride,x,y,w,h) ?? "", @"(?<=\d)\s+(?=\d{3}(?:\D|$))", ","));
         if (scene == "TOOL_REFILL_CONFIRM") return new(null, null, Price(715, 513, 485, 60), null);

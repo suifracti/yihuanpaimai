@@ -25,7 +25,7 @@ public static class AuctionPreparation
         DomainActionKind.OpenBidPanel => scene == "AUCTION",
         DomainActionKind.OpenToolSetup => scene == "TOOL_SETUP",
         DomainActionKind.RequestToolRefill => scene == "TOOL_REFILL_CONFIRM",
-        DomainActionKind.ConfirmToolRefill => scene == "TOOL_SETUP",
+        DomainActionKind.ConfirmToolRefill => scene is "TOOL_SETUP" or "LOBBY",
         DomainActionKind.CloseToolSetup => scene == "LOBBY",
         _ => false,
     };
@@ -43,6 +43,7 @@ public sealed record DomainIntent(string IntentId, DomainActionKind Kind, string
     public int GoldStockBefore { get; init; }
     public int PurpleStockBefore { get; init; }
     public long MinimumFunds { get; init; }
+    public long FundsBefore { get; init; }
 }
 
 // Produced from the current qualified Native/Engine state, never from the intent itself.
@@ -179,8 +180,11 @@ public sealed class DomainActionCoordinator
                 _ => false,
             };
             if (i.Kind == DomainActionKind.ConfirmToolRefill)
-                matches &= (evidence.Instruments?.GoldAverage > i.GoldStockBefore
-                    || evidence.Instruments?.PurpleCount > i.PurpleStockBefore)
+                matches &= (evidence.Scene == "LOBBY"
+                    ? i.Amount is > 0 && i.FundsBefore >= i.Amount
+                        && evidence.Instruments?.Funds == i.FundsBefore - i.Amount
+                    : evidence.Instruments?.GoldAverage > i.GoldStockBefore
+                        || evidence.Instruments?.PurpleCount > i.PurpleStockBefore)
                     && evidence.Instruments?.Funds >= i.MinimumFunds;
             if (!matches) return entry.Receipt; // Neither OS success nor unrelated/stale frames confirm.
             var confirmed = entry.Receipt with { Status = ReceiptStatus.CONFIRMED, Reason = "VISIBLE_RESULT_CONFIRMED",

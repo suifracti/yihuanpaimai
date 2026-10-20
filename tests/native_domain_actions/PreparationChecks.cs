@@ -41,6 +41,20 @@ static class PreparationChecks
                 && backend.Operations[0].ToString() == kind.ToString(), "ONLY_NAMED_PRIMITIVE");
         }
         Console.WriteLine("PASS preparation policy and named ticket primitives (fake input only)");
+        {
+            var f = new Fixture();
+            f.Scope = f.Scope with { Round=0, Scene="TOOL_REFILL_CONFIRM" };
+            var intent = f.Intent("refill-returns-lobby", DomainActionKind.ConfirmToolRefill) with
+                { Round=0, Amount=500, MinimumFunds=100000, FundsBefore=200000 };
+            Require(f.Coordinator.Dispatch(intent).Status==ReceiptStatus.SENT_PENDING_CONFIRMATION,"REFILL_SENT");
+            var evidence = f.Evidence(intent,"LOBBY") with { Instruments=new(null,null,null,199500) };
+            foreach (long? funds in new long?[] { null, 200000, 199000 })
+                Require(f.Coordinator.Confirm(evidence with {Instruments=new(null,null,null,funds)}).Status
+                    ==ReceiptStatus.SENT_PENDING_CONFIRMATION,"LOBBY_ALONE_IS_NOT_REFILL_EFFECT");
+            Require(f.Coordinator.Confirm(evidence).Status==ReceiptStatus.CONFIRMED,"REAL_REFILL_RETURNS_LOBBY");
+            f.Coordinator.Dispatch(intent);
+            Require(f.Port.Sends==1,"REFILL_NOT_REPEATED");
+        }
         foreach(var kind in new[] {DomainActionKind.OpenToolSetup,DomainActionKind.RequestToolRefill,
             DomainActionKind.ConfirmToolRefill,DomainActionKind.CloseToolSetup})
         {

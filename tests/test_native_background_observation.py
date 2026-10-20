@@ -30,6 +30,7 @@ _MAIN_FUNCTIONS = {
     "_native_source_frame_rejection", "_native_observation_event",
     "_native_domain_action_dispatch_rejected",
     "_advance_authorized_live_domain_loop",
+    "_stop_authorized_live_domain_loop",
     "_native_domain_planning_view",
     "_live_loop_view",
     "_game_is_foreground",

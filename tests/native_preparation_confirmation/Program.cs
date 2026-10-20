@@ -77,6 +77,23 @@ static class Program
             Require(v?.Scene==row.GetProperty("scene").GetString(),"STOCK_SCENE");
             if(row.TryGetProperty("gold",out var g)) Require(v?.Instruments?.GoldAverage==g.GetInt32(),"GOLD_STOCK");
             if(row.TryGetProperty("cost",out var c)) Require(v?.Instruments?.RefillCost==c.GetInt64(),"REFILL_COST");
+            if(row.TryGetProperty("refillFundsBefore",out var before)) {
+                var current=scope with { Scene="TOOL_REFILL_CONFIRM", CapturedNs=TraceClock.NowNs(),
+                    LeaseExpiresNs=TraceClock.NowNs()+8_000_000_000,ApprovalId="test" };
+                var port=new SentPort();
+                var coordinator=new DomainActionCoordinator(()=>current,TraceClock.NowNs,port);
+                var intent=new DomainIntent("real-refill",DomainActionKind.ConfirmToolRefill,current.MatchId,
+                    0,0,5000,1000000,TraceClock.NowNs()+8_000_000_000,0,"lobby",current.Window)
+                    { MatchGeneration=1,ObservationSessionId="test",MinimumFunds=100000,FundsBefore=before.GetInt64(),ApprovalId="test" };
+                var pending=coordinator.Dispatch(intent);
+                Require(pending.Status==ReceiptStatus.SENT_PENDING_CONFIRMATION,"REPLAY_REFILL_PENDING");
+                var frame=new NativeDomainFrame(scope with {CapturedNs=TraceClock.NowNs(),SourceSequence=2},new(w,h,0,0),pixels,w*4);
+                var producer=new NativeVisibleResultProducer(decoder,TraceClock.NowNs);
+                var effect=producer.FromCapture(intent,pending,frame,null);
+                Require(effect is not null && coordinator.Confirm(effect).Status==ReceiptStatus.CONFIRMED,"REAL_LOBBY_DEBIT_CONFIRMS_REFILL");
+                Require(port.Sends==1,"NO_REFILL_REPLAY");
+                Console.WriteLine("PASS saved real lobby debit + decoder/OCR + producer/coordinator; fake send, stock still reread before entry");
+            }
         }
     }
     static void SavedImage(string path, bool openList = false)
