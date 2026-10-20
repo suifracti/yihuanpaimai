@@ -43,6 +43,7 @@ static class WindowsBackendChecks
         {
             Window = window; window.Activate();
             window.ResetFieldForTest();
+            long confirmationsBefore = window.Clicks;
             Require(SpinWait.SpinUntil(() => Win32DummyWindow.IsForeground(window.Hwnd.ToInt64()), 1000), "DUMMY_FOREGROUND_REQUIRED");
             var identity = new WindowIdentityReader().Read(window.Hwnd.ToInt64());
             var binding = new WindowBinding(identity.Hwnd, identity.Pid, identity.ProcessInstanceToken, 0);
@@ -67,7 +68,7 @@ static class WindowsBackendChecks
                 if (!CommitAllowed) return false;
                 // Test-only ACK record, NOT another budget book. Prove disk acknowledgement
                 // occurs after safe amount editing, before the confirm click.
-                Require(Raw.SendCallCount == 2 && window.Accepted == 0, "ATTEMPT_MUST_PRECEDE_CONFIRMATION");
+                Require(Raw.SendCallCount == 2 && window.Clicks == confirmationsBefore, "ATTEMPT_MUST_PRECEDE_CONFIRMATION");
                 using var file = new FileStream("build/native-domain-actions/dummy-attempt-ack.json", FileMode.Create, FileAccess.Write);
                 System.Text.Json.JsonSerializer.Serialize(file, i); file.Flush(true); return true;
             }, r => { ReceiptCommits++; return ReceiptAllowed; });
