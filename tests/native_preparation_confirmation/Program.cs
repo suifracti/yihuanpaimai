@@ -37,6 +37,7 @@ static class Program
         Host = hostArg >= 0 ? new ReplayHostContext().LoadFromAssemblyPath(Path.GetFullPath(args[hostArg + 1]))
             : Assembly.Load("WgcLiveHarness");
         Console.WriteLine("Host assembly: " + Host.Location);
+        InputBoundary();
         int stockArg = Array.IndexOf(args, "--stock-replay");
         if (stockArg >= 0) { StockReplay(args[stockArg + 1]); return 0; }
         int imageArg = Array.IndexOf(args, "--saved-image");
@@ -52,6 +53,24 @@ static class Program
         public int Sends;
         public PortOutcome TrySend(DomainIntent i, Func<bool> current)
         { Require(current(), "DISPATCH_SCOPE"); Sends++; return new(true, true, "FAKE_SENT"); }
+    }
+    static void InputBoundary()
+    {
+        var type=Host.GetType("WgcLiveHarness.TicketedSceneAnchorDispatch",true)!;
+        foreach(int sending in new[]{0,1}) {
+            var observer=new FakeInputObserver();
+            var guard=new InputSafetyGuard(observer,new FakeFocusSnapshotProvider(),new FakeCursorBackend(),new CountingRawInputBackend());
+            object host=type.GetConstructors(BindingFlags.Instance|BindingFlags.NonPublic).Single().Invoke(
+                new object?[]{"test",new Decoder("slow-effect"),guard,null,null,null,null,null,(Action<System.Text.Json.Nodes.JsonObject>)(_=>{})});
+            observer.Start(_=>{});
+            Require(guard.Arm(new(1)).Ok,"FAKE_ARM");
+            type.GetField("dispatching",BindingFlags.Instance|BindingFlags.NonPublic)!.SetValue(host,sending);
+            type.GetMethod("OnObservedInput",BindingFlags.Instance|BindingFlags.NonPublic)!.Invoke(host,new object[]{
+                new ObservedInputEvent(InputEventKind.MouseButtonDown,InputDeviceClass.Mouse,InputEventOrigin.Hardware,0,10,20,TraceClock.NowNs(),1)});
+            Require(guard.State==(sending==0?GuardState.Armed:GuardState.Cancelled),"IDLE_ENTRY_VS_ACTIVE_TAKEOVER");
+            observer.Stop();
+        }
+        Console.WriteLine("PASS manual entry between actions does not disable later tickets; input during a transaction cancels (fake only)");
     }
     static void StockReplay(string replay)
     {

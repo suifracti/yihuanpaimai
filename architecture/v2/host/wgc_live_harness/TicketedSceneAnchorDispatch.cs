@@ -37,6 +37,14 @@ sealed class TicketedSceneAnchorDispatch : IDisposable
     bool settlementReturned;
     bool armed;
     bool disposed;
+    int dispatching;
+
+    void OnObservedInput(ObservedInputEvent observed)
+    {
+        // Manual lobby/entry interaction between transactions is expected.
+        // Takeover protects a transaction while it is actually sending input.
+        if (Volatile.Read(ref dispatching) != 0) guard.OnObservedInput(observed);
+    }
 
     TicketedSceneAnchorDispatch(string sessionId, IGameDomainFrameDecoder decoder, InputSafetyGuard guard,
         Win32LowLevelInputObserver observer, GameFocus focus, SwitchingObligations obligations,
@@ -96,12 +104,12 @@ sealed class TicketedSceneAnchorDispatch : IDisposable
         var observer = new Win32LowLevelInputObserver("scene-anchor");
         var guard = new InputSafetyGuard(observer, focus, new Win32CursorBackend(), new Win32RawInputBackend(), null,
             new InputSafetyOptions { EnableRestrictedDomainActions = true, RestoreCursorOnCleanRelease = false });
-        if (!observer.Start(observed => guard.OnObservedInput(observed)).Ok)
+        TicketedSceneAnchorDispatch? dispatch = null;
+        if (!observer.Start(observed => dispatch?.OnObservedInput(observed)).Ok)
         {
             observer.Stop();
             return null;
         }
-        TicketedSceneAnchorDispatch? dispatch = null;
         var obligations = new SwitchingObligations();
         var evidence = new CapturedDomainControlEvidence(() => dispatch!.CaptureEngine(), decoder);
         var backend = new WindowsTicketedDomainBackend(guard, evidence, obligations, ProtocolClock.NowNs, hwnd, allowGameInput: true);
@@ -152,8 +160,9 @@ sealed class TicketedSceneAnchorDispatch : IDisposable
             current = intent;
             latestCapture = null;
             DomainReceipt receipt;
+            Volatile.Write(ref dispatching, 1);
             try { receipt = runtime.Dispatch(intent); }
-            finally { current = pending; }
+            finally { Volatile.Write(ref dispatching, 0); current = pending; }
             if (receipt.Status == ReceiptStatus.SENT_PENDING_CONFIRMATION)
             { pending = intent; confirmationDeadlineNs = receipt.SentNs + 3_000_000_000; }
             else if (receipt.Status == ReceiptStatus.UNKNOWN) pending = null;
