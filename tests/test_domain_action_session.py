@@ -175,10 +175,28 @@ class AuthorizedLiveDomainLoopTests(unittest.TestCase):
             approvalId="goal-20261019-authorized", bootId="boot-live",
             leaseId="live-" + scope["matchId"], ledgerPath=str(Path(directory) / "bid-ledger.json"),
             nowMs=100, nowNs=1_000_000, deadlineMs=800, deadlineNs=701_000_000,
+            roundRemainingMs=30000, roundDeadlineNs=30_001_000_000,
             bidReceipt=None, sessionReceipt=None,
         )
         base.update(extra)
         return base
+
+    def test_short_round_is_skipped_without_a_ledger_and_next_round_can_bid(self):
+        with tempfile.TemporaryDirectory() as directory:
+            sent = []
+            state = fresh_live_domain_state()
+            view = self.view(funds=100000, scene='AUCTION', round_no=2, directory=directory,
+                             roundRemainingMs=5900)
+            advance_live_domain_loop(state, view, lambda *args: sent.append(args) or True)
+            self.assertEqual(state['reason'], 'ROUND_TIME_TOO_SHORT')
+            self.assertEqual(list(Path(directory).iterdir()), [])
+            view['roundRemainingMs'] = 30000
+            advance_live_domain_loop(state, view, lambda *args: sent.append(args) or True)
+            self.assertEqual(sent, [])
+            next_round = self.view(funds=100000, scene='AUCTION', round_no=3, directory=directory)
+            advance_live_domain_loop(state, next_round, lambda *args: sent.append(args) or True)
+            self.assertEqual(len(sent), 1)
+            self.assertEqual(sent[0][1]['intent']['roundDeadlineNs'], 30_001_000_000)
 
     def test_authorized_live_loop_sends_each_step_once(self):
         with tempfile.TemporaryDirectory() as directory:

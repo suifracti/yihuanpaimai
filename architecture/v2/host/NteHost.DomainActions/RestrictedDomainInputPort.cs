@@ -21,6 +21,8 @@ public interface ITicketedDomainBackend
     // attempts include cursor preparation and partial/throwing native sends.
     PortOutcome Execute(DomainPrimitive primitive, DomainIntent intent, Func<bool> current);
     AmountFieldReadback? ReadAmountField();
+    bool HasTimeToFillAndConfirm(DomainIntent intent) => true;
+    bool HasTimeToConfirm(DomainIntent intent) => true;
 }
 
 /// <summary>Closed bid/return/start transaction, for a ticketed adapter or offline substitute.</summary>
@@ -34,15 +36,13 @@ public sealed class RestrictedDomainInputPort : IRestrictedDomainInputPort
     }
     public PortOutcome TrySend(DomainIntent intent, Func<bool> current)
     {
-        bool attempted = false;
         PortOutcome Step(DomainPrimitive primitive)
         {
-            if (!current()) return new(attempted, false, "CURRENT_REJECTED_BEFORE_" + primitive);
+            if (!current()) return new(false, false, "CURRENT_REJECTED_BEFORE_" + primitive);
             try
             {
                 var result = backend.Execute(primitive, intent, current);
-                attempted |= result.SideEffectAttempted;
-                return result with { SideEffectAttempted = attempted };
+                return result;
             }
             catch { return new(true, false, "PRIMITIVE_EXCEPTION_UNKNOWN"); }
         }
@@ -52,20 +52,29 @@ public sealed class RestrictedDomainInputPort : IRestrictedDomainInputPort
             && Enum.TryParse<DomainPrimitive>(intent.Kind.ToString(), out var preparation)) return Step(preparation);
         if (intent.Kind != DomainActionKind.Bid || intent.Amount is not (> 0 and <= 9_999_999))
             return new(false, false, "INVALID_BOUNDED_AMOUNT");
+        PortOutcome NotSubmitted(string reason) => new(false,false,reason) { BidConfirmationAttempted=false };
+        if (!backend.HasTimeToFillAndConfirm(intent)) return NotSubmitted("ROUND_TIME_TOO_SHORT");
         var focus = Step(DomainPrimitive.FocusAmountField);
-        if (!focus.Completed) return focus;
-        var replace = Step(DomainPrimitive.ReplaceAmountDigits);
-        if (!replace.Completed) return replace;
-        long replacedNs = clock();
-        AmountFieldReadback? field;
-        try { field = backend.ReadAmountField(); }
-        catch { return new(attempted, false, "AMOUNT_READBACK_EXCEPTION"); }
-        long now = clock();
-        // Field readback is a pre-submit check, never the accepted-bid receipt.
-        // Require a newly captured field frame, not retained pixels before typing.
-        if (field == null || field.Amount != intent.Amount || field.Window != intent.Window
-            || field.CapturedNs <= replacedNs)
-            return new(attempted, false, "AMOUNT_FIELD_READBACK_UNPROVEN");
-        return Step(DomainPrimitive.SubmitBid);
+        if (!focus.Completed) return NotSubmitted(focus.Reason);
+        for (int attempt=0; attempt<2; attempt++)
+        {
+            if (!backend.HasTimeToFillAndConfirm(intent)) return NotSubmitted("ROUND_TIME_TOO_SHORT");
+            var replace = Step(DomainPrimitive.ReplaceAmountDigits);
+            if (!replace.Completed) return NotSubmitted(replace.Reason);
+            long replacedNs = clock();
+            AmountFieldReadback? field;
+            try { field = backend.ReadAmountField(); }
+            catch { field = null; }
+            if (field is not null && field.Window != intent.Window) return NotSubmitted("TARGET_IDENTITY_REJECTED");
+            if (field is not null && field.Amount == intent.Amount && field.CapturedNs > replacedNs)
+            {
+                if (!backend.HasTimeToConfirm(intent)) return NotSubmitted("ROUND_TIME_TOO_SHORT");
+                var submit=Step(DomainPrimitive.SubmitBid);
+                return submit with { BidConfirmationAttempted=submit.SideEffectAttempted };
+            }
+            // Before SubmitBid, clear-and-refill is safe. At most two fills,
+            // exactly one read after each complete amount, never per digit.
+        }
+        return NotSubmitted("AMOUNT_FILL_FAILED_AFTER_2");
     }
 }

@@ -48,6 +48,7 @@ public sealed record DomainIntent(string IntentId, DomainActionKind Kind, string
     public int PurpleStockBefore { get; init; }
     public long MinimumFunds { get; init; }
     public long FundsBefore { get; init; }
+    public long RoundDeadlineNs { get; init; }
 }
 
 // Produced from the current qualified Native/Engine state, never from the intent itself.
@@ -87,7 +88,11 @@ public sealed record DomainReceipt(string IntentId, DomainActionKind Kind, strin
     public string ApprovalId { get; init; } = "";
 }
 
-public sealed record PortOutcome(bool SideEffectAttempted, bool Completed, string Reason);
+public sealed record PortOutcome(bool SideEffectAttempted, bool Completed, string Reason)
+{
+    // Editing an unsubmitted amount is not an attempted bid confirmation.
+    public bool? BidConfirmationAttempted { get; init; }
+}
 public interface IRestrictedDomainInputPort
 {
     // A closed domain operation, not coordinates/text/key scripts. Implementations must
@@ -140,13 +145,14 @@ public sealed class DomainActionCoordinator
             try { outcome = port.TrySend(intent, () => Validate(intent, SafeRead()) == "OK"); }
             catch { outcome = new(true, false, "PORT_EXCEPTION_DELIVERY_UNKNOWN"); }
             long sentNs = clock(); // Confirmation captures must be taken AFTER the completed click.
-            var status = !outcome.SideEffectAttempted ? ReceiptStatus.NOT_SENT
+            bool attemptedCommit = outcome.BidConfirmationAttempted ?? outcome.SideEffectAttempted;
+            var status = !attemptedCommit ? ReceiptStatus.NOT_SENT
                 : outcome.Completed ? ReceiptStatus.SENT_PENDING_CONFIRMATION : ReceiptStatus.UNKNOWN;
             var receipt = new DomainReceipt(intent.IntentId, intent.Kind, intent.MatchId, intent.Round,
                 intent.FactsRevision, status, outcome.Reason, intent.Amount, sentNs)
                 { MatchGeneration = intent.MatchGeneration, ObservationSessionId = intent.ObservationSessionId, ApprovalId = intent.ApprovalId };
             receipts.Add(intent.IntentId, (intent, receipt, scope!.SourceSequence));
-            if (outcome.SideEffectAttempted) attempted.Add((intent.MatchId, intent.Round, intent.Kind));
+            if (attemptedCommit) attempted.Add((intent.MatchId, intent.Round, intent.Kind));
             if (status == ReceiptStatus.SENT_PENDING_CONFIRMATION) pending = intent.IntentId;
             if (status == ReceiptStatus.UNKNOWN) stopped = true;
             return receipt;

@@ -124,11 +124,20 @@ public sealed class SafeSendInputExecutor
 
         try
         {
-            uint accepted = _backend.Send(inputs);
-            if (accepted != inputs.Length)
+            if (action.Kind == InputActionKind.RestrictedAmountKeypad)
             {
-                return Fail(InputSafetyReasons.SendInputPartial);
+                // One consumed ticket covers the entire bounded amount fill.
+                // Space clicks so the game processes separate button presses;
+                // no per-digit ticket, capture, recognition or resend.
+                for (int offset = 0; offset < inputs.Length; offset += 3)
+                {
+                    if (!action.CheckDomainCurrent()) return Fail("KEYPAD_TARGET_CHANGED");
+                    if (_backend.Send(inputs.AsSpan(offset, 3).ToArray()) != 3)
+                        return Fail(InputSafetyReasons.SendInputPartial);
+                    Thread.Sleep(45);
+                }
             }
+            else if (_backend.Send(inputs) != inputs.Length) return Fail(InputSafetyReasons.SendInputPartial);
         }
         catch
         {
@@ -158,6 +167,11 @@ public sealed class SafeSendInputExecutor
                 Key(0xA2, false); Key(0x41, false); Key(0x41, true); Key(0xA2, true);
                 foreach (char digit in action.AmountDigits!) { Key(digit, false); Key(digit, true); }
                 return result.ToArray();
+            case InputActionKind.RestrictedAmountKeypad:
+                return action.KeypadClicks!.SelectMany(point => new[] {
+                    new InputRecord(0, point.AbsoluteX, point.AbsoluteY, 0, 0xC001, marker),
+                    new InputRecord(0, 0, 0, 0, 0x0002, marker), new InputRecord(0, 0, 0, 0, 0x0004, marker)
+                }).ToArray();
             case InputActionKind.MouseWheel:
                 return
                 [

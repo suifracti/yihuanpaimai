@@ -202,6 +202,14 @@ public sealed class SelfInjectionLedger
                 Add(InputActionKind.CursorMove, 0, point.X, point.Y);
                 Add(InputActionKind.RestrictedLeftClick, 1, point.X, point.Y);
             }
+            else if (action.Kind == InputActionKind.RestrictedAmountKeypad)
+            {
+                foreach (var point in action.KeypadClicks!)
+                {
+                    Add(InputActionKind.CursorMove, 0, point.X, point.Y);
+                    Add(InputActionKind.RestrictedLeftClick, 1, point.X, point.Y);
+                }
+            }
             else
             {
                 Add(InputActionKind.RestrictedAmountDigits, 0xA2);

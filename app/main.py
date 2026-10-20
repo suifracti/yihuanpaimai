@@ -3032,8 +3032,12 @@ def _native_domain_action_receipt_event(event: Dict[str, Any]) -> Optional[Dict[
     state = globals().get('_LIVE_DOMAIN_LOOP') or {}
     if (kind == 'Bid' and receipt.get('status') in {'UNKNOWN', 'NOT_SENT'}
             and receipt['intentId'] == state.get('bidIntentId')):
-        # Stop is independent of admitting a receipt as a committed bid fact.
-        _stop_authorized_live_domain_loop(str(receipt.get('reason') or receipt['status']))
+        if receipt.get('status') == 'NOT_SENT' and receipt.get('reason') == 'ROUND_TIME_TOO_SHORT':
+            state.update(phase='idle', reason='ROUND_TIME_TOO_SHORT',
+                skippedBidRound=[receipt.get(k) for k in ('matchId','matchGeneration','round')])
+        else:
+            # Stop is independent of admitting a receipt as a committed bid fact.
+            _stop_authorized_live_domain_loop(str(receipt.get('reason') or receipt['status']))
 
     with _MANUAL_STATE_LOCK:
         if kind == "Bid":
@@ -3291,6 +3295,11 @@ def _live_loop_view(data: Dict[str, Any], published: Optional[str], funds) -> Op
     now_ms = int(time.time() * 1000)
     now_ns = time.monotonic_ns()
     horizon_ns = 15 * 60 * 1_000_000_000
+    timer = data.get('timer')
+    sample_ns = (data.get('domainObservation') or {}).get('readbackNs')
+    remaining_ms = None
+    if type(timer) in (int,float) and math.isfinite(timer) and timer >= 0 and type(sample_ns) is int:
+        remaining_ms = int(timer * 1000 - (now_ns - sample_ns) / 1_000_000)
     scope = {
         "matchId": match_id,
         "matchGeneration": generation,
@@ -3335,6 +3344,8 @@ def _live_loop_view(data: Dict[str, Any], published: Optional[str], funds) -> Op
         "ledgerPath": os.path.join(directory, "bid-ledger.json") if directory else "",
         "nowMs": now_ms,
         "nowNs": now_ns,
+        "roundRemainingMs": remaining_ms,
+        "roundDeadlineNs": now_ns + remaining_ms * 1_000_000 if remaining_ms is not None else 0,
         "deadlineMs": now_ms + 15 * 60 * 1000,
         "deadlineNs": now_ns + horizon_ns,
         "bidReceipt": LATEST_PAYLOAD.get("bidActionReceipt"),

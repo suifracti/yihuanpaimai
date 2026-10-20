@@ -57,22 +57,12 @@ static class Program
     }
     static void KeypadSequence()
     {
-        var keys=new List<DomainPrimitive>();
-        var ok=WindowsTicketedDomainBackend.ReplaceOnKeypad(343268, key=> {
-            keys.Add(key); return new(true,true,"FAKE_CLICK"); });
-        Require(ok.Completed && keys.SequenceEqual(new[]{DomainPrimitive.ClearAmount,
+        var keys=WindowsTicketedDomainBackend.KeypadSequence(343268);
+        Require(keys.SequenceEqual(new[]{DomainPrimitive.ClearAmount,
             DomainPrimitive.AmountDigit3,DomainPrimitive.AmountDigit4,DomainPrimitive.AmountDigit3,
             DomainPrimitive.AmountDigit2,DomainPrimitive.AmountDigit6,DomainPrimitive.AmountDigit8}),"EXACT_DIGITS_ONCE");
-        keys.Clear();
-        var failed=WindowsTicketedDomainBackend.ReplaceOnKeypad(343268, key=> {
-            keys.Add(key); return new(true,key!=DomainPrimitive.AmountDigit4,"FAKE_UNKNOWN"); });
-        Require(failed.SideEffectAttempted && !failed.Completed && keys.Count==3,"NO_KEY_RETRY_OR_CONTINUE_AFTER_UNKNOWN");
-        keys.Clear();
-        var changed=WindowsTicketedDomainBackend.ReplaceOnKeypad(343268,key=> {
-            keys.Add(key); return new(false,false,"TARGET_CHANGED"); });
-        Require(!changed.SideEffectAttempted && !changed.Completed && keys.Count==1,"NO_SEND_WITH_WRONG_TARGET");
-        Require(!WindowsTicketedDomainBackend.ReplaceOnKeypad(0,_=>throw new Exception()).SideEffectAttempted,"BOUNDED_AMOUNT");
-        Console.WriteLine("PASS keypad: exact repeated digits, one clear, failed/unknown step stops without resend (fake only)");
+        Require(WindowsTicketedDomainBackend.KeypadSequence(0).Count==0,"BOUNDED_AMOUNT");
+        Console.WriteLine("PASS keypad: one clear and exact bounded digits, including repeated digits (no input)");
     }
     static void InputBoundary()
     {
@@ -137,6 +127,26 @@ static class Program
                 Require(field.Top>=675 && field.Top+field.Height<=750 && field.Width>=250,
                     "FIELD_MUST_EXCLUDE_RECOMMENDATION_AND_ALLOWED_RANGE");
                 Console.WriteLine("PASS real empty keypad: named clear/digits and amount-only region; no OS input");
+            }
+            if(row.TryGetProperty("hoverAfterClear",out var hoverPath)) {
+                var hover=File.ReadAllBytes(hoverPath.GetString()!);
+                int ho=BitConverter.ToInt32(hover,10), hh=BitConverter.ToInt32(hover,22);
+                var hoverPixels=new byte[w*h*4];
+                for(int y=0;y<h;y++) Buffer.BlockCopy(hover,ho+(hh<0?y:h-1-y)*w*4,hoverPixels,y*w*4,w*4);
+                var initialKeypad=new NativeDomainFrame(scope,new(w,h,0,0),pixels,w*4);
+                var after=new NativeDomainFrame(scope with {SourceSequence=2,CapturedNs=2},new(w,h,0,0),hoverPixels,w*4);
+                int captures=0;
+                IDomainControlEvidence evidence=new CapturedDomainControlEvidence(()=>++captures==1?initialKeypad:after,decoder);
+                var intent=new DomainIntent("real-hover",DomainActionKind.Bid,scope.MatchId,scope.Round,0,222809,
+                    1000000,long.MaxValue,0,"lobby",scope.Window) {MatchGeneration=1,ObservationSessionId="test"};
+                Require(evidence.Locate(DomainPrimitive.ReplaceAmountDigits,intent) is not null,"INITIAL_PANEL");
+                var keypadControls=evidence.AmountKeypad;
+                evidence.CaptureAmountField(); // independently read the real pink hover frame
+                Require(keypadControls.Count==11 && evidence.AmountKeypad==keypadControls,"HOVER_MUST_NOT_INVALIDATE_KEYPAD_LAYOUT");
+                var clicks=WindowsTicketedDomainBackend.KeypadSequence(222809);
+                Require(clicks.All(key=>keypadControls.Count(c=>c.Primitive==key)==1)
+                    && clicks.Count==7 && captures==2,"ONE_LAYOUT_NOT_REDETECTED_PER_DIGIT");
+                Console.WriteLine("PASS real white-to-pink Clear hover keeps one bound keypad layout; no OS input");
             }
             if(row.TryGetProperty("gold",out var g)) Require(v?.Instruments?.GoldAverage==g.GetInt32(),"GOLD_STOCK");
             if(row.TryGetProperty("cost",out var c)) Require(v?.Instruments?.RefillCost==c.GetInt64(),"REFILL_COST");

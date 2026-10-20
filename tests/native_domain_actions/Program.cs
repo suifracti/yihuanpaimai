@@ -53,12 +53,16 @@ sealed class FakeTicketBackend : ITicketedDomainBackend
     public readonly List<DomainPrimitive> Operations = new();
     public Func<AmountFieldReadback?> Read = () => null;
     public Action<DomainPrimitive>? BeforeCommit;
+    public bool EnoughTime=true, EnoughConfirmTime=true;
+    public Func<DomainPrimitive,PortOutcome>? Outcome;
+    public bool HasTimeToFillAndConfirm(DomainIntent i)=>EnoughTime;
+    public bool HasTimeToConfirm(DomainIntent i)=>EnoughConfirmTime;
     public PortOutcome Execute(DomainPrimitive primitive, DomainIntent intent, Func<bool> current)
     {
         BeforeCommit?.Invoke(primitive);
         if (!current()) return new(false, false, "TICKET_FINAL_GATE_REJECTED");
         Operations.Add(primitive);
-        return new(true, true, "OS_ACCEPTED");
+        return Outcome?.Invoke(primitive) ?? new(true, true, "OS_ACCEPTED");
     }
     public AmountFieldReadback? ReadAmountField() => Read();
 }
@@ -102,10 +106,10 @@ static class Program
                 var coordinator = new DomainActionCoordinator(() => f.Scope, () => f.Now,
                     new RestrictedDomainInputPort(backend, () => f.Now));
                 var result = coordinator.Dispatch(i);
-                Require(result.Status == (valid ? ReceiptStatus.SENT_PENDING_CONFIRMATION : ReceiptStatus.UNKNOWN), "FIELD_CONFIRMATION");
+                Require(result.Status == (valid ? ReceiptStatus.SENT_PENDING_CONFIRMATION : ReceiptStatus.NOT_SENT), "FIELD_CONFIRMATION");
                 Require(backend.Operations.SequenceEqual(valid ? new[] { DomainPrimitive.FocusAmountField,
                     DomainPrimitive.ReplaceAmountDigits, DomainPrimitive.SubmitBid } : new[] {
-                    DomainPrimitive.FocusAmountField, DomainPrimitive.ReplaceAmountDigits }), "CLOSED_SEQUENCE");
+                    DomainPrimitive.FocusAmountField, DomainPrimitive.ReplaceAmountDigits, DomainPrimitive.ReplaceAmountDigits }), "CLOSED_SEQUENCE");
             }
         });
         Case("window changes after field focus stop before amount and cannot retry", () => {
@@ -114,9 +118,31 @@ static class Program
                 f.Scope = f.Scope with { Window = f.Scope.Window with { Pid = 999 } }; };
             var coordinator = new DomainActionCoordinator(() => f.Scope, () => f.Now,
                 new RestrictedDomainInputPort(backend, () => f.Now));
-            Require(coordinator.Dispatch(i).Status == ReceiptStatus.UNKNOWN, "FOCUS_SIDE_EFFECT_UNKNOWN");
+            Require(coordinator.Dispatch(i).Status == ReceiptStatus.NOT_SENT, "NOT_SUBMITTED_BEFORE_CONFIRM");
             Require(backend.Operations.SequenceEqual(new[] { DomainPrimitive.FocusAmountField }), "NO_AMOUNT_AFTER_TAKEOVER");
             Require(coordinator.Dispatch(i with { IntentId = "retry" }).Status == ReceiptStatus.NOT_SENT, "NO_RETRY");
+        });
+        Case("one wrong fill can be replaced once; confirmation UNKNOWN is never resent",()=> {
+            var f=new Fixture(); var i=f.Intent(); var backend=new FakeTicketBackend(); int reads=0;
+            backend.Read=()=> {f.Now++; return new(++reads==1?499:500,i.MatchId,1,7,i.Window,2,f.Now,true);};
+            backend.Outcome=p=>new(true,p!=DomainPrimitive.SubmitBid,"FAKE_CONFIRM_UNKNOWN");
+            var coordinator=new DomainActionCoordinator(()=>f.Scope,()=>f.Now,new RestrictedDomainInputPort(backend,()=>f.Now));
+            Require(coordinator.Dispatch(i).Status==ReceiptStatus.UNKNOWN && reads==2,"ONE_REFILL_THEN_CONFIRM_UNKNOWN");
+            Require(backend.Operations.Count(p=>p==DomainPrimitive.ReplaceAmountDigits)==2
+                && backend.Operations.Count(p=>p==DomainPrimitive.SubmitBid)==1,"TWO_WHOLE_FILLS_ONE_SUBMIT");
+            coordinator.Dispatch(i); coordinator.Dispatch(i with {IntentId="another"});
+            Require(backend.Operations.Count(p=>p==DomainPrimitive.SubmitBid)==1,"NEVER_RETRY_UNKNOWN_SUBMIT");
+        });
+        Case("insufficient round time skips fill or confirmation without sending a bid",()=> {
+            foreach(bool beforeFill in new[]{true,false}) {
+                var f=new Fixture(); var i=f.Intent(); var backend=new FakeTicketBackend {EnoughTime=!beforeFill,EnoughConfirmTime=false};
+                backend.Read=()=> {f.Now++; return new(500,i.MatchId,1,7,i.Window,2,f.Now,true);};
+                var coordinator=new DomainActionCoordinator(()=>f.Scope,()=>f.Now,new RestrictedDomainInputPort(backend,()=>f.Now));
+                var receipt=coordinator.Dispatch(i);
+                Require(receipt.Status==ReceiptStatus.NOT_SENT && receipt.Reason=="ROUND_TIME_TOO_SHORT"
+                    && !backend.Operations.Contains(DomainPrimitive.SubmitBid),"NO_BID_WITH_TOO_LITTLE_TIME");
+                Require(!beforeFill || backend.Operations.Count==0,"NO_FILL_WITH_TOO_LITTLE_TIME");
+            }
         });
         Case("OS acceptance pending; only own later visible amount confirms", () => {
             var f = new Fixture(); var i = f.Intent(); var sent = f.Coordinator.Dispatch(i);

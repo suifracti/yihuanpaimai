@@ -6,6 +6,40 @@ namespace NteHost.Input.Verifier;
 // installs hooks or invokes an OS input API. Delays model independent capture.
 internal static class DomainTimingChecks
 {
+    public static int RunKeypad()
+    {
+        foreach(string mode in new[]{"ok","wrong-window","partial","throw"})
+        {
+            var observer=new FakeInputObserver(); var focus=new FakeFocusSnapshotProvider();
+            var raw=new CountingRawInputBackend {PartialSendResult=mode=="partial"?1u:null,ThrowOnSend=mode=="throw"};
+            var trace=new InMemoryInputTraceSink();
+            var guard=new InputSafetyGuard(observer,focus,new FakeCursorBackend(),raw,trace,
+                new InputSafetyOptions {EnableRestrictedDomainActions=true,RestoreCursorOnCleanRelease=false});
+            observer.Start(e=>guard.OnObservedInput(e));
+            Require(guard.Arm(new(1)).Ok,"KEYPAD_ARM");
+            if(mode=="wrong-window") focus.SetForeground(2);
+            var points=Enumerable.Range(0,7).Select(i=>new KeypadClick(10+i,20,100+i,200)).ToArray();
+            var action=InputAction.DomainKeypad(222809,points,()=>true);
+            var result=guard.Execute(action);
+            int tickets=trace.Records.Count(r=>r.Phase==TracePhase.TicketIssued);
+            Require(mode=="ok" ? result.Ok && raw.SendCallCount==7 && raw.InputsSentCount==21 && tickets==1
+                : !result.Ok && raw.SendCallCount==(mode=="wrong-window"?0:1),"ONE_TICKET_ENTIRE_FILL:"+mode);
+            if(mode=="ok") {
+                long sequence=0;
+                foreach(var point in points) foreach(var kind in new[]{InputEventKind.MouseMove,InputEventKind.MouseButtonDown})
+                    observer.Emit(new(kind,InputDeviceClass.Mouse,InputEventOrigin.Injected,raw.SentExtraInfo[0],
+                        point.X,point.Y,TraceClock.NowNs(),++sequence) {DomainCode=kind==InputEventKind.MouseButtonDown?1u:0u});
+                Require(guard.State==GuardState.Armed,"WHOLE_FILL_OWN_CLICKS_NOT_TAKEOVER");
+            }
+            long sent=raw.SendCallCount;
+            var ticket=new SendInputTicket(999,guard.AuthorityId,action.Fingerprint,0,long.MaxValue,1);
+            ticket.TryConsume();
+            Require(!guard.ExecuteWithTicket(action,ticket).Ok && raw.SendCallCount==sent,"CONSUMED_TICKET_CANNOT_RESEND_FILL");
+            guard.Cancel("END"); guard.Release(); observer.Stop();
+        }
+        Console.WriteLine("PASS one ticket per whole keypad fill, wrong target rejected, partial/throw stops, consumed ticket cannot resend; zero OS input");
+        return 0;
+    }
     sealed class Raw(FakeInputObserver observer, bool click, int eventDelayMs) : IRawInputBackend
     {
         public long SendCallCount { get; private set; }

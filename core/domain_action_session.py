@@ -527,6 +527,18 @@ def _dispatch_live_bid(state, view, send):
     if view.get("foreground") is not True:
         state["reason"] = "GAME_NOT_FOREGROUND"
         return state
+    engine = _live_engine(view)
+    if engine is not None and engine.get('round') in range(1,6):
+        round_key = [engine.get(k) for k in ('matchId','matchGeneration','round')]
+        remaining = view.get('roundRemainingMs')
+        if state.get('skippedBidRound') == round_key:
+            return state
+        if type(remaining) is not int:
+            state['reason'] = 'ROUND_TIME_UNKNOWN'
+            return state
+        if remaining < 6000:
+            state.update(reason='ROUND_TIME_TOO_SHORT', skippedBidRound=round_key)
+            return state
     if view.get("publishedScene") != "AUCTION":
         return _dispatch_live_preparation(state, view, send)
     if view.get("userConfirmed") is not True:
@@ -576,6 +588,7 @@ def _dispatch_live_bid(state, view, send):
         return state
     from pathlib import Path
     path = Path(ledger_path)
+    path = path.with_name(f"{path.stem}-{engine['matchGeneration']}-r{engine['round']}{path.suffix}")
     if path.exists() or path.with_name(path.name + ".owner").exists():
         state["phase"] = "stopped"
         state["reason"] = "RESEND_BLOCKED"
@@ -602,6 +615,7 @@ def _dispatch_live_bid(state, view, send):
             state["resendAllowed"] = False
             return state
         domain = claimed_bid_to_domain_intent(claim, scope, now_ms=now_ms, now_ns=view["nowNs"])
+        domain['roundDeadlineNs'] = view.get('roundDeadlineNs', 0)
         owner = NativeBidObligationOwner(
             book, domain, current_provider=lambda current=current: current,
             native_scope_provider=lambda scope=scope: scope,

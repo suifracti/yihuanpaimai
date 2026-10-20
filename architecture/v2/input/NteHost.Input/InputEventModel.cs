@@ -84,6 +84,7 @@ public enum InputActionKind
     CursorMove,
     RestrictedLeftClick,
     RestrictedAmountDigits,
+    RestrictedAmountKeypad,
 }
 
 /// <summary>
@@ -92,6 +93,7 @@ public enum InputActionKind
 /// then scroll), and it is what opens the TOCTOU window that must fail closed.
 /// </summary>
 public readonly record struct CursorPrepare(int X, int Y);
+internal readonly record struct KeypadClick(int X, int Y, int AbsoluteX, int AbsoluteY);
 
 public sealed record InputAction
 {
@@ -101,15 +103,18 @@ public sealed record InputAction
     public int Y { get; init; }
     public CursorPrepare? Prepare { get; init; }
     internal string? AmountDigits { get; init; }
+    internal IReadOnlyList<KeypadClick>? KeypadClicks { get; init; }
     internal CursorPrepare? DomainPoint { get; init; }
     internal int DomainAbsoluteX { get; init; }
     internal int DomainAbsoluteY { get; init; }
     internal Func<bool>? DomainCurrent { get; init; }
-    internal bool IsDomain => Kind is InputActionKind.RestrictedLeftClick or InputActionKind.RestrictedAmountDigits;
+    internal bool IsDomain => Kind is InputActionKind.RestrictedLeftClick or InputActionKind.RestrictedAmountDigits or InputActionKind.RestrictedAmountKeypad;
     internal bool DomainValid => !IsDomain || (DomainCurrent != null &&
         (Kind == InputActionKind.RestrictedLeftClick ? DomainPoint.HasValue && DomainAbsoluteX is >= 0 and <= 65535
             && DomainAbsoluteY is >= 0 and <= 65535 :
-            AmountDigits is { Length: >= 1 and <= 7 } d && d.All(c => c is >= '0' and <= '9') && d[0] != '0'));
+            AmountDigits is { Length: >= 1 and <= 7 } d && d.All(c => c is >= '0' and <= '9') && d[0] != '0'
+            && (Kind != InputActionKind.RestrictedAmountKeypad || KeypadClicks is { } keys
+                && keys.Count == d.Length + 1 && keys.All(k => k.AbsoluteX is >= 0 and <= 65535 && k.AbsoluteY is >= 0 and <= 65535))));
     internal bool CheckDomainCurrent()
     {
         if (!IsDomain) return true;
@@ -122,6 +127,9 @@ public sealed record InputAction
     internal static InputAction DomainAmount(long amount, Func<bool> current) => new()
         { Kind = InputActionKind.RestrictedAmountDigits,
           AmountDigits = amount.ToString(System.Globalization.CultureInfo.InvariantCulture), DomainCurrent = current };
+    internal static InputAction DomainKeypad(long amount, IReadOnlyList<KeypadClick> clicks, Func<bool> current) => new()
+        { Kind = InputActionKind.RestrictedAmountKeypad, KeypadClicks = clicks.ToArray(),
+          AmountDigits = amount.ToString(System.Globalization.CultureInfo.InvariantCulture), DomainCurrent = current };
 
     public string Fingerprint => Kind switch
     {
@@ -130,6 +138,7 @@ public sealed record InputAction
         InputActionKind.CursorMove => $"MOVE:{X},{Y}",
         InputActionKind.RestrictedLeftClick => $"DOMAIN_LEFT:{DomainPoint}:{DomainAbsoluteX},{DomainAbsoluteY}",
         InputActionKind.RestrictedAmountDigits => $"DOMAIN_AMOUNT:{AmountDigits}",
+        InputActionKind.RestrictedAmountKeypad => $"DOMAIN_KEYPAD:{AmountDigits}:{string.Join(';', KeypadClicks ?? [])}",
         _ => "UNKNOWN",
     };
 

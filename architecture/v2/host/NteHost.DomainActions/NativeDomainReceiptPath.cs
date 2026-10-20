@@ -57,6 +57,7 @@ public sealed class UnconnectedGameDomainDecoder : IGameDomainFrameDecoder
 public sealed class CapturedDomainControlEvidence : IDomainControlEvidence
 {
     public string LastFailure { get; private set; } = "NOT_READ";
+    public IReadOnlyList<VisibleControlAnchor> AmountKeypad { get; private set; } = [];
     private readonly Func<NativeDomainFrame?> capture;
     private readonly IGameDomainFrameDecoder decoder;
     public CapturedDomainControlEvidence(Func<NativeDomainFrame?> capture, IGameDomainFrameDecoder decoder)
@@ -68,6 +69,9 @@ public sealed class CapturedDomainControlEvidence : IDomainControlEvidence
         if (frame == null) { LastFailure = "INDEPENDENT_CAPTURE_UNAVAILABLE"; return null; }
         LastFailure = "DECODE_STARTED";
         var view = frame.DecodeOnce(decoder);
+        if (primitive == DomainPrimitive.ReplaceAmountDigits)
+            AmountKeypad = view?.Controls.Where(c => c.Primitive == DomainPrimitive.ClearAmount
+                || c.Primitive >= DomainPrimitive.AmountDigit0 && c.Primitive <= DomainPrimitive.AmountDigit9).ToArray() ?? [];
         if (primitive == DomainPrimitive.ConfirmToolRefill && view?.Instruments?.RefillCost != intent.Amount)
         { LastFailure = "REFILL_PRICE_CHANGED_OR_UNKNOWN"; return null; }
         string expectedScene = intent.Kind switch { DomainActionKind.Bid => "AUCTION",

@@ -13,6 +13,7 @@ public sealed record VisibleControlAnchor(DomainPrimitive Primitive, int Left, i
 public interface IDomainControlEvidence
 {
     string LastFailure => "UNREPORTED";
+    IReadOnlyList<VisibleControlAnchor> AmountKeypad => [];
     // Detector reads ONLY this target's independent new capture, including ROI/geometry.
     // Null means not connected. No fixed game coordinates or dummy-profile fallback.
     VisibleControlAnchor? Locate(DomainPrimitive primitive, DomainIntent intent);
@@ -54,6 +55,9 @@ public sealed class WindowsTicketedDomainBackend : ITicketedDomainBackend
     private Func<bool>? amountCurrent;
     public string LastReadbackReason { get; private set; } = "NOT_READ";
     private readonly HashSet<(string, DomainPrimitive)> attemptedPrimitives = new();
+    private int fillAttempts;
+    private VisibleControlAnchor? amountAnchor;
+    private IReadOnlyList<VisibleControlAnchor> amountKeys = [];
 
     // allowGameInput must remain FALSE for offline integration. It is a second,
     // explicit operator gate; neither a READY intent nor a recognized ROI sets it.
@@ -67,7 +71,8 @@ public sealed class WindowsTicketedDomainBackend : ITicketedDomainBackend
         lock (gate)
         {
             if (!Enum.IsDefined(primitive) || !KindAllows(intent.Kind, primitive)) return new(false, false, "PRIMITIVE_NOT_ALLOWED");
-            if (attemptedPrimitives.Contains((intent.IntentId, primitive))) return new(false, false, "PRIMITIVE_ALREADY_ATTEMPTED");
+            if (attemptedPrimitives.Contains((intent.IntentId, primitive))
+                && (primitive != DomainPrimitive.ReplaceAmountDigits || fillAttempts >= 2)) return new(false, false, "PRIMITIVE_ALREADY_ATTEMPTED");
             if (primitive == DomainPrimitive.ReplaceAmountDigits && !attemptedPrimitives.Contains((intent.IntentId, DomainPrimitive.FocusAmountField)))
                 return new(false, false, "AMOUNT_FIELD_NOT_FOCUSED");
             if (primitive == DomainPrimitive.SubmitBid && (amountIntent != intent || !amountVerified))
@@ -75,7 +80,8 @@ public sealed class WindowsTicketedDomainBackend : ITicketedDomainBackend
             if (intent.Amount is not (> 0 and <= 9_999_999) && intent.Kind == DomainActionKind.Bid)
                 return new(false, false, "INVALID_AMOUNT");
             VisibleControlAnchor? anchor;
-            try { anchor = evidence.Locate(primitive, intent); } catch { anchor = null; }
+            try { anchor = primitive == DomainPrimitive.ReplaceAmountDigits && amountIntent == intent && amountAnchor is not null
+                    ? amountAnchor : evidence.Locate(primitive, intent); } catch { anchor = null; }
             if (anchor == null) return new(false, false, "NOT_CONNECTED_CONTROL_ANCHOR_UNKNOWN:" + evidence.LastFailure);
             if (!AnchorMatches(anchor, primitive, intent)) return new(false, false, "CONTROL_NOT_FOUND_IN_TARGET");
             string validationFailure = "NONE";
@@ -93,7 +99,7 @@ public sealed class WindowsTicketedDomainBackend : ITicketedDomainBackend
             if (obligations == null) return new(false, false, "DURABLE_ATTEMPT_PORT_NOT_CONNECTED");
             if (committed.TryGetValue(intent.IntentId, out var previous) && previous != intent)
                 return new(false, false, "DURABLE_INTENT_CONFLICT");
-            if (!committed.ContainsKey(intent.IntentId))
+            if (!committed.ContainsKey(intent.IntentId) && (intent.Kind != DomainActionKind.Bid || primitive == DomainPrimitive.SubmitBid))
             {
                 try
                 {
@@ -126,15 +132,26 @@ public sealed class WindowsTicketedDomainBackend : ITicketedDomainBackend
             }
             PortOutcome result;
             if (gameKeypad && primitive == DomainPrimitive.ReplaceAmountDigits)
-                result = ReplaceOnKeypad(intent.Amount!.Value, key =>
+            {
+                if (amountIntent != intent) { fillAttempts = 0; amountKeys = evidence.AmountKeypad.ToArray(); amountAnchor = anchor; }
+                if (++fillAttempts > 2) return new(false, false, "AMOUNT_FILL_LIMIT");
+                var keys = KeypadSequence(intent.Amount!.Value);
+                var points = new List<KeypadClick>();
+                int vx = GetSystemMetrics(76), vy = GetSystemMetrics(77), vw = GetSystemMetrics(78), vh = GetSystemMetrics(79);
+                foreach (var key in keys)
                 {
-                    var control = evidence.Locate(key, intent);
+                    var control = amountKeys.SingleOrDefault(c => c.Primitive == key);
                     if (control is null || !AnchorMatches(control, key, intent))
                         return new(false, false, "KEYPAD_CONTROL_UNAVAILABLE:" + key);
-                    bool KeyCurrent() => SafeValid() && PlatformMatches(control, intent);
-                    if (!KeyCurrent()) return new(false, false, "KEYPAD_TARGET_CHANGED");
-                    return Click(control, KeyCurrent);
-                });
+                    int x = control.Geometry.ScreenX + control.Left + control.Width / 2;
+                    int y = control.Geometry.ScreenY + control.Top + control.Height / 2;
+                    if (vw <= 1 || vh <= 1 || x < vx || y < vy || x >= vx+vw || y >= vy+vh)
+                        return new(false,false,"CONTROL_OUTSIDE_VIRTUAL_DESKTOP");
+                    points.Add(new(x,y,(int)(((long)(x-vx)*65536+32768)/vw),(int)(((long)(y-vy)*65536+32768)/vh)));
+                }
+                var sent = guard.Execute(InputAction.DomainKeypad(intent.Amount.Value, points, SafeValid));
+                result = new(sent.SendCallCount > 0, sent.Ok, sent.Reason);
+            }
             else if (primitive == DomainPrimitive.ReplaceAmountDigits)
             {
                 var sent = guard.Execute(InputAction.DomainAmount(intent.Amount!.Value, SafeValid));
@@ -148,24 +165,17 @@ public sealed class WindowsTicketedDomainBackend : ITicketedDomainBackend
         }
     }
 
-    // One Clear followed by the exact bounded digits, including repeated digits.
-    // Each step owns its normal one-use input ticket; no retry after any failure.
-    public static PortOutcome ReplaceOnKeypad(long amount, Func<DomainPrimitive, PortOutcome> click)
+    public static IReadOnlyList<DomainPrimitive> KeypadSequence(long amount)
     {
-        if (amount is not (> 0 and <= 9_999_999)) return new(false, false, "INVALID_AMOUNT");
-        bool attempted = false;
-        var keys = new[] { DomainPrimitive.ClearAmount }.Concat(amount.ToString(System.Globalization.CultureInfo.InvariantCulture)
-            .Select(c => (DomainPrimitive)((int)DomainPrimitive.AmountDigit0 + c - '0')));
-        foreach (var key in keys)
-        {
-            PortOutcome step;
-            try { step = click(key); }
-            catch { return new(true, false, "KEYPAD_EXCEPTION_UNKNOWN"); }
-            attempted |= step.SideEffectAttempted;
-            if (!step.Completed) return step with { SideEffectAttempted = attempted };
-        }
-        return new(attempted, true, "KEYPAD_DIGITS_SENT");
+        if (amount is not (> 0 and <= 9_999_999)) return [];
+        return new[] { DomainPrimitive.ClearAmount }.Concat(amount.ToString(System.Globalization.CultureInfo.InvariantCulture)
+            .Select(c => (DomainPrimitive)((int)DomainPrimitive.AmountDigit0 + c - '0'))).ToArray();
     }
+
+    public bool HasTimeToFillAndConfirm(DomainIntent intent) => !allowGameInput
+        || intent.RoundDeadlineNs - clock() >= 6_000_000_000;
+    public bool HasTimeToConfirm(DomainIntent intent) => !allowGameInput
+        || intent.RoundDeadlineNs - clock() >= 3_000_000_000;
 
     public AmountFieldReadback? ReadAmountField()
     {
@@ -174,17 +184,12 @@ public sealed class WindowsTicketedDomainBackend : ITicketedDomainBackend
             var i = amountIntent;
             amountVerified = false;
             if (i == null || amountCurrent == null) { LastReadbackReason = "NO_AMOUNT_MUTATION"; return null; }
-            long deadline = clock() + 3_000_000_000;
-            while (clock() < deadline)
-            {
-                if (!amountCurrent()) { LastReadbackReason = "TARGET_IDENTITY_REJECTED"; return null; }
-                var field = evidence.CaptureAmountField();
-                if (field is not null && field.Window == i.Window && field.Amount == i.Amount
-                    && field.CapturedNs > lastAmountMutationNs)
-                { amountVerified = true; LastReadbackReason = "EXACT_AMOUNT_VISIBLE"; return field; }
-            }
-            LastReadbackReason = "AMOUNT_READ_TIMEOUT_3S";
-            return null;
+            if (!amountCurrent()) { LastReadbackReason = "TARGET_IDENTITY_REJECTED"; return null; }
+            var field = evidence.CaptureAmountField(); // exactly one post-fill read
+            amountVerified = field is not null && field.Window == i.Window && field.Amount == i.Amount
+                && field.CapturedNs > lastAmountMutationNs;
+            LastReadbackReason = amountVerified ? "EXACT_AMOUNT_VISIBLE" : "AMOUNT_READBACK_MISMATCH";
+            return field;
         }
     }
 
