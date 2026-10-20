@@ -123,6 +123,16 @@ static class Program
                     Console.WriteLine("OCR "+read.Invoke(null,new object[]{(ReadOnlyMemory<byte>)pixels,w,h,w*4,box[0],box[1],box[2],box[3]}));
             }
             Require(v?.Scene==row.GetProperty("scene").GetString(),"STOCK_SCENE");
+            if(row.TryGetProperty("expectedFunds",out var expectedFunds)) {
+                var readText=Host.GetType("WgcLiveHarness.SceneAnchorOcr",true)!.GetMethod("ReadText")!;
+                if(v?.Scene=="LOBBY") Console.WriteLine("ACTUAL_ASSETS_TEXT="+readText.Invoke(null,new object[]{
+                    (ReadOnlyMemory<byte>)pixels,w,h,w*4,1340,20,170,65}));
+                Console.WriteLine("ASSETS_ENLARGED_TEXT="+Host.GetType("WgcLiveHarness.SceneAnchorOcr",true)!
+                    .GetMethod("ReadAssetsText")!.Invoke(null,new object[]{(ReadOnlyMemory<byte>)pixels,w,h,w*4,v!.Scene}));
+                var amount=Host.GetType("WgcLiveHarness.SceneAnchorOcr",true)!.GetMethod("ReadAssets")!
+                    .Invoke(null,new object[]{(ReadOnlyMemory<byte>)pixels,w,h,w*4,v!.Scene});
+                Require((long?)amount==expectedFunds.GetInt64(),"REAL_SCENE_FUNDS_READ");
+            }
             if(row.TryGetProperty("expectedCommitted",out var expectedCommitted)) {
                 bool Matches(long amount) => v?.OwnBid?.MatchesAmount(amount)==true;
                 Console.WriteLine("ACTUAL_COMMITTED_TEXT="+v?.OwnBid?.DisplayText);
