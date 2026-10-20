@@ -36,11 +36,12 @@ class MainDomainActionReceiptTests(unittest.TestCase):
     def test_lobby_planning_does_not_require_a_fabricated_auction_round(self):
         planning=dict(schemaVersion='domain-planning-view.v1',planningOnly=True,inputActions=False,
                       scene='LOBBY',frameSequence=1,readbackNs=100,round=0,matchId='')
-        data=dict(domainObservation=planning,observationStatus='FRAME',frameSequence=1,capturedAtNs=100,
+        data=dict(domainObservation=planning,observationStatus='WAITING_FOR_FRESH_FRAME',frameSequence=1,capturedAtNs=100,
                   round=None,matchId='old-match')
         self.assertEqual(app_main._native_domain_planning_view(data),planning)
         planning['scene']='AUCTION'
-        self.assertIsNone(app_main._native_domain_planning_view(data))
+        self.assertEqual(app_main._native_domain_planning_view(data),planning,
+                         'visual controls do not grant or require business-fact qualification')
 
     def test_preparation_receipt_is_scoped_and_never_changes_bid_or_session(self):
         intent = dict(intentId='open-gold', kind='OpenInstrument', matchId='match-1',

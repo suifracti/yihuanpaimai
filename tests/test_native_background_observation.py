@@ -414,10 +414,13 @@ class NativeBackgroundObservationTests(unittest.TestCase):
                     matchGeneration=1, round=1, factsRevision=7, scene='AUCTION_READY', funds=200000)
         data['domainObservation'] = view
         self.assertEqual(ns['_native_domain_planning_view'](data), view)
-        for key in ('frameSequence', 'readbackNs', 'matchId', 'matchGeneration', 'round', 'factsRevision'):
+        for key in ('frameSequence', 'readbackNs'):
             invalid = copy.deepcopy(data)
             invalid['domainObservation'][key] = 'other'
             self.assertIsNone(ns['_native_domain_planning_view'](invalid))
+        data['observationStatus']='WAITING_FOR_FRESH_FRAME'
+        self.assertEqual(ns['_native_domain_planning_view'](data),view,
+                         'pixel/control metadata is not a qualified Solver fact')
         tree = ast.parse((ROOT/'app/main.py').read_text(encoding='utf-8'))
         names = {node.name for node in tree.body if isinstance(node, ast.FunctionDef)}
         self.assertFalse(names & {'_live_loop_frame_image', '_park_assistant_and_focus_game',

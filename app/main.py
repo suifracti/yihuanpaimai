@@ -3203,13 +3203,11 @@ def _live_loop_waiting_to_send(state: Dict[str, Any], published: Optional[str]) 
 def _native_domain_planning_view(data: Dict[str, Any]) -> Optional[Dict[str, Any]]:
     """Read scene/funds from the held Host FRAME; never a screen grab or SOURCE."""
     view = data.get('domainObservation')
+    # This describes pixels and controls, not qualified auction facts. Solver
+    # and bid admission still own their fact scope; visual actions do not.
     pairs = [('frameSequence', 'frameSequence'), ('readbackNs', 'capturedAtNs')]
-    if isinstance(view, dict) and view.get('scene') not in {'LOBBY', 'TOOL_SETUP', 'TOOL_REFILL_CONFIRM'}:
-        pairs += [('matchId', 'matchId'), ('matchGeneration', 'sourceMatchGeneration'),
-                  ('round', 'round'), ('factsRevision', 'engineFactsRevision')]
     if (not isinstance(view, dict) or view.get('schemaVersion') != 'domain-planning-view.v1'
             or view.get('planningOnly') is not True or view.get('inputActions') is not False
-            or data.get('observationStatus') != 'FRAME'
             or any(view.get(k) != data.get(v) for k, v in pairs)):
         return None
     return view
