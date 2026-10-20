@@ -162,10 +162,10 @@ def published_domain_scene(frame):
             and (settlement.get("witnesses") or settlement.get("controls"))):
         return "SETTLEMENT"
     lobby = scenes.get("LOBBY") or {}
-    if lobby.get("controls") and all(hit(row["template"], row["search"]) for row in lobby["controls"]):
+    if lobby.get("controls") and all(row.get("optional") or hit(row["template"], row["search"]) for row in lobby["controls"]):
         return "LOBBY"
     auction = scenes.get("AUCTION") or {}
-    if auction.get("controls") and all(hit(row["template"], row["search"]) for row in auction["controls"]):
+    if auction.get("controls") and all(row.get("optional") or hit(row["template"], row["search"]) for row in auction["controls"]):
         return "AUCTION"
     return None
 
