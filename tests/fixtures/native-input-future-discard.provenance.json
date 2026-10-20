@@ -1,0 +1,13 @@
+{
+  "head": "0c3fe3acb0f840abd48d73269314d752f71b16bf",
+  "privateSource": "build/native-observation/session-8d7fd16149124ad2875d60f90c75340b",
+  "files": {
+    "domain-rejected-diagnostic.json": "bd5fdc0e2ff584d8cc0d54ac74a8087bf9603c77bd9a4c79f3f6d886c563a204",
+    "host-trace.jsonl": "b157e9cfe131be00893f3f6d722d18d84148984b44d74c9b916b77aa23bd364b"
+  },
+  "proofs": [
+    875,
+    877
+  ],
+  "meaning": "875 is the actual rejected independent input capture. 877 is a later ordinary capture, explicitly rebound to the original operation in the offline fixture. Original proof timing retained for 875, identifiers anonymized, test pixels blank. Neither fixture is real qualified SOURCE or runtime recovery evidence."
+}

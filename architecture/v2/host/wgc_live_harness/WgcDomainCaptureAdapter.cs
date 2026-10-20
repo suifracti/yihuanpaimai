@@ -10,27 +10,31 @@ internal static class WgcDomainCaptureAdapter
         long requestNs, long deadlineNs, Func<long> clock)
     {
         CapturedBgraFrame? last = null;
+        // CaptureAfterRequest/DeadlineForRequest anchors timeout to requestNs.
+        // Passing "remaining from now" would move that inner deadline backwards.
+        int requestWaitMs = checked((int)Math.Min(int.MaxValue,
+            Math.Max(1, (deadlineNs - requestNs + 999_999) / 1_000_000)));
         for (int sample = 0; sample < 4 && clock() < deadlineNs; sample++)
         {
-            var remainingMs = Math.Max(1, (deadlineNs - clock()) / 1_000_000);
-            var frame = capture((int)Math.Min(1500, remainingMs), requestNs, deadlineNs);
+            var frame = capture(requestWaitMs, requestNs, deadlineNs);
             if (last is not null && frame.CaptureScopeEpoch != last.CaptureScopeEpoch)
                 throw new InvalidOperationException("input-capture-scope-changed");
             last = frame;
             var now = clock();
             var proof = frame.DeliveryProof;
-            // Post-empty delivery can still carry a pre-request source marker.
-            // Only that otherwise-valid case waits for another independent image.
-            // Invalid/future/stalled/expired proofs keep their original rejection.
-            bool preRequestDelivery = frame.SourceTimestampNs <= requestNs && proof is not null
-                && proof.RequestNs == requestNs && proof.DeadlineNs == deadlineNs
+            // A pre-request or future-at-getter image is never input support.
+            // Discard only otherwise-valid delivery and request a NEW image;
+            // a future marker still beyond completed readback is not recoverable.
+            bool discardableDelivery = proof is not null
+                && proof.RequestNs == requestNs && proof.DeadlineNs <= deadlineNs
                 && proof.SourceNs == frame.SourceTimestampNs && proof.ReadbackCompletedNs == frame.CaptureTimestampNs
                 && proof.AcquisitionSequence == frame.AcquisitionSequence
-                && proof.SourceMarkerProgress && proof.OriginStatus == "CONSISTENT_AT_READ"
-                && proof.Rejection(now, 500_000_000) is null;
-            if (!preRequestDelivery) return frame;
+                && proof.SourceMarkerProgress && proof.Rejection(now, 500_000_000) is null
+                && ((frame.SourceTimestampNs <= requestNs && proof.OriginStatus == "CONSISTENT_AT_READ")
+                    || (proof.OriginStatus == "FUTURE_AT_READ" && proof.SourceNs <= proof.ReadbackCompletedNs));
+            if (!discardableDelivery) return frame;
         }
-        // An exhausted wait never upgrades the last pre-request delivery.
+        // An exhausted wait never upgrades the last discarded delivery.
         // FromIndependentCapture will reject it by the unchanged source gate.
         return last ?? throw new TimeoutException("input-post-request-source-timeout");
     }
