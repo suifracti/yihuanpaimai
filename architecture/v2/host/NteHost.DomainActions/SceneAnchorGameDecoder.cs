@@ -16,6 +16,8 @@ public sealed class SceneAnchorGameDecoder : IGameDomainFrameDecoder
     public const int OwnCommittedBidSlot = 0;
     public delegate long? AmountSample(ReadOnlyMemory<byte> bgra, int width, int height, int stride,
         int x, int y, int w, int h);
+    public delegate string? TextSample(ReadOnlyMemory<byte> bgra, int width, int height, int stride,
+        int x, int y, int w, int h);
 
     public readonly record struct GrayImage(byte[] Pixels, int Width, int Height)
     {
@@ -35,6 +37,7 @@ public sealed class SceneAnchorGameDecoder : IGameDomainFrameDecoder
     public bool Ready { get; }
     public AmountSample? ReadAmount { get; set; }
     public AmountSample? ReadCommittedAmount { get; set; }
+    public TextSample? ReadCommittedText { get; set; }
     public Func<NativeDomainFrame, string, int, InstrumentStock?>? ReadInstruments { get; set; }
 
     SceneAnchorGameDecoder(Catalog? catalog, Dictionary<string, GrayImage> templates)
@@ -162,22 +165,30 @@ public sealed class SceneAnchorGameDecoder : IGameDomainFrameDecoder
         var controls = found.Select(item => Anchor(item.Control.Primitive, item.Left, item.Top, item.Width, item.Height, frame)).ToArray();
         long? amount = null;
         long? committed = null;
+        string? committedText = null;
         if (scene is "AUCTION" or "AUCTION_R1" or "AUCTION_READY")
         {
             var focus = found.FirstOrDefault(item => item.Control.Primitive == DomainPrimitive.FocusAmountField);
             if (focus.Control is not null && ReadAmount is not null)
                 amount = ReadSample(ReadAmount, frame, focus.Left, focus.Top, focus.Width, focus.Height);
             bool panelOpen = found.Any(item => item.Control.Primitive == DomainPrimitive.SubmitBid);
-            if (!panelOpen && catalog.Committed is Box committedBox && ReadCommittedAmount is not null)
+            if (!panelOpen && catalog.Committed is Box committedBox)
             {
                 var scaled = Scale(committedBox, frame.Geometry.Width, frame.Geometry.Height, catalog);
-                committed = ReadSample(ReadCommittedAmount, frame, scaled.X, scaled.Y,
-                    scaled.Right - scaled.X, scaled.Bottom - scaled.Y);
+                if (ReadCommittedText is not null)
+                    committedText = ReadCommittedText(frame.Pixels, frame.Geometry.Width, frame.Geometry.Height,
+                        frame.Stride, scaled.X, scaled.Y, scaled.Right-scaled.X, scaled.Bottom-scaled.Y);
+                else if (ReadCommittedAmount is not null)
+                    committed = ReadSample(ReadCommittedAmount, frame, scaled.X, scaled.Y,
+                        scaled.Right - scaled.X, scaled.Bottom - scaled.Y);
             }
         }
         CapturedOwnBid? own = committed is > 0 and <= 9_999_999
             ? new(OwnCommittedBidSlot, OwnCommittedBidIdentity, committed.Value, true, frame.EvidenceRef)
             : null;
+        if (own is null && !string.IsNullOrWhiteSpace(committedText))
+            own = new(OwnCommittedBidSlot, OwnCommittedBidIdentity, null, true, frame.EvidenceRef)
+                { DisplayText = committedText };
         bool goldVisible = catalog.GoldAverage is { } gold && Match(gray, frame.Geometry.Width, frame.Geometry.Height,
             gold.Image, Scale(gold.Search, frame.Geometry.Width, frame.Geometry.Height, catalog), catalog.Threshold, out _, out _);
         int counterY = 235;

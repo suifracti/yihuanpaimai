@@ -283,7 +283,7 @@ static class Program
             var closedFrame = Blank("AUCTION", 1);
             var closedView = decoder.Decode(new NativeDomainFrame(closedFrame.Scope, closedFrame.Geometry, closed, closedFrame.Stride));
             Require(closedView?.Scene == "AUCTION_R1" && closedView.OwnBid?.Amount == 300000
-                && readX == 1382 && readY == 864 && readW == 1901 - 1382 && readH == 1069 - 864
+                && readX == 1608 && readY == 976 && readW == 1882 - 1608 && readH == 1042 - 976
                 && readX + readW <= width && readY + readH <= height, "COMMITTED_SEARCH_BOX " + readX + "," + readY + " " + readW + "x" + readH);
             decoder.ReadCommittedAmount = null;
             Require(decoder.Decode(Blank("AUCTION", 1)) is null, "BLANK_FRAME_STAYS_UNCONNECTED");

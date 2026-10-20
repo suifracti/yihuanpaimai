@@ -62,6 +62,15 @@ static class Program
             DomainPrimitive.AmountDigit3,DomainPrimitive.AmountDigit4,DomainPrimitive.AmountDigit3,
             DomainPrimitive.AmountDigit2,DomainPrimitive.AmountDigit6,DomainPrimitive.AmountDigit8}),"EXACT_DIGITS_ONCE");
         Require(WindowsTicketedDomainBackend.KeypadSequence(0).Count==0,"BOUNDED_AMOUNT");
+        CapturedOwnBid Display(string text) => new(0,"own",null,true,"test") {DisplayText=text};
+        Require(Display("203.93K").MatchesAmount(203930),"COMPACT_K");
+        Require(Display("203 ． 93K").MatchesAmount(203930),"REAL_WINDOWS_OCR_FULLWIDTH_DOT");
+        Require(Display("343.27K").MatchesAmount(343268),"DISPLAY_PRECISION_NOT_FABRICATED_EXACT_OCR");
+        Require(Display("1.25M").MatchesAmount(1250000),"COMPACT_M");
+        Require(Display("203,930").MatchesAmount(203930),"EXACT_INTEGER_RETAINED");
+        Require(!Display("203.92K").MatchesAmount(203930)
+            && !Display("允许出价范围203.93K").MatchesAmount(203930)
+            && !Display("203.93K 1").MatchesAmount(203930),"WRONG_OR_UNBOUND_DISPLAY_REJECTED");
         Console.WriteLine("PASS keypad: one clear and exact bounded digits, including repeated digits (no input)");
     }
     static void InputBoundary()
@@ -87,6 +96,8 @@ static class Program
         var decoder = SceneAnchorGameDecoder.Load("assets/scene_anchors");
         decoder.ReadAmount=(SceneAnchorGameDecoder.AmountSample)Host.GetType("WgcLiveHarness.SceneAnchorOcr",true)!
             .GetMethod("Read")!.CreateDelegate(typeof(SceneAnchorGameDecoder.AmountSample));
+        decoder.ReadCommittedText=(SceneAnchorGameDecoder.TextSample)Host.GetType("WgcLiveHarness.SceneAnchorOcr",true)!
+            .GetMethod("ReadText")!.CreateDelegate(typeof(SceneAnchorGameDecoder.TextSample));
         var readStock = Host.GetType("WgcLiveHarness.SceneAnchorOcr", true)!.GetMethod("ReadInstruments")!
             .CreateDelegate<Func<NativeDomainFrame, string, int, InstrumentStock?>>();
         decoder.ReadInstruments = (frame, scene, top) => { Console.WriteLine("GROUP_TOP="+top); return readStock(frame,scene,top); };
@@ -112,6 +123,27 @@ static class Program
                     Console.WriteLine("OCR "+read.Invoke(null,new object[]{(ReadOnlyMemory<byte>)pixels,w,h,w*4,box[0],box[1],box[2],box[3]}));
             }
             Require(v?.Scene==row.GetProperty("scene").GetString(),"STOCK_SCENE");
+            if(row.TryGetProperty("expectedCommitted",out var expectedCommitted)) {
+                bool Matches(long amount) => v?.OwnBid?.MatchesAmount(amount)==true;
+                Console.WriteLine("ACTUAL_COMMITTED_TEXT="+v?.OwnBid?.DisplayText);
+                Require(Matches(expectedCommitted.GetInt64()),"REAL_COMMITTED_COMPACT_BID_NOT_READ");
+                Require(!Matches(expectedCommitted.GetInt64()+100),"WRONG_COMPACT_AMOUNT_REJECTED");
+                var current=scope with {Round=1,Scene="AUCTION",CapturedNs=TraceClock.NowNs(),
+                    LeaseExpiresNs=TraceClock.NowNs()+8_000_000_000,ApprovalId="test"};
+                var port=new SentPort();
+                var coordinator=new DomainActionCoordinator(()=>current,TraceClock.NowNs,port);
+                var intent=new DomainIntent("real-committed",DomainActionKind.Bid,current.MatchId,1,0,
+                    expectedCommitted.GetInt64(),1000000,TraceClock.NowNs()+8_000_000_000,0,"lobby",current.Window)
+                    {MatchGeneration=1,ObservationSessionId="test",MaxSafeBid=1000000,ApprovalId="test"};
+                var pending=coordinator.Dispatch(intent);
+                Require(pending.Status==ReceiptStatus.SENT_PENDING_CONFIRMATION,"COMMITTED_REPLAY_PENDING");
+                var frame=new NativeDomainFrame(current with {CapturedNs=TraceClock.NowNs(),SourceSequence=2},new(w,h,0,0),pixels,w*4);
+                var producer=new NativeVisibleResultProducer(decoder,TraceClock.NowNs);
+                var result=producer.FromCapture(intent,pending,frame,new(0,SceneAnchorGameDecoder.OwnCommittedBidIdentity));
+                Require(result is not null && coordinator.Confirm(result).Status==ReceiptStatus.CONFIRMED,"REAL_COMPACT_RESULT_CONFIRMS");
+                Require(port.Sends==1,"NO_BID_RESEND");
+                Console.WriteLine("PASS saved actual submitted compact bid matches only its displayed value; no input");
+            }
             if(row.TryGetProperty("replaceAnchor",out var replace) && replace.GetBoolean()) {
                 var frame=new NativeDomainFrame(scope,new(w,h,0,0),pixels,w*4);
                 var intent=new DomainIntent("bind-only",DomainActionKind.Bid,scope.MatchId,scope.Round,0,442779,

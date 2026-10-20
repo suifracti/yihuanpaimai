@@ -2,6 +2,8 @@ using System.Security.Cryptography;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using System.Text.Json.Serialization;
+using System.Globalization;
+using System.Text.RegularExpressions;
 
 namespace NteHost.DomainActions;
 
@@ -34,8 +36,26 @@ public sealed class NativeDomainFrame
     }
 }
 public sealed record OwnSeatBinding(int Slot, string PlayerIdentity);
-public sealed record CapturedOwnBid(int Slot, string PlayerIdentity, long Amount, bool AcceptanceVisible,
-    string EvidenceRef);
+public sealed record CapturedOwnBid(int Slot, string PlayerIdentity, long? Amount, bool AcceptanceVisible,
+    string EvidenceRef)
+{
+    // The submitted button uses K/M with two decimal places. Retain its text;
+    // it is a display confirmation of the already read-back exact input.
+    public string? DisplayText { get; init; }
+    public bool MatchesAmount(long expected)
+    {
+        if (Amount is { } exact) return exact == expected;
+        string text = Regex.Replace(DisplayText ?? "", @"\s", "").Replace('，', ',').Replace('．', '.');
+        if (Regex.IsMatch(text, @"^(?:\d+|\d{1,3}(?:,\d{3})+)$")
+            && long.TryParse(text.Replace(",", ""), out var integer)) return expected > 0 && integer == expected;
+        var match = Regex.Match(text,
+            @"^(\d+(?:\.\d{1,2})?)([KM])$", RegexOptions.IgnoreCase);
+        if (!match.Success || !decimal.TryParse(match.Groups[1].Value, NumberStyles.AllowDecimalPoint,
+                CultureInfo.InvariantCulture, out var shown)) return false;
+        decimal scale = match.Groups[2].Value.Equals("K", StringComparison.OrdinalIgnoreCase) ? 1000 : 1000000;
+        return expected > 0 && Math.Round(expected / scale, 2, MidpointRounding.AwayFromZero) == shown;
+    }
+}
 public sealed record InstrumentStock(int? GoldAverage, int? PurpleCount, long? RefillCost, long? Funds);
 public sealed record DecodedDomainFrame(string Scene, int Round, string MatchId, long MatchGeneration,
     CapturedOwnBid? OwnBid, long? AmountField, IReadOnlyList<VisibleControlAnchor> Controls)
@@ -125,8 +145,9 @@ public sealed class NativeVisibleResultProducer
                 || view.Scene is not ("AUCTION" or "AUCTION_R1" or "AUCTION_READY") || ownSeat == null || view.OwnBid == null
                 || !view.OwnBid.AcceptanceVisible || view.OwnBid.Slot != ownSeat.Slot
                 || string.IsNullOrWhiteSpace(ownSeat.PlayerIdentity) || view.OwnBid.PlayerIdentity != ownSeat.PlayerIdentity
-                || view.OwnBid.EvidenceRef != frame.EvidenceRef || view.OwnBid.Amount != intent.Amount) return null;
-            accepted = view.OwnBid.Amount;
+                || view.OwnBid.EvidenceRef != frame.EvidenceRef || intent.Amount is not { } amount
+                || !view.OwnBid.MatchesAmount(amount)) return null;
+            accepted = amount;
         }
         else if (intent.Kind == DomainActionKind.ReturnLobby)
         {
