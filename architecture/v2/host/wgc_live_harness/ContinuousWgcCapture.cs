@@ -146,7 +146,11 @@ internal sealed class ContinuousWgcCapture : IDisposable
                     : _policy == CapturePolicy.Delivery
                     ? source.CaptureDelivered(timeoutMs, requestNs, deadlineNs, () => stop() || stopped(), _observation, epoch)
                     : source.CaptureAfterRequest(timeoutMs, requestNs, deadlineNs, () => stop() || stopped());
-                return _validate(source, frame with { CaptureScopeEpoch = epoch }); }
+                var scoped = frame with { CaptureScopeEpoch = epoch };
+                if (!forAction) return _validate(source, scoped);
+                _ensureMapping(source, null);
+                if (!_mapping.IsCurrent(epoch)) throw new CaptureScopeInvalidatedException();
+                return scoped; }
             catch (MappingProbeException ex) { _ensureMapping(source, ex.Probe); throw new CaptureScopeInvalidatedException(); }
             finally { LastRequestClockDiagnosticsJson = _policy == CapturePolicy.Delivery ? source.LastDeliveryDiagnosticJson : source.LastRequestClockDiagnosticsJson; source.EnableRequestClockDiagnostics = false; source.RequestGateClockSample = null; }
         }, timeoutMs + 100, discardLatest: true);
