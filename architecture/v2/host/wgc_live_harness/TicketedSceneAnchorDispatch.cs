@@ -99,7 +99,7 @@ sealed class TicketedSceneAnchorDispatch : IDisposable
         if (!decoder.Ready) return null;
         decoder.ReadAmount = SceneAnchorOcr.Read;
         decoder.ReadCommittedAmount = SceneAnchorOcr.Read;
-        decoder.ReadCommittedText = SceneAnchorOcr.ReadText;
+        decoder.ReadCommittedText = SceneAnchorOcr.ReadCommittedText;
         decoder.ReadInstruments = SceneAnchorOcr.ReadInstruments;
         var focus = new GameFocus { Target = hwnd };
         var observer = new Win32LowLevelInputObserver("scene-anchor");

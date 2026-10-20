@@ -44,11 +44,22 @@ static class SceneAnchorOcr
         if (AssetsRegion(scene, width, height) is not { } r) return null;
         // Small bold balance digits lost the 7 in the real 2,732,464 frame.
         // Enlarge the same crop; do not repair or guess missing OCR digits.
-        const int scale = 3;
-        int w=r.W*scale,h=r.H*scale;
+        return ReadEnlargedText(bgra,width,height,stride,r.X,r.Y,r.W,r.H);
+    }
+
+    public static string? ReadCommittedText(ReadOnlyMemory<byte> bgra, int width, int height, int stride,
+        int x,int y,int cropWidth,int cropHeight)
+        => ReadEnlargedText(bgra,width,height,stride,x,y,cropWidth,cropHeight);
+
+    static string? ReadEnlargedText(ReadOnlyMemory<byte> bgra, int width, int height, int stride,
+        int left,int top,int cropWidth,int cropHeight)
+    {
+        if(left<0 || top<0 || cropWidth<3 || cropHeight<3 || left+cropWidth>width || top+cropHeight>height) return null;
+        const int scale=3;
+        int w=cropWidth*scale,h=cropHeight*scale;
         var enlarged=new byte[w*h*4];
         for(int y=0;y<h;y++) for(int x=0;x<w;x++)
-            bgra.Span.Slice((r.Y+y/scale)*stride+(r.X+x/scale)*4,4)
+            bgra.Span.Slice((top+y/scale)*stride+(left+x/scale)*4,4)
                 .CopyTo(enlarged.AsSpan((y*w+x)*4,4));
         return ReadText(enlarged,w,h,w*4,0,0,w,h);
     }

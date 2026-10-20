@@ -45,7 +45,7 @@ public sealed record CapturedOwnBid(int Slot, string PlayerIdentity, long? Amoun
     public bool MatchesAmount(long expected)
     {
         if (Amount is { } exact) return exact == expected;
-        string text = Regex.Replace(DisplayText ?? "", @"\s", "").Replace('，', ',').Replace('．', '.');
+        string text = Regex.Replace(DisplayText ?? "", @"\s", "").Replace('，', ',').Replace('．', '.').Replace('·', '.');
         if (Regex.IsMatch(text, @"^(?:\d+|\d{1,3}(?:,\d{3})+)$")
             && long.TryParse(text.Replace(",", ""), out var integer)) return expected > 0 && integer == expected;
         var match = Regex.Match(text,
@@ -53,7 +53,9 @@ public sealed record CapturedOwnBid(int Slot, string PlayerIdentity, long? Amoun
         if (!match.Success || !decimal.TryParse(match.Groups[1].Value, NumberStyles.AllowDecimalPoint,
                 CultureInfo.InvariantCulture, out var shown)) return false;
         decimal scale = match.Groups[2].Value.Equals("K", StringComparison.OrdinalIgnoreCase) ? 1000 : 1000000;
-        return expected > 0 && Math.Round(expected / scale, 2, MidpointRounding.AwayFromZero) == shown;
+        // The UI hides the last digits. At a half step either neighboring
+        // rendering is consistent; the exact input was checked before Submit.
+        return expected > 0 && Math.Abs(expected / scale - shown) <= .005m;
     }
 }
 public sealed record InstrumentStock(int? GoldAverage, int? PurpleCount, long? RefillCost, long? Funds);

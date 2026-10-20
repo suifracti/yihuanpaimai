@@ -66,6 +66,9 @@ static class Program
         Require(Display("203.93K").MatchesAmount(203930),"COMPACT_K");
         Require(Display("203 ． 93K").MatchesAmount(203930),"REAL_WINDOWS_OCR_FULLWIDTH_DOT");
         Require(Display("343.27K").MatchesAmount(343268),"DISPLAY_PRECISION_NOT_FABRICATED_EXACT_OCR");
+        Require(Display("393.54K").MatchesAmount(393545)
+            && !Display("393.54K").MatchesAmount(393546),"REAL_HALF_STEP_AND_OUTSIDE_DISPLAY_PRECISION");
+        Require(Display("393 · 54K").MatchesAmount(393545),"REAL_ENLARGED_WINDOWS_OCR_DECIMAL_MARK");
         Require(Display("1.25M").MatchesAmount(1250000),"COMPACT_M");
         Require(Display("203,930").MatchesAmount(203930),"EXACT_INTEGER_RETAINED");
         Require(!Display("203.92K").MatchesAmount(203930)
@@ -97,7 +100,7 @@ static class Program
         decoder.ReadAmount=(SceneAnchorGameDecoder.AmountSample)Host.GetType("WgcLiveHarness.SceneAnchorOcr",true)!
             .GetMethod("Read")!.CreateDelegate(typeof(SceneAnchorGameDecoder.AmountSample));
         decoder.ReadCommittedText=(SceneAnchorGameDecoder.TextSample)Host.GetType("WgcLiveHarness.SceneAnchorOcr",true)!
-            .GetMethod("ReadText")!.CreateDelegate(typeof(SceneAnchorGameDecoder.TextSample));
+            .GetMethod("ReadCommittedText")!.CreateDelegate(typeof(SceneAnchorGameDecoder.TextSample));
         var readStock = Host.GetType("WgcLiveHarness.SceneAnchorOcr", true)!.GetMethod("ReadInstruments")!
             .CreateDelegate<Func<NativeDomainFrame, string, int, InstrumentStock?>>();
         decoder.ReadInstruments = (frame, scene, top) => { Console.WriteLine("GROUP_TOP="+top); return readStock(frame,scene,top); };
