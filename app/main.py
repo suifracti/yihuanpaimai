@@ -3178,7 +3178,8 @@ def _advance_authorized_live_domain_loop(data: Dict[str, Any], frame: Dict[str, 
             _stop_authorized_live_domain_loop(_LIVE_DOMAIN_LOOP.get('reason') or 'STOPPED')
             return
         holder = globals().get('_MAIN_WINDOW_HOLDER') or []
-        if not holder or not holder[0].prepare_game_input(str(data.get('observationSessionId') or '')):
+        if not holder or not holder[0].prepare_game_input(str(data.get('observationSessionId') or ''),
+                int((data.get('target') or {}).get('targetHwnd') or 0)):
             return
         planning = _native_domain_planning_view(data)
         published = planning.get("scene") if planning is not None else None

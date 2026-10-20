@@ -1685,7 +1685,7 @@ def create_main_window_type(WinForms, Drawing):
             self.Resize += self._on_resize
             self.FormClosing += self._on_form_closing
 
-        def prepare_game_input(self, session_id: str) -> bool:
+        def prepare_game_input(self, session_id: str, target_hwnd: int = 0) -> bool:
             """Minimize once per run, on the UI thread, before dispatching input."""
             if self._game_input_session == session_id:
                 return self._game_input_ready and not self._game_input_finished
@@ -1699,6 +1699,8 @@ def create_main_window_type(WinForms, Drawing):
                 self._game_input_previous_state = self.WindowState
                 self.Text = "异环拍卖助手"
                 self.WindowState = WinForms.FormWindowState.Minimized
+                if target_hwnd:
+                    ctypes.windll.user32.SetForegroundWindow(ctypes.c_void_p(target_hwnd))
                 self._game_input_ready = True
             if getattr(self, "InvokeRequired", False):
                 from System import Action

@@ -96,12 +96,17 @@ async def start(prepared, output, *, environment=None, on_launch=None):
     if on_launch is not None:
         on_launch(child)  # Retain ownership for the one-shot wrapper's bounded cleanup.
     record("assistant-launched", wrapperPid=child.pid)
-    deadline = time.monotonic() + 15
+    deadline = time.monotonic() + 30
     while time.monotonic() < deadline:
         if child.poll() is not None:
             raise RuntimeError(f"Assistant exited before bus ready: {child.returncode}")
         log = output / "main.log"
-        if log.is_file() and "WebSocket bus ready on" in log.read_text(encoding="utf-8", errors="replace"):
+        ready_log = log.read_text(encoding="utf-8", errors="replace") if log.is_file() else ""
+        ui_log = output / "stdout.log"
+        if ui_log.is_file():
+            ready_log += ui_log.read_text(encoding="utf-8", errors="replace")
+        if ("WebSocket bus ready on" in ready_log and
+                "Running WinForms application message loop with native Main Window owner" in ready_log):
             record("bus-ready")
             async with websockets.connect(f"ws://127.0.0.1:{prepared['port']}", open_timeout=2) as ws:
                 try:
