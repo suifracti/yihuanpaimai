@@ -43,24 +43,30 @@ public sealed class UnconnectedGameDomainDecoder : IGameDomainFrameDecoder
 // callback must request a new WGC frame; retained Engine context is not a capture.
 public sealed class CapturedDomainControlEvidence : IDomainControlEvidence
 {
+    public string LastFailure { get; private set; } = "NOT_READ";
     private readonly Func<NativeDomainFrame?> capture;
     private readonly IGameDomainFrameDecoder decoder;
     public CapturedDomainControlEvidence(Func<NativeDomainFrame?> capture, IGameDomainFrameDecoder decoder)
     { this.capture = capture; this.decoder = decoder; }
     public VisibleControlAnchor? Locate(DomainPrimitive primitive, DomainIntent intent)
     {
+        LastFailure = "CAPTURE_STARTED";
         var frame = capture();
-        if (frame == null || !frame.Scope.SourceQualified) return null;
+        if (frame == null) { LastFailure = "INDEPENDENT_CAPTURE_UNAVAILABLE"; return null; }
+        if (!frame.Scope.SourceQualified) { LastFailure = "SOURCE_UNQUALIFIED"; return null; }
+        LastFailure = "DECODE_STARTED";
         var view = decoder.Decode(frame);
         string expectedScene = intent.Kind switch { DomainActionKind.Bid => "AUCTION",
             DomainActionKind.ReturnLobby => "SETTLEMENT", DomainActionKind.StartNextMatch => "LOBBY",
             _ => AuctionPreparation.ExpectedScene(intent.Kind) ?? "INVALID" };
         if (view == null || view.Scene != expectedScene || frame.Scope.Scene != expectedScene
             || view.MatchId != frame.Scope.MatchId || view.MatchGeneration != frame.Scope.MatchGeneration
-            || view.Round != frame.Scope.Round) return null;
+            || view.Round != frame.Scope.Round)
+        { LastFailure = $"DECODE_OR_SCOPE:expected={expectedScene},decoded={view?.Scene},scope={frame.Scope.Scene}"; return null; }
         var matches = view?.Controls.Where(a => a.Primitive == primitive
             && a.EvidenceRef == frame.EvidenceRef && a.SourceSequence == frame.Scope.SourceSequence
             && a.CapturedNs == frame.Scope.CapturedNs && a.Geometry == frame.Geometry).ToArray();
+        LastFailure = matches is { Length: 1 } ? "OK" : "CONTROL_BINDING_OR_MATCH_COUNT:" + matches?.Length;
         return matches is { Length: 1 } ? matches[0] : null;
     }
     public AmountFieldReadback? CaptureAmountField()

@@ -12,6 +12,7 @@ public sealed record VisibleControlAnchor(DomainPrimitive Primitive, int Left, i
 
 public interface IDomainControlEvidence
 {
+    string LastFailure => "UNREPORTED";
     // Detector reads ONLY this target's independent new capture, including ROI/geometry.
     // Null means not connected. No fixed game coordinates or dummy-profile fallback.
     VisibleControlAnchor? Locate(DomainPrimitive primitive, DomainIntent intent);
@@ -75,7 +76,7 @@ public sealed class WindowsTicketedDomainBackend : ITicketedDomainBackend
                 return new(false, false, "INVALID_AMOUNT");
             VisibleControlAnchor? anchor;
             try { anchor = evidence.Locate(primitive, intent); } catch { anchor = null; }
-            if (anchor == null) return new(false, false, "NOT_CONNECTED_CONTROL_ANCHOR_UNKNOWN");
+            if (anchor == null) return new(false, false, "NOT_CONNECTED_CONTROL_ANCHOR_UNKNOWN:" + evidence.LastFailure);
             if (!AnchorMatches(anchor, primitive, intent)) return new(false, false, "INITIAL_CONTROL_ANCHOR_UNQUALIFIED_OR_STALE");
             string validationFailure = "NONE";
             bool Valid()

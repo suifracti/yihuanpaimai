@@ -310,38 +310,82 @@ internal static class NativeObservationService
                     && capture.IsClientAreaMappingCurrent(),
                 ex => trace.Event("warehouse.source.v2.failed", session.GenerationId, new { error = ex.ToString(), diagnostic = capture.LastRequestClockDiagnosticsJson }),
                 reason => EmitStatus(sessionId, "ERROR", reason, new { exitConfirmed = false })) : null;
+            CapturedBgraFrame? lastDomainCapture = null;
+            long lastDomainRequestNs = 0;
+            string lastDomainCaptureStage = "NOT_REQUESTED";
+            bool domainRejectionSaved = false;
+            void PublishDomainAction(JsonObject message)
+            {
+                if (!domainRejectionSaved && (string?)message["type"] == "domain.action.receipt"
+                    && (string?)message["receipt"]?["status"] is "NOT_SENT" or "UNKNOWN")
+                {
+                    domainRejectionSaved = true;
+                    try
+                    {
+                        var image = lastDomainCapture;
+                        var path = image is null ? null : Path.Combine(workDir, "domain-rejected-diagnostic.bmp");
+                        if (image is not null) WriteBmp(path!, image.Width, image.Height, image.Pixels);
+                        File.WriteAllText(Path.Combine(workDir, "domain-rejected-diagnostic.json"),
+                            JsonSerializer.Serialize(new {
+                                diagnosticOnly = true, sourceQualified = false, inputActions = false,
+                                requestNs = lastDomainRequestNs, stage = lastDomainCaptureStage,
+                                receipt = message["receipt"]?.DeepClone(), rawPath = path,
+                                captureId = image?.DeliveryProof?.CaptureId,
+                                readbackNs = image?.CaptureTimestampNs, sourceNs = image?.SourceTimestampNs,
+                                acquisitionSequence = image?.AcquisitionSequence, captureScopeEpoch = image?.CaptureScopeEpoch,
+                                pixelSha256 = image is null ? null : Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(image.Pixels)),
+                                deliveryProof = image?.DeliveryProof?.ToJson()
+                            }, JsonLineOptions));
+                    }
+                    catch (Exception ex)
+                    {
+                        try { trace.Event("domain-action.diagnostic.failed", session.GenerationId, new { error = ex.GetType().Name }); }
+                        catch { }
+                    }
+                }
+                EmitLine(message);
+            }
             if (SceneAnchorGameDecoder.OperatorAllowsGameInput(
                     Environment.GetEnvironmentVariable("NTE_DOMAIN_ALLOW_GAME_INPUT")))
             {
                 var anchorDirectory = Environment.GetEnvironmentVariable("NTE_SCENE_ANCHOR_DIR");
                 sceneAnchorDispatch = string.IsNullOrWhiteSpace(anchorDirectory)
                     ? null
-                    : TicketedSceneAnchorDispatch.TryCreate(anchorDirectory, sessionId, target.TargetHwnd, EmitLine);
+                    : TicketedSceneAnchorDispatch.TryCreate(anchorDirectory, sessionId, target.TargetHwnd, PublishDomainAction);
                 domainDecoderLabel = sceneAnchorDispatch is null ? "SCENE_ANCHOR_UNAVAILABLE" : "SCENE_ANCHOR";
                 domainExecutionLabel = sceneAnchorDispatch is null ? "OFF" : "OPERATOR_GATE";
             }
             NativeDomainFrame? CaptureDomainFrame()
             {
                 var requestNs = ProtocolClock.NowNs();
+                lastDomainRequestNs = requestNs;
+                lastDomainCapture = null;
+                lastDomainCaptureStage = "CAPTURE_REQUESTED";
                 CapturedBgraFrame original;
                 try
                 {
                     original = capture.CaptureAfterRequest(1500, requestNs, requestNs + 2_000_000_000,
                         () => stop.IsCancellationRequested);
                 }
-                catch { return null; }
+                catch (Exception ex) { lastDomainCaptureStage = "CAPTURE_EXCEPTION:" + ex.GetType().Name; return null; }
+                lastDomainCapture = original;
+                lastDomainCaptureStage = "TARGET_OR_MAPPING_RECHECK";
                 var comparisonNs = ProtocolClock.NowNs();
                 var currentTarget = monitor.Snapshot();
                 if (!capture.IsFrameCurrent(original)
                     || !IsObservationIdentityUsable(currentTarget, observationWindowMode)
                     || !BackgroundObservationPolicy.IsSameObservationTarget(currentTarget, target))
                     return null;
+                lastDomainCaptureStage = "ENGINE_STATE_READ";
                 var state = ReadJsonObject(Path.Combine(workDir, "engine_state.json"));
                 var generation = (long?)state?["lastFrame"]?["matchGeneration"]
                     ?? (long?)state?["currentMatch"]?["matchGeneration"] ?? 0;
                 var sceneName = (string?)state?["pipelineContext"]?["scene"] ?? "UNKNOWN";
-                return AdaptIndependentDomainCapture(original, state, generation, sceneName, sessionId,
+                lastDomainCaptureStage = "DOMAIN_ADAPTATION";
+                var adapted = AdaptIndependentDomainCapture(original, state, generation, sceneName, sessionId,
                     requestNs, comparisonNs, currentTarget, capture);
+                lastDomainCaptureStage = adapted is null ? "DOMAIN_ADAPTATION_REJECTED" : "CAPTURE_QUALIFIED";
+                return adapted;
             }
             Volatile.Write(ref observationReady, 1);
             EmitStatus(sessionId, "READY", "engine-ready", new

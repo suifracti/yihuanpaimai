@@ -31,7 +31,12 @@ static class ReceiptPathChecks
         decoder.TypedOnly = true; Require(producer.FromCapture(i, receipt, good, new(1, "self")) == null, "TYPED_NOT_ACCEPTED");
         decoder.TypedOnly = false; decoder.OtherSeat = true; Require(producer.FromCapture(i, receipt, good, new(1, "self")) == null, "OPPONENT_NOT_SELF");
         decoder.OtherSeat = false; decoder.CachedSeat = true; Require(producer.FromCapture(i, receipt, good, new(1, "self")) == null, "CACHED_SEAT_NOT_FRESH");
-        Require(new CapturedDomainControlEvidence(() => good, new UnconnectedGameDomainDecoder()).Locate(DomainPrimitive.SubmitBid, i) == null, "UNKNOWN_GAME_ANCHOR_NOT_CONNECTED");
+        var controls = new CapturedDomainControlEvidence(() => good, new UnconnectedGameDomainDecoder());
+        Require(controls.Locate(DomainPrimitive.SubmitBid, i) == null && controls.LastFailure.StartsWith("DECODE_OR_SCOPE:"), "UNKNOWN_GAME_ANCHOR_NOT_CONNECTED");
+        var absent = new CapturedDomainControlEvidence(() => null, decoder);
+        Require(absent.Locate(DomainPrimitive.SubmitBid, i) == null && absent.LastFailure == "INDEPENDENT_CAPTURE_UNAVAILABLE", "MISSING_CAPTURE_REASON");
+        var unqualified = new CapturedDomainControlEvidence(() => new(good.Scope with { SourceQualified = false }, geometry, pixels, 16), decoder);
+        Require(unqualified.Locate(DomainPrimitive.SubmitBid, i) == null && unqualified.LastFailure == "SOURCE_UNQUALIFIED", "UNQUALIFIED_CAPTURE_REASON");
         Console.WriteLine("PASS independent capture receipts: qualification/future/stale/cross-match/window/takeover/typed/other/cached seat");
         var wgc = new CapturedBgraFrame(4, 4, 16, pixels, f.Now - 1, "", f.Now - 2, 11) { CaptureScopeEpoch = 1 };
         NativeDomainFrame? Convert(CapturedBgraFrame frame, ActionScope scope) =>
