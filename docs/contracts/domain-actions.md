@@ -8,8 +8,6 @@ After a completed click, capture a new target-window image, decode that frame on
 
 Current implementation work is limited to one real confirmed bid. Entry-fee automation, continuous looping and M5 remain deferred.
 
-PR #56 adds pre-match instrument replenishment. A left click consumes one ticket, sends move/down, holds 60ms, then releases once. Raw API counts are two calls per click; the release is cleanup, including after partial/throwing press, never another press or retry. This is input pulse duration, not a wait for a scene or a freshness condition.
-
 Base: PR #22 `25fd1d0073ce24e3c2f92f95cdeb8a706d4f9630`. Consumer: Luna-B; Solver producer: Sol-B PR #47 `3cf468143c189144ee0950b736d116e283efec61`.
 
 ## Available code

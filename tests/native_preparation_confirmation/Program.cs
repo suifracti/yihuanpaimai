@@ -68,8 +68,7 @@ static class Program
             var scope = new ActionScope("lobby-test",0,0,1000000,0,"LOBBY","lobby",0,new(1,2,3,0),0,1,1,true,true,true,true,false,false)
                 {MatchGeneration=1,ObservationSessionId="test"};
             var v=decoder.Decode(new(scope,new(w,h,0,0),pixels,w*4));
-            Console.WriteLine(System.Text.Json.JsonSerializer.Serialize(new {path=row.GetProperty("path").GetString(),v?.Scene,v?.Instruments,
-                controls=v?.Controls.Select(x=>new {kind=x.Primitive.ToString(),x.Left,x.Top,x.Width,x.Height})}));
+            Console.WriteLine(System.Text.Json.JsonSerializer.Serialize(new {path=row.GetProperty("path").GetString(),v?.Scene,v?.Instruments,controls=v?.Controls.Select(x=>x.Primitive.ToString())}));
             if(v?.Scene=="TOOL_SETUP") {
                 var read=Host.GetType("WgcLiveHarness.SceneAnchorOcr",true)!.GetMethod("ReadText")!;
                 foreach(var box in new[]{new[]{320,235,115,55},new[]{421,927,145,66}})

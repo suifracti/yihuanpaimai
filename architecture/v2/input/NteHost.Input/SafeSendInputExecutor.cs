@@ -124,26 +124,6 @@ public sealed class SafeSendInputExecutor
 
         try
         {
-            if (action.Kind == InputActionKind.RestrictedLeftClick)
-            {
-                // One ticket owns one click. Give the game a real press pulse;
-                // down/up in one batch can disappear between input polls.
-                uint pressed=0, released=0;
-                bool failed=false;
-                try {
-                    pressed=_backend.Send(inputs[..2]);
-                    if(pressed==2) Thread.Sleep(60);
-                }
-                catch { failed=true; }
-                finally {
-                    // Release once even on partial/throwing input. This is
-                    // cleanup of the same click, never another press/retry.
-                    try { released=_backend.Send([inputs[2]]); } catch { failed=true; }
-                }
-                if(failed) return Fail(InputSafetyReasons.BackendError);
-                if(pressed!=2 || released!=1) return Fail(InputSafetyReasons.SendInputPartial);
-                return new(true, InputSafetyReasons.Ok, _backend.SendCallCount, _backend.InputsSentCount);
-            }
             uint accepted = _backend.Send(inputs);
             if (accepted != inputs.Length)
             {

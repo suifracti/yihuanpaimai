@@ -11,8 +11,6 @@ internal static class DomainTimingChecks
         public long SendCallCount { get; private set; }
         public long InputsSentCount { get; private set; }
         public IReadOnlyList<ulong> SentExtraInfo => [];
-        long downAt;
-        public bool VisiblePress { get; private set; }
         public uint Send(InputRecord[] inputs)
         {
             SendCallCount++;
@@ -21,12 +19,8 @@ internal static class DomainTimingChecks
             long seq = 0;
             if (click)
             {
-                foreach (var input in inputs)
-                {
-                    if ((input.Flags & 1) != 0) Emit(InputEventKind.MouseMove, InputDeviceClass.Mouse, 0);
-                    if ((input.Flags & 2) != 0) { downAt=TraceClock.NowNs(); Emit(InputEventKind.MouseButtonDown, InputDeviceClass.Mouse, 1); }
-                    if ((input.Flags & 4) != 0) VisiblePress=TraceClock.NowNs()-downAt>=40_000_000;
-                }
+                Emit(InputEventKind.MouseMove, InputDeviceClass.Mouse, 0);
+                Emit(InputEventKind.MouseButtonDown, InputDeviceClass.Mouse, 1);
             }
             else
                 foreach (var input in inputs.Where(i => i.Type == 1 && i.Flags == 0))
@@ -75,15 +69,12 @@ internal static class DomainTimingChecks
         try
         {
             if (mode is "slow-valid" or "ticket-expired" or "late-event")
-            {
-                if(click) Require(raw.VisiblePress,"PRESS_MUST_SPAN_A_GAME_POLL_INSTEAD_OF_DOWN_UP_IN_ONE_BATCH");
-                Require(outcome.Ok && raw.SendCallCount == (click ? 2 : 1) && !guard.UserTakeoverSeen && guard.State == GuardState.Armed,
+                Require(outcome.Ok && raw.SendCallCount == 1 && !guard.UserTakeoverSeen && guard.State == GuardState.Armed,
                     "OWN_INPUT_MUST_NOT_EXPIRE_DURING_CAPTURE");
-            }
             else
                 Require(!outcome.Ok && raw.SendCallCount == 0, "FINAL_GATE_MUST_PREVENT_SEND");
             // A completed/failed action never authorizes a second raw send by itself.
-            Require(guard.ExecuteWithTicket(action, null).Ok == false && raw.SendCallCount <= (click ? 2 : 1), "MISSING_TICKET");
+            Require(guard.ExecuteWithTicket(action, null).Ok == false && raw.SendCallCount <= 1, "MISSING_TICKET");
         }
         finally { guard.Cancel("TEST_END"); guard.Release(); observer.Stop(); }
     }

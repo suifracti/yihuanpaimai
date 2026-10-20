@@ -2760,6 +2760,8 @@ def _native_publish_health(event: Dict[str, Any], *, force_main: bool = False) -
     global _NATIVE_WAREHOUSE_FRAME_LEASE
     health = _native_health_from_event(event)
     raw_status = str(event.get("status") or "").upper()
+    if raw_status in {"PAUSED", "ERROR", "STOPPED"}:
+        _stop_authorized_live_domain_loop(str(event.get("reason") or raw_status))
     invalidating = raw_status in {"STARTING", "READY", "SUSPENDED", "PAUSED", "ERROR", "STOPPED"}
     with _MANUAL_STATE_LOCK:
         if raw_status == "PAUSED":
@@ -3140,6 +3142,20 @@ def _native_domain_action_dispatch_rejected(event: Dict[str, Any]) -> Dict[str, 
     return {"type": "domain_action_dispatch_rejected", "reason": event.get("reason")}
 
 
+def _stop_authorized_live_domain_loop(reason: str) -> None:
+    state = globals().get('_LIVE_DOMAIN_LOOP')
+    if state is None:
+        return
+    if state.get('phase') != 'stopped':
+        state.update(phase='stopped', reason=reason)
+    reason = str(state.get('reason') or reason)
+    from domain_action_session import live_domain_loop_public
+    LATEST_PAYLOAD['liveDomainLoop'] = live_domain_loop_public(state)
+    holder = globals().get('_MAIN_WINDOW_HOLDER') or []
+    if holder:
+        holder[0].finish_game_input(reason)
+
+
 def _advance_authorized_live_domain_loop(data: Dict[str, Any], frame: Dict[str, Any]) -> None:
     """Env-gated pass of the authorized bid, return, and next-match loop.
 
@@ -3158,6 +3174,12 @@ def _advance_authorized_live_domain_loop(data: Dict[str, Any], frame: Dict[str, 
         )
         if _LIVE_DOMAIN_LOOP is None:
             _LIVE_DOMAIN_LOOP = fresh_live_domain_state()
+        if _LIVE_DOMAIN_LOOP.get('phase') == 'stopped':
+            _stop_authorized_live_domain_loop(_LIVE_DOMAIN_LOOP.get('reason') or 'STOPPED')
+            return
+        holder = globals().get('_MAIN_WINDOW_HOLDER') or []
+        if not holder or not holder[0].prepare_game_input(str(data.get('observationSessionId') or '')):
+            return
         planning = _native_domain_planning_view(data)
         published = planning.get("scene") if planning is not None else None
         funds = planning.get("funds") if planning is not None else None
@@ -3187,8 +3209,11 @@ def _advance_authorized_live_domain_loop(data: Dict[str, Any], frame: Dict[str, 
             LATEST_PAYLOAD["liveDomainLoop"] = public
         if (_LIVE_DOMAIN_LOOP.get("phase"), _LIVE_DOMAIN_LOOP.get("reason")) != before:
             _record_live_domain_loop(public, view)
+        if _LIVE_DOMAIN_LOOP.get('phase') == 'stopped':
+            _stop_authorized_live_domain_loop(public.get('reason') or 'STOPPED')
     except Exception as exc:
         log_stage("PRESENTATION:NATIVE", f"live domain loop failed: {type(exc).__name__}: {exc}")
+        _stop_authorized_live_domain_loop(f'{type(exc).__name__}: {exc}')
 
 
 def _live_loop_waiting_to_send(state: Dict[str, Any], published: Optional[str]) -> bool:
@@ -8619,6 +8644,7 @@ class HudJsApi:
 
 def _start_native_observation_locked(*, resume_same_match: bool = False):
     global NATIVE_OBSERVATION_BRIDGE
+    global _LIVE_DOMAIN_LOOP
     global _NATIVE_WINDOW_MODE, _NATIVE_WINDOW_MODE_CONFIRMED, _NATIVE_WINDOW_TARGET_INSTANCE
     global _NATIVE_EXPECTED_SESSION, _NATIVE_OBSERVATION_SOURCE_NS
     global _NATIVE_AUTO_WAREHOUSE_ENABLED, _NATIVE_SOURCE_CAPTURE_CAPABILITY, _NATIVE_CAPTURE_POLICY, _NATIVE_DELIVERY_ANCHORED_MATCH, _NATIVE_AUTO_TRIGGER_STATUS
@@ -8632,6 +8658,7 @@ def _start_native_observation_locked(*, resume_same_match: bool = False):
         if NATIVE_OBSERVATION_BRIDGE is not None and NATIVE_OBSERVATION_BRIDGE.running:
             PRESENTATION_RUNTIME.set_vision_process_state("running")
             return NATIVE_OBSERVATION_BRIDGE.process
+        _LIVE_DOMAIN_LOOP = None
         resume_state = None
         health = LATEST_PAYLOAD.get("visionHealth") or {}
         if resume_same_match and health.get("pausedMatchId") == CURRENT_MATCH.id and health.get("reason") in {
@@ -8780,6 +8807,7 @@ def stop_vision_worker():
 
 def _stop_vision_worker_locked():
     global VISION_PROCESS, NATIVE_OBSERVATION_BRIDGE
+    _stop_authorized_live_domain_loop('USER_STOP')
     worker, VISION_PROCESS = VISION_PROCESS, None
     with _NATIVE_OBSERVATION_LOCK:
         native = NATIVE_OBSERVATION_BRIDGE

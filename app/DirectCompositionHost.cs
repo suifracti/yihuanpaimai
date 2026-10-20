@@ -215,8 +215,9 @@ namespace NTE.DirectComposition
                 {
                     cp.ExStyle |= 0x00000008; // WS_EX_TOPMOST (强置顶)
                 }
-                // 不写死 WS_EX_NOACTIVATE：启动不抢焦点靠 ShowWithoutActivation，
-                // 用户点击后必须能正常激活、输入、拖动。
+                // HUD is a passive ticket: set mouse pass-through at creation,
+                // never reconfigure it from frame/image checks.
+                cp.ExStyle |= 0x00000020 | 0x08000000; // TRANSPARENT | NOACTIVATE
                 return cp;
             }
         }
@@ -483,8 +484,6 @@ namespace NTE.DirectComposition
             const int WM_MOUSELEAVE = 0x02A3;
 
             const int WM_NCHITTEST = 0x0084;
-            const int HTCLIENT = 1;
-            const int HTCAPTION = 2;
 
             // 拦截并强制保持 TopMost 层级
             if (m.Msg == WM_WINDOWPOSCHANGING && this.TopMost)
@@ -496,10 +495,10 @@ namespace NTE.DirectComposition
                 catch { }
             }
 
-            // 统一由 HTML/JS 触发 begin_drag，全窗口返回 HTCLIENT 确保 WebView2 接收完整的 hover/click/drag 事件
+            // The game underneath owns mouse interaction, including the HUD area.
             if (m.Msg == WM_NCHITTEST)
             {
-                m.Result = (IntPtr)HTCLIENT;
+                m.Result = (IntPtr)(-1); // HTTRANSPARENT
                 return;
             }
 

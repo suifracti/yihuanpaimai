@@ -1646,6 +1646,10 @@ def create_main_window_type(WinForms, Drawing):
             self._status_lock = threading.Lock()
             self._status_pending_message = None
             self._status_job_active = False
+            self._game_input_session = None
+            self._game_input_ready = False
+            self._game_input_finished = False
+            self._game_input_previous_state = None
 
             BaseForm.__init__(self)
 
@@ -1680,6 +1684,51 @@ def create_main_window_type(WinForms, Drawing):
 
             self.Resize += self._on_resize
             self.FormClosing += self._on_form_closing
+
+        def prepare_game_input(self, session_id: str) -> bool:
+            """Minimize once per run, on the UI thread, before dispatching input."""
+            if self._game_input_session == session_id:
+                return self._game_input_ready and not self._game_input_finished
+            self._game_input_session = session_id
+            self._game_input_ready = False
+            self._game_input_finished = False
+
+            def minimize_once():
+                if self._game_input_session != session_id or self._game_input_finished:
+                    return
+                self._game_input_previous_state = self.WindowState
+                self.Text = "异环拍卖助手"
+                self.WindowState = WinForms.FormWindowState.Minimized
+                self._game_input_ready = True
+            if getattr(self, "InvokeRequired", False):
+                from System import Action
+                self.BeginInvoke(Action(minimize_once))
+            else:
+                minimize_once()
+            return self._game_input_ready
+
+        def finish_game_input(self, reason: str) -> None:
+            """Restore once on any terminal stop; a queued start cannot hide it later."""
+            if not self._game_input_session or self._game_input_finished:
+                return
+            self._game_input_finished = True
+            session_id = self._game_input_session
+
+            def restore_once():
+                if self._game_input_session != session_id:
+                    return
+                previous = self._game_input_previous_state
+                self.WindowState = (previous if previous is not None and
+                    previous != WinForms.FormWindowState.Minimized else WinForms.FormWindowState.Normal)
+                self.Text = "异环拍卖助手 — 自动拍卖已停止：" + str(reason)
+                self.Show()
+                self.Activate()
+                self.post_status("自动拍卖已停止：" + str(reason), "stopped")
+            if getattr(self, "InvokeRequired", False):
+                from System import Action
+                self.BeginInvoke(Action(restore_once))
+            else:
+                restore_once()
 
         def set_topmost(self, enable: bool) -> None:
             """Explicit, idempotent TopMost control using SWP_NOACTIVATE."""
