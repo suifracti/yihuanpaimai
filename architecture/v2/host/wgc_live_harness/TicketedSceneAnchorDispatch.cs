@@ -79,7 +79,7 @@ sealed class TicketedSceneAnchorDispatch : IDisposable
             ["readbackNs"] = frame.CaptureTimestampNs, ["matchId"] = scope.MatchId,
             ["matchGeneration"] = scope.MatchGeneration, ["factsRevision"] = scope.FactsRevision,
             ["round"] = scope.Round, ["scene"] = view?.Scene, ["goldAverageVisible"] = view?.GoldAverageVisible,
-            ["funds"] = funds };
+            ["funds"] = funds, ["instruments"] = JsonSerializer.SerializeToNode(view?.Instruments, Json) };
     }
 
     public static TicketedSceneAnchorDispatch? TryCreate(string anchorDirectory, string sessionId, long hwnd,
@@ -90,6 +90,7 @@ sealed class TicketedSceneAnchorDispatch : IDisposable
         if (!decoder.Ready) return null;
         decoder.ReadAmount = SceneAnchorOcr.Read;
         decoder.ReadCommittedAmount = SceneAnchorOcr.Read;
+        decoder.ReadInstruments = SceneAnchorOcr.ReadInstruments;
         var focus = new GameFocus { Target = hwnd };
         var observer = new Win32LowLevelInputObserver("scene-anchor");
         var guard = new InputSafetyGuard(observer, focus, new Win32CursorBackend(), new Win32RawInputBackend(), null,
@@ -165,6 +166,7 @@ sealed class TicketedSceneAnchorDispatch : IDisposable
         {
             var intent = pending;
             if (intent is null) return;
+            engine = LobbyFrame(engine, intent);
             current = intent;
             pinned = engine;
             usePinned = true;
@@ -208,6 +210,7 @@ sealed class TicketedSceneAnchorDispatch : IDisposable
         if (capture is null) return null;
         try { engine = capture(intent); }
         catch { return null; }
+        engine = LobbyFrame(engine, intent);
         if (engine is not null && intent.Kind is DomainActionKind.ReturnLobby or DomainActionKind.StartNextMatch)
         {
             var scene = engine.DecodeOnce(decoder)?.Scene ?? "UNKNOWN";
@@ -217,6 +220,11 @@ sealed class TicketedSceneAnchorDispatch : IDisposable
         latestCapture = engine;
         return engine;
     }
+
+    static NativeDomainFrame? LobbyFrame(NativeDomainFrame? frame, DomainIntent intent) =>
+        frame is not null && AuctionPreparation.IsLobby(intent.Kind)
+            ? new(frame.Scope with { MatchId = "lobby-" + intent.ObservationSessionId,
+                MatchGeneration = 1, Round = 0 }, frame.Geometry, frame.Pixels.ToArray(), frame.Stride) : frame;
 
     ActionScope? ReadScope()
     {
@@ -288,8 +296,10 @@ sealed class TicketedSceneAnchorDispatch : IDisposable
                 && !string.IsNullOrWhiteSpace(intent.ApprovalId);
         if (intent.Kind == DomainActionKind.ReturnLobby) return intent.Amount is null;
         if (intent.Kind == DomainActionKind.StartNextMatch) return intent.Amount is null && intent.Round == 0;
-        if (AuctionPreparation.IsPreparation(intent.Kind)) return intent.Amount is null
-            && intent.Round is >= 1 and <= 5 && !string.IsNullOrWhiteSpace(intent.ApprovalId);
+        if (AuctionPreparation.IsPreparation(intent.Kind)) return !string.IsNullOrWhiteSpace(intent.ApprovalId)
+            && (AuctionPreparation.IsLobby(intent.Kind) ? intent.Round == 0
+                && (intent.Kind == DomainActionKind.ConfirmToolRefill ? intent.Amount is > 0 && intent.Amount <= intent.Budget : intent.Amount is null)
+                : intent.Amount is null && intent.Round is >= 1 and <= 5);
         return false;
     }
 

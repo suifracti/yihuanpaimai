@@ -37,7 +37,7 @@ class TestPurpleAvgContract(unittest.TestCase):
         solver = _solver_ctx(CTX_T327)
         self.assertEqual(solver["purpleAvg"], 4357)
         self.assertIsNone(solver["goldAvg"])
-        self.assertFalse(_facts_ready(CTX_T327))
+        self.assertTrue(_facts_ready(CTX_T327), 'engine may compute without a gold average; output still decides bid availability')
 
     def test_q_plus_purple_avg_is_not_full_shadow(self):
         script = (

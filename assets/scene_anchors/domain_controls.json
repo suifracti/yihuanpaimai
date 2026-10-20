@@ -63,6 +63,17 @@
             1852,
             1060
           ]
+        },
+        {
+          "template": "lobby_tool_group.png",
+          "search": [
+            1200,
+            755,
+            1480,
+            835
+          ],
+          "primitive": "OpenToolSetup",
+          "optional": true
         }
       ]
     },
@@ -160,6 +171,86 @@
           ],
           "primitive": "OpenInstrument",
           "optional": true
+        }
+      ]
+    },
+    {
+      "scene": "TOOL_SETUP",
+      "witnesses": [
+        {
+          "template": "tool_setup_title.png",
+          "search": [
+            60,
+            125,
+            230,
+            190
+          ]
+        },
+        {
+          "template": "tool_setup_group.png",
+          "search": [
+            65,
+            233,
+            290,
+            290
+          ]
+        },
+        {
+          "template": "tool_setup_gold.png",
+          "search": [
+            590,
+            815,
+            850,
+            870
+          ]
+        }
+      ],
+      "controls": [
+        {
+          "template": "tool_refill_label.png",
+          "search": [
+            650,
+            935,
+            850,
+            990
+          ],
+          "primitive": "RequestToolRefill"
+        },
+        {
+          "template": "tool_setup_close.png",
+          "search": [
+            1060,
+            130,
+            1125,
+            190
+          ],
+          "primitive": "CloseToolSetup"
+        }
+      ]
+    },
+    {
+      "scene": "TOOL_REFILL_CONFIRM",
+      "witnesses": [
+        {
+          "template": "tool_refill_question.png",
+          "search": [
+            895,
+            510,
+            1210,
+            575
+          ]
+        }
+      ],
+      "controls": [
+        {
+          "template": "tool_refill_confirm.png",
+          "search": [
+            1110,
+            685,
+            1200,
+            750
+          ],
+          "primitive": "ConfirmToolRefill"
         }
       ]
     }

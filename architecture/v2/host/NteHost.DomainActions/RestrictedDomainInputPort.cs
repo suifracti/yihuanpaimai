@@ -1,7 +1,8 @@
 namespace NteHost.DomainActions;
 
 public enum DomainPrimitive { FocusAmountField, ReplaceAmountDigits, SubmitBid, ReturnLobby, StartNextMatch,
-    OpenInstrument, SelectGoldAverage, UseGoldAverage, OpenBidPanel }
+    OpenInstrument, SelectGoldAverage, UseGoldAverage, OpenBidPanel,
+    OpenToolSetup, RequestToolRefill, ConfirmToolRefill, CloseToolSetup }
 public sealed record AmountFieldReadback(long Amount, string MatchId, int Round, long FactsRevision,
     WindowBinding Window, long TakeoverGeneration, long CapturedNs, bool SourceQualified)
 {

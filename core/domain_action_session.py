@@ -435,6 +435,8 @@ def live_domain_loop_public(state):
         "reason": state.get("reason"),
         "amount": state.get("amount"),
         "resendAllowed": False,
+        "restockSpent": (state.get('restock') or {}).get('spent', 0),
+        "instrumentsReady": (state.get('restock') or {}).get('ready') is True,
     }
 
 
@@ -554,7 +556,8 @@ def _dispatch_live_bid(state, view, send):
         state["reason"] = "NO_SOLVER_SUGGESTION"
         return state
     suggestion = solver_suggestion(proposal)
-    amount = None if suggestion is None else capped_send_amount(suggestion, view.get("configuredCap"), funds)
+    amount = None if suggestion is None else capped_send_amount(suggestion, view.get("configuredCap"),
+        max(0, funds - view.get('minimumFunds', 0)))
     if amount is None:
         state["reason"] = ("FUND_CAP_BLOCKS_SEND" if suggestion is not None else
                            next(iter(proposal.get("prohibitions") or []), "NO_SOLVER_SUGGESTION"))
@@ -643,17 +646,16 @@ def _dispatch_live_preparation(state, view, send):
     kind = None
     scene = view.get('publishedScene')
     if type(q) is int and q > 0:
-        if average is None:
+        proposal = build_bid_intent(view.get('proposalEvent') or {}, view['current'],
+            now_ms=view['nowMs'], deadline_ms=view['deadlineMs'])
+        if scene == 'AUCTION_READY' and solver_suggestion(proposal) is not None:
+            kind = 'OpenBidPanel'
+        elif average is None and view.get('goldTotal') is None:
             if view.get('goldAverageVisible') is not True:
                 kind = {'AUCTION_READY': 'OpenInstrument', 'INSTRUMENT_LIST': 'SelectGoldAverage',
                         'INSTRUMENT_GOLD_SELECTED': 'UseGoldAverage'}.get(scene)
-        elif scene == 'AUCTION_READY':
-            proposal = build_bid_intent(view.get('proposalEvent') or {}, view['current'],
-                now_ms=view['nowMs'], deadline_ms=view['deadlineMs'])
-            if solver_suggestion(proposal) is not None:
-                kind = 'OpenBidPanel'
     if kind is None:
-        state['reason'] = 'WAITING_BID_PANEL_OR_INDEPENDENT_FACTS'
+        state['reason'] = 'ROUND_SKIPPED_NO_SOLVER_VALUE'
         return state
     scope = _live_native_scope(view, engine, funds)
     if scope is None:

@@ -353,6 +353,7 @@ def _profile_cache_key(ctx: Dict[str, Any], history_gen: int) -> str:
         "catalogVersion": ctx.get("catalogVersion"),
         "q": ctx.get("q"),
         "goldAvg": ctx.get("goldAvg") if ctx.get("goldAvg") is not None else ctx.get("avg"),
+        "goldTotal": ctx.get("goldTotal"),
         "purpleAvg": ctx.get("purpleAvg"),
         "purple": ctx.get("purple") if ctx.get("purple") is not None else ctx.get("purpleCount"),
         "goldCount": ctx.get("goldCount"),
@@ -405,6 +406,7 @@ def _solver_ctx(ctx: Dict[str, Any], records: Optional[List[Dict[str, Any]]] = N
         "q": ctx.get("q"),
         "avg": ctx.get("avg") if ctx.get("avg") is not None else ctx.get("goldAvg"),
         "goldAvg": ctx.get("goldAvg") if ctx.get("goldAvg") is not None else ctx.get("avg"),
+        "goldTotal": ctx.get("goldTotal"),
         "purpleAvg": ctx.get("purpleAvg"),
         "purple": ctx.get("purple") if ctx.get("purple") is not None else ctx.get("purpleCount"),
         "purpleCount": ctx.get("purpleCount") if ctx.get("purpleCount") is not None else ctx.get("purple"),
@@ -425,9 +427,10 @@ def _facts_ready(ctx: Dict[str, Any]) -> bool:
     if ctx.get("fieldCondition") in ("sparkle", "闪耀之心", "shining_heart"):
         return True
     q = ctx.get("q")
-    avg = ctx.get("goldAvg") if ctx.get("goldAvg") is not None else ctx.get("avg")
     try:
-        return float(q) > 0 and float(avg) > 0
+        # Ask the existing engine for its gold-total/structural result too.
+        # Its output still decides whether any numeric bid is available.
+        return float(q) > 0
     except (TypeError, ValueError):
         return False
 

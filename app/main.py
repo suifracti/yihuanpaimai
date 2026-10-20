@@ -3016,7 +3016,8 @@ def _native_domain_action_receipt_event(event: Dict[str, Any]) -> Optional[Dict[
     session_id = str(event.get("observationSessionId") or "")
     kind = receipt.get("kind")
     channel = event.get("receiptChannel")
-    preparation = kind in {'OpenInstrument', 'SelectGoldAverage', 'UseGoldAverage', 'OpenBidPanel'}
+    from instrument_restock import KINDS as restock_kinds
+    preparation = kind in {'OpenInstrument', 'SelectGoldAverage', 'UseGoldAverage', 'OpenBidPanel'} | restock_kinds
     if (not session_id or session_id != _NATIVE_EXPECTED_SESSION
             or session_id != _NATIVE_OBSERVATION_SESSION
             or receipt.get("observationSessionId") != session_id
@@ -3041,7 +3042,7 @@ def _native_domain_action_receipt_event(event: Dict[str, Any]) -> Optional[Dict[
             expected = (globals().get('_LIVE_DOMAIN_LOOP') or {}).get('preparationIntent') or {}
             if (not expected or any(receipt.get(k) != expected.get(k) for k in
                     ('intentId', 'kind', 'matchId', 'matchGeneration', 'observationSessionId', 'round', 'factsRevision'))
-                    or receipt.get('matchId') != CURRENT_MATCH.id):
+                    or (kind not in restock_kinds and receipt.get('matchId') != CURRENT_MATCH.id)):
                 return None
             LATEST_PAYLOAD['preparationActionReceipt'] = copy.deepcopy(receipt)
         else:
@@ -3171,7 +3172,12 @@ def _advance_authorized_live_domain_loop(data: Dict[str, Any], frame: Dict[str, 
             return bool(bridge is not None and bridge.running and bridge.send_control(envelope))
 
         before = (_LIVE_DOMAIN_LOOP.get("phase"), _LIVE_DOMAIN_LOOP.get("reason"))
-        _LIVE_DOMAIN_LOOP = advance_live_domain_loop(_LIVE_DOMAIN_LOOP, view, send)
+        from instrument_restock import advance as advance_restock
+        restock_ready = advance_restock(_LIVE_DOMAIN_LOOP, view, send, CONFIG.get('autoAuction') or {})
+        if restock_ready and not (published == 'LOBBY' and _LIVE_DOMAIN_LOOP.get('phase') == 'idle'):
+            _LIVE_DOMAIN_LOOP = advance_live_domain_loop(_LIVE_DOMAIN_LOOP, view, send)
+        elif published in {'AUCTION', 'AUCTION_READY', 'INSTRUMENT_LIST', 'INSTRUMENT_GOLD_SELECTED'}:
+            _LIVE_DOMAIN_LOOP.update(phase='stopped', reason='INSTRUMENT_PREFLIGHT_NOT_COMPLETED')
         public = live_domain_loop_public(_LIVE_DOMAIN_LOOP)
         with _MANUAL_STATE_LOCK:
             data["liveDomainLoop"] = public
@@ -3197,13 +3203,14 @@ def _live_loop_waiting_to_send(state: Dict[str, Any], published: Optional[str]) 
 def _native_domain_planning_view(data: Dict[str, Any]) -> Optional[Dict[str, Any]]:
     """Read scene/funds from the held Host FRAME; never a screen grab or SOURCE."""
     view = data.get('domainObservation')
+    pairs = [('frameSequence', 'frameSequence'), ('readbackNs', 'capturedAtNs')]
+    if isinstance(view, dict) and view.get('scene') not in {'LOBBY', 'TOOL_SETUP', 'TOOL_REFILL_CONFIRM'}:
+        pairs += [('matchId', 'matchId'), ('matchGeneration', 'sourceMatchGeneration'),
+                  ('round', 'round'), ('factsRevision', 'engineFactsRevision')]
     if (not isinstance(view, dict) or view.get('schemaVersion') != 'domain-planning-view.v1'
             or view.get('planningOnly') is not True or view.get('inputActions') is not False
             or data.get('observationStatus') != 'FRAME'
-            or any(view.get(k) != data.get(v) for k, v in (
-                ('frameSequence', 'frameSequence'), ('readbackNs', 'capturedAtNs'),
-                ('matchId', 'matchId'), ('matchGeneration', 'sourceMatchGeneration'),
-                ('round', 'round'), ('factsRevision', 'engineFactsRevision')))):
+            or any(view.get(k) != data.get(v) for k, v in pairs)):
         return None
     return view
 
@@ -3218,12 +3225,15 @@ def _live_loop_view(data: Dict[str, Any], published: Optional[str], funds) -> Op
     if type(facts_round) is not int or isinstance(facts_round, bool):
         facts_round = 0
     try:
-        generation = int(data.get("sourceMatchGeneration"))
-        revision = int(data.get("factsRevision"))
+        lobby = published in {'LOBBY', 'TOOL_SETUP', 'TOOL_REFILL_CONFIRM'}
+        generation = 1 if lobby else int(data.get("sourceMatchGeneration"))
+        revision = 0 if lobby else int(data.get("factsRevision"))
     except (TypeError, ValueError):
         return None
     match_id = str(data.get("matchId") or "")
     session_id = str(data.get("observationSessionId") or "")
+    if lobby:
+        match_id, facts_round = 'lobby-' + session_id, 0
     if not match_id or not session_id or generation <= 0 or revision < 0:
         return None
     target = data.get("target") if isinstance(data.get("target"), dict) else {}
@@ -3269,6 +3279,9 @@ def _live_loop_view(data: Dict[str, Any], published: Optional[str], funds) -> Op
         "publishedScene": published,
         "q": data.get("q") if data.get("q") is not None else CURRENT_MATCH.facts.get("q"),
         "goldAvg": data.get("goldAvg") if data.get("goldAvg") is not None else CURRENT_MATCH.facts.get("goldAvg"),
+        "goldTotal": data.get("goldTotal") if data.get("goldTotal") is not None else CURRENT_MATCH.facts.get("goldTotal"),
+        "instruments": (data.get('domainObservation') or {}).get('instruments'),
+        "minimumFunds": (CONFIG.get('autoAuction') or {}).get('minimumFunds', 100000),
         "goldAverageVisible": (data.get('domainObservation') or {}).get('goldAverageVisible') is True,
         "preparationReceipt": LATEST_PAYLOAD.get("preparationActionReceipt"),
         "foreground": _game_is_foreground(target),

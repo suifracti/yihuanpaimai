@@ -1195,6 +1195,10 @@ internal static class NativeObservationService
         var matchId = (string?)currentMatch?["id"];
         var matchGeneration = (long?)state?["lastFrame"]?["matchGeneration"]
             ?? (long?)currentMatch?["matchGeneration"] ?? 0;
+        // Lobby preparation has an observation/window scope, not an auction fact.
+        // Its dispatcher binds this image to lobby-<session> before use.
+        if (string.IsNullOrWhiteSpace(matchId) || matchGeneration <= 0)
+        { matchId = "lobby-" + sessionId; matchGeneration = 1; expectedMatchGeneration = 1; }
         if (string.IsNullOrWhiteSpace(matchId) || string.IsNullOrWhiteSpace(sessionId)
             || matchGeneration <= 0 || matchGeneration != expectedMatchGeneration
             || owner.TargetIdentity is not { IsPresent: true } identity

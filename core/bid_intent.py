@@ -124,7 +124,7 @@ def build_bid_intent(event, current, *, now_ms, deadline_ms, requested_bid=None)
                         'informationCutoffAt': snap.get('informationCutoffAt')}
     if not result['source']['predictionId'] or not result['source']['inputHash']:
         return reject('SOURCE_ID_MISSING', 'UNKNOWN')
-    if not money(facts.get('q')) or facts['q'] <= 0 or not money(facts.get('goldAvg')) or facts['goldAvg'] <= 0:
+    if not money(facts.get('q')) or facts['q'] <= 0:
         return reject('MISSING_QUANTITY_OR_AVERAGE', 'UNKNOWN')
     costs = facts.get('costs') or {}
     sunk, total, target = costs.get('sunkCost'), costs.get('total'), facts.get('targetProfit')
@@ -139,6 +139,11 @@ def build_bid_intent(event, current, *, now_ms, deadline_ms, requested_bid=None)
     has_all_state_floor = (mode == 'partial_shadow'
                           and forecast.get('scope') == 'partial_inventory_conditional'
                           and structural.get('scope') == 'all_feasible_inventory_states')
+    structural_basis = (mode == 'structural_only' and forecast.get('scope') == 'structural_inventory') or has_all_state_floor
+    if (not (money(facts.get('goldAvg')) and facts['goldAvg'] > 0)
+            and not (money(facts.get('goldTotal')) and facts['goldTotal'] > 0)
+            and not structural_basis):
+        return reject('MISSING_QUANTITY_OR_AVERAGE', 'UNKNOWN')
     if (mode == 'structural_only' and forecast.get('scope') == 'structural_inventory') or has_all_state_floor:
         bounds = (forecast.get('structural') or {}).get('feasibleRange')
         if not isinstance(bounds, list) or len(bounds) != 2 or not all(money(v) for v in bounds) or bounds[0] > bounds[1]:

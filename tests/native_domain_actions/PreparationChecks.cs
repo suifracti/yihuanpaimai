@@ -41,6 +41,22 @@ static class PreparationChecks
                 && backend.Operations[0].ToString() == kind.ToString(), "ONLY_NAMED_PRIMITIVE");
         }
         Console.WriteLine("PASS preparation policy and named ticket primitives (fake input only)");
+        foreach(var kind in new[] {DomainActionKind.OpenToolSetup,DomainActionKind.RequestToolRefill,
+            DomainActionKind.ConfirmToolRefill,DomainActionKind.CloseToolSetup})
+        {
+            var f=new Fixture();
+            f.Scope=f.Scope with {Round=0,Scene=AuctionPreparation.ExpectedScene(kind)!};
+            var intent=f.Intent("lobby-"+kind,kind) with {Round=0,Amount=kind==DomainActionKind.ConfirmToolRefill?500:null,
+                MinimumFunds=100000,GoldStockBefore=0};
+            Require(f.Coordinator.Dispatch(intent).Status==ReceiptStatus.SENT_PENDING_CONFIRMATION,"LOBBY_DISPATCH:"+kind);
+            string next=kind switch {DomainActionKind.RequestToolRefill=>"TOOL_REFILL_CONFIRM",DomainActionKind.CloseToolSetup=>"LOBBY",_=>"TOOL_SETUP"};
+            var evidence=f.Evidence(intent,next) with {Instruments=new(1,1,0,200000)};
+            if(kind==DomainActionKind.ConfirmToolRefill)
+                Require(f.Coordinator.Confirm(evidence with {Instruments=new(0,0,500,200000)}).Status==ReceiptStatus.SENT_PENDING_CONFIRMATION,"REFILL_MUST_HAVE_VISIBLE_STOCK_EFFECT");
+            Require(f.Coordinator.Confirm(evidence).Status==ReceiptStatus.CONFIRMED,"LOBBY_CONFIRM:"+kind);
+            f.Coordinator.Dispatch(intent);
+            Require(f.Port.Sends==1,"LOBBY_ONE_SHOT");
+        }
         var bidFixture = new Fixture();
         var bid = bidFixture.Intent();
         Require(bidFixture.Coordinator.Dispatch(bid).Status == ReceiptStatus.SENT_PENDING_CONFIRMATION, "BID_PENDING");

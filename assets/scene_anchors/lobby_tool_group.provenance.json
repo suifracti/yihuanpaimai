@@ -1,0 +1,11 @@
+{
+  "source": "build/goal-20261020-restock/lobby.bmp",
+  "sha256": "4b166b485e72f120004853ebdfbee887b8ec4737c907fd14087dd1dff00baa03",
+  "crop": [
+    1254,
+    774,
+    1434,
+    804
+  ],
+  "purpose": "Lobby instrument replenishment, observed 2026-10-20; cropped label only, no account data."
+}

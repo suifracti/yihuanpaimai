@@ -25,6 +25,16 @@ Python 不再另截桌面、压低 Main/HUD 或直接点游戏。
 
 ## 后续产品开关
 
+2026-10-20 开局前补仪器：`autoAuction.minimumFunds` 默认100000，
+`autoAuction.instrumentTargets` 默认 `{"goldAverage":1}`，也支持当前仪器组的 `purpleCount`。
+`liveDomainLoop.phase=restocking` 时不入场；`restockSpent` 记录本次实际确认的补充支出。
+Host 新增 `OpenToolSetup / RequestToolRefill / ConfirmToolRefill / CloseToolSetup`，
+沿原 preparation 回执与三秒新画面确认。大厅使用 `lobby-<observationSessionId>` 上下文和 round=0，
+不创建竞拍事实或跨局写入。`domainObservation.instruments` 提供可用数量、补充价格和资金。
+数量够则关闭窗口，资金下限、数量不可读/目标达不到、未知回执则给出原因停止；不买完假定成功。
+目前只接已观测的高级品鉴组“一键补全”，不支持的组/更高储备数量无法达到时停止，不能声称已补齐。
+局内已有金总价或全仓可行区间时可沿原 Solver 产生报价；没有可用数值则本回合不报价，继续观察。
+
 `auto_auction_start / auto_auction_stop` 与 `app_status.autoAuction` 按主计划 M5 接入；
 **当前尚未提供这些动作**。完成时在这里更新确切请求体及状态字段，再由前端接按钮。
 当前临时环境开关仍需在 M5 删除。费用确认的 Host 接线、持续循环及真实验收尚未完成。

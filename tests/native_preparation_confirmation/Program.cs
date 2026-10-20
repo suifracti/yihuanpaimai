@@ -37,6 +37,8 @@ static class Program
         Host = hostArg >= 0 ? new ReplayHostContext().LoadFromAssemblyPath(Path.GetFullPath(args[hostArg + 1]))
             : Assembly.Load("WgcLiveHarness");
         Console.WriteLine("Host assembly: " + Host.Location);
+        int stockArg = Array.IndexOf(args, "--stock-replay");
+        if (stockArg >= 0) { StockReplay(args[stockArg + 1]); return 0; }
         int imageArg = Array.IndexOf(args, "--saved-image");
         if (imageArg >= 0) { SavedImage(args[imageArg + 1]); return 0; }
         int listArg = Array.IndexOf(args, "--open-list-image");
@@ -50,6 +52,32 @@ static class Program
         public int Sends;
         public PortOutcome TrySend(DomainIntent i, Func<bool> current)
         { Require(current(), "DISPATCH_SCOPE"); Sends++; return new(true, true, "FAKE_SENT"); }
+    }
+    static void StockReplay(string replay)
+    {
+        var decoder = SceneAnchorGameDecoder.Load("assets/scene_anchors");
+        decoder.ReadInstruments = Host.GetType("WgcLiveHarness.SceneAnchorOcr", true)!.GetMethod("ReadInstruments")!
+            .CreateDelegate<Func<NativeDomainFrame, string, InstrumentStock?>>();
+        using var doc = System.Text.Json.JsonDocument.Parse(File.ReadAllText(replay));
+        foreach (var row in doc.RootElement.EnumerateArray())
+        {
+            var raw = File.ReadAllBytes(row.GetProperty("path").GetString()!);
+            int w = BitConverter.ToInt32(raw,18), sh=BitConverter.ToInt32(raw,22), h=Math.Abs(sh), offset=BitConverter.ToInt32(raw,10);
+            var pixels = new byte[w*h*4];
+            for(int y=0;y<h;y++) Buffer.BlockCopy(raw,offset+(sh<0?y:h-1-y)*w*4,pixels,y*w*4,w*4);
+            var scope = new ActionScope("lobby-test",0,0,1000000,0,"LOBBY","lobby",0,new(1,2,3,0),0,1,1,true,true,true,true,false,false)
+                {MatchGeneration=1,ObservationSessionId="test"};
+            var v=decoder.Decode(new(scope,new(w,h,0,0),pixels,w*4));
+            Console.WriteLine(System.Text.Json.JsonSerializer.Serialize(new {path=row.GetProperty("path").GetString(),v?.Scene,v?.Instruments,controls=v?.Controls.Select(x=>x.Primitive.ToString())}));
+            if(v?.Scene=="TOOL_SETUP") {
+                var read=Host.GetType("WgcLiveHarness.SceneAnchorOcr",true)!.GetMethod("ReadText")!;
+                foreach(var box in new[]{new[]{320,235,115,55},new[]{421,927,145,66}})
+                    Console.WriteLine("OCR "+read.Invoke(null,new object[]{(ReadOnlyMemory<byte>)pixels,w,h,w*4,box[0],box[1],box[2],box[3]}));
+            }
+            Require(v?.Scene==row.GetProperty("scene").GetString(),"STOCK_SCENE");
+            if(row.TryGetProperty("gold",out var g)) Require(v?.Instruments?.GoldAverage==g.GetInt32(),"GOLD_STOCK");
+            if(row.TryGetProperty("cost",out var c)) Require(v?.Instruments?.RefillCost==c.GetInt64(),"REFILL_COST");
+        }
     }
     static void SavedImage(string path, bool openList = false)
     {

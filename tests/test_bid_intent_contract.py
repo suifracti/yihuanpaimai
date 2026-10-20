@@ -92,9 +92,11 @@ class BidIntentContract(unittest.TestCase):
         self.assertFalse(book.claim(value['intentId'], dict(current(), factsRevision=5), now_ms=101)['ok'])
         self.assertEqual(book._reserved(), 0)
 
-    def test_no_average_is_unknown_even_if_snapshot_has_range(self):
+    def test_no_average_can_use_existing_whole_inventory_feasible_range(self):
         e = event()
         del e['predictionSnapshot']['input']['normalizedFacts']['goldAvg']
+        self.assertEqual(intent(e)['status'], 'READY')
+        e['predictionSnapshot']['forecast']['scope']='partial_inventory_conditional'
         self.assertEqual(intent(e)['status'], 'UNKNOWN')
 
     def test_qualification_loss_and_settlement_do_not_use_answers(self):

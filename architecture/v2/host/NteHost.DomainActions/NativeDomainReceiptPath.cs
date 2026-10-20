@@ -36,9 +36,11 @@ public sealed class NativeDomainFrame
 public sealed record OwnSeatBinding(int Slot, string PlayerIdentity);
 public sealed record CapturedOwnBid(int Slot, string PlayerIdentity, long Amount, bool AcceptanceVisible,
     string EvidenceRef);
+public sealed record InstrumentStock(int? GoldAverage, int? PurpleCount, long? RefillCost, long? Funds);
 public sealed record DecodedDomainFrame(string Scene, int Round, string MatchId, long MatchGeneration,
     CapturedOwnBid? OwnBid, long? AmountField, IReadOnlyList<VisibleControlAnchor> Controls)
-{ public bool GoldAverageVisible { get; init; } }
+{ public bool GoldAverageVisible { get; init; }
+  public InstrumentStock? Instruments { get; init; } }
 public interface IGameDomainFrameDecoder
 {
     // All fields must derive from THIS frame's pixels. Existing cached seats/myBid
@@ -66,6 +68,8 @@ public sealed class CapturedDomainControlEvidence : IDomainControlEvidence
         if (frame == null) { LastFailure = "INDEPENDENT_CAPTURE_UNAVAILABLE"; return null; }
         LastFailure = "DECODE_STARTED";
         var view = frame.DecodeOnce(decoder);
+        if (primitive == DomainPrimitive.ConfirmToolRefill && view?.Instruments?.RefillCost != intent.Amount)
+        { LastFailure = "REFILL_PRICE_CHANGED_OR_UNKNOWN"; return null; }
         string expectedScene = intent.Kind switch { DomainActionKind.Bid => "AUCTION",
             DomainActionKind.ReturnLobby => "SETTLEMENT", DomainActionKind.StartNextMatch => "LOBBY",
             _ => AuctionPreparation.ExpectedScene(intent.Kind) ?? "INVALID" };
@@ -141,7 +145,7 @@ public sealed class NativeVisibleResultProducer
             accepted, newMatch, view.Scene, s.SourceSequence, s.CapturedNs, s.SourceQualified, s.Window, s.TakeoverGeneration)
             { OriginMatchGeneration = intent.MatchGeneration, ObservationSessionId = s.ObservationSessionId,
               NewMatchGeneration = newGeneration, EvidenceRef = frame.EvidenceRef,
-              PreparationEffectVisible = view.GoldAverageVisible };
+              PreparationEffectVisible = view.GoldAverageVisible, Instruments = view.Instruments };
     }
 }
 

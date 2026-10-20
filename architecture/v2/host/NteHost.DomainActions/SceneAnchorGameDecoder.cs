@@ -35,6 +35,7 @@ public sealed class SceneAnchorGameDecoder : IGameDomainFrameDecoder
     public bool Ready { get; }
     public AmountSample? ReadAmount { get; set; }
     public AmountSample? ReadCommittedAmount { get; set; }
+    public Func<NativeDomainFrame, string, InstrumentStock?>? ReadInstruments { get; set; }
 
     SceneAnchorGameDecoder(Catalog? catalog, Dictionary<string, GrayImage> templates)
     {
@@ -97,6 +98,8 @@ public sealed class SceneAnchorGameDecoder : IGameDomainFrameDecoder
                 if (image is null) return new(null, templates);
                 goldAverage = new(file, ReadBox(goldNode.GetProperty("search")), image.Value);
             }
+            if (scenes.Any(s => s.Scene == "TOOL_SETUP")
+                && LoadTemplate(directory, "tool_used_badge.png", templates) is null) return new(null, templates);
             return new(new(refW, refH, threshold, scenes.ToArray(), committed, goldAverage), templates);
         }
         catch (Exception ex) when (ex is IOException or JsonException or KeyNotFoundException or InvalidOperationException
@@ -138,11 +141,9 @@ public sealed class SceneAnchorGameDecoder : IGameDomainFrameDecoder
         string? scene = null;
         if (settlement is not null && AllWitnesses(gray, frame, catalog, settlement) && Collect(gray, frame, catalog, settlement, found))
             scene = "SETTLEMENT";
-        else if (lobby is not null && Collect(gray, frame, catalog, lobby, found))
-            scene = "LOBBY";
         else
         {
-            foreach (string name in new[] { "INSTRUMENT_GOLD_SELECTED", "INSTRUMENT_LIST", "AUCTION", "AUCTION_READY" })
+            foreach (string name in new[] { "TOOL_REFILL_CONFIRM", "TOOL_SETUP", "LOBBY", "INSTRUMENT_GOLD_SELECTED", "INSTRUMENT_LIST", "AUCTION", "AUCTION_READY" })
             {
                 var spec = Scene(catalog, name);
                 if (spec is null || !AllWitnesses(gray, frame, catalog, spec)) continue;
@@ -176,8 +177,17 @@ public sealed class SceneAnchorGameDecoder : IGameDomainFrameDecoder
             : null;
         bool goldVisible = catalog.GoldAverage is { } gold && Match(gray, frame.Geometry.Width, frame.Geometry.Height,
             gold.Image, Scale(gold.Search, frame.Geometry.Width, frame.Geometry.Height, catalog), catalog.Threshold, out _, out _);
+        var stock = scene is "TOOL_SETUP" or "TOOL_REFILL_CONFIRM" ? ReadInstruments?.Invoke(frame, scene) : null;
+        if (scene == "TOOL_SETUP" && stock is not null && TryGetTemplate("tool_used_badge.png", out var used))
+        {
+            bool Used(Box box) => Match(gray, frame.Geometry.Width, frame.Geometry.Height, used,
+                Scale(box, frame.Geometry.Width, frame.Geometry.Height, catalog), catalog.Threshold, out _, out _);
+            stock = stock with {
+                GoldAverage = stock.GoldAverage is { } g ? Math.Max(0, g - (Used(new(960, 806, 1070, 850)) ? 1 : 0)) : null,
+                PurpleCount = stock.PurpleCount is { } p ? Math.Max(0, p - (Used(new(960, 675, 1070, 718)) ? 1 : 0)) : null };
+        }
         return new(scene, frame.Scope.Round, frame.Scope.MatchId, frame.Scope.MatchGeneration,
-            own, amount is >= 0 and <= 9_999_999 ? amount : null, controls) { GoldAverageVisible = goldVisible };
+            own, amount is >= 0 and <= 9_999_999 ? amount : null, controls) { GoldAverageVisible = goldVisible, Instruments = stock };
     }
 
     void AddAmountFocus(byte[] gray, NativeDomainFrame frame, SceneSpec auction,
