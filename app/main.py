@@ -3041,8 +3041,11 @@ def _native_domain_action_receipt_event(event: Dict[str, Any]) -> Optional[Dict[
 
     with _MANUAL_STATE_LOCK:
         if kind == "Bid":
+            # Host intents use the captured match generation; Main's draft
+            # counter can advance separately while binding the same match.
+            generation = LATEST_PAYLOAD.get("sourceMatchGeneration", getattr(CURRENT_MATCH, "_seq", 0))
             if (receipt.get("matchId") != CURRENT_MATCH.id
-                    or receipt.get("matchGeneration") != getattr(CURRENT_MATCH, "_seq", 0)):
+                    or receipt.get("matchGeneration") != generation):
                 return None
             owner = _NATIVE_DURABLE_BID_OBLIGATION_OWNER
             if owner is None or not owner.receipt_is_committed(receipt):
@@ -3073,6 +3076,7 @@ def _native_domain_action_receipt_event(event: Dict[str, Any]) -> Optional[Dict[
             "observationSessionId": session_id,
             "receiptChannel": channel,
             "currentMatch": current,
+            **({'bidActionReceipt': copy.deepcopy(receipt)} if kind == 'Bid' else {}),
             **({'preparationActionReceipt': copy.deepcopy(receipt)} if preparation else {}),
         }
 

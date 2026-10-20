@@ -17,6 +17,40 @@ from vision_contract import VisionObservation, VisionSettlement
 
 
 class MainDomainActionReceiptTests(unittest.TestCase):
+    def test_host_generation_receipt_reaches_main_when_local_draft_counter_differs(self):
+        import json
+        from pathlib import Path
+        evidence = os.environ.get('NTE_REAL_BID_RECEIPT_REPLAY')
+        if evidence:
+            receipts = [json.loads(line) for line in Path(evidence).read_text(encoding='utf8').splitlines()]
+            event = next(e for e in receipts if e['receipt'].get('kind') == 'Bid'
+                         and e['receipt'].get('status') == 'CONFIRMED')
+            saved = json.loads(Path(os.environ['NTE_REAL_BID_MAIN_REPLAY']).read_text(encoding='utf8'))
+        else:
+            receipt = dict(kind='Bid', intentId='one', matchId='match', matchGeneration=2,
+                           observationSessionId='obs', status='CONFIRMED', amount=250038)
+            event = dict(type='domain.action.receipt', receiptChannel='bid',
+                         observationSessionId='obs', receipt=receipt)
+            saved = dict(matchId='match', matchGeneration=4, sourceMatchGeneration=2)
+        receipt = event['receipt']
+        latest = dict(sourceMatchGeneration=saved['sourceMatchGeneration'])
+        self.assertNotEqual(saved['matchGeneration'], receipt['matchGeneration'])
+        with mock.patch.multiple(app_main, CURRENT_MATCH=SimpleNamespace(id=saved['matchId'],
+                _seq=saved['matchGeneration']), LATEST_PAYLOAD=latest,
+                _NATIVE_EXPECTED_SESSION=event['observationSessionId'],
+                _NATIVE_OBSERVATION_SESSION=event['observationSessionId'], WS_EVENT_LOOP=None,
+                _NATIVE_DURABLE_BID_OBLIGATION_OWNER=SimpleNamespace(receipt_is_committed=lambda r: r == receipt)), \
+             mock.patch.object(app_main, 'get_current_match_presentation_summary',
+                side_effect=lambda: {'bidActionReceipt': latest.get('bidActionReceipt')}), \
+             mock.patch.object(app_main, '_native_post_main_status'):
+            result = app_main._native_domain_action_receipt_event(event)
+            self.assertIsNotNone(result, 'REAL_CONFIRMED_RECEIPT_LOST_TO_LOCAL_COUNTER')
+            self.assertEqual(result['currentMatch']['bidActionReceipt'], receipt)
+            self.assertEqual(latest['bidActionReceipt']['status'], 'CONFIRMED')
+            self.assertEqual(result['bidActionReceipt'], receipt)
+            latest['sourceMatchGeneration'] += 1
+            self.assertIsNone(app_main._native_domain_action_receipt_event(event))
+
     def test_lobby_restock_receipt_is_not_an_auction_fact(self):
         intent=dict(intentId='refill',kind='ConfirmToolRefill',matchId='lobby-obs-1',
                     matchGeneration=1,observationSessionId='obs-1',round=0,factsRevision=0)
