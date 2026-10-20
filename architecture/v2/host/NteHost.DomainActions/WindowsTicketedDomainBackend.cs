@@ -76,18 +76,26 @@ public sealed class WindowsTicketedDomainBackend : ITicketedDomainBackend
             VisibleControlAnchor? anchor;
             try { anchor = evidence.Locate(primitive, intent); } catch { anchor = null; }
             if (anchor == null) return new(false, false, "NOT_CONNECTED_CONTROL_ANCHOR_UNKNOWN");
+            if (!AnchorMatches(anchor, primitive, intent)) return new(false, false, "INITIAL_CONTROL_ANCHOR_UNQUALIFIED_OR_STALE");
+            string validationFailure = "NONE";
             bool Valid()
             {
-                if (!current() || inputTargetId == 0 || !guard.IsArmedFor(inputTargetId, intent.Window.FocusEpoch)
-                    || !AnchorMatches(anchor, primitive, intent) || !PlatformMatches(anchor, intent)) return false;
+                if (!current()) { validationFailure = "CURRENT_CONTEXT_REJECTED"; return false; }
+                if (inputTargetId == 0 || !guard.IsArmedFor(inputTargetId, intent.Window.FocusEpoch))
+                { validationFailure = "GUARD_NOT_ARMED_FOR_TARGET"; return false; }
+                if (!PlatformMatches(anchor, intent)) { validationFailure = "INITIAL_PLATFORM_CHANGED"; return false; }
                 var latest = evidence.Locate(primitive, intent);
                 // New frames are allowed, but the recognized control and geometry
                 // must be identical. Drift after preflight never silently retargets.
+                // The initial anchor fixes coordinates; its freshness was checked
+                // at acquisition. Freshness at every use belongs to this independent
+                // latest capture, not the initial image aging during current().
                 bool controlsCurrent = latest != null && AnchorMatches(latest, primitive, intent)
                     && latest.Left == anchor.Left && latest.Top == anchor.Top && latest.Width == anchor.Width
                     && latest.Height == anchor.Height && latest.Geometry == anchor.Geometry
                     && latest.ControlProfile == anchor.ControlProfile && PlatformMatches(latest, intent);
-                if (!controlsCurrent || primitive != DomainPrimitive.SubmitBid) return controlsCurrent;
+                if (!controlsCurrent) { validationFailure = "LATEST_CONTROL_SCOPE_FRESHNESS_OR_GEOMETRY_REJECTED"; return false; }
+                if (primitive != DomainPrimitive.SubmitBid) return true;
                 // Re-read the exact field again at SubmitBid's final ticket check;
                 // a prior successful read does not authorize a changed field.
                 var field = evidence.CaptureAmountField(); long now = clock();
@@ -99,8 +107,8 @@ public sealed class WindowsTicketedDomainBackend : ITicketedDomainBackend
                     && field.FactsRevision == intent.FactsRevision && field.TakeoverGeneration == intent.TakeoverGeneration
                     && PlatformMatches(latest!, intent);
             }
-            bool SafeValid() { try { return Valid(); } catch { return false; } }
-            if (!SafeValid()) return new(false, false, "DOMAIN_TARGET_CONTROL_OR_CURRENT_REJECTED");
+            bool SafeValid() { try { return Valid(); } catch (Exception e) { validationFailure = "VALIDATION_EXCEPTION_" + e.GetType().Name; return false; } }
+            if (!SafeValid()) return new(false, false, "DOMAIN_TARGET_CONTROL_OR_CURRENT_REJECTED:" + validationFailure);
             if (obligations == null) return new(false, false, "DURABLE_ATTEMPT_PORT_NOT_CONNECTED");
             if (committed.TryGetValue(intent.IntentId, out var previous) && previous != intent)
                 return new(false, false, "DURABLE_INTENT_CONFLICT");

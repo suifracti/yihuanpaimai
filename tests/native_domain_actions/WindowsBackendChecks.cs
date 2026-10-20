@@ -252,6 +252,36 @@ static class WindowsBackendChecks
             ["acceptedAmount"] = window.Accepted, ["receiptStatus"] = confirmed.Status.ToString() });
     }
 
+    public static void RunRollingAnchor(bool awaitActivation)
+    {
+        Directory.CreateDirectory("build/native-domain-actions");
+        using var window = new Win32DummyWindow(waitForForeground: !awaitActivation);
+        Console.WriteLine("WAIT owned DUMMY foreground; no game target and no input will be sent");
+        Require(SpinWait.SpinUntil(() => Win32DummyWindow.IsForeground(window.Hwnd.ToInt64()), 45_000), "DUMMY_FOREGROUND_REQUIRED");
+        using var f = new Fixture(window);
+        // A refused durable acknowledgement guarantees ZERO cursor/key input.
+        // Model a current-state capture taking longer than the initial control's
+        // age, followed by an independent, fresh, identical control capture.
+        f.CommitAllowed = false;
+        var result = f.Backend.Execute(DomainPrimitive.FocusAmountField, f.Intent, () => {
+            Thread.Sleep(600); f.Capture(); return true;
+        });
+        Console.WriteLine($"rolling anchor reason={result.Reason}; commits={f.AttemptCommits}; raw={f.Raw.SendCallCount}");
+        Require(result.Reason == "DURABLE_ATTEMPT_NOT_ACKNOWLEDGED" && f.AttemptCommits == 1
+            && !result.SideEffectAttempted && f.Raw.SendCallCount == 0, "FRESH_IDENTICAL_CONTROL_MUST_REACH_ACK");
+        var changed = f.Backend.Execute(DomainPrimitive.FocusAmountField, f.Intent, () => {
+            f.Scope = f.Scope with { FactsRevision = 99 }; return true;
+        });
+        Require(!changed.SideEffectAttempted && f.AttemptCommits == 1, "CHANGED_REVISION_MUST_REJECT");
+        f.Scope = f.Scope with { FactsRevision = 4 };
+        var unqualified = f.Backend.Execute(DomainPrimitive.FocusAmountField, f.Intent, () => {
+            f.Scope = f.Scope with { SourceQualified = false }; return true;
+        });
+        Require(!unqualified.SideEffectAttempted && f.AttemptCommits == 1 && f.Raw.SendCallCount == 0,
+            "UNQUALIFIED_NEW_CAPTURE_MUST_REJECT");
+        Console.WriteLine("PASS rolling control freshness, changed revision and unqualified recapture; zero input");
+    }
+
     public static void RunAckTimeoutDummy()
     {
         if (!OperatingSystem.IsWindows()) throw new Exception("ACK_TIMEOUT_DUMMY_REQUIRES_WINDOWS");

@@ -11,18 +11,21 @@ sealed class Win32DummyWindow : IDisposable
     readonly Thread thread;
     readonly ManualResetEventSlim ready = new();
     readonly Proc procedure;
+    readonly bool showInTaskbar;
     Proc? editProcedure;
     IntPtr editOriginal;
     public IntPtr Hwnd, Edit, Submit;
     public int Clicks;
     public long Accepted;
     public string FieldText => Text(Edit);
-    public Win32DummyWindow()
+    public Win32DummyWindow(bool waitForForeground = true)
     {
+        showInTaskbar = !waitForForeground;
         procedure = WindowProc;
         thread = new Thread(Run) { IsBackground = true };
         thread.Start();
         if (!ready.Wait(5000) || Hwnd == IntPtr.Zero) throw new Exception("DUMMY_WINDOW_UNAVAILABLE");
+        if (!waitForForeground) return;
         SetForegroundWindow(Hwnd);
         if (!SpinWait.SpinUntil(() => GetForegroundWindow() == Hwnd, 1500)) throw new Exception("DUMMY_CANNOT_ACQUIRE_FOREGROUND");
     }
@@ -33,7 +36,8 @@ sealed class Win32DummyWindow : IDisposable
             Procedure = Marshal.GetFunctionPointerForDelegate(procedure), Background = new(6) };
         // Same-process second dummy can reuse the registered class.
         RegisterClassEx(ref wc);
-        Hwnd = CreateWindowEx(0x80, ClassName, "Sol-C restricted input DUMMY", 0x90000000,
+        Hwnd = CreateWindowEx(showInTaskbar ? 0u : 0x80u, ClassName, "Sol-C restricted input DUMMY",
+            showInTaskbar ? 0x10CF0000u : 0x90000000u,
             100, 100, 400, 280, IntPtr.Zero, IntPtr.Zero, IntPtr.Zero, IntPtr.Zero);
         Edit = CreateWindowEx(0, "EDIT", "12", 0x50802000, 40, 40, 160, 36, Hwnd, new(101), IntPtr.Zero, IntPtr.Zero);
         Submit = CreateWindowEx(0, "BUTTON", "Submit dummy", 0x50000000, 40, 100, 160, 36, Hwnd, new(102), IntPtr.Zero, IntPtr.Zero);

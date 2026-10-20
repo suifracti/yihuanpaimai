@@ -73,6 +73,7 @@ static class Program
         if (args.Contains("--cross-process-dummy-host")) { WindowsBackendChecks.RunCrossProcessHost(); return; }
         if (args.Contains("--ack-timeout-dummy")) { WindowsBackendChecks.RunAckTimeoutDummy(); return; }
         if (args.Contains("--dummy-window")) { WindowsBackendChecks.Run(); return; }
+        if (args.Contains("--rolling-anchor-only")) { WindowsBackendChecks.RunRollingAnchor(args.Contains("--await-activation")); return; }
         Case("default execution OFF", () => {
             var f = new Fixture(false); Require(f.Coordinator.Dispatch(f.Intent()).Status == ReceiptStatus.NOT_SENT, "OFF");
             Require(f.Port.Sends == 0, "NO_INPUT");
