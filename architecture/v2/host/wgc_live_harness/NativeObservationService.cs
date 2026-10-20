@@ -312,6 +312,7 @@ internal static class NativeObservationService
                 reason => EmitStatus(sessionId, "ERROR", reason, new { exitConfirmed = false })) : null;
             CapturedBgraFrame? lastDomainCapture = null;
             long lastDomainRequestNs = 0;
+            long lastDomainImageRequestNs = 0;
             string lastDomainCaptureStage = "NOT_REQUESTED";
             bool domainRejectionSaved = false;
             void PublishDomainAction(JsonObject message)
@@ -329,6 +330,9 @@ internal static class NativeObservationService
                             JsonSerializer.Serialize(new {
                                 diagnosticOnly = true, sourceQualified = false, inputActions = false,
                                 requestNs = lastDomainRequestNs, stage = lastDomainCaptureStage,
+                                imageRequestNs = lastDomainImageRequestNs,
+                                imageFromEarlierAttempt = image is not null && lastDomainImageRequestNs != lastDomainRequestNs,
+                                imageReadBackAfterSend = image is not null && image.CaptureTimestampNs > ((long?)message["receipt"]?["sentNs"] ?? long.MaxValue),
                                 receipt = message["receipt"]?.DeepClone(), rawPath = path,
                                 captureId = image?.DeliveryProof?.CaptureId,
                                 readbackNs = image?.CaptureTimestampNs, sourceNs = image?.SourceTimestampNs,
@@ -359,7 +363,7 @@ internal static class NativeObservationService
             {
                 var requestNs = ProtocolClock.NowNs();
                 lastDomainRequestNs = requestNs;
-                lastDomainCapture = null;
+                // A later timeout must not erase the last actual diagnostic pixels.
                 lastDomainCaptureStage = "CAPTURE_REQUESTED";
                 CapturedBgraFrame original;
                 try
@@ -369,6 +373,7 @@ internal static class NativeObservationService
                 }
                 catch (Exception ex) { lastDomainCaptureStage = "CAPTURE_EXCEPTION:" + ex.GetType().Name; return null; }
                 lastDomainCapture = original;
+                lastDomainImageRequestNs = requestNs;
                 lastDomainCaptureStage = "TARGET_OR_MAPPING_RECHECK";
                 var comparisonNs = ProtocolClock.NowNs();
                 var currentTarget = monitor.Snapshot();
@@ -463,7 +468,9 @@ internal static class NativeObservationService
                 {
                     try
                     {
-                        var domainFrame = CaptureDomainFrame(Math.Min(250, sceneAnchorDispatch.ConfirmationWaitMs));
+                        // Use the remaining click-to-result window once. Restarting
+                        // 250ms captures repeatedly drains the newly queued effect.
+                        var domainFrame = CaptureDomainFrame(sceneAnchorDispatch.ConfirmationWaitMs);
                         sceneAnchorDispatch.Observe(domainFrame);
                     }
                     catch { sceneAnchorDispatch.Observe(null); }
