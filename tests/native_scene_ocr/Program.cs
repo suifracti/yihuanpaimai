@@ -10,6 +10,11 @@ var cases = new (string? Text, long? Expected)[] {
 };
 foreach (var (text, expected) in cases)
     if (SceneAnchorOcr.ParseSingleAmount(text) != expected) throw new Exception($"AMOUNT_PARSE: {text}");
+if (SceneAnchorOcr.ParseAssets("2 727 464") != 2727464
+    || SceneAnchorOcr.ParseAssets("2 ， 732 ， 464") != 2732464
+    || SceneAnchorOcr.ParseAssets("123 45") is not null
+    || SceneAnchorOcr.ParseAssets("0 2 ， 732 ， 464") is not null)
+    throw new Exception("BALANCE_COMPLETE_THOUSANDS_GROUPS_ONLY");
 if (SceneAnchorOcr.AssetsRegion("LOBBY", 1920, 1080) != (1340, 20, 170, 65)
     || SceneAnchorOcr.AssetsRegion("AUCTION_READY", 1920, 1080) != (1695, 25, 180, 65)
     || SceneAnchorOcr.AssetsRegion("UNKNOWN", 1920, 1080) is not null

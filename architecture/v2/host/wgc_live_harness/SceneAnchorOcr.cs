@@ -27,7 +27,17 @@ static class SceneAnchorOcr
     }
 
     public static long? ReadAssets(ReadOnlyMemory<byte> bgra, int width, int height, int stride, string? scene)
-        => ParseSingleAmount(ReadAssetsText(bgra, width, height, stride, scene));
+        => ParseAssets(ReadAssetsText(bgra, width, height, stride, scene));
+
+    public static long? ParseAssets(string? text)
+    {
+        // Windows OCR also represents the visible comma groups as spaces.
+        // Accept complete groups of three only, within this single balance ROI.
+        string value=(text ?? "").Trim();
+        if (Regex.IsMatch(value,@"^\d{1,3}(?:\s+\d{3})+$"))
+            value=Regex.Replace(value,@"\s+",",");
+        return ParseSingleAmount(value);
+    }
 
     public static string? ReadAssetsText(ReadOnlyMemory<byte> bgra, int width, int height, int stride, string? scene)
     {
