@@ -11,6 +11,16 @@ sys.path[:0] = [str(ROOT / 'app'), str(ROOT / 'core')]
 
 
 class AutoRunWindowTests(unittest.TestCase):
+    def test_failed_bid_receipt_commit_stops_window_without_publishing_a_bid(self):
+        import main
+        form=SimpleNamespace(finish_game_input=mock.Mock())
+        with mock.patch.multiple(main,_LIVE_DOMAIN_LOOP={'phase':'bid_dispatched','bidIntentId':'one'},
+                _MAIN_WINDOW_HOLDER=[form],LATEST_PAYLOAD={},WS_EVENT_LOOP=None,
+                _NATIVE_OBSERVATION_SESSION='obs'):
+            main._native_domain_action_dispatch_rejected(dict(intentId='one',observationSessionId='obs',reason='COMMIT_FAILED'))
+            self.assertEqual(main._LIVE_DOMAIN_LOOP['phase'],'stopped')
+            self.assertNotIn('bidActionReceipt',main.LATEST_PAYLOAD)
+            form.finish_game_input.assert_called_once_with('COMMIT_FAILED')
     def test_unadmitted_unknown_bid_still_stops_and_restores_without_becoming_a_fact(self):
         import main
         form=SimpleNamespace(finish_game_input=mock.Mock())

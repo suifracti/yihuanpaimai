@@ -66,8 +66,8 @@ static class WindowsBackendChecks
                 AttemptCommits++;
                 if (!CommitAllowed) return false;
                 // Test-only ACK record, NOT another budget book. Prove disk acknowledgement
-                // occurs with zero raw calls and before this transaction's input.
-                Require(Raw.SendCallCount == 0, "ATTEMPT_MUST_PRECEDE_INPUT");
+                // occurs after safe amount editing, before the confirm click.
+                Require(Raw.SendCallCount == 2 && window.Accepted == 0, "ATTEMPT_MUST_PRECEDE_CONFIRMATION");
                 using var file = new FileStream("build/native-domain-actions/dummy-attempt-ack.json", FileMode.Create, FileAccess.Write);
                 System.Text.Json.JsonSerializer.Serialize(file, i); file.Flush(true); return true;
             }, r => { ReceiptCommits++; return ReceiptAllowed; });
@@ -138,22 +138,22 @@ static class WindowsBackendChecks
             };
             using var other = mode == "other-window" ? new Win32DummyWindow() : null;
             var result = f.Runtime.Dispatch(f.Intent);
-            Require(result.Status == ReceiptStatus.NOT_SENT && f.Raw.SendCallCount == 0,
+            Require(result.Status == ReceiptStatus.NOT_SENT && f.Raw.SendCallCount == (mode=="commit-failure"?2:0),
                 "GATE_FAILED " + mode + " " + result.Status + " " + result.Reason);
-            Console.WriteLine("PASS zero OS input: " + mode);
+            Console.WriteLine("PASS no confirmation input: " + mode);
         }
         using (var f = new Fixture(window, partial: true, fakeObserver: true))
         {
-            Require(f.Runtime.Dispatch(f.Intent).Status == ReceiptStatus.UNKNOWN, "PARTIAL_MUST_BE_UNKNOWN");
+            Require(f.Runtime.Dispatch(f.Intent).Status == ReceiptStatus.NOT_SENT, "PARTIAL_EDIT_IS_NOT_SUBMITTED");
             Require(f.Runtime.Dispatch(f.Intent with { IntentId = "retry" }).Status == ReceiptStatus.NOT_SENT && f.Raw.SendCallCount == 1, "PARTIAL_RESEND");
-            Console.WriteLine("PASS partial backend UNKNOWN/no retry (fake partial, no partial OS modifier injection)");
+            Console.WriteLine("PASS partial edit stops without submission or continued input (fake partial)");
         }
         using (var f = new Fixture(window))
         {
             f.Decoder.BadAmount = true;
-            Require(f.Runtime.Dispatch(f.Intent).Status == ReceiptStatus.UNKNOWN && f.Raw.SendCallCount == 2, "BAD_AMOUNT_MUST_NOT_SUBMIT");
+            Require(f.Runtime.Dispatch(f.Intent).Status == ReceiptStatus.NOT_SENT && f.Raw.SendCallCount == 3, "BAD_AMOUNT_MUST_NOT_SUBMIT_AFTER_TWO_FILLS");
             Require(window.Clicks == 1, "UNVERIFIED_AMOUNT_CLICKED_SUBMIT");
-            Console.WriteLine("PASS actual field mutation but mismatched captured amount UNKNOWN/no submit");
+            Console.WriteLine("PASS two actual field fills but mismatched captured amount NOT_SENT/no submit");
         }
         using (var f = new Fixture(window))
         {
@@ -256,8 +256,8 @@ static class WindowsBackendChecks
             _ => { }, "dummy-boot", "dummy-ledger", 1,
             f.Intent.ObservationSessionId, f.Intent));
         var timedOut = f.Runtime.Dispatch(f.Intent);
-        Require(timedOut.Status == ReceiptStatus.UNKNOWN && f.Raw.SendCallCount == 0
-            && f.Events.Count == 0, "MISSING_MAIN_ACK_MUST_TIMEOUT_WITH_ZERO_INPUT_AND_NO_VISIBLE_RECEIPT");
-        Console.WriteLine("PASS Main ACK timeout blocks first primitive and receipt projection");
+        Require(timedOut.Status == ReceiptStatus.NOT_SENT && f.Raw.SendCallCount == 2
+            && f.Events.All(e=>(string?)e["type"]!="domain.action.receipt"), "MISSING_MAIN_ACK_BLOCKS_CONFIRMATION_AND_BID_PROJECTION");
+        Console.WriteLine("PASS Main ACK timeout blocks confirmation and exposes only a stop notice");
     }
 }

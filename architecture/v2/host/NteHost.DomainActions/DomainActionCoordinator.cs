@@ -144,8 +144,8 @@ public sealed class DomainActionCoordinator
             PortOutcome outcome;
             try { outcome = port.TrySend(intent, () => Validate(intent, SafeRead()) == "OK"); }
             catch { outcome = new(true, false, "PORT_EXCEPTION_DELIVERY_UNKNOWN"); }
-            long sentNs = clock(); // Confirmation captures must be taken AFTER the completed click.
             bool attemptedCommit = outcome.BidConfirmationAttempted ?? outcome.SideEffectAttempted;
+            long sentNs = attemptedCommit ? clock() : 0; // Draft edits are not a submitted bid.
             var status = !attemptedCommit ? ReceiptStatus.NOT_SENT
                 : outcome.Completed ? ReceiptStatus.SENT_PENDING_CONFIRMATION : ReceiptStatus.UNKNOWN;
             var receipt = new DomainReceipt(intent.IntentId, intent.Kind, intent.MatchId, intent.Round,

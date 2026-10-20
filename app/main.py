@@ -3142,6 +3142,10 @@ def _native_dispatch_claimed_bid_to_host() -> bool:
 
 def _native_domain_action_dispatch_rejected(event: Dict[str, Any]) -> Dict[str, Any]:
     """Keep a host refusal off the observation-health path. It is not a frame."""
+    state = globals().get('_LIVE_DOMAIN_LOOP') or {}
+    if (event.get('intentId') and event.get('intentId') == state.get('bidIntentId')
+            and event.get('observationSessionId') == _NATIVE_OBSERVATION_SESSION):
+        _stop_authorized_live_domain_loop(str(event.get('reason') or 'HOST_DISPATCH_REJECTED'))
     with _MANUAL_STATE_LOCK:
         LATEST_PAYLOAD["domainActionDispatchRejected"] = {
             "reason": event.get("reason"),

@@ -204,12 +204,12 @@ public sealed class NativeDomainActionRuntime
             try { committed = obligations?.CommitReceipt(receipt) == true; } catch { committed = false; }
             if (!committed)
             {
-                try { receipt = coordinator.MarkUnknown(receipt.IntentId, "DURABLE_RECEIPT_COMMIT_FAILED"); }
-                catch (ArgumentException) when (receipt.Status == ReceiptStatus.NOT_SENT)
-                {
-                    // A preflight rejection may have no coordinator receipt row;
-                    // keep it NOT_SENT while suppressing its uncommitted projection.
-                }
+                publish(new JsonObject { ["type"]="domain.action.dispatch.rejected",
+                    ["observationSessionId"]=receipt.ObservationSessionId, ["intentId"]=receipt.IntentId,
+                    ["reason"]="DURABLE_RECEIPT_COMMIT_FAILED:" + receipt.Reason,
+                    ["inputActions"]=false }); // a stop notice, never a committed bid receipt
+                if (receipt.Status != ReceiptStatus.NOT_SENT)
+                    receipt = coordinator.MarkUnknown(receipt.IntentId, "DURABLE_RECEIPT_COMMIT_FAILED");
             }
         }
         var node = JsonSerializer.SerializeToNode(receipt, Json)!.AsObject();

@@ -106,7 +106,8 @@ static class Program
                 var coordinator = new DomainActionCoordinator(() => f.Scope, () => f.Now,
                     new RestrictedDomainInputPort(backend, () => f.Now));
                 var result = coordinator.Dispatch(i);
-                Require(result.Status == (valid ? ReceiptStatus.SENT_PENDING_CONFIRMATION : ReceiptStatus.NOT_SENT), "FIELD_CONFIRMATION");
+                Require(result.Status == (valid ? ReceiptStatus.SENT_PENDING_CONFIRMATION : ReceiptStatus.NOT_SENT)
+                    && (valid || result.SentNs==0), "FIELD_CONFIRMATION");
                 Require(backend.Operations.SequenceEqual(valid ? new[] { DomainPrimitive.FocusAmountField,
                     DomainPrimitive.ReplaceAmountDigits, DomainPrimitive.SubmitBid } : new[] {
                     DomainPrimitive.FocusAmountField, DomainPrimitive.ReplaceAmountDigits, DomainPrimitive.ReplaceAmountDigits }), "CLOSED_SEQUENCE");
@@ -259,7 +260,7 @@ static class Program
             var focus = bid?.Controls.Single(control => control.Primitive == DomainPrimitive.FocusAmountField);
             Require(bid?.Scene == "AUCTION" && submit is { Left: 1189, Top: 926 }
                 && submit.Left + submit.Width / 2 > (883 + 1459) / 2 + 40, "CONFIRM_NOT_CLEAR_BUTTON");
-            Require(focus is { Left: 1139, Top: 701, Width: 370, Height: 50 }, "AMOUNT_LINE_EXCLUDES_ALLOWED_RANGE " + focus);
+            Require(focus is { Left: 1139, Top: 756, Width: 370, Height: 50 }, "AMOUNT_LINE_FROM_REAL_FILLED_PANEL " + focus);
             var lobbyPixels = new byte[width * height * 4];
             SceneAnchorGameDecoder.PaintGray(lobbyPixels, width * 4, 1208, 961, start);
             var lobbyFrame = Blank("LOBBY", 0);

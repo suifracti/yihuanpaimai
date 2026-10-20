@@ -609,6 +609,8 @@ jobs:
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           dotnet run --project architecture/v2/input/verifier/NteInputGuardVerifier.csproj -c Release -- --domain-timing-only
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          dotnet run --project architecture/v2/input/verifier/NteInputGuardVerifier.csproj -c Release -- --amount-keypad-only
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           dotnet run --project tests/native_preparation_confirmation/confirmation.csproj -c Release
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           $output = dotnet run --project tests/native_domain_actions/domain-actions.csproj -- $workflowPath 2>&1
@@ -633,7 +635,7 @@ jobs:
             'Domain action session contracts: NOT_RUN (no result file)' | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Append -Encoding utf8
           } else {
             $result = Get-Content $outputPath -Raw | ConvertFrom-Json
-            if ($testExitCode -ne 0 -or $result.tests -ne 26 -or $result.failures.Count -gt 0 -or $result.errors.Count -gt 0 -or $result.skipped.Count -gt 0) { $status = 'FAIL' }
+            if ($testExitCode -ne 0 -or $result.tests -ne 27 -or $result.failures.Count -gt 0 -or $result.errors.Count -gt 0 -or $result.skipped.Count -gt 0) { $status = 'FAIL' }
             else { $status = 'PASS' }
             "Domain action session contracts: $status; tests=$($result.tests); failures=$($result.failures.Count); errors=$($result.errors.Count); skipped=$($result.skipped.Count)" | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Append -Encoding utf8
           }

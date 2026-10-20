@@ -100,7 +100,12 @@ static class Program
             var scope = new ActionScope("lobby-test",0,0,1000000,0,"LOBBY","lobby",0,new(1,2,3,0),0,1,1,true,true,true,true,false,false)
                 {MatchGeneration=1,ObservationSessionId="test"};
             var v=decoder.Decode(new(scope,new(w,h,0,0),pixels,w*4));
-            Console.WriteLine(System.Text.Json.JsonSerializer.Serialize(new {path=row.GetProperty("path").GetString(),v?.Scene,v?.Instruments,controls=v?.Controls.Select(x=>x.Primitive.ToString())}));
+            Console.WriteLine(System.Text.Json.JsonSerializer.Serialize(new {path=row.GetProperty("path").GetString(),v?.Scene,v?.Instruments,v?.AmountField,controls=v?.Controls.Select(x=>x.Primitive.ToString())}));
+            if(row.TryGetProperty("expectedAmount",out var expectedAmount)) {
+                var region=v?.Controls.Single(c=>c.Primitive==DomainPrimitive.FocusAmountField);
+                Console.WriteLine($"FILLED_ROI={region?.Left},{region?.Top},{region?.Width},{region?.Height}");
+                Require(v?.AmountField==expectedAmount.GetInt64(),"REAL_FILLED_AMOUNT_MUST_READ_EXACTLY");
+            }
             if(v?.Scene=="TOOL_SETUP") {
                 var read=Host.GetType("WgcLiveHarness.SceneAnchorOcr",true)!.GetMethod("ReadText")!;
                 foreach(var box in new[]{new[]{320,235,115,55},new[]{421,927,145,66}})
@@ -124,8 +129,7 @@ static class Program
                 }
                 var field=v!.Controls.Single(c=>c.Primitive==DomainPrimitive.FocusAmountField);
                 Console.WriteLine($"AMOUNT_ROI={field.Left},{field.Top},{field.Width},{field.Height}");
-                Require(field.Top>=675 && field.Top+field.Height<=750 && field.Width>=250,
-                    "FIELD_MUST_EXCLUDE_RECOMMENDATION_AND_ALLOWED_RANGE");
+                Require(field.Width>=250,"READ_COMPLETE_AMOUNT_LINE");
                 Console.WriteLine("PASS real empty keypad: named clear/digits and amount-only region; no OS input");
             }
             if(row.TryGetProperty("hoverAfterClear",out var hoverPath)) {
