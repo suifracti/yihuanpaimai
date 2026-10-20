@@ -1027,6 +1027,7 @@ class NTEVisionPipeline:
         self._frame_ocr_rows = []
 
         self.current_context.pop("boxObservation", None)
+        self.current_context.pop("auctionFunds", None)
 
         # A prepared warehouse observation is valid only for the exact frame
         # that was already inspected by the early-publish path.
@@ -1252,6 +1253,7 @@ class NTEVisionPipeline:
             # The live fast path skips the canvas containing the rule label.
             # Read its own line too; a known box does not imply a standard game.
             priority_crops.append(frame[int(h * .86):int(h * .90), int(w * .47):int(w * .55)])
+            priority_crops.append(frame[int(h * .023):int(h * .083), int(w * .883):int(w * .979)])
 
             valid_crop_indices = [i for i, crop in enumerate(priority_crops) if getattr(crop, "size", 0) > 0]
             valid_crops = [priority_crops[i] for i in valid_crop_indices]
@@ -1285,6 +1287,11 @@ class NTEVisionPipeline:
                     aligned_results[crop_index] = result
 
             footer = aligned_results[5]
+            assets = aligned_results[7]
+            if round_title_confirmed and assets and float(assets[1] or 0) >= .85:
+                text = re.sub(r"\s+", "", str(assets[0] or ""))
+                if re.fullmatch(r"\d+|\d{1,3}(?:[,，.．]\d{3})+", text):
+                    self.current_context["auctionFunds"] = int(re.sub(r"[,，.．]", "", text))
             rule_footer = aligned_results[6]
             if round_title_confirmed and rule_footer and float(rule_footer[1] or 0) >= .85:
                 rule = extract_from_text(str(rule_footer[0] or "")).get("fieldCondition")

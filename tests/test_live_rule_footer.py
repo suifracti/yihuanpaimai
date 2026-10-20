@@ -40,9 +40,11 @@ class LiveRuleFooterTests(unittest.TestCase):
                 pipe = NTEVisionPipeline()
                 pipe.fast_live_intel = True
                 pipe.current_context.update(scene='IN_AUCTION', inAuction=True, round=3)
+                pipe.current_context['auctionFunds'] = 99  # Must not survive an unreadable new frame.
                 def recognize(crops):
                     return [(text, .99) if c.shape[:2] == (44, 154)
                             else ('皮制宝箱（高级藏品概率提升）', .99) if c.shape[:2] == (50, 538)
+                            else ('2,727,464', .99) if c.shape[:2] == (65, 184) and text != '看不清'
                             else ('', 0.) for c in crops], None
                 ocr = Mock(return_value=([], None))
                 ocr.text_rec.side_effect = recognize
@@ -54,8 +56,26 @@ class LiveRuleFooterTests(unittest.TestCase):
                                                 stage_timings=timings)
                 self.assertEqual(result['fieldCondition'], expected)
                 self.assertEqual(result['boxObservation']['text'], FIXTURE['rawBoxObservation'])
+                self.assertEqual(result.get('auctionFunds'), 2727464 if text != '看不清' else None)
                 # No full-canvas OCR was needed to obtain the rule.
                 self.assertNotIn('fullCanvasOcr', timings)
+
+    def test_main_uses_same_frame_auction_funds_when_windows_ocr_is_missing(self):
+        from test_native_background_observation import _isolated_main
+        ns, _, _ = _isolated_main()
+        ns['_LIVE_DOMAIN_LOOP'] = {'phase': 'idle'}
+        ns['_MAIN_WINDOW_HOLDER'] = [Mock(prepare_game_input=Mock(return_value=True))]
+        ns['_native_domain_planning_view'] = lambda _: {'scene': 'AUCTION', 'funds': None}
+        view = ns['_live_loop_view'] = Mock(return_value=None)
+        data = {'scene': 'IN_AUCTION', 'auctionFunds': 2727464, 'observationSessionId': 'test'}
+        with patch.dict(os.environ, {'NTE_DOMAIN_LIVE_LOOP': '1'}):
+            ns['_advance_authorized_live_domain_loop'](data, {})
+        view.assert_called_once_with(data, 'AUCTION', 2727464)
+        view.reset_mock()
+        data.pop('auctionFunds')
+        with patch.dict(os.environ, {'NTE_DOMAIN_LIVE_LOOP': '1'}):
+            ns['_advance_authorized_live_domain_loop'](data, {})
+        view.assert_called_once_with(data, 'AUCTION', None)
 
     def test_run_u_box_mapping_is_present_rule_is_the_actual_missing_input(self):
         facts = FIXTURE['facts']
@@ -77,6 +97,7 @@ class LiveRuleFooterTests(unittest.TestCase):
         context = pipe.process_frame(frame, prioritize_live_facts=True,
                                      captured_at='2026-10-20T13:59:08.497725+00:00')
         self.assertEqual(context['fieldCondition'], 'standard')
+        self.assertEqual(context['auctionFunds'], FIXTURE['funds'])
         self.assertEqual(context['boxObservation']['text'], FIXTURE['rawBoxObservation'])
         # Production engine projects this observed rule, not a box/default rule.
         from test_native_viewport_observation import NativeViewportObservationTests

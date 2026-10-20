@@ -256,7 +256,7 @@ jobs:
       - name: Run live rule footer and saved box wiring contracts
         shell: pwsh
         run: |
-          python tools/run_tests.py test_live_rule_footer.LiveRuleFooterTests.test_fast_path_reads_rule_line_with_box_without_canvas test_live_rule_footer.LiveRuleFooterTests.test_run_u_box_mapping_is_present_rule_is_the_actual_missing_input --output build/ci-live-rule-footer.json
+          python tools/run_tests.py test_live_rule_footer.LiveRuleFooterTests.test_fast_path_reads_rule_line_with_box_without_canvas test_live_rule_footer.LiveRuleFooterTests.test_run_u_box_mapping_is_present_rule_is_the_actual_missing_input test_live_rule_footer.LiveRuleFooterTests.test_main_uses_same_frame_auction_funds_when_windows_ocr_is_missing --output build/ci-live-rule-footer.json
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
       - name: Run Main bridge and raw PARTIAL page contracts

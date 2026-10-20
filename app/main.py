@@ -3204,6 +3204,10 @@ def _advance_authorized_live_domain_loop(data: Dict[str, Any], frame: Dict[str, 
         planning = _native_domain_planning_view(data)
         published = planning.get("scene") if planning is not None else None
         funds = planning.get("funds") if planning is not None else None
+        # Reuse the accepted frame's existing RapidOCR batch for live funds.
+        # A missing Windows OCR result must not discard this actual reading.
+        if data.get("scene") == "IN_AUCTION" and type(data.get("auctionFunds")) is int:
+            funds = data["auctionFunds"]
         view = _live_loop_view(data, published, funds)
         if view is None:
             return
