@@ -23,15 +23,39 @@ class NativeBidObligationProtocolTests(unittest.TestCase):
         self.proposal = intent()
         self.assertTrue(self.book.reserve(self.proposal, self.current, now_ms=100)["ok"])
         claim = self.book.claim(self.proposal["intentId"], self.current, now_ms=101)
+        self.claim = claim
         native = dict(self.current, budget=100000, leaseExpiresNs=1_000_000_000,
                       takeoverGeneration=1, leaseId="protocol-lease",
                       window=dict(hwnd=10, pid=20, processInstanceToken=30, focusEpoch=40))
+        self.native = native
         self.intent = claimed_bid_to_domain_intent(
             claim, native, now_ms=101, now_ns=101_000_000)
         self.owner = NativeBidObligationOwner(
             self.book, self.intent, current_provider=lambda: self.current,
             native_scope_provider=lambda: native, now_ms=lambda: 102,
             now_ns=lambda: 102_000_000, boot_id="protocol-boot")
+
+    def test_millisecond_quantization_does_not_reconvert_the_fixed_deadline(self):
+        self.native.update(clockAnchorMs=101, clockAnchorNs=101_900_000)
+        prepared = claimed_bid_to_domain_intent(self.claim, self.native,
+                                               now_ms=101, now_ns=101_900_000)
+        owner = NativeBidObligationOwner(self.book, prepared,
+            current_provider=lambda: self.current, native_scope_provider=lambda: self.native,
+            now_ms=lambda: 102, now_ns=lambda: 102_100_000, boot_id="protocol-boot")
+        request = owner.dispatch_envelope('quantized-clock')
+        request.update(type='domain.action.obligation.request', requestKind='attempted',
+                       intentId=prepared['intentId'])
+        ack = owner.handle_request(request)
+        self.assertTrue(ack['accepted'], ack)
+        self.assertEqual(owner.intent['deadlineNs'], 800_900_000)
+        for changes, ms, ns in (({}, 800, 800_900_000),
+                                ({'clockAnchorMs': 103}, 102, 102_100_000),
+                                ({'clockAnchorNs': 103_000_000}, 102, 102_100_000),
+                                ({'leaseExpiresNs': 700_000_000}, 102, 102_100_000)):
+            with self.subTest(changes=changes):
+                with self.assertRaises(ValueError):
+                    claimed_bid_to_domain_intent(self.claim, dict(self.native, **changes),
+                                                now_ms=ms, now_ns=ns)
 
     def test_dispatch_and_attempt_are_one_shot_and_revision_bound(self):
         self.owner.dispatch_envelope("dispatch-one")

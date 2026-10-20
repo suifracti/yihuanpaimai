@@ -282,7 +282,7 @@ jobs:
         shell: pwsh
         run: |
           $outputPath = 'build/ci-issue46-bid-intent.json'
-          python tools/run_tests.py test_bid_intent_contract --output $outputPath
+          python tools/run_tests.py test_bid_intent_contract test_saved_auction_bid_replay test_prediction_snapshot_isolation --output $outputPath
           $testExitCode = $LASTEXITCODE
           if (-not (Test-Path $outputPath)) {
             $status = 'NOT_RUN'
@@ -649,7 +649,7 @@ jobs:
             'Main/Host durable dummy round trip: NOT_RUN (no result file)' | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Append -Encoding utf8
           } else {
             $result = Get-Content $outputPath -Raw | ConvertFrom-Json
-            if ($testExitCode -ne 0 -or $result.tests -ne 3 -or $result.failures.Count -gt 0 -or $result.errors.Count -gt 0 -or $result.skipped.Count -gt 0) { $status = 'FAIL' }
+            if ($testExitCode -ne 0 -or $result.tests -ne 4 -or $result.failures.Count -gt 0 -or $result.errors.Count -gt 0 -or $result.skipped.Count -gt 0) { $status = 'FAIL' }
             else { $status = 'PASS' }
             "Main/Host durable dummy round trip: $status; tests=$($result.tests); failures=$($result.failures.Count); errors=$($result.errors.Count); skipped=$($result.skipped.Count)" | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Append -Encoding utf8
           }

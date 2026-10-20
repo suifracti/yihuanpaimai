@@ -72,6 +72,7 @@ class NativeDomainActionCrossProcessTests(unittest.TestCase):
                     raise AssertionError("DUMMY_CLAIM_FAILED")
                 window = copy.deepcopy(ready["window"])
                 native_scope = dict(scope, budget=budget["remaining"],
+                    clockAnchorMs=now_ms, clockAnchorNs=now_ns,
                     leaseExpiresNs=now_ns + 60_000_000_000, takeoverGeneration=2,
                     leaseId="dummy-lease", window=window)
                 prepared = claimed_bid_to_domain_intent(claim, native_scope,

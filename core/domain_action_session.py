@@ -192,7 +192,17 @@ def claimed_bid_to_domain_intent(claim: dict, native_scope: dict, *, now_ms: int
     if (type(now_ms) is not int or type(now_ns) is not int
             or type(deadline_ms) is not int or now_ms >= deadline_ms):
         raise ValueError("CLAIM_DEADLINE_INVALID")
-    deadline_ns = now_ns + (deadline_ms - now_ms) * 1_000_000
+    # Convert once per captured scope. Repeating this conversion with a newly
+    # rounded millisecond sample moves the deadline by up to a millisecond and
+    # spuriously rejects the very same immutable intent at commit-before-input.
+    anchor_ms = native_scope.get("clockAnchorMs", now_ms)
+    anchor_ns = native_scope.get("clockAnchorNs", now_ns)
+    if (type(anchor_ms) is not int or type(anchor_ns) is not int
+            or anchor_ms > now_ms or anchor_ns > now_ns):
+        raise ValueError("CLAIM_CLOCK_ANCHOR_INVALID")
+    deadline_ns = anchor_ns + (deadline_ms - anchor_ms) * 1_000_000
+    if now_ns >= deadline_ns:
+        raise ValueError("CLAIM_DEADLINE_INVALID")
     if deadline_ns > native_scope.get("leaseExpiresNs", 0):
         raise ValueError("CLAIM_EXCEEDS_NATIVE_LEASE")
     return dict(intentId=proposal["intentId"], kind="Bid", **binding, amount=amount, maxSafeBid=cap,
@@ -716,6 +726,8 @@ def _live_native_scope(view, engine, funds):
     return {
         **engine,
         "budget": funds,
+        "clockAnchorMs": view.get("nowMs"),
+        "clockAnchorNs": now_ns,
         "leaseExpiresNs": deadline_ns,
         "takeoverGeneration": 0,
         "leaseId": lease_id,
