@@ -222,7 +222,9 @@ public sealed class SceneAnchorGameDecoder : IGameDomainFrameDecoder
             matches.Add((control, left, top, width, height));
         }
         found.AddRange(matches);
-        return matches.Count > 0;
+        // A witnessed panel remains open even when an optional item is absent.
+        // Only actually matched controls become clickable anchors.
+        return matches.Count > 0 || spec.Witnesses.Length > 0;
     }
 
     bool AllWitnesses(byte[] gray, NativeDomainFrame frame, Catalog catalog, SceneSpec spec)

@@ -46,6 +46,15 @@ static class PreparationChecks
         Require(bidFixture.Coordinator.Dispatch(bid).Status == ReceiptStatus.SENT_PENDING_CONFIRMATION, "BID_PENDING");
         Require(bidFixture.Coordinator.Confirm(bidFixture.Evidence(bid, "AUCTION_READY")).Status == ReceiptStatus.CONFIRMED,
             "CLOSED_PANEL_STILL_CONFIRMS_OWN_BID");
+        var listDecoder = SceneAnchorGameDecoder.Load("assets/scene_anchors");
+        Require(listDecoder.TryGetTemplate("instrument_list_title.png", out var title), "LIST_TITLE_TEMPLATE");
+        var listPixels = new byte[1920 * 1080 * 4];
+        SceneAnchorGameDecoder.PaintGray(listPixels, 1920 * 4, 70, 140, title);
+        var list = listDecoder.Decode(new NativeDomainFrame(new Fixture().Scope,
+            new(1920, 1080, 0, 0), listPixels, 1920 * 4));
+        Require(list?.Scene == "INSTRUMENT_LIST" && list.Controls.Count == 0 && !list.GoldAverageVisible,
+            "OPEN_LIST_DOES_NOT_REQUIRE_OR_INVENT_GOLD_TOOL");
+        Console.WriteLine("PASS list title confirms open panel without inventing an absent instrument (synthetic pixels)");
         if (replayPath is null || !File.Exists(replayPath)) return;
         using var doc = JsonDocument.Parse(File.ReadAllText(replayPath));
         var root = doc.RootElement;
@@ -74,6 +83,9 @@ static class PreparationChecks
                 Require(view!.GoldAverageVisible == goldExpected.GetBoolean(), "REAL_GOLD_EFFECT:" + path);
             Require(view!.Controls.All(a => !a.SourceQualified), "PLANNING_MUST_NOT_GRANT_INPUT");
             var names = view.Controls.Select(a => a.Primitive.ToString()).ToArray();
+            if (row.TryGetProperty("absentControls", out var absent))
+                foreach (var control in absent.EnumerateArray())
+                    Require(!names.Contains(control.GetString()), "ABSENT_CONTROL_PUBLISHED:" + control.GetString());
             output.Add(new { path, expected, actual = view.Scene, controls = names, view.GoldAverageVisible, elapsedMs = timer.Elapsed.TotalMilliseconds, inputQualified = false });
             Console.WriteLine($"PASS real saved scene {Path.GetFileName(path)} {view.Scene} {timer.ElapsedMilliseconds}ms");
         }

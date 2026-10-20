@@ -17,6 +17,11 @@ sealed class Decoder(string mode) : IGameDomainFrameDecoder
             null, null, []) { GoldAverageVisible = mode != "no-effect" };
     }
 }
+sealed class CountedDecoder(IGameDomainFrameDecoder inner) : IGameDomainFrameDecoder
+{
+    public int Reads;
+    public DecodedDomainFrame? Decode(NativeDomainFrame f) { Reads++; return inner.Decode(f); }
+}
 static class Program
 {
     static void Require(bool ok, string why) { if (!ok) throw new Exception(why); }
@@ -34,6 +39,8 @@ static class Program
         Console.WriteLine("Host assembly: " + Host.Location);
         int imageArg = Array.IndexOf(args, "--saved-image");
         if (imageArg >= 0) { SavedImage(args[imageArg + 1]); return 0; }
+        int listArg = Array.IndexOf(args, "--open-list-image");
+        if (listArg >= 0) { SavedImage(args[listArg + 1], openList: true); return 0; }
         foreach (string mode in new[] { "slow-effect", "slow-frame", "legacy-unqualified", "no-effect", "pre-click", "wrong-window" }) Check(mode);
         Console.WriteLine("PASS simple confirmation: one decode per frame, post-click effect, 3s UNKNOWN/no resend, correct window; zero OS input");
         return 0;
@@ -44,7 +51,7 @@ static class Program
         public PortOutcome TrySend(DomainIntent i, Func<bool> current)
         { Require(current(), "DISPATCH_SCOPE"); Sends++; return new(true, true, "FAKE_SENT"); }
     }
-    static void SavedImage(string path)
+    static void SavedImage(string path, bool openList = false)
     {
         var bytes = File.ReadAllBytes(path);
         int width = BitConverter.ToInt32(bytes, 18), signedHeight = BitConverter.ToInt32(bytes, 22);
@@ -59,11 +66,11 @@ static class Program
         // Main has already used this OCR engine for lobby funds before an
         // instrument can be sent. Warm that model before starting frame age.
         read(pixels, width, height, width * 4, 0, 0, 8, 8);
-        int reads = 0;
         decoder.ReadCommittedAmount = (p, w, h, stride, x, y, rw, rh) => {
-            reads++; return read(p, w, h, stride, x, y, rw, rh);
+            return read(p, w, h, stride, x, y, rw, rh);
         };
-        Check("saved-effect", decoder, pixels, width, height, () => reads);
+        var counted = new CountedDecoder(decoder);
+        Check(openList ? "saved-open" : "saved-effect", counted, pixels, width, height, () => counted.Reads);
         Console.WriteLine("PASS real saved pixels + production decoder/OCR/Host Observe; fixture scope and fake send, not real capture qualification");
     }
     static void Check(string mode, IGameDomainFrameDecoder? saved = null, byte[]? pixels = null,
@@ -72,10 +79,11 @@ static class Program
         var type = Host.GetType("WgcLiveHarness.TicketedSceneAnchorDispatch", true)!;
         long now = TraceClock.NowNs();
         var window = new WindowBinding(1, 2, 3, 0);
-        var scope = new ActionScope("match", 1, 1, 100, 100, "INSTRUMENT_GOLD_SELECTED", "lease",
+        var scope = new ActionScope("match", 1, 1, 100, 100,
+            mode == "saved-open" ? "AUCTION_READY" : "INSTRUMENT_GOLD_SELECTED", "lease",
             now + 8_000_000_000, window, 0, 1, now, true, true, true, true, false, false)
             { MatchGeneration = 1, ObservationSessionId = "test", ApprovalId = "test" };
-        var intent = new DomainIntent("use", DomainActionKind.UseGoldAverage, "match", 1, 1, null, 100,
+        var intent = new DomainIntent("use", mode == "saved-open" ? DomainActionKind.OpenInstrument : DomainActionKind.UseGoldAverage, "match", 1, 1, null, 100,
             now + 8_000_000_000, 0, "lease", window)
             { MatchGeneration = 1, ObservationSessionId = "test", ApprovalId = "test" };
         var synthetic = new Decoder(mode);
@@ -104,7 +112,7 @@ static class Program
         int decodes = readCount?.Invoke() ?? synthetic.Reads;
         Console.WriteLine($"{mode}: status={status} decodes={decodes} fakeSends={port.Sends} ageMs={(TraceClock.NowNs() - fresh.CapturedNs) / 1_000_000.0:F1}");
         Require(port.Sends == 1, "NO_RESEND");
-        Require(mode is "slow-effect" or "slow-frame" or "legacy-unqualified" or "saved-effect" ? status == "CONFIRMED" && decodes == 1
+        Require(mode is "slow-effect" or "slow-frame" or "legacy-unqualified" or "saved-effect" or "saved-open" ? status == "CONFIRMED" && decodes == 1
             : status != "CONFIRMED", "CONFIRM_ONLY_FRESH_MATCHED_EFFECT");
         if (decodes > 0) {
             frame.DecodeOnce(decoder);

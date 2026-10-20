@@ -132,7 +132,8 @@
             375,
             845
           ],
-          "primitive": "SelectGoldAverage"
+          "primitive": "SelectGoldAverage",
+          "optional": true
         }
       ]
     },
