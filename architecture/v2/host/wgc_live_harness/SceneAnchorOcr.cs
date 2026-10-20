@@ -19,7 +19,7 @@ static class SceneAnchorOcr
         return scene switch
         {
             "LOBBY" => (1340, 20, 170, 65),
-            "TOOL_SETUP" => (335, 28, 170, 65),
+            "TOOL_SETUP" or "TOOL_GROUPS" => (335, 28, 170, 65),
             "AUCTION" or "AUCTION_READY" or "INSTRUMENT_LIST" or "INSTRUMENT_GOLD_SELECTED"
                 => (1695, 25, 180, 65),
             _ => null
@@ -30,9 +30,9 @@ static class SceneAnchorOcr
         => AssetsRegion(scene, width, height) is { } r
             ? Read(bgra, width, height, stride, r.X, r.Y, r.W, r.H) : null;
 
-    public static InstrumentStock ReadInstruments(NativeDomainFrame f, string scene)
+    public static InstrumentStock ReadInstruments(NativeDomainFrame f, string scene, int counterY = 235)
     {
-        if (scene == "LOBBY") return new(null, null, null,
+        if (scene is "LOBBY" or "TOOL_GROUPS") return new(null, null, null,
             ReadAssets(f.Pixels, f.Geometry.Width, f.Geometry.Height, f.Stride, scene));
         long? Price(int x,int y,int w,int h) => ParseSingleAmount(Regex.Replace(
             ReadText(f.Pixels,f.Geometry.Width,f.Geometry.Height,f.Stride,x,y,w,h) ?? "", @"(?<=\d)\s+(?=\d{3}(?:\D|$))", ","));
@@ -42,7 +42,7 @@ static class SceneAnchorOcr
         const int cw=115,ch=55,scale=3;
         var counter=new byte[cw*ch*scale*scale*4];
         for(int y=0;y<ch*scale;y++) for(int x=0;x<cw*scale;x++) {
-            int src=(235+y/scale)*f.Stride+(320+x/scale)*4, dst=(y*cw*scale+x)*4;
+            int src=(counterY+y/scale)*f.Stride+(320+x/scale)*4, dst=(y*cw*scale+x)*4;
             var p=f.Pixels.Span;
             byte ink=p[src]>190 && p[src+1]>190 && p[src+2]>190?(byte)0:(byte)255;
             counter[dst]=counter[dst+1]=counter[dst+2]=ink; counter[dst+3]=255;

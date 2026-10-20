@@ -1,13 +1,19 @@
 """Lobby replenishment using the existing named Host actions and receipts."""
 
-KINDS = {'OpenToolSetup', 'RequestToolRefill', 'ConfirmToolRefill', 'CloseToolSetup'}
-SCENES = {'LOBBY', 'TOOL_SETUP', 'TOOL_REFILL_CONFIRM'}
+KINDS = {'OpenToolSetup', 'RequestToolRefill', 'ConfirmToolRefill', 'CloseToolSetup', 'BrowseToolGroups', 'SelectToolGroup'}
+SCENES = {'LOBBY', 'TOOL_SETUP', 'TOOL_REFILL_CONFIRM', 'TOOL_GROUPS'}
 
 
 def advance(state, view, send, config):
     """Return True after configured stock was read and setup was closed."""
     stock = state.setdefault('restock', {'step': 0, 'spent': 0})
     scene = view.get('publishedScene')
+    pending, receipt = stock.get('pending'), view.get('preparationReceipt') or {}
+    if pending and all(receipt.get(k) == pending.get(k) for k in
+            ('intentId', 'kind', 'matchId', 'matchGeneration', 'observationSessionId', 'round')):
+        if receipt.get('status') in {'UNKNOWN', 'NOT_SENT'}:
+            state.update(phase='stopped',reason='INSTRUMENT_'+str(receipt.get('reason') or receipt['status']),resendAllowed=False)
+            return False
     if scene not in SCENES:
         if stock.get('ready') and scene in {'AUCTION','AUCTION_READY','INSTRUMENT_LIST','INSTRUMENT_GOLD_SELECTED','SETTLEMENT'}:
             stock['leftLobby'] = True
@@ -63,6 +69,14 @@ def advance(state, view, send, config):
     inventory = view.get('instruments') or {}
     if scene == 'LOBBY':
         kind, cost = 'OpenToolSetup', None
+    elif scene == 'TOOL_GROUPS':
+        if view.get('advancedToolGroupVisible') is True:
+            kind, cost = 'SelectToolGroup', None
+        elif stock.get('browsed'):
+            return stop('INSTRUMENT_ADVANCED_GROUP_NOT_FOUND')
+        else:
+            kind, cost = 'BrowseToolGroups', None
+            stock['browsed'] = True
     elif scene == 'TOOL_SETUP':
         if any(type(inventory.get(k)) is not int for k, n in targets.items() if n):
             return stop('INSTRUMENT_STOCK_UNREADABLE')

@@ -3,6 +3,31 @@ from instrument_restock import advance
 
 
 class InstrumentRestockTests(unittest.TestCase):
+    def test_default_group_browse_select_then_stock_and_close(self):
+        state, sent = {'phase':'idle'}, []
+        send=lambda _,e:sent.append(e['intent']) or True
+        advance(state,self.view(),send,{})
+        for scene,extra,kind in [
+            ('TOOL_GROUPS',{},'BrowseToolGroups'),
+            ('TOOL_GROUPS',{'advancedToolGroupVisible':True},'SelectToolGroup'),
+            ('TOOL_SETUP',{'instruments':{'goldAverage':1}},'CloseToolSetup')]:
+            advance(state,self.view(scene,preparationReceipt=dict(sent[-1],status='CONFIRMED'),**extra),send,{})
+            self.assertEqual(sent[-1]['kind'],kind)
+        self.assertTrue(advance(state,self.view(preparationReceipt=dict(sent[-1],status='CONFIRMED')),send,{}))
+        self.assertFalse(any(i['kind']=='ConfirmToolRefill' for i in sent))
+
+    def test_group_navigation_is_bounded_and_unknown_stops_even_on_unrelated_scene(self):
+        for scene,status,reason in [('TOOL_GROUPS','CONFIRMED','INSTRUMENT_ADVANCED_GROUP_NOT_FOUND'),
+                                    ('AUCTION','UNKNOWN','INSTRUMENT_UNKNOWN')]:
+            state,sent={'phase':'idle'},[]
+            send=lambda _,e:sent.append(e['intent']) or True
+            advance(state,self.view(),send,{})
+            advance(state,self.view('TOOL_GROUPS',preparationReceipt=dict(sent[-1],status='CONFIRMED')),send,{})
+            advance(state,self.view(scene,preparationReceipt=dict(sent[-1],status=status)),send,{})
+            self.assertEqual(state['phase'],'stopped')
+            self.assertEqual(state['reason'],reason)
+            self.assertEqual(len(sent),2)
+
     def test_purchase_returns_to_lobby_then_rereads_stock_before_entry(self):
         state, sent = {'phase':'idle'}, []
         send = lambda _, e: sent.append(e['intent']) or True

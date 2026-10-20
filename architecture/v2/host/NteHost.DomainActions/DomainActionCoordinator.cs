@@ -1,7 +1,7 @@
 namespace NteHost.DomainActions;
 
 public enum DomainActionKind { Bid, ReturnLobby, StartNextMatch, OpenInstrument, SelectGoldAverage, UseGoldAverage, OpenBidPanel,
-    OpenToolSetup, RequestToolRefill, ConfirmToolRefill, CloseToolSetup }
+    OpenToolSetup, RequestToolRefill, ConfirmToolRefill, CloseToolSetup, BrowseToolGroups, SelectToolGroup }
 public static class AuctionPreparation
 {
     public static string? ExpectedScene(DomainActionKind kind) => kind switch
@@ -12,18 +12,22 @@ public static class AuctionPreparation
         DomainActionKind.OpenToolSetup => "LOBBY",
         DomainActionKind.RequestToolRefill or DomainActionKind.CloseToolSetup => "TOOL_SETUP",
         DomainActionKind.ConfirmToolRefill => "TOOL_REFILL_CONFIRM",
+        DomainActionKind.BrowseToolGroups or DomainActionKind.SelectToolGroup => "TOOL_GROUPS",
         _ => null,
     };
     public static bool IsPreparation(DomainActionKind kind) => ExpectedScene(kind) is not null;
     public static bool IsLobby(DomainActionKind kind) => kind is DomainActionKind.OpenToolSetup
-        or DomainActionKind.RequestToolRefill or DomainActionKind.ConfirmToolRefill or DomainActionKind.CloseToolSetup;
+        or DomainActionKind.RequestToolRefill or DomainActionKind.ConfirmToolRefill or DomainActionKind.CloseToolSetup
+        or DomainActionKind.BrowseToolGroups or DomainActionKind.SelectToolGroup;
     public static bool Confirms(DomainActionKind kind, string scene, bool goldAverageVisible = false) => kind switch
     {
         DomainActionKind.OpenInstrument => scene is "INSTRUMENT_LIST" or "INSTRUMENT_GOLD_SELECTED",
         DomainActionKind.SelectGoldAverage => scene == "INSTRUMENT_GOLD_SELECTED",
         DomainActionKind.UseGoldAverage => scene == "AUCTION_READY" && goldAverageVisible,
         DomainActionKind.OpenBidPanel => scene == "AUCTION",
-        DomainActionKind.OpenToolSetup => scene == "TOOL_SETUP",
+        DomainActionKind.OpenToolSetup => scene is "TOOL_SETUP" or "TOOL_GROUPS",
+        DomainActionKind.BrowseToolGroups => scene == "TOOL_GROUPS",
+        DomainActionKind.SelectToolGroup => scene == "TOOL_SETUP",
         DomainActionKind.RequestToolRefill => scene == "TOOL_REFILL_CONFIRM",
         DomainActionKind.ConfirmToolRefill => scene is "TOOL_SETUP" or "LOBBY",
         DomainActionKind.CloseToolSetup => scene == "LOBBY",

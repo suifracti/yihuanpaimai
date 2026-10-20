@@ -56,14 +56,14 @@ static class PreparationChecks
             Require(f.Port.Sends==1,"REFILL_NOT_REPEATED");
         }
         foreach(var kind in new[] {DomainActionKind.OpenToolSetup,DomainActionKind.RequestToolRefill,
-            DomainActionKind.ConfirmToolRefill,DomainActionKind.CloseToolSetup})
+            DomainActionKind.ConfirmToolRefill,DomainActionKind.CloseToolSetup,DomainActionKind.BrowseToolGroups,DomainActionKind.SelectToolGroup})
         {
             var f=new Fixture();
             f.Scope=f.Scope with {Round=0,Scene=AuctionPreparation.ExpectedScene(kind)!};
             var intent=f.Intent("lobby-"+kind,kind) with {Round=0,Amount=kind==DomainActionKind.ConfirmToolRefill?500:null,
                 MinimumFunds=100000,GoldStockBefore=0};
             Require(f.Coordinator.Dispatch(intent).Status==ReceiptStatus.SENT_PENDING_CONFIRMATION,"LOBBY_DISPATCH:"+kind);
-            string next=kind switch {DomainActionKind.RequestToolRefill=>"TOOL_REFILL_CONFIRM",DomainActionKind.CloseToolSetup=>"LOBBY",_=>"TOOL_SETUP"};
+            string next=kind switch {DomainActionKind.RequestToolRefill=>"TOOL_REFILL_CONFIRM",DomainActionKind.CloseToolSetup=>"LOBBY",DomainActionKind.BrowseToolGroups=>"TOOL_GROUPS",_=>"TOOL_SETUP"};
             var evidence=f.Evidence(intent,next) with {Instruments=new(1,1,0,200000)};
             if(kind==DomainActionKind.ConfirmToolRefill)
                 Require(f.Coordinator.Confirm(evidence with {Instruments=new(0,0,500,200000)}).Status==ReceiptStatus.SENT_PENDING_CONFIRMATION,"REFILL_MUST_HAVE_VISIBLE_STOCK_EFFECT");

@@ -56,8 +56,9 @@ static class Program
     static void StockReplay(string replay)
     {
         var decoder = SceneAnchorGameDecoder.Load("assets/scene_anchors");
-        decoder.ReadInstruments = Host.GetType("WgcLiveHarness.SceneAnchorOcr", true)!.GetMethod("ReadInstruments")!
-            .CreateDelegate<Func<NativeDomainFrame, string, InstrumentStock?>>();
+        var readStock = Host.GetType("WgcLiveHarness.SceneAnchorOcr", true)!.GetMethod("ReadInstruments")!
+            .CreateDelegate<Func<NativeDomainFrame, string, int, InstrumentStock?>>();
+        decoder.ReadInstruments = (frame, scene, top) => { Console.WriteLine("GROUP_TOP="+top); return readStock(frame,scene,top); };
         using var doc = System.Text.Json.JsonDocument.Parse(File.ReadAllText(replay));
         foreach (var row in doc.RootElement.EnumerateArray())
         {

@@ -3198,7 +3198,7 @@ def _advance_authorized_live_domain_loop(data: Dict[str, Any], frame: Dict[str, 
         restock_ready = advance_restock(_LIVE_DOMAIN_LOOP, view, send, CONFIG.get('autoAuction') or {})
         if restock_ready and not (published == 'LOBBY' and _LIVE_DOMAIN_LOOP.get('phase') == 'idle'):
             _LIVE_DOMAIN_LOOP = advance_live_domain_loop(_LIVE_DOMAIN_LOOP, view, send)
-        elif published in {'AUCTION', 'AUCTION_READY', 'INSTRUMENT_LIST', 'INSTRUMENT_GOLD_SELECTED'}:
+        elif published in {'AUCTION', 'AUCTION_READY', 'INSTRUMENT_LIST', 'INSTRUMENT_GOLD_SELECTED'} and not _LIVE_DOMAIN_LOOP.get('restock', {}).get('pending'):
             _LIVE_DOMAIN_LOOP.update(phase='stopped', reason='INSTRUMENT_PREFLIGHT_NOT_COMPLETED')
         public = live_domain_loop_public(_LIVE_DOMAIN_LOOP)
         with _MANUAL_STATE_LOCK:
@@ -3248,7 +3248,7 @@ def _live_loop_view(data: Dict[str, Any], published: Optional[str], funds) -> Op
     if type(facts_round) is not int or isinstance(facts_round, bool):
         facts_round = 0
     try:
-        lobby = published in {'LOBBY', 'TOOL_SETUP', 'TOOL_REFILL_CONFIRM'}
+        lobby = published in {'LOBBY', 'TOOL_SETUP', 'TOOL_GROUPS', 'TOOL_REFILL_CONFIRM'}
         generation = 1 if lobby else int(data.get("sourceMatchGeneration"))
         revision = 0 if lobby else int(data.get("factsRevision"))
     except (TypeError, ValueError):
@@ -3304,6 +3304,7 @@ def _live_loop_view(data: Dict[str, Any], published: Optional[str], funds) -> Op
         "goldAvg": data.get("goldAvg") if data.get("goldAvg") is not None else CURRENT_MATCH.facts.get("goldAvg"),
         "goldTotal": data.get("goldTotal") if data.get("goldTotal") is not None else CURRENT_MATCH.facts.get("goldTotal"),
         "instruments": (data.get('domainObservation') or {}).get('instruments'),
+        "advancedToolGroupVisible": (data.get('domainObservation') or {}).get('advancedToolGroupVisible') is True,
         "minimumFunds": (CONFIG.get('autoAuction') or {}).get('minimumFunds', 100000),
         "goldAverageVisible": (data.get('domainObservation') or {}).get('goldAverageVisible') is True,
         "preparationReceipt": LATEST_PAYLOAD.get("preparationActionReceipt"),

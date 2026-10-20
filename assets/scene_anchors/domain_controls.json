@@ -187,12 +187,12 @@
           ]
         },
         {
-          "template": "tool_setup_group.png",
+          "template": "tool_group_selected.png",
           "search": [
-            65,
-            233,
-            290,
-            290
+            60,
+            220,
+            95,
+            900
           ]
         },
         {
@@ -214,7 +214,8 @@
             850,
             990
           ],
-          "primitive": "RequestToolRefill"
+          "primitive": "RequestToolRefill",
+          "optional": true
         },
         {
           "template": "tool_setup_close.png",
@@ -225,6 +226,54 @@
             190
           ],
           "primitive": "CloseToolSetup"
+        }
+      ]
+    },
+    {
+      "scene": "TOOL_GROUPS",
+      "witnesses": [
+        {
+          "template": "tool_setup_title.png",
+          "search": [
+            60,
+            125,
+            230,
+            190
+          ]
+        }
+      ],
+      "controls": [
+        {
+          "template": "tool_setup_close.png",
+          "search": [
+            1060,
+            130,
+            1125,
+            190
+          ],
+          "primitive": "CloseToolSetup"
+        },
+        {
+          "template": "tool_groups_page.png",
+          "search": [
+            446,
+            743,
+            460,
+            775
+          ],
+          "primitive": "BrowseToolGroups",
+          "optional": true
+        },
+        {
+          "template": "tool_setup_group.png",
+          "search": [
+            65,
+            230,
+            290,
+            900
+          ],
+          "primitive": "SelectToolGroup",
+          "optional": true
         }
       ]
     },

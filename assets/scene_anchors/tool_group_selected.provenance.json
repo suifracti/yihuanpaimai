@@ -1,0 +1,11 @@
+{
+  "source": "build\\goal-20261020-window\\advanced-selected.bmp",
+  "sha256": "21c0f2cd9fa188cea32175f31f5cc3616991e233b93d01b9f0202ef890cb2749",
+  "crop": [
+    68,
+    400,
+    87,
+    419
+  ],
+  "purpose": "Selected instrument group border, independent of cursor covering its text. Stock read from this selected row."
+}

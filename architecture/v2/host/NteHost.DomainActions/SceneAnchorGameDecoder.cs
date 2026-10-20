@@ -35,7 +35,7 @@ public sealed class SceneAnchorGameDecoder : IGameDomainFrameDecoder
     public bool Ready { get; }
     public AmountSample? ReadAmount { get; set; }
     public AmountSample? ReadCommittedAmount { get; set; }
-    public Func<NativeDomainFrame, string, InstrumentStock?>? ReadInstruments { get; set; }
+    public Func<NativeDomainFrame, string, int, InstrumentStock?>? ReadInstruments { get; set; }
 
     SceneAnchorGameDecoder(Catalog? catalog, Dictionary<string, GrayImage> templates)
     {
@@ -143,7 +143,7 @@ public sealed class SceneAnchorGameDecoder : IGameDomainFrameDecoder
             scene = "SETTLEMENT";
         else
         {
-            foreach (string name in new[] { "TOOL_REFILL_CONFIRM", "TOOL_SETUP", "LOBBY", "INSTRUMENT_GOLD_SELECTED", "INSTRUMENT_LIST", "AUCTION", "AUCTION_READY" })
+            foreach (string name in new[] { "TOOL_REFILL_CONFIRM", "TOOL_SETUP", "TOOL_GROUPS", "LOBBY", "INSTRUMENT_GOLD_SELECTED", "INSTRUMENT_LIST", "AUCTION", "AUCTION_READY" })
             {
                 var spec = Scene(catalog, name);
                 if (spec is null || !AllWitnesses(gray, frame, catalog, spec)) continue;
@@ -177,7 +177,13 @@ public sealed class SceneAnchorGameDecoder : IGameDomainFrameDecoder
             : null;
         bool goldVisible = catalog.GoldAverage is { } gold && Match(gray, frame.Geometry.Width, frame.Geometry.Height,
             gold.Image, Scale(gold.Search, frame.Geometry.Width, frame.Geometry.Height, catalog), catalog.Threshold, out _, out _);
-        var stock = scene is "LOBBY" or "TOOL_SETUP" or "TOOL_REFILL_CONFIRM" ? ReadInstruments?.Invoke(frame, scene) : null;
+        int counterY = 235;
+        if (scene == "TOOL_SETUP" && TryGetTemplate("tool_group_selected.png", out var group)
+            && Match(gray, frame.Geometry.Width, frame.Geometry.Height, group,
+                Scale(new(60, 220, 95, 900), frame.Geometry.Width, frame.Geometry.Height, catalog),
+                catalog.Threshold, out _, out int selectedTop))
+            counterY = selectedTop + 4;
+        var stock = scene is "LOBBY" or "TOOL_GROUPS" or "TOOL_SETUP" or "TOOL_REFILL_CONFIRM" ? ReadInstruments?.Invoke(frame, scene, counterY) : null;
         if (scene == "TOOL_SETUP" && stock is not null && TryGetTemplate("tool_used_badge.png", out var used))
         {
             bool Used(Box box) => Match(gray, frame.Geometry.Width, frame.Geometry.Height, used,

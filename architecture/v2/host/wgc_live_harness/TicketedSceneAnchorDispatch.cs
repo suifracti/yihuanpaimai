@@ -79,7 +79,8 @@ sealed class TicketedSceneAnchorDispatch : IDisposable
             ["readbackNs"] = frame.CaptureTimestampNs, ["matchId"] = scope.MatchId,
             ["matchGeneration"] = scope.MatchGeneration, ["factsRevision"] = scope.FactsRevision,
             ["round"] = scope.Round, ["scene"] = view?.Scene, ["goldAverageVisible"] = view?.GoldAverageVisible,
-            ["funds"] = funds, ["instruments"] = JsonSerializer.SerializeToNode(view?.Instruments, Json) };
+            ["funds"] = funds, ["instruments"] = JsonSerializer.SerializeToNode(view?.Instruments, Json),
+            ["advancedToolGroupVisible"] = view?.Controls.Any(c => c.Primitive == DomainPrimitive.SelectToolGroup) == true };
     }
 
     public static TicketedSceneAnchorDispatch? TryCreate(string anchorDirectory, string sessionId, long hwnd,
