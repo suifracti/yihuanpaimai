@@ -111,7 +111,7 @@ static class WindowsBackendChecks
             Console.WriteLine($"dummy raw={f.Raw.SendCallCount} acceptedRecords={f.Raw.InputsSentCount} field={window.FieldText} clicks={window.Clicks} guard={f.Guard.State}/{f.Guard.CancelReason} read={f.Backend.LastReadbackReason}");
             Require(receipt.Status == ReceiptStatus.SENT_PENDING_CONFIRMATION, "ACTUAL_OS_SEND_MUST_STAY_PENDING: " + receipt.Reason);
             Require(SpinWait.SpinUntil(() => window.FieldText == "12345" && window.Clicks == 1, 1000), "DUMMY_DID_NOT_RECEIVE_EXACT_DIGITS_AND_BUTTON");
-            Require(f.Raw.SendCallCount == 3 && f.AttemptCommits == 1, "TICKETED_PRIMITIVES_OR_DURABLE_ACK");
+            Require(f.Raw.SendCallCount == 5 && f.AttemptCommits == 1, "TICKETED_PRIMITIVES_OR_DURABLE_ACK");
             Require(!f.Guard.UserTakeoverSeen && f.Guard.State == GuardState.Armed, "SELF_INPUT_MUST_MATCH_LEDGER");
             var frame = f.Capture();
             Require(f.Runtime.OnIndependentCapture(f.Intent.IntentId, frame, new(2, "other"))?.Status == ReceiptStatus.SENT_PENDING_CONFIRMATION, "OPPONENT_CONFIRMATION");
@@ -123,7 +123,7 @@ static class WindowsBackendChecks
             var payload = envelope["receipt"]!;
             Require((string?)payload["status"] == "CONFIRMED" && (string?)payload["evidenceRef"] == frame.EvidenceRef, "MAIN_SCHEMA_PROJECTION");
             File.WriteAllText("build/native-domain-actions/dummy-receipt-events.json", new JsonArray(f.Events.Select(e => e.DeepClone()).ToArray()).ToJsonString());
-            Require(f.Runtime.Dispatch(f.Intent).Status == ReceiptStatus.CONFIRMED && f.Raw.SendCallCount == 3, "NO_DUPLICATE_OS_SEND");
+            Require(f.Runtime.Dispatch(f.Intent).Status == ReceiptStatus.CONFIRMED && f.Raw.SendCallCount == 5, "NO_DUPLICATE_OS_SEND");
             Console.WriteLine("PASS actual Windows tickets: exact digits/button + independent own pixel receipt + duplicate no-send");
         }
         foreach (string mode in new[] { "disabled", "missing-obligation", "commit-failure", "focus-epoch", "wrong-instance", "takeover", "shutdown", "other-window", "unknown-anchor" })
@@ -145,13 +145,13 @@ static class WindowsBackendChecks
         using (var f = new Fixture(window, partial: true, fakeObserver: true))
         {
             Require(f.Runtime.Dispatch(f.Intent).Status == ReceiptStatus.UNKNOWN, "PARTIAL_MUST_BE_UNKNOWN");
-            Require(f.Runtime.Dispatch(f.Intent with { IntentId = "retry" }).Status == ReceiptStatus.NOT_SENT && f.Raw.SendCallCount == 1, "PARTIAL_RESEND");
+            Require(f.Runtime.Dispatch(f.Intent with { IntentId = "retry" }).Status == ReceiptStatus.NOT_SENT && f.Raw.SendCallCount == 2, "PARTIAL_RESEND");
             Console.WriteLine("PASS partial backend UNKNOWN/no retry (fake partial, no partial OS modifier injection)");
         }
         using (var f = new Fixture(window))
         {
             f.Decoder.BadAmount = true;
-            Require(f.Runtime.Dispatch(f.Intent).Status == ReceiptStatus.UNKNOWN && f.Raw.SendCallCount == 2, "BAD_AMOUNT_MUST_NOT_SUBMIT");
+            Require(f.Runtime.Dispatch(f.Intent).Status == ReceiptStatus.UNKNOWN && f.Raw.SendCallCount == 3, "BAD_AMOUNT_MUST_NOT_SUBMIT");
             Require(window.Clicks == 1, "UNVERIFIED_AMOUNT_CLICKED_SUBMIT");
             Console.WriteLine("PASS actual field mutation but mismatched captured amount UNKNOWN/no submit");
         }
@@ -159,7 +159,7 @@ static class WindowsBackendChecks
         {
             f.ReceiptAllowed = false;
             Require(f.Runtime.Dispatch(f.Intent).Status == ReceiptStatus.UNKNOWN, "LOST_PENDING_DURABILITY_MUST_STOP");
-            Require(f.Runtime.Dispatch(f.Intent with { IntentId = "retry" }).Status == ReceiptStatus.NOT_SENT && f.Raw.SendCallCount == 3, "DURABILITY_RESEND");
+            Require(f.Runtime.Dispatch(f.Intent with { IntentId = "retry" }).Status == ReceiptStatus.NOT_SENT && f.Raw.SendCallCount == 5, "DURABILITY_RESEND");
             Console.WriteLine("PASS pending durability failure UNKNOWN/no resend");
         }
         Console.WriteLine("PASS Windows dummy adapter; HTGame never constructed/discovered/authorized");
