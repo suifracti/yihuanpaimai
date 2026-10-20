@@ -11,6 +11,7 @@ import os
 from pathlib import Path
 import sys
 import threading
+import tempfile
 from types import SimpleNamespace
 import unittest
 from unittest.mock import Mock, patch
@@ -494,6 +495,28 @@ class NativeBackgroundObservationTests(unittest.TestCase):
 
 
 class NativeHostExitReceiptTests(unittest.TestCase):
+    def test_real_diagnostics_delivers_receipt_and_following_frame(self):
+        from native_observation import NativeObservationBridge
+        from native_diagnostic_log import NativeDiagnosticLog
+        receipt = {"type": "domain.action.receipt", "channel": "preparation",
+                   "receipt": {"intentId": "prepare-fixture", "kind": "OpenInstrument", "status": "NOT_SENT"}}
+        frame = {"type": "native_observation", "status": "FRAME", "observationSessionId": "fixture-session"}
+        child = SimpleNamespace(stdout=io.StringIO("\n".join(json.dumps(x) for x in (receipt, frame))),
+                                poll=lambda: 0)
+        events = []
+        with tempfile.TemporaryDirectory() as folder:
+            bridge = NativeObservationBridge(str(ROOT), events.append, Mock())
+            bridge.session_dir = Path(folder)
+            bridge.process = child
+            diagnostics = NativeDiagnosticLog(bridge.session_dir)
+            try:
+                bridge._read_stdout(child, diagnostics)
+            finally:
+                diagnostics.close()
+            self.assertEqual(events[:2], [receipt, frame])
+            self.assertEqual(json.loads((Path(folder) / 'domain-action-receipts.jsonl').read_text()), receipt)
+            self.assertEqual(diagnostics.write_failures, 0)
+
     def make_bridge(self, events, code, *, terminal=False):
         sys.path.insert(0, str(ROOT / "app"))
         from native_observation import NativeObservationBridge

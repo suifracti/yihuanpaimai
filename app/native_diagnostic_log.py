@@ -9,13 +9,14 @@ import threading
 SESSION_DIAGNOSTIC_LIMIT_BYTES = 32 * 1024 * 1024
 _FILES = frozenset({
     "ui-frame-events.jsonl", "host-status.jsonl", "ui-last-frame.json", "host-stderr.log",
+    "domain-action-receipts.jsonl",
 })
 
 
 class NativeDiagnosticLog:
     """Disk writes never run on the Host stdout consumer.
 
-    Each allowed file gets one quarter of the session budget. Only these text
+    Each allowed file gets an equal share of the session budget. Only these text
     diagnostics in the newly-created session may be truncated; originals and
     prior sessions are outside this writer's authority. A full queue drops
     diagnostics, never the business event delivered to Main.

@@ -588,6 +588,10 @@ jobs:
         if: steps.setup-python-domain-actions.outcome == 'success'
         run: python -m pip install --disable-pip-version-check --no-input numpy==2.2.6 onnxruntime==1.23.2 opencv-python==5.0.0.93 rapidocr-onnxruntime==1.4.4 websockets==16.1.1 mss==10.2.0 pywin32==312
 
+      - name: Verify real receipt diagnostics do not interrupt frame transport
+        shell: pwsh
+        run: python tools/run_tests.py test_native_background_observation.NativeHostExitReceiptTests.test_real_diagnostics_delivers_receipt_and_following_frame
+
       - name: Run scene-specific amount parsing contracts (no OCR model required)
         shell: pwsh
         run: dotnet run --project tests/native_scene_ocr/scene-ocr.csproj -c Release -- --parser-only
