@@ -53,6 +53,9 @@ def advance(state, view, send, config):
             state.update(phase=stock['resumePhase'], reason='INSTRUMENTS_READY')
             return True
     funds = stock.get('funds')
+    if view.get('foreground') is not True:
+        state.update(phase='restocking', reason='GAME_NOT_FOREGROUND')
+        return False
     if type(funds) is not int:
         return stop('INSTRUMENT_FUNDS_UNREADABLE')
     if funds < floor:

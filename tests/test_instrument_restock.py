@@ -4,7 +4,7 @@ from instrument_restock import advance
 
 class InstrumentRestockTests(unittest.TestCase):
     def view(self, scene='LOBBY', **extra):
-        return dict(publishedScene=scene, currentFunds=200000,
+        return dict(publishedScene=scene, currentFunds=200000, foreground=True,
             engine=dict(matchId='old', matchGeneration=3, round=1, factsRevision=0, observationSessionId='obs'),
             window=dict(hwnd=1, pid=2, processInstanceToken=3, focusEpoch=0),
             nowNs=100, approvalId='user', bootId='boot', **extra)

@@ -1,6 +1,7 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup><OutputType>Exe</OutputType><TargetFramework>net8.0-windows10.0.19041.0</TargetFramework><ImplicitUsings>enable</ImplicitUsings><Nullable>enable</Nullable></PropertyGroup>
   <ItemGroup>
+    <ProjectReference Include="../../architecture/v2/host/NteHost.DomainActions/NteHost.DomainActions.csproj" />
     <FrameworkReference Include="Microsoft.Windows.SDK.NET.Ref" />
     <Compile Include="../../architecture/v2/host/wgc_live_harness/SceneAnchorOcr.cs" Link="SceneAnchorOcr.cs" />
   </ItemGroup>
