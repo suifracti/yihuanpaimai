@@ -1,6 +1,7 @@
 namespace NteHost.DomainActions;
 
-public enum DomainPrimitive { FocusAmountField, ReplaceAmountDigits, SubmitBid, ReturnLobby, StartNextMatch }
+public enum DomainPrimitive { FocusAmountField, ReplaceAmountDigits, SubmitBid, ReturnLobby, StartNextMatch,
+    OpenInstrument, SelectGoldAverage, UseGoldAverage, OpenBidPanel }
 public sealed record AmountFieldReadback(long Amount, string MatchId, int Round, long FactsRevision,
     WindowBinding Window, long TakeoverGeneration, long CapturedNs, bool SourceQualified)
 {
@@ -48,6 +49,8 @@ public sealed class RestrictedDomainInputPort : IRestrictedDomainInputPort
         }
         if (intent.Kind == DomainActionKind.ReturnLobby) return Step(DomainPrimitive.ReturnLobby);
         if (intent.Kind == DomainActionKind.StartNextMatch) return Step(DomainPrimitive.StartNextMatch);
+        if (AuctionPreparation.IsPreparation(intent.Kind)
+            && Enum.TryParse<DomainPrimitive>(intent.Kind.ToString(), out var preparation)) return Step(preparation);
         if (intent.Kind != DomainActionKind.Bid || intent.Amount is not (> 0 and <= 9_999_999))
             return new(false, false, "INVALID_BOUNDED_AMOUNT");
         var focus = Step(DomainPrimitive.FocusAmountField);

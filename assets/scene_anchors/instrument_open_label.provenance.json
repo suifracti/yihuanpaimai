@@ -1,0 +1,11 @@
+{
+  "source": "build/goal-20261019-c/match-12/board-57.jpg",
+  "sha256": "aa5f7b590d5d8c58852c61a68ffc00b1c973c0a4fe753b8c8b8c3035973f38a3",
+  "crop": [
+    375,
+    986,
+    433,
+    1024
+  ],
+  "purpose": "Named control/witness from saved real match-12; no inferred numeric business facts."
+}

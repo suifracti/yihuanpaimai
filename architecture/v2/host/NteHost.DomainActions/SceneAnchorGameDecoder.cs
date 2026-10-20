@@ -1,4 +1,5 @@
 using System.IO.Compression;
+using System.Numerics;
 using System.Text.Json;
 
 namespace NteHost.DomainActions;
@@ -16,12 +17,18 @@ public sealed class SceneAnchorGameDecoder : IGameDomainFrameDecoder
     public delegate long? AmountSample(ReadOnlyMemory<byte> bgra, int width, int height, int stride,
         int x, int y, int w, int h);
 
-    public readonly record struct GrayImage(byte[] Pixels, int Width, int Height);
+    public readonly record struct GrayImage(byte[] Pixels, int Width, int Height)
+    {
+        // Preprocess each reference once. Integer lanes preserve the exact NCC
+        // dot product; this is not a reduced-resolution or looser matcher.
+        internal int[] Samples { get; } = Array.ConvertAll(Pixels, value => (int)value);
+    }
     readonly record struct Box(int X, int Y, int Right, int Bottom);
-    sealed record TemplateControl(DomainPrimitive Primitive, string File, Box Search, GrayImage Image);
+    sealed record TemplateControl(DomainPrimitive Primitive, string File, Box Search, GrayImage Image, bool Optional = false);
     sealed record Witness(string File, Box Search, GrayImage Image);
     sealed record SceneSpec(string Scene, Witness[] Witnesses, TemplateControl[] Controls, Box? AmountAbove);
-    sealed record Catalog(int ReferenceWidth, int ReferenceHeight, double Threshold, SceneSpec[] Scenes, Box? Committed);
+    sealed record Catalog(int ReferenceWidth, int ReferenceHeight, double Threshold, SceneSpec[] Scenes, Box? Committed,
+        Witness? GoldAverage);
 
     readonly Catalog? catalog;
     readonly Dictionary<string, GrayImage> templates;
@@ -72,7 +79,8 @@ public sealed class SceneAnchorGameDecoder : IGameDomainFrameDecoder
                         return new(null, templates);
                     var image = LoadTemplate(directory, item.GetProperty("template").GetString()!, templates);
                     if (image is null) return new(null, templates);
-                    controls.Add(new(primitive, item.GetProperty("template").GetString()!, ReadBox(item.GetProperty("search")), image.Value));
+                    controls.Add(new(primitive, item.GetProperty("template").GetString()!, ReadBox(item.GetProperty("search")), image.Value,
+                        item.TryGetProperty("optional", out var optional) && optional.GetBoolean()));
                 }
                 Box? amount = null;
                 if (scene.TryGetProperty("amountAboveSubmit", out var amountNode))
@@ -81,7 +89,15 @@ public sealed class SceneAnchorGameDecoder : IGameDomainFrameDecoder
                 scenes.Add(new(scene.GetProperty("scene").GetString()!, witnesses.ToArray(), controls.ToArray(), amount));
             }
             Box? committed = root.TryGetProperty("committedSearch", out var committedNode) ? ReadBox(committedNode) : null;
-            return new(new(refW, refH, threshold, scenes.ToArray(), committed), templates);
+            Witness? goldAverage = null;
+            if (root.TryGetProperty("goldAverageWitness", out var goldNode))
+            {
+                string file = goldNode.GetProperty("template").GetString()!;
+                var image = LoadTemplate(directory, file, templates);
+                if (image is null) return new(null, templates);
+                goldAverage = new(file, ReadBox(goldNode.GetProperty("search")), image.Value);
+            }
+            return new(new(refW, refH, threshold, scenes.ToArray(), committed, goldAverage), templates);
         }
         catch (Exception ex) when (ex is IOException or JsonException or KeyNotFoundException or InvalidOperationException
             or FormatException or ArgumentException)
@@ -124,9 +140,17 @@ public sealed class SceneAnchorGameDecoder : IGameDomainFrameDecoder
             scene = "SETTLEMENT";
         else if (lobby is not null && Collect(gray, frame, catalog, lobby, found))
             scene = "LOBBY";
-        else if (auction is not null && Collect(gray, frame, catalog, auction, found))
-            scene = "AUCTION";
-        else if (SeatStripBright(gray, frame.Geometry.Width, frame.Geometry.Height))
+        else
+        {
+            foreach (string name in new[] { "INSTRUMENT_GOLD_SELECTED", "INSTRUMENT_LIST", "AUCTION", "AUCTION_READY" })
+            {
+                var spec = Scene(catalog, name);
+                if (spec is null || !AllWitnesses(gray, frame, catalog, spec)) continue;
+                if (spec.Controls.Length == 0 ? spec.Witnesses.Length > 0 : Collect(gray, frame, catalog, spec, found))
+                { scene = name; break; }
+            }
+        }
+        if (scene is null && SeatStripBright(gray, frame.Geometry.Width, frame.Geometry.Height))
             scene = frame.Scope.Round == 1 ? "AUCTION_R1" : "AUCTION";
         if (scene is null) return null;
         if (scene == "AUCTION" && auction is not null)
@@ -134,7 +158,7 @@ public sealed class SceneAnchorGameDecoder : IGameDomainFrameDecoder
         var controls = found.Select(item => Anchor(item.Control.Primitive, item.Left, item.Top, item.Width, item.Height, frame)).ToArray();
         long? amount = null;
         long? committed = null;
-        if (scene is "AUCTION" or "AUCTION_R1")
+        if (scene is "AUCTION" or "AUCTION_R1" or "AUCTION_READY")
         {
             var focus = found.FirstOrDefault(item => item.Control.Primitive == DomainPrimitive.FocusAmountField);
             if (focus.Control is not null && ReadAmount is not null)
@@ -150,8 +174,10 @@ public sealed class SceneAnchorGameDecoder : IGameDomainFrameDecoder
         CapturedOwnBid? own = committed is > 0 and <= 9_999_999
             ? new(OwnCommittedBidSlot, OwnCommittedBidIdentity, committed.Value, true, frame.EvidenceRef)
             : null;
+        bool goldVisible = catalog.GoldAverage is { } gold && Match(gray, frame.Geometry.Width, frame.Geometry.Height,
+            gold.Image, Scale(gold.Search, frame.Geometry.Width, frame.Geometry.Height, catalog), catalog.Threshold, out _, out _);
         return new(scene, frame.Scope.Round, frame.Scope.MatchId, frame.Scope.MatchGeneration,
-            own, amount is >= 0 and <= 9_999_999 ? amount : null, controls);
+            own, amount is >= 0 and <= 9_999_999 ? amount : null, controls) { GoldAverageVisible = goldVisible };
     }
 
     void AddAmountFocus(byte[] gray, NativeDomainFrame frame, SceneSpec auction,
@@ -188,14 +214,15 @@ public sealed class SceneAnchorGameDecoder : IGameDomainFrameDecoder
         {
             if (!Match(gray, frame.Geometry.Width, frame.Geometry.Height, control.Image,
                 Scale(control.Search, frame.Geometry.Width, frame.Geometry.Height, catalog), catalog.Threshold,
-                out int left, out int top)) return false;
+                out int left, out int top))
+            { if (control.Optional) continue; return false; }
             int width = Math.Max(3, Scale(control.Image.Width, frame.Geometry.Width, catalog.ReferenceWidth));
             int height = Math.Max(3, Scale(control.Image.Height, frame.Geometry.Height, catalog.ReferenceHeight));
             if (!Inside(left, top, width, height, frame.Geometry.Width, frame.Geometry.Height)) return false;
             matches.Add((control, left, top, width, height));
         }
         found.AddRange(matches);
-        return true;
+        return matches.Count > 0;
     }
 
     bool AllWitnesses(byte[] gray, NativeDomainFrame frame, Catalog catalog, SceneSpec spec)
@@ -217,9 +244,23 @@ public sealed class SceneAnchorGameDecoder : IGameDomainFrameDecoder
         int cropH = search.Bottom - search.Y;
         if (cropW < template.Width || cropH < template.Height || search.X < 0 || search.Y < 0
             || search.Right > width || search.Bottom > height) return false;
-        var crop = new byte[cropW * cropH];
+        var crop = new int[cropW * cropH];
+        int prefixWidth = cropW + 1;
+        var sums = new long[prefixWidth * (cropH + 1)];
+        var squares = new long[sums.Length];
         for (int row = 0; row < cropH; row++)
-            Buffer.BlockCopy(gray, (search.Y + row) * width + search.X, crop, row * cropW, cropW);
+        {
+            long sum = 0, square = 0;
+            for (int col = 0; col < cropW; col++)
+            {
+                int value = gray[(search.Y + row) * width + search.X + col];
+                crop[row * cropW + col] = value;
+                sum += value; square += value * value;
+                int p = (row + 1) * prefixWidth + col + 1;
+                sums[p] = sums[p - prefixWidth] + sum;
+                squares[p] = squares[p - prefixWidth] + square;
+            }
+        }
         double best = threshold - 1e-6;
         int bestX = 0, bestY = 0;
         int limitX = cropW - template.Width;
@@ -235,23 +276,34 @@ public sealed class SceneAnchorGameDecoder : IGameDomainFrameDecoder
         double templateMean = templateSum / (double)count;
         double templateVar = templateSumSq - templateSum * templateMean;
         if (templateVar < 1) return false;
+        int lanes = Vector<int>.Count;
+        var samples = template.Samples;
         for (int oy = 0; oy <= limitY; oy++)
         {
             for (int ox = 0; ox <= limitX; ox++)
             {
-                long imageSum = 0, imageSumSq = 0, cross = 0;
+                int tl = oy * prefixWidth + ox;
+                int tr = tl + template.Width;
+                int bl = (oy + template.Height) * prefixWidth + ox;
+                int br = bl + template.Width;
+                long imageSum = sums[br] - sums[bl] - sums[tr] + sums[tl];
+                long imageSumSq = squares[br] - squares[bl] - squares[tr] + squares[tl];
+                long cross = 0;
                 int source = 0;
                 for (int row = 0; row < template.Height; row++)
                 {
                     int origin = (oy + row) * cropW + ox;
-                    for (int col = 0; col < template.Width; col++)
+                    int col = 0;
+                    if (Vector.IsHardwareAccelerated)
+                        for (; col <= template.Width - lanes; col += lanes)
+                            cross += Vector.Dot(new Vector<int>(crop, origin + col), new Vector<int>(samples, source + col));
+                    for (; col < template.Width; col++)
                     {
                         int image = crop[origin + col];
-                        int pixel = template.Pixels[source++];
-                        imageSum += image;
-                        imageSumSq += (long)image * image;
+                        int pixel = samples[source + col];
                         cross += (long)image * pixel;
                     }
+                    source += template.Width;
                 }
                 double imageVar = imageSumSq - imageSum * (imageSum / (double)count);
                 if (imageVar < 1) continue;

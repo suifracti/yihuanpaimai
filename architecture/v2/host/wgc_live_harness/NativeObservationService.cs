@@ -925,7 +925,8 @@ internal static class NativeObservationService
                     settlementBusinessClosed: justClosedSettlement && scene == "SETTLEMENT"
                         && !string.IsNullOrEmpty(settlementMatchId)
                         && string.Equals(settlementMatchId, nextRecordKey, StringComparison.Ordinal),
-                    settlementDeadlineNs: settlementSourceDeadlineNs);
+                    settlementDeadlineNs: settlementSourceDeadlineNs,
+                    actionDispatch: sceneAnchorDispatch);
                 if (observationRejection is not null)
                 {
                     if (observationRejection == "capture-scope-invalidated") continue;
@@ -980,7 +981,8 @@ internal static class NativeObservationService
         ContinuousWgcCapture capture,
         string observationWindowMode,
         bool settlementBusinessClosed,
-        long? settlementDeadlineNs)
+        long? settlementDeadlineNs,
+        TicketedSceneAnchorDispatch? actionDispatch)
     {
         var targetEvidence = JsonSerializer.SerializeToNode(TargetEvidence(target), JsonLineOptions);
         var adviceQualification = frame.DeliveryProof is { } delivery
@@ -990,6 +992,10 @@ internal static class NativeObservationService
         var sourceRejection = frame.DeliveryProof is { } proof ? proof.Rejection(publicationAtNs, 31_000_000_000) : BackgroundObservationPolicy.BackgroundPublicationRejection(
             observationWindowMode, frame.SourceTimestampNs, publicationAtNs);
         if (sourceRejection is not null) return sourceRejection;
+        JsonObject? domainPlanning = null;
+        if (actionDispatch is not null && ReadDomainClientGeometry(target.TargetHwnd, frame.Width, frame.Height) is { } domainGeometry)
+            domainPlanning = actionDispatch.DescribePlanningFrame(frame, state, target, domainGeometry,
+                Convert.ToInt64(transfer.GetValueOrDefault("sequence") ?? 0));
         var line = new JsonObject
         {
             ["type"] = "native_observation",
@@ -1003,6 +1009,7 @@ internal static class NativeObservationService
             ["formalHistoryWriter"] = false,
             ["acceptedFrameCount"] = acceptedFrames,
             ["target"] = targetEvidence,
+            ["domainObservation"] = domainPlanning,
             ["frame"] = new JsonObject
             {
                 ["sequence"] = Convert.ToInt64(transfer.GetValueOrDefault("sequence") ?? 0),

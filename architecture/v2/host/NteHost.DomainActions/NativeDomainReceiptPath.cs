@@ -26,7 +26,8 @@ public sealed record OwnSeatBinding(int Slot, string PlayerIdentity);
 public sealed record CapturedOwnBid(int Slot, string PlayerIdentity, long Amount, bool AcceptanceVisible,
     string EvidenceRef);
 public sealed record DecodedDomainFrame(string Scene, int Round, string MatchId, long MatchGeneration,
-    CapturedOwnBid? OwnBid, long? AmountField, IReadOnlyList<VisibleControlAnchor> Controls);
+    CapturedOwnBid? OwnBid, long? AmountField, IReadOnlyList<VisibleControlAnchor> Controls)
+{ public bool GoldAverageVisible { get; init; } }
 public interface IGameDomainFrameDecoder
 {
     // All fields must derive from THIS frame's pixels. Existing cached seats/myBid
@@ -52,7 +53,8 @@ public sealed class CapturedDomainControlEvidence : IDomainControlEvidence
         if (frame == null || !frame.Scope.SourceQualified) return null;
         var view = decoder.Decode(frame);
         string expectedScene = intent.Kind switch { DomainActionKind.Bid => "AUCTION",
-            DomainActionKind.ReturnLobby => "SETTLEMENT", DomainActionKind.StartNextMatch => "LOBBY", _ => "INVALID" };
+            DomainActionKind.ReturnLobby => "SETTLEMENT", DomainActionKind.StartNextMatch => "LOBBY",
+            _ => AuctionPreparation.ExpectedScene(intent.Kind) ?? "INVALID" };
         if (view == null || view.Scene != expectedScene || frame.Scope.Scene != expectedScene
             || view.MatchId != frame.Scope.MatchId || view.MatchGeneration != frame.Scope.MatchGeneration
             || view.Round != frame.Scope.Round) return null;
@@ -97,7 +99,7 @@ public sealed class NativeVisibleResultProducer
         if (intent.Kind == DomainActionKind.Bid)
         {
             if (s.MatchId != intent.MatchId || s.MatchGeneration != intent.MatchGeneration || s.Round != intent.Round
-                || view.Scene is not ("AUCTION" or "AUCTION_R1") || ownSeat == null || view.OwnBid == null
+                || view.Scene is not ("AUCTION" or "AUCTION_R1" or "AUCTION_READY") || ownSeat == null || view.OwnBid == null
                 || !view.OwnBid.AcceptanceVisible || view.OwnBid.Slot != ownSeat.Slot
                 || string.IsNullOrWhiteSpace(ownSeat.PlayerIdentity) || view.OwnBid.PlayerIdentity != ownSeat.PlayerIdentity
                 || view.OwnBid.EvidenceRef != frame.EvidenceRef || view.OwnBid.Amount != intent.Amount) return null;
@@ -109,15 +111,22 @@ public sealed class NativeVisibleResultProducer
         }
         else if (intent.Kind == DomainActionKind.StartNextMatch)
         {
-            if (view.Scene != "AUCTION_R1" || view.Round != 1 || string.IsNullOrWhiteSpace(s.MatchId)
+            if (view.Scene is not ("AUCTION_R1" or "AUCTION_READY") || view.Round != 1 || string.IsNullOrWhiteSpace(s.MatchId)
                 || s.MatchId == intent.MatchId || s.MatchGeneration <= intent.MatchGeneration) return null;
             newMatch = s.MatchId; newGeneration = s.MatchGeneration;
+        }
+        else if (AuctionPreparation.IsPreparation(intent.Kind))
+        {
+            if (!AuctionPreparation.Confirms(intent.Kind, view.Scene, view.GoldAverageVisible)
+                || s.MatchId != intent.MatchId || s.MatchGeneration != intent.MatchGeneration
+                || s.Round != intent.Round) return null;
         }
         else return null;
         return new(intent.IntentId, intent.Kind, intent.MatchId, intent.Round, intent.FactsRevision,
             accepted, newMatch, view.Scene, s.SourceSequence, s.CapturedNs, true, s.Window, s.TakeoverGeneration)
             { OriginMatchGeneration = intent.MatchGeneration, ObservationSessionId = s.ObservationSessionId,
-              NewMatchGeneration = newGeneration, EvidenceRef = frame.EvidenceRef };
+              NewMatchGeneration = newGeneration, EvidenceRef = frame.EvidenceRef,
+              PreparationEffectVisible = view.GoldAverageVisible };
     }
 }
 
@@ -186,7 +195,8 @@ public sealed class NativeDomainActionRuntime
             ["type"] = "domain.action.receipt",
             ["observationSessionId"] = receipt.ObservationSessionId,
             ["receipt"] = node,
-            ["receiptChannel"] = receipt.Kind == DomainActionKind.Bid ? "bid" : "session",
+            ["receiptChannel"] = receipt.Kind == DomainActionKind.Bid ? "bid"
+                : AuctionPreparation.IsPreparation(receipt.Kind) ? "preparation" : "session",
         };
         // Main only exposes a bid receipt after its sole durable ledger ACK.
         if (committed) publish(message);

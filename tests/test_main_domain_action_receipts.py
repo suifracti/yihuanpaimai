@@ -17,6 +17,27 @@ from vision_contract import VisionObservation, VisionSettlement
 
 
 class MainDomainActionReceiptTests(unittest.TestCase):
+    def test_preparation_receipt_is_scoped_and_never_changes_bid_or_session(self):
+        intent = dict(intentId='open-gold', kind='OpenInstrument', matchId='match-1',
+                      matchGeneration=1, observationSessionId='obs-1', round=1, factsRevision=7)
+        receipt = dict(intent, status='CONFIRMED')
+        latest = {}
+        with mock.patch.multiple(app_main, CURRENT_MATCH=SimpleNamespace(id='match-1'),
+            LATEST_PAYLOAD=latest, _LIVE_DOMAIN_LOOP={'preparationIntent': intent},
+            _NATIVE_EXPECTED_SESSION='obs-1', _NATIVE_OBSERVATION_SESSION='obs-1', WS_EVENT_LOOP=None), \
+            mock.patch.object(app_main, 'get_current_match_presentation_summary', return_value={}), \
+            mock.patch.object(app_main, '_native_post_main_status'):
+            event = dict(type='domain.action.receipt', observationSessionId='obs-1',
+                         receiptChannel='preparation', receipt=receipt)
+            result = app_main._native_observation_event(event)
+            self.assertEqual(result['preparationActionReceipt'], receipt)
+            self.assertEqual(latest['preparationActionReceipt'], receipt)
+            for field in ('matchGeneration', 'round', 'intentId'):
+                bad = {**event, 'receipt': {**receipt, field: 'other'}}
+                self.assertIsNone(app_main._native_observation_event(bad))
+            self.assertNotIn('bidActionReceipt', latest)
+            self.assertNotIn('domainActionReceipt', latest)
+
     def _session(self, *, archived=False):
         fsm = AuctionSessionFSM()
         fsm.trigger_match_start()

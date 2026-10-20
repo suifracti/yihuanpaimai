@@ -199,6 +199,7 @@ public sealed class WindowsTicketedDomainBackend : ITicketedDomainBackend
         DomainActionKind.Bid => primitive is DomainPrimitive.FocusAmountField or DomainPrimitive.ReplaceAmountDigits or DomainPrimitive.SubmitBid,
         DomainActionKind.ReturnLobby => primitive == DomainPrimitive.ReturnLobby,
         DomainActionKind.StartNextMatch => primitive == DomainPrimitive.StartNextMatch,
+        _ when AuctionPreparation.IsPreparation(kind) => primitive.ToString() == kind.ToString(),
         _ => false,
     };
     [StructLayout(LayoutKind.Sequential)] private struct Point { public int X, Y; }

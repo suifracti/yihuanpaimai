@@ -29,7 +29,7 @@ _MAIN_FUNCTIONS = {
     "_native_source_frame_rejection", "_native_observation_event",
     "_native_domain_action_dispatch_rejected",
     "_advance_authorized_live_domain_loop",
-    "_live_loop_frame_image",
+    "_native_domain_planning_view",
     "_live_loop_view",
     "_game_is_foreground",
     "_native_observed_solver_facts",
@@ -403,28 +403,24 @@ class NativeBackgroundObservationTests(unittest.TestCase):
         self.assertTrue(seen.get("ui_acquired_lock"))
 
     def test_live_loop_frame_does_not_open_the_host_bmp(self):
-        import ctypes
-        import numpy as np
         ns, _, _ = _isolated_main("background-readonly")
-        opened = []
-        original = np.fromfile
-
-        def spy(path, *args, **kwargs):
-            opened.append(str(path))
-            return original(path, *args, **kwargs)
-
-        np.fromfile = spy
-        try:
-            hwnd = int(ctypes.windll.user32.GetDesktopWindow())
-            image = ns["_live_loop_frame_image"](
-                {"rawFramePath": r"D:\unused\latest-business-frame.bmp"},
-                {"targetHwnd": hwnd},
-            )
-        finally:
-            np.fromfile = original
-        self.assertEqual(opened, [])
-        self.assertIsNotNone(image)
-        self.assertEqual(image.shape[2], 3)
+        # Host metadata replaces both opening the live BMP and desktop capture.
+        # No window, capture, ImageGrab or foreground-moving API is needed.
+        data = dict(observationStatus='FRAME', frameSequence=1, capturedAtNs=99_000_000_000,
+                    matchId='live', sourceMatchGeneration=1, round=1, engineFactsRevision=7)
+        view = dict(schemaVersion='domain-planning-view.v1', planningOnly=True, inputActions=False,
+                    frameSequence=1, readbackNs=data['capturedAtNs'], matchId='live',
+                    matchGeneration=1, round=1, factsRevision=7, scene='AUCTION_READY', funds=200000)
+        data['domainObservation'] = view
+        self.assertEqual(ns['_native_domain_planning_view'](data), view)
+        for key in ('frameSequence', 'readbackNs', 'matchId', 'matchGeneration', 'round', 'factsRevision'):
+            invalid = copy.deepcopy(data)
+            invalid['domainObservation'][key] = 'other'
+            self.assertIsNone(ns['_native_domain_planning_view'](invalid))
+        tree = ast.parse((ROOT/'app/main.py').read_text(encoding='utf-8'))
+        names = {node.name for node in tree.body if isinstance(node, ast.FunctionDef)}
+        self.assertFalse(names & {'_live_loop_frame_image', '_park_assistant_and_focus_game',
+                                 '_send_foreground_client_click', '_live_fee_confirm_if_visible'})
 
     def test_live_loop_uses_the_observed_frame_round(self):
         ns, _, _ = _isolated_main("background-readonly")

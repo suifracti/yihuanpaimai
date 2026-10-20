@@ -1,0 +1,11 @@
+{
+  "source": "build/goal-20261019-c/match-12/after-instrument.jpg",
+  "sha256": "2544d97e25c31209850c81f5fdb1e5621fc514be529fd829f16d11ab870dd055",
+  "crop": [
+    359,
+    949,
+    413,
+    980
+  ],
+  "purpose": "Named control/witness from saved real match-12; no inferred numeric business facts."
+}

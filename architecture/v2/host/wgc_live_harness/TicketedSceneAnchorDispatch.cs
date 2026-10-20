@@ -53,6 +53,33 @@ sealed class TicketedSceneAnchorDispatch : IDisposable
 
     public bool AwaitingVisibleResult { get { lock (gate) return pending is not null; } }
 
+    // Planning metadata comes from the same held WGC pixels as FRAME. These
+    // anchors are deliberately unqualified for input: every dispatch still
+    // reacquires an independent frame through CaptureEngine and its tickets.
+    public JsonObject? DescribePlanningFrame(CapturedBgraFrame frame, JsonObject? state,
+        WindowMonitorSnapshot target, ClientGeometry geometry, long frameSequence)
+    {
+        if (target.TargetIdentity is not { IsPresent: true } identity) return null;
+        var match = state?["currentMatch"] as JsonObject;
+        var window = new WindowBinding(target.TargetHwnd, target.TargetPid, identity.ProcessInstanceToken, 0);
+        var scope = new ActionScope((string?)match?["id"] ?? "", (int?)match?["roundNo"] ?? 0,
+            (long?)match?["factsRevision"] ?? 0, 0, 0, "UNKNOWN", "", 0, window, 0,
+            frame.AcquisitionSequence, frame.CaptureTimestampNs, false, false, target.IsTargetForeground,
+            false, false, false)
+        { MatchGeneration = (long?)state?["lastFrame"]?["matchGeneration"] ?? 0,
+            ObservationSessionId = sessionId };
+        var held = new NativeDomainFrame(scope, geometry, frame.Pixels, frame.Stride);
+        var view = decoder.Decode(held);
+        var funds = frame.Width == 1920 && frame.Height == 1080
+            ? SceneAnchorOcr.Read(held.Pixels, frame.Width, frame.Height, frame.Stride, 1380, 0, 540, 86) : null;
+        return new JsonObject { ["schemaVersion"] = "domain-planning-view.v1", ["planningOnly"] = true,
+            ["inputActions"] = false, ["frameSequence"] = frameSequence,
+            ["readbackNs"] = frame.CaptureTimestampNs, ["matchId"] = scope.MatchId,
+            ["matchGeneration"] = scope.MatchGeneration, ["factsRevision"] = scope.FactsRevision,
+            ["round"] = scope.Round, ["scene"] = view?.Scene, ["goldAverageVisible"] = view?.GoldAverageVisible,
+            ["funds"] = funds };
+    }
+
     public static TicketedSceneAnchorDispatch? TryCreate(string anchorDirectory, string sessionId, long hwnd,
         Action<JsonObject> publish)
     {
@@ -197,13 +224,16 @@ sealed class TicketedSceneAnchorDispatch : IDisposable
         if (view is null) return false;
         return intent.Kind switch
         {
-            DomainActionKind.Bid => (view.Scene is "AUCTION" or "AUCTION_R1")
+            DomainActionKind.Bid => (view.Scene is "AUCTION" or "AUCTION_R1" or "AUCTION_READY")
                 && view.OwnBid?.Amount == intent.Amount,
             DomainActionKind.ReturnLobby => view.Scene == "LOBBY"
                 && view.MatchId == intent.MatchId && view.MatchGeneration == intent.MatchGeneration,
-            DomainActionKind.StartNextMatch => view.Scene == "AUCTION_R1" && view.Round == 1
+            DomainActionKind.StartNextMatch => (view.Scene is "AUCTION_R1" or "AUCTION_READY") && view.Round == 1
                 && !string.IsNullOrWhiteSpace(view.MatchId) && view.MatchId != intent.MatchId
                 && view.MatchGeneration > intent.MatchGeneration,
+            _ when AuctionPreparation.IsPreparation(intent.Kind) => AuctionPreparation.Confirms(intent.Kind, view.Scene, view.GoldAverageVisible)
+                && view.MatchId == intent.MatchId && view.MatchGeneration == intent.MatchGeneration
+                && view.Round == intent.Round,
             _ => false,
         };
     }
@@ -249,9 +279,10 @@ sealed class TicketedSceneAnchorDispatch : IDisposable
         string expected = Expected(intent.Kind);
         bool confirmScene = intent.Kind switch
         {
-            DomainActionKind.Bid => scene is "AUCTION" or "AUCTION_R1",
+            DomainActionKind.Bid => scene is "AUCTION" or "AUCTION_R1" or "AUCTION_READY",
             DomainActionKind.ReturnLobby => scene == "LOBBY",
-            DomainActionKind.StartNextMatch => scene == "AUCTION_R1",
+            DomainActionKind.StartNextMatch => scene is "AUCTION_R1" or "AUCTION_READY",
+            _ when AuctionPreparation.IsPreparation(intent.Kind) => AuctionPreparation.Confirms(intent.Kind, scene, view?.GoldAverageVisible == true),
             _ => false,
         };
         bool pixelsMatch = confirmingFrame ? confirmScene : scene == expected;
@@ -301,6 +332,8 @@ sealed class TicketedSceneAnchorDispatch : IDisposable
                 && !string.IsNullOrWhiteSpace(intent.ApprovalId);
         if (intent.Kind == DomainActionKind.ReturnLobby) return intent.Amount is null;
         if (intent.Kind == DomainActionKind.StartNextMatch) return intent.Amount is null && intent.Round == 0;
+        if (AuctionPreparation.IsPreparation(intent.Kind)) return intent.Amount is null
+            && intent.Round is >= 1 and <= 5 && !string.IsNullOrWhiteSpace(intent.ApprovalId);
         return false;
     }
 
@@ -319,7 +352,7 @@ sealed class TicketedSceneAnchorDispatch : IDisposable
         DomainActionKind.Bid => "AUCTION",
         DomainActionKind.ReturnLobby => "SETTLEMENT",
         DomainActionKind.StartNextMatch => "LOBBY",
-        _ => "INVALID",
+        _ => AuctionPreparation.ExpectedScene(kind) ?? "INVALID",
     };
 
     static readonly JsonSerializerOptions Json = new()
@@ -336,6 +369,7 @@ sealed class TicketedSceneAnchorDispatch : IDisposable
         {
             DomainActionKind.Bid => Bid?.CommitBeforeInput(intent) == true,
             DomainActionKind.ReturnLobby or DomainActionKind.StartNextMatch => true,
+            _ when AuctionPreparation.IsPreparation(intent.Kind) => true,
             _ => false,
         };
         public bool CommitReceipt(DomainReceipt receipt) => receipt.Kind == DomainActionKind.Bid

@@ -1,6 +1,25 @@
 namespace NteHost.DomainActions;
 
-public enum DomainActionKind { Bid, ReturnLobby, StartNextMatch }
+public enum DomainActionKind { Bid, ReturnLobby, StartNextMatch, OpenInstrument, SelectGoldAverage, UseGoldAverage, OpenBidPanel }
+public static class AuctionPreparation
+{
+    public static string? ExpectedScene(DomainActionKind kind) => kind switch
+    {
+        DomainActionKind.OpenInstrument or DomainActionKind.OpenBidPanel => "AUCTION_READY",
+        DomainActionKind.SelectGoldAverage => "INSTRUMENT_LIST",
+        DomainActionKind.UseGoldAverage => "INSTRUMENT_GOLD_SELECTED",
+        _ => null,
+    };
+    public static bool IsPreparation(DomainActionKind kind) => ExpectedScene(kind) is not null;
+    public static bool Confirms(DomainActionKind kind, string scene, bool goldAverageVisible = false) => kind switch
+    {
+        DomainActionKind.OpenInstrument => scene is "INSTRUMENT_LIST" or "INSTRUMENT_GOLD_SELECTED",
+        DomainActionKind.SelectGoldAverage => scene == "INSTRUMENT_GOLD_SELECTED",
+        DomainActionKind.UseGoldAverage => scene == "AUCTION_READY" && goldAverageVisible,
+        DomainActionKind.OpenBidPanel => scene == "AUCTION",
+        _ => false,
+    };
+}
 public enum ReceiptStatus { NOT_SENT, SENT_PENDING_CONFIRMATION, CONFIRMED, UNKNOWN }
 public sealed record WindowBinding(long Hwnd, int Pid, long ProcessInstanceToken, long FocusEpoch);
 public sealed record DomainIntent(string IntentId, DomainActionKind Kind, string MatchId, int Round,
@@ -30,6 +49,7 @@ public sealed record VisibleResult(string IntentId, DomainActionKind Kind, strin
     string Scene, long SourceSequence, long CapturedNs, bool SourceQualified,
     WindowBinding Window, long TakeoverGeneration)
 {
+    public bool PreparationEffectVisible { get; init; }
     public long OriginMatchGeneration { get; init; }
     public string ObservationSessionId { get; init; } = "";
     public long NewMatchGeneration { get; init; }
@@ -143,11 +163,13 @@ public sealed class DomainActionCoordinator
                 && evidence.SourceSequence <= current.SourceSequence && evidence.CapturedNs <= current.CapturedNs;
             matches &= i.Kind switch
             {
-                DomainActionKind.Bid => (evidence.Scene is "AUCTION" or "AUCTION_R1") && evidence.AcceptedOwnAmount == i.Amount,
+                DomainActionKind.Bid => (evidence.Scene is "AUCTION" or "AUCTION_R1" or "AUCTION_READY") && evidence.AcceptedOwnAmount == i.Amount,
                 DomainActionKind.ReturnLobby => evidence.Scene == "LOBBY",
-                DomainActionKind.StartNextMatch => evidence.Scene == "AUCTION_R1"
+                DomainActionKind.StartNextMatch => (evidence.Scene == "AUCTION_R1"
+                    || evidence.Scene == "AUCTION_READY" && current!.Round == 1)
                     && !string.IsNullOrWhiteSpace(evidence.NewMatchId) && evidence.NewMatchId != i.MatchId
                     && evidence.NewMatchGeneration > i.MatchGeneration,
+                _ when AuctionPreparation.IsPreparation(i.Kind) => AuctionPreparation.Confirms(i.Kind, evidence.Scene, evidence.PreparationEffectVisible),
                 _ => false,
             };
             if (!matches) return entry.Receipt; // Neither OS success nor unrelated/stale frames confirm.
@@ -197,7 +219,7 @@ public sealed class DomainActionCoordinator
     private static bool LiveContinuity(DomainIntent i, ActionScope? s, long now) => Continuity(i, s)
         && s!.Budget > 0 && now < s.LeaseExpiresNs
         && s.ObservationSessionId == i.ObservationSessionId
-        && (i.Kind != DomainActionKind.Bid || (s.MatchId == i.MatchId && s.Round == i.Round
+        && (i.Kind != DomainActionKind.Bid && !AuctionPreparation.IsPreparation(i.Kind) || (s.MatchId == i.MatchId && s.Round == i.Round
             && s.MatchGeneration == i.MatchGeneration && s.ApprovalId == i.ApprovalId));
     private string Validate(DomainIntent i, ActionScope? s)
     {
@@ -223,6 +245,9 @@ public sealed class DomainActionCoordinator
             DomainActionKind.ReturnLobby when s.Scene == "SETTLEMENT" && s.SettlementArchived && i.Amount == null => "OK",
             DomainActionKind.StartNextMatch when s.Scene == "LOBBY" && s.SettlementArchived
                 && s.NewMatchAdmission && i.Round == 0 && i.Amount == null => "OK",
+            _ when AuctionPreparation.IsPreparation(i.Kind) && s.Scene == AuctionPreparation.ExpectedScene(i.Kind)
+                && i.Amount is null && i.Round is >= 1 and <= 5
+                && !string.IsNullOrWhiteSpace(i.ApprovalId) && i.ApprovalId == s.ApprovalId => "OK",
             _ => "DOMAIN_SCENE_AMOUNT_OR_ADMISSION_REJECTED",
         };
     }

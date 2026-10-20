@@ -466,6 +466,19 @@ def advance_live_domain_loop(state, view, send):
 
 def _consume_live_receipt(state, view):
     phase = state.get("phase")
+    if phase == "preparing":
+        receipt = view.get("preparationReceipt")
+        intent = state.get("preparationIntent") or {}
+        if not isinstance(receipt, dict) or any(receipt.get(k) != intent.get(k) for k in
+                ('intentId', 'kind', 'matchId', 'matchGeneration', 'observationSessionId', 'round', 'factsRevision')):
+            return
+        if receipt.get('status') == 'CONFIRMED':
+            state['phase'] = 'idle'
+            state['reason'] = None
+        elif receipt.get('status') in ('UNKNOWN', 'NOT_SENT'):
+            state['phase'] = 'stopped'
+            state['reason'] = receipt.get('reason') or receipt['status']
+        return
     if phase == "bid_dispatched":
         receipt, intent_id = view.get("bidReceipt"), state.get("bidIntentId")
     elif phase == "return_dispatched":
@@ -513,8 +526,7 @@ def _dispatch_live_bid(state, view, send):
         state["reason"] = "GAME_NOT_FOREGROUND"
         return state
     if view.get("publishedScene") != "AUCTION":
-        state["reason"] = "WAITING_BID_PANEL"
-        return state
+        return _dispatch_live_preparation(state, view, send)
     if view.get("userConfirmed") is not True:
         state["reason"] = "USER_CONFIRMATION_REQUIRED"
         return state
@@ -609,6 +621,63 @@ def _dispatch_live_bid(state, view, send):
     state["phase"] = "bid_dispatched"
     state["reason"] = "WAITING_VISIBLE_RESULT"
     state["resendAllowed"] = False
+    return state
+
+
+def _dispatch_live_preparation(state, view, send):
+    """Only acquire missing gold mean, then open the existing Solver bid panel.
+
+    Each step is one named Host transaction; receipts never fill business facts.
+    The saved match-12 sequence and the missed setup in match-1 are the source
+    of these controls. No random instrument or extra consumption policy.
+    """
+    from bid_intent import admitted, build_bid_intent, solver_suggestion
+    engine = _live_engine(view)
+    funds = view.get('currentFunds')
+    if (engine is None or not admitted(view.get('current') or {})
+            or view.get('userConfirmed') is not True
+            or type(funds) is not int or funds <= 0):
+        state['reason'] = 'PREPARATION_OBSERVATION_OR_FUNDS_MISSING'
+        return state
+    q, average = view.get('q'), view.get('goldAvg')
+    kind = None
+    scene = view.get('publishedScene')
+    if type(q) is int and q > 0:
+        if average is None:
+            if view.get('goldAverageVisible') is not True:
+                kind = {'AUCTION_READY': 'OpenInstrument', 'INSTRUMENT_LIST': 'SelectGoldAverage',
+                        'INSTRUMENT_GOLD_SELECTED': 'UseGoldAverage'}.get(scene)
+        elif scene == 'AUCTION_READY':
+            proposal = build_bid_intent(view.get('proposalEvent') or {}, view['current'],
+                now_ms=view['nowMs'], deadline_ms=view['deadlineMs'])
+            if solver_suggestion(proposal) is not None:
+                kind = 'OpenBidPanel'
+    if kind is None:
+        state['reason'] = 'WAITING_BID_PANEL_OR_INDEPENDENT_FACTS'
+        return state
+    scope = _live_native_scope(view, engine, funds)
+    if scope is None:
+        state['reason'] = 'LIVE_LOOP_IDENTITY_INCOMPLETE'
+        return state
+    intent_id = f"prepare-{engine['matchId']}-{engine['round']}-{kind}"
+    attempted = state.setdefault('preparationAttempts', [])
+    if intent_id in attempted:
+        state['reason'] = 'WAITING_INDEPENDENT_PREPARATION_EFFECT'
+        return state
+    intent = dict(engine, intentId=intent_id, kind=kind, amount=None, budget=funds,
+        deadlineNs=min(scope['leaseExpiresNs'], view['nowNs'] + 8_000_000_000),
+        takeoverGeneration=0, leaseId=scope['leaseId'], window=scope['window'],
+        maxSafeBid=0, approvalId=view.get('approvalId'))
+    envelope = dict(type='domain.action.dispatch', protocolVersion=1,
+        requestId='dispatch-' + intent_id, bootId=view.get('bootId'),
+        observationSessionId=engine['observationSessionId'], intent=intent)
+    attempted.append(intent_id)
+    state['preparationIntent'] = intent
+    state['phase'] = 'preparing'
+    state['reason'] = 'WAITING_' + kind.upper() + '_VISIBLE_RESULT'
+    if send(None, envelope) is not True:
+        state['phase'] = 'stopped'
+        state['reason'] = 'PREPARATION_DISPATCH_NOT_ACCEPTED'
     return state
 
 
