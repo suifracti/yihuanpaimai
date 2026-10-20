@@ -1,0 +1,9 @@
+{
+  "source": "build/native-observation/session-0eb6ee1b34154cff8502c2412128fc24/host-trace.jsonl",
+  "sha256": "d4417d0ac4f76f028ed2c361825d21477e80485964b637b9dd593dde057865af",
+  "processedFrames": [
+    263,
+    264
+  ],
+  "head": "0c448a54abc021e02dcf0a267cdee0bfa0ea682f"
+}

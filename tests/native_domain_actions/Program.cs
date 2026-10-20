@@ -70,6 +70,7 @@ static class Program
     static void Main(string[] args)
     {
         if (args.Contains("--preparation-only")) { PreparationChecks.Run(args.LastOrDefault()); return; }
+        if (args.Contains("--input-source-only")) { InputCaptureChecks.Run(); return; }
         if (args.Contains("--cross-process-dummy-host")) { WindowsBackendChecks.RunCrossProcessHost(); return; }
         if (args.Contains("--ack-timeout-dummy")) { WindowsBackendChecks.RunAckTimeoutDummy(); return; }
         if (args.Contains("--dummy-window")) { WindowsBackendChecks.Run(); return; }

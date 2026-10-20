@@ -364,8 +364,9 @@ internal static class NativeObservationService
                 CapturedBgraFrame original;
                 try
                 {
-                    original = capture.CaptureAfterRequest(1500, requestNs, requestNs + 2_000_000_000,
-                        () => stop.IsCancellationRequested);
+                    original = WgcDomainCaptureAdapter.CaptureForInput(
+                        (waitMs, requestedNs, deadlineNs) => capture.CaptureAfterRequest(waitMs, requestedNs, deadlineNs,
+                            () => stop.IsCancellationRequested), requestNs, requestNs + 2_000_000_000, ProtocolClock.NowNs);
                 }
                 catch (Exception ex) { lastDomainCaptureStage = "CAPTURE_EXCEPTION:" + ex.GetType().Name; return null; }
                 lastDomainCapture = original;
