@@ -94,6 +94,11 @@ static class WindowsBackendChecks
         }
         public NativeDomainFrame Capture()
         {
+            // The dummy uses queued Win32 EDIT keyboard messages. Drain the
+            // test widget's pending edit before taking its single pixel read;
+            // production captures the game's actual post-fill frame instead.
+            if (Raw.SendCallCount >= 2)
+                SpinWait.SpinUntil(() => Window.FieldText == Intent.Amount?.ToString(), 1000);
             Scope = Scope with { SourceSequence = Scope.SourceSequence + 1, CapturedNs = TraceClock.NowNs(),
                 ForegroundMatches = Win32DummyWindow.IsForeground(Scope.Window.Hwnd) };
             Latest = Window.Capture(Scope); Scope = Latest.Scope; return Latest;
