@@ -3195,12 +3195,12 @@ def _advance_authorized_live_domain_loop(data: Dict[str, Any], frame: Dict[str, 
             return bool(bridge is not None and bridge.running and bridge.send_control(envelope))
 
         before = (_LIVE_DOMAIN_LOOP.get("phase"), _LIVE_DOMAIN_LOOP.get("reason"))
-        from instrument_restock import advance as advance_restock
+        from instrument_restock import advance as advance_restock, SCENES as restock_scenes
         restock_ready = advance_restock(_LIVE_DOMAIN_LOOP, view, send, CONFIG.get('autoAuction') or {})
-        if restock_ready and not (published == 'LOBBY' and _LIVE_DOMAIN_LOOP.get('phase') == 'idle'):
+        if (_LIVE_DOMAIN_LOOP.get('phase') != 'stopped'
+                and (restock_ready or published not in restock_scenes)
+                and not (published == 'LOBBY' and _LIVE_DOMAIN_LOOP.get('phase') == 'idle')):
             _LIVE_DOMAIN_LOOP = advance_live_domain_loop(_LIVE_DOMAIN_LOOP, view, send)
-        elif published in {'AUCTION', 'AUCTION_READY', 'INSTRUMENT_LIST', 'INSTRUMENT_GOLD_SELECTED'} and not _LIVE_DOMAIN_LOOP.get('restock', {}).get('pending'):
-            _LIVE_DOMAIN_LOOP.update(phase='stopped', reason='INSTRUMENT_PREFLIGHT_NOT_COMPLETED')
         public = live_domain_loop_public(_LIVE_DOMAIN_LOOP)
         with _MANUAL_STATE_LOCK:
             data["liveDomainLoop"] = public

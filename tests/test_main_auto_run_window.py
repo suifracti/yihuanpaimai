@@ -11,6 +11,20 @@ sys.path[:0] = [str(ROOT / 'app'), str(ROOT / 'core')]
 
 
 class AutoRunWindowTests(unittest.TestCase):
+    def test_attach_during_auction_does_not_invent_stock_or_require_lobby_again(self):
+        import main
+        form=SimpleNamespace(prepare_game_input=mock.Mock(return_value=True))
+        view={'publishedScene':'AUCTION_READY','engine':{'round':2}}
+        with mock.patch.dict('os.environ',{'NTE_DOMAIN_LIVE_LOOP':'1'}), \
+             mock.patch.multiple(main,_LIVE_DOMAIN_LOOP=None,_MAIN_WINDOW_HOLDER=[form],LATEST_PAYLOAD={}), \
+             mock.patch.object(main,'_native_domain_planning_view',return_value={'scene':'AUCTION_READY'}), \
+             mock.patch.object(main,'_live_loop_view',return_value=view), \
+             mock.patch('domain_action_session.advance_live_domain_loop',side_effect=lambda state,*_:state) as advance:
+            main._advance_authorized_live_domain_loop({'observationSessionId':'mid-auction'}, {})
+            advance.assert_called_once()
+            self.assertFalse(main.LATEST_PAYLOAD['liveDomainLoop']['instrumentsReady'])
+            self.assertNotEqual(main._LIVE_DOMAIN_LOOP['phase'],'stopped')
+
     def window(self, queued=False):
         source = ast.parse((ROOT / 'app/main_window.py').read_text(encoding='utf-8-sig'))
         cls = next(n for n in ast.walk(source) if isinstance(n, ast.ClassDef) and n.name == 'MainWindow')
