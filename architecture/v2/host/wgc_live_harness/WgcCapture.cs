@@ -42,6 +42,18 @@ internal sealed class WgcWindowCapture : IDisposable
     private long _completedReadbacks;
     private long _deliverySequence, _deliveryMarker;
 
+    public CapturedBgraFrame CaptureForAction(int timeoutMs, long requestNs, long deadlineNs, Func<bool> stopped)
+    {
+        ObjectDisposedException.ThrowIf(_disposed, this);
+        // Drop queued images and take the next image after this request. Actions
+        // do not inspect presentation timestamps, freshness or delivery proofs.
+        using var frame = DeliveredFrameSelector.Select(_framePool.TryGetNextFrame, f => f.Dispose(), _ => { },
+            ms => _frameArrived.WaitOne(ms), ProtocolClock.NowNs, stopped, requestNs,
+            Math.Min(deadlineNs, requestNs + timeoutMs * 1_000_000L),
+            out _, out _, out _, out _, out _, out _);
+        return ReadBack(frame) with { AcquisitionSequence = ++_deliverySequence };
+    }
+
     public CapturedBgraFrame CaptureDelivered(int timeoutMs, long requestNs, long absoluteDeadlineNs,
         Func<bool> stopped, string observationSessionId, long poolEpoch)
     {

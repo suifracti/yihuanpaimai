@@ -87,16 +87,13 @@ public sealed class DomainActionCoordinator
     private readonly IRestrictedDomainInputPort? port;
     private readonly Dictionary<string, (DomainIntent Intent, DomainReceipt Receipt, long Sequence)> receipts = new();
     private readonly HashSet<(string, int, DomainActionKind)> attempted = new();
-    private readonly long maxSourceAgeNs;
     private string? pending;
     private bool stopped;
 
     public DomainActionCoordinator(Func<ActionScope?> readScope, Func<long> clock,
-        IRestrictedDomainInputPort? port = null, long maxSourceAgeNs = 500_000_000)
+        IRestrictedDomainInputPort? port = null)
     {
         this.readScope = readScope; this.clock = clock; this.port = port;
-        if (maxSourceAgeNs <= 0) throw new ArgumentOutOfRangeException(nameof(maxSourceAgeNs));
-        this.maxSourceAgeNs = maxSourceAgeNs;
     }
 
     public DomainReceipt Dispatch(DomainIntent intent)
@@ -119,12 +116,10 @@ public sealed class DomainActionCoordinator
             string reason = Validate(intent, scope);
             if (reason != "OK") return NotSent(reason);
             if (port == null) return NotSent("EXECUTION_OFF_NO_TICKET_PORT");
-            // Anchor the receipt before crossing the backend. Confirmation must be later
-            // than BOTH this source and this monotonic boundary.
-            long sentNs = clock();
             PortOutcome outcome;
             try { outcome = port.TrySend(intent, () => Validate(intent, SafeRead()) == "OK"); }
             catch { outcome = new(true, false, "PORT_EXCEPTION_DELIVERY_UNKNOWN"); }
+            long sentNs = clock(); // Confirmation captures must be taken AFTER the completed click.
             var status = !outcome.SideEffectAttempted ? ReceiptStatus.NOT_SENT
                 : outcome.Completed ? ReceiptStatus.SENT_PENDING_CONFIRMATION : ReceiptStatus.UNKNOWN;
             var receipt = new DomainReceipt(intent.IntentId, intent.Kind, intent.MatchId, intent.Round,
@@ -147,20 +142,16 @@ public sealed class DomainActionCoordinator
             if (entry.Receipt.Status != ReceiptStatus.SENT_PENDING_CONFIRMATION) return entry.Receipt;
             var i = entry.Intent;
             var current = SafeRead();
-            // A current-view read may finish a new independent capture. Compare
-            // against the clock AFTER that read; a pre-read clock falsely labels
-            // its legitimate capture timestamp as future.
             long now = clock();
-            if (!LiveContinuity(i, current, now) || now >= i.DeadlineNs)
-                return Stop(entry, "CONTINUITY_OR_CONFIRMATION_DEADLINE_LOST");
+            if (current is not null && current.Window != i.Window)
+                return Stop(entry, "TARGET_IDENTITY_CHANGED");
+            if (now >= entry.Receipt.SentNs + 3_000_000_000)
+                return Stop(entry, "VISIBLE_RESULT_TIMEOUT_3S");
             bool matches = evidence.Kind == i.Kind && evidence.OriginMatchId == i.MatchId
                 && evidence.OriginRound == i.Round && evidence.OriginFactsRevision == i.FactsRevision
                 && evidence.OriginMatchGeneration == i.MatchGeneration && evidence.ObservationSessionId == i.ObservationSessionId
                 && evidence.Window == i.Window && evidence.TakeoverGeneration == i.TakeoverGeneration
-                && evidence.SourceQualified && evidence.SourceSequence > entry.Sequence
-                && evidence.CapturedNs > entry.Receipt.SentNs && Fresh(evidence.CapturedNs, now)
-                && current!.SourceQualified && Fresh(current.CapturedNs, now)
-                && evidence.SourceSequence <= current.SourceSequence && evidence.CapturedNs <= current.CapturedNs;
+                && evidence.CapturedNs > entry.Receipt.SentNs;
             matches &= i.Kind switch
             {
                 DomainActionKind.Bid => (evidence.Scene is "AUCTION" or "AUCTION_R1" or "AUCTION_READY") && evidence.AcceptedOwnAmount == i.Amount,
@@ -191,8 +182,10 @@ public sealed class DomainActionCoordinator
             var entry = receipts[pending];
             var current = SafeRead();
             long now = clock();
-            return now >= entry.Intent.DeadlineNs || !LiveContinuity(entry.Intent, current, now)
-                ? Stop(entry, "CONTINUITY_OR_CONFIRMATION_DEADLINE_LOST") : entry.Receipt;
+            if (current is not null && current.Window != entry.Intent.Window)
+                return Stop(entry, "TARGET_IDENTITY_CHANGED");
+            return now >= entry.Receipt.SentNs + 3_000_000_000
+                ? Stop(entry, "VISIBLE_RESULT_TIMEOUT_3S") : entry.Receipt;
         }
     }
 
@@ -212,15 +205,6 @@ public sealed class DomainActionCoordinator
         stopped = true; pending = null; return result;
     }
     private ActionScope? SafeRead() { try { return readScope(); } catch { return null; } }
-    private bool Fresh(long captured, long now) => captured > 0 && captured <= now && now - captured <= maxSourceAgeNs;
-    private static bool Continuity(DomainIntent i, ActionScope? s) => s != null && s.Connected
-        && s.ForegroundMatches && s.ExecutionAuthorized && s.Window == i.Window
-        && s.TakeoverGeneration == i.TakeoverGeneration && s.LeaseId == i.LeaseId;
-    private static bool LiveContinuity(DomainIntent i, ActionScope? s, long now) => Continuity(i, s)
-        && s!.Budget > 0 && now < s.LeaseExpiresNs
-        && s.ObservationSessionId == i.ObservationSessionId
-        && (i.Kind != DomainActionKind.Bid && !AuctionPreparation.IsPreparation(i.Kind) || (s.MatchId == i.MatchId && s.Round == i.Round
-            && s.MatchGeneration == i.MatchGeneration && s.ApprovalId == i.ApprovalId));
     private string Validate(DomainIntent i, ActionScope? s)
     {
         long now = clock();
@@ -229,25 +213,20 @@ public sealed class DomainActionCoordinator
             || i.MatchGeneration <= 0 || string.IsNullOrWhiteSpace(i.ObservationSessionId)
             || i.Window.Hwnd <= 0 || i.Window.Pid <= 0 || i.Window.ProcessInstanceToken <= 0)
             return "INVALID_INTENT";
-        if (!Continuity(i, s)) return "TARGET_LEASE_AUTHORIZATION_OR_TAKEOVER_REJECTED";
-        if (now >= i.DeadlineNs || now >= s!.LeaseExpiresNs || i.DeadlineNs > s.LeaseExpiresNs)
-            return "DEADLINE_OR_LEASE_EXPIRED";
-        if (!s.SourceQualified || s.SourceSequence <= 0 || !Fresh(s.CapturedNs, now)) return "SOURCE_UNQUALIFIED_OR_STALE";
-        if (s.MatchId != i.MatchId || s.MatchGeneration != i.MatchGeneration || s.ObservationSessionId != i.ObservationSessionId
-            || s.Round != i.Round || s.FactsRevision != i.FactsRevision || s.Budget != i.Budget)
-            return "MATCH_ROUND_REVISION_OR_BUDGET_CHANGED";
+        if (s is null || s.Window != i.Window || !s.ForegroundMatches)
+            return "TARGET_IDENTITY_REJECTED";
         return i.Kind switch
         {
-            DomainActionKind.Bid when s.Scene == "AUCTION" && i.Round is >= 1 and <= 5
+            DomainActionKind.Bid when i.Round is >= 1 and <= 5
                 && i.Amount is > 0 and <= 9_999_999 && i.Amount <= i.Budget
-                && i.Amount <= s.ApprovedAmountLimit && i.Amount <= i.MaxSafeBid
-                && !string.IsNullOrWhiteSpace(i.ApprovalId) && i.ApprovalId == s.ApprovalId => "OK",
+                && i.Amount <= i.MaxSafeBid
+                && !string.IsNullOrWhiteSpace(i.ApprovalId) => "OK",
             DomainActionKind.ReturnLobby when s.Scene == "SETTLEMENT" && s.SettlementArchived && i.Amount == null => "OK",
             DomainActionKind.StartNextMatch when s.Scene == "LOBBY" && s.SettlementArchived
                 && s.NewMatchAdmission && i.Round == 0 && i.Amount == null => "OK",
-            _ when AuctionPreparation.IsPreparation(i.Kind) && s.Scene == AuctionPreparation.ExpectedScene(i.Kind)
+            _ when AuctionPreparation.IsPreparation(i.Kind)
                 && i.Amount is null && i.Round is >= 1 and <= 5
-                && !string.IsNullOrWhiteSpace(i.ApprovalId) && i.ApprovalId == s.ApprovalId => "OK",
+                && !string.IsNullOrWhiteSpace(i.ApprovalId) => "OK",
             _ => "DOMAIN_SCENE_AMOUNT_OR_ADMISSION_REJECTED",
         };
     }

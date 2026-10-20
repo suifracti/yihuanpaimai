@@ -13,6 +13,17 @@ public sealed class NativeDomainFrame
     public ReadOnlyMemory<byte> Pixels { get; }
     public int Stride { get; }
     public string EvidenceRef { get; }
+    readonly Dictionary<IGameDomainFrameDecoder, DecodedDomainFrame?> decoded = new();
+    public DecodedDomainFrame? DecodeOnce(IGameDomainFrameDecoder decoder)
+    {
+        lock (decoded)
+        {
+            if (decoded.TryGetValue(decoder, out var result)) return result;
+            try { result = decoder.Decode(this); } catch { result = null; }
+            decoded.Add(decoder, result);
+            return result;
+        }
+    }
     public NativeDomainFrame(ActionScope scope, ClientGeometry geometry, byte[] bgra, int stride)
     {
         if (geometry.Width <= 0 || geometry.Height <= 0 || stride < geometry.Width * 4L
@@ -53,13 +64,12 @@ public sealed class CapturedDomainControlEvidence : IDomainControlEvidence
         LastFailure = "CAPTURE_STARTED";
         var frame = capture();
         if (frame == null) { LastFailure = "INDEPENDENT_CAPTURE_UNAVAILABLE"; return null; }
-        if (!frame.Scope.SourceQualified) { LastFailure = "SOURCE_UNQUALIFIED"; return null; }
         LastFailure = "DECODE_STARTED";
-        var view = decoder.Decode(frame);
+        var view = frame.DecodeOnce(decoder);
         string expectedScene = intent.Kind switch { DomainActionKind.Bid => "AUCTION",
             DomainActionKind.ReturnLobby => "SETTLEMENT", DomainActionKind.StartNextMatch => "LOBBY",
             _ => AuctionPreparation.ExpectedScene(intent.Kind) ?? "INVALID" };
-        if (view == null || view.Scene != expectedScene || frame.Scope.Scene != expectedScene
+        if (view == null || view.Scene != expectedScene
             || view.MatchId != frame.Scope.MatchId || view.MatchGeneration != frame.Scope.MatchGeneration
             || view.Round != frame.Scope.Round)
         { LastFailure = $"DECODE_OR_SCOPE:expected={expectedScene},decoded={view?.Scene},scope={frame.Scope.Scene}"; return null; }
@@ -72,8 +82,8 @@ public sealed class CapturedDomainControlEvidence : IDomainControlEvidence
     public AmountFieldReadback? CaptureAmountField()
     {
         var frame = capture();
-        if (frame == null || !frame.Scope.SourceQualified) return null;
-        var view = decoder.Decode(frame);
+        if (frame == null) return null;
+        var view = frame.DecodeOnce(decoder);
         if (view?.AmountField is not (>= 0 and <= 9_999_999) || view.Scene != "AUCTION"
             || view.MatchId != frame.Scope.MatchId || view.MatchGeneration != frame.Scope.MatchGeneration
             || view.Round != frame.Scope.Round) return null;
@@ -94,11 +104,10 @@ public sealed class NativeVisibleResultProducer
     {
         var s = frame.Scope; long now = clock();
         if (pending.Status != ReceiptStatus.SENT_PENDING_CONFIRMATION || pending.IntentId != intent.IntentId
-            || !s.SourceQualified || s.CapturedNs <= pending.SentNs || s.CapturedNs > now
-            || now - s.CapturedNs > 500_000_000 || s.Window != intent.Window
+            || s.CapturedNs <= pending.SentNs || s.Window != intent.Window
             || s.ObservationSessionId != intent.ObservationSessionId || s.TakeoverGeneration != intent.TakeoverGeneration)
             return null;
-        var view = decoder.Decode(frame);
+        var view = frame.DecodeOnce(decoder);
         if (view == null || view.MatchId != s.MatchId || view.MatchGeneration != s.MatchGeneration || view.Round != s.Round)
             return null;
         long? accepted = null; string? newMatch = null; long newGeneration = 0;
@@ -129,7 +138,7 @@ public sealed class NativeVisibleResultProducer
         }
         else return null;
         return new(intent.IntentId, intent.Kind, intent.MatchId, intent.Round, intent.FactsRevision,
-            accepted, newMatch, view.Scene, s.SourceSequence, s.CapturedNs, true, s.Window, s.TakeoverGeneration)
+            accepted, newMatch, view.Scene, s.SourceSequence, s.CapturedNs, s.SourceQualified, s.Window, s.TakeoverGeneration)
             { OriginMatchGeneration = intent.MatchGeneration, ObservationSessionId = s.ObservationSessionId,
               NewMatchGeneration = newGeneration, EvidenceRef = frame.EvidenceRef,
               PreparationEffectVisible = view.GoldAverageVisible };

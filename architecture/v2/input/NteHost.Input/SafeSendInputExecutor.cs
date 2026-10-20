@@ -96,7 +96,7 @@ public sealed class SafeSendInputExecutor
             return Fail(InputSafetyReasons.TicketReused);
         }
 
-        if (TraceClock.NowNs() > ticket.ExpiresNs)
+        if (!action.IsDomain && TraceClock.NowNs() > ticket.ExpiresNs)
         {
             return Fail(InputSafetyReasons.TicketExpired);
         }

@@ -26,8 +26,8 @@ static class PreparationChecks
                 Require(f.Coordinator.Confirm(f.Evidence(intent, next)).Status == ReceiptStatus.SENT_PENDING_CONFIRMATION, "PANEL_CLOSE_IS_NOT_USE_PROOF");
             Require(f.Coordinator.Confirm(f.Evidence(intent, next) with { PreparationEffectVisible = true }).Status == ReceiptStatus.CONFIRMED, "INDEPENDENT_EFFECT_REQUIRED");
             foreach (var change in new Func<ActionScope, ActionScope>[] {
-                s => s with { SourceQualified = false }, s => s with { ForegroundMatches = false },
-                s => s with { Window = s.Window with { Pid = 999 } }, s => s with { Scene = "WRONG" } })
+                s => s with { ForegroundMatches = false },
+                s => s with { Window = s.Window with { Pid = 999 } } })
             {
                 var bad = new Fixture();
                 bad.Scope = bad.Scope with { Scene = AuctionPreparation.ExpectedScene(kind)! };

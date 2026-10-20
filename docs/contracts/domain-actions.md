@@ -1,5 +1,13 @@
 # Sol-C / Issue #44 domain actions (offline integration contract)
 
+## Current rule — 2026-10-20, PR #55
+
+The user's “保持简单” instruction supersedes older freshness/proof requirements below. Input safety is target-window identity, a one-shot ticket, and no resend after UNKNOWN. Amount limits and reading the intended amount remain business behavior.
+
+After a completed click, capture a new target-window image, decode that frame once and cache the result. Recognizing the expected result yields CONFIRMED; otherwise, after three seconds, UNKNOWN latches and prevents resend. Presentation-marker age/future status, anchor age, first-frame proofs and a 500ms image expiry are not action gates. Successful image capture does not create Solver facts or a warehouse SOURCE.
+
+Current implementation work is limited to one real confirmed bid. Entry-fee automation, continuous looping and M5 remain deferred.
+
 Base: PR #22 `25fd1d0073ce24e3c2f92f95cdeb8a706d4f9630`. Consumer: Luna-B; Solver producer: Sol-B PR #47 `3cf468143c189144ee0950b736d116e283efec61`.
 
 ## Available code

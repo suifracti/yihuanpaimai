@@ -132,7 +132,7 @@ internal sealed class ContinuousWgcCapture : IDisposable
         if (_pump.FailureException is { } failure)
             throw new InvalidOperationException($"capture-owner-unavailable; clockDiagnostic={_failureClockDiagnostics}", failure);
     }
-    public CapturedBgraFrame CaptureAfterRequest(int timeoutMs, long requestNs, long deadlineNs, Func<bool> stopped, QpcClockSample? requestClock = null)
+    public CapturedBgraFrame CaptureAfterRequest(int timeoutMs, long requestNs, long deadlineNs, Func<bool> stopped, QpcClockSample? requestClock = null, bool forAction = false)
     {
         return _pump.Invoke((source, stop) =>
         {
@@ -141,7 +141,9 @@ internal sealed class ContinuousWgcCapture : IDisposable
             var epoch = _mapping.Epoch;
             source.EnableRequestClockDiagnostics = EnableRequestClockDiagnostics;
             source.RequestGateClockSample = requestClock;
-            try { var frame = _policy == CapturePolicy.Delivery
+            try { var frame = forAction
+                    ? source.CaptureForAction(timeoutMs, requestNs, deadlineNs, () => stop() || stopped())
+                    : _policy == CapturePolicy.Delivery
                     ? source.CaptureDelivered(timeoutMs, requestNs, deadlineNs, () => stop() || stopped(), _observation, epoch)
                     : source.CaptureAfterRequest(timeoutMs, requestNs, deadlineNs, () => stop() || stopped());
                 return _validate(source, frame with { CaptureScopeEpoch = epoch }); }

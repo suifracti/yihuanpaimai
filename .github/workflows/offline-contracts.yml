@@ -607,11 +607,9 @@ jobs:
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           dotnet run --project tests/native_domain_actions/domain-actions.csproj -c Release -- --input-source-only
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          dotnet run --project tests/native_domain_actions/domain-actions.csproj -c Release -- --input-future-only
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           dotnet run --project architecture/v2/input/verifier/NteInputGuardVerifier.csproj -c Release -- --domain-timing-only
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          dotnet run --project tests/native_domain_actions/domain-actions.csproj -c Release -- --rolling-anchor-only
+          dotnet run --project tests/native_preparation_confirmation/confirmation.csproj -c Release
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           $output = dotnet run --project tests/native_domain_actions/domain-actions.csproj -- $workflowPath 2>&1
           $testExitCode = $LASTEXITCODE

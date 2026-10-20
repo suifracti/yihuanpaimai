@@ -24,7 +24,9 @@ public readonly record struct ExemptionDecision(bool Exempted, string Reason);
 ///      which bounds replay to a single arming.
 ///   4. a matching *pending, unconsumed, unexpired* intent exists in this ledger
 ///      for that exact event kind (and exact coordinates for cursor moves), AND
-///      the per-arming exemption budget has not been exhausted.
+///      the per-arming exemption budget has not been exhausted (legacy wheel
+///      intents only). Domain input uses exact one-shot events without age or
+///      event-count gates; its input ticket already limits each send to once.
 ///
 /// Condition 4 is what actually bounds the waiver. A forged marker, a replayed
 /// marker, an over-budget marker, an expired intent, or a second identical event
@@ -51,6 +53,7 @@ public sealed class SelfInjectionLedger
         public bool Consumed;
         public bool Abandoned;
         public uint DomainCode;
+        public bool IsDomain;
     }
 
     private readonly object _gate = new();
@@ -192,7 +195,7 @@ public sealed class SelfInjectionLedger
             long now = _clock();
             void Add(InputActionKind kind, uint code, int x = 0, int y = 0) => _intents.Add(new Intent
                 { Id = ++_intentSequence, Kind = kind, DomainCode = code, X = x, Y = y,
-                  RegisteredNs = now, ExpiresNs = now + _ttlNs });
+                  RegisteredNs = now, ExpiresNs = now + _ttlNs, IsDomain = true });
             if (action.Kind == InputActionKind.RestrictedLeftClick)
             {
                 var point = action.DomainPoint!.Value;
@@ -278,7 +281,7 @@ public sealed class SelfInjectionLedger
                     continue;
                 }
 
-                if (now > intent.ExpiresNs)
+                if (!intent.IsDomain && now > intent.ExpiresNs)
                 {
                     expiredMatch ??= intent;
                     continue;
@@ -319,13 +322,13 @@ public sealed class SelfInjectionLedger
                 return new ExemptionDecision(false, InputSafetyReasons.DenyNoPendingIntent);
             }
 
-            if (_exemptionsUsed >= _maxExemptions)
+            if (!liveMatch.IsDomain && _exemptionsUsed >= _maxExemptions)
             {
                 return new ExemptionDecision(false, InputSafetyReasons.DenyBudgetExhausted);
             }
 
             liveMatch.Consumed = true;
-            _exemptionsUsed++;
+            if (!liveMatch.IsDomain) _exemptionsUsed++;
             return new ExemptionDecision(true, InputSafetyReasons.Ok);
         }
     }

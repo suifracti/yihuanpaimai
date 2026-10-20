@@ -16,7 +16,7 @@ namespace WgcLiveHarness;
 /// </summary>
 sealed class TicketedSceneAnchorDispatch : IDisposable
 {
-    readonly SceneAnchorGameDecoder decoder;
+    readonly IGameDomainFrameDecoder decoder;
     readonly InputSafetyGuard guard;
     readonly Win32LowLevelInputObserver observer;
     readonly GameFocus focus;
@@ -24,19 +24,21 @@ sealed class TicketedSceneAnchorDispatch : IDisposable
     readonly NativeDomainActionRuntime runtime;
     readonly WindowsTicketedDomainBackend backend;
     readonly object gate = new();
+    readonly WindowIdentityReader identities = new();
     readonly string sessionId;
     readonly Action<JsonObject> publish;
     Func<DomainIntent, NativeDomainFrame?>? engineCapture;
     DomainIntent? current;
     DomainIntent? pending;
     NativeDomainFrame? pinned;
-    bool confirming;
+    NativeDomainFrame? latestCapture;
     bool usePinned;
+    long confirmationDeadlineNs;
     bool settlementReturned;
     bool armed;
     bool disposed;
 
-    TicketedSceneAnchorDispatch(string sessionId, SceneAnchorGameDecoder decoder, InputSafetyGuard guard,
+    TicketedSceneAnchorDispatch(string sessionId, IGameDomainFrameDecoder decoder, InputSafetyGuard guard,
         Win32LowLevelInputObserver observer, GameFocus focus, SwitchingObligations obligations,
         WindowsTicketedDomainBackend backend, NativeDomainActionRuntime runtime, Action<JsonObject> publish)
     {
@@ -52,6 +54,7 @@ sealed class TicketedSceneAnchorDispatch : IDisposable
     }
 
     public bool AwaitingVisibleResult { get { lock (gate) return pending is not null; } }
+    public int ConfirmationWaitMs => (int)Math.Max(1, (confirmationDeadlineNs - ProtocolClock.NowNs()) / 1_000_000);
 
     // Planning metadata comes from the same held WGC pixels as FRAME. These
     // anchors are deliberately unqualified for input: every dispatch still
@@ -69,7 +72,7 @@ sealed class TicketedSceneAnchorDispatch : IDisposable
         { MatchGeneration = (long?)state?["lastFrame"]?["matchGeneration"] ?? 0,
             ObservationSessionId = sessionId };
         var held = new NativeDomainFrame(scope, geometry, frame.Pixels, frame.Stride);
-        var view = decoder.Decode(held);
+        var view = held.DecodeOnce(decoder);
         var funds = SceneAnchorOcr.ReadAssets(held.Pixels, frame.Width, frame.Height, frame.Stride, view?.Scene);
         return new JsonObject { ["schemaVersion"] = "domain-planning-view.v1", ["planningOnly"] = true,
             ["inputActions"] = false, ["frameSequence"] = frameSequence,
@@ -100,7 +103,7 @@ sealed class TicketedSceneAnchorDispatch : IDisposable
         var obligations = new SwitchingObligations();
         var evidence = new CapturedDomainControlEvidence(() => dispatch!.CaptureEngine(), decoder);
         var backend = new WindowsTicketedDomainBackend(guard, evidence, obligations, ProtocolClock.NowNs, hwnd, allowGameInput: true);
-        var coordinator = new DomainActionCoordinator(() => dispatch!.CaptureEngine()?.Scope, ProtocolClock.NowNs,
+        var coordinator = new DomainActionCoordinator(() => dispatch!.ReadScope(), ProtocolClock.NowNs,
             new RestrictedDomainInputPort(backend, ProtocolClock.NowNs));
         var runtime = new NativeDomainActionRuntime(coordinator, new(decoder, ProtocolClock.NowNs), obligations,
             message => dispatch!.publish(message));
@@ -145,11 +148,12 @@ sealed class TicketedSceneAnchorDispatch : IDisposable
                     (string)message["ledgerId"]!, (long)message["ledgerRevision"]!, sessionId, intent);
             }
             current = intent;
-            confirming = false;
+            latestCapture = null;
             DomainReceipt receipt;
             try { receipt = runtime.Dispatch(intent); }
             finally { current = pending; }
-            if (receipt.Status == ReceiptStatus.SENT_PENDING_CONFIRMATION) pending = intent;
+            if (receipt.Status == ReceiptStatus.SENT_PENDING_CONFIRMATION)
+            { pending = intent; confirmationDeadlineNs = receipt.SentNs + 3_000_000_000; }
             else if (receipt.Status == ReceiptStatus.UNKNOWN) pending = null;
             return true;
         }
@@ -160,26 +164,21 @@ sealed class TicketedSceneAnchorDispatch : IDisposable
         lock (gate)
         {
             var intent = pending;
-            if (engine is null || intent is null) return;
-            // A frame that cannot confirm must not be polled. Continuity loss
-            // latches UNKNOWN, and that same coordinator can never return.
-            if (!CanConfirm(intent, engine) && ProtocolClock.NowNs() < intent.DeadlineNs) return;
+            if (intent is null) return;
             current = intent;
-            confirming = true;
-            usePinned = true;
             pinned = engine;
+            usePinned = true;
             DomainReceipt? receipt;
             try
             {
-                receipt = runtime.OnIndependentCapture(intent.IntentId, engine,
+                receipt = engine is null ? runtime.Poll() : runtime.OnIndependentCapture(intent.IntentId, engine,
                     new OwnSeatBinding(SceneAnchorGameDecoder.OwnCommittedBidSlot, SceneAnchorGameDecoder.OwnCommittedBidIdentity));
             }
             finally
             {
                 usePinned = false;
                 pinned = null;
-                confirming = false;
-                current = null;
+                    current = null;
             }
             if (receipt?.Status == ReceiptStatus.CONFIRMED)
             {
@@ -203,37 +202,31 @@ sealed class TicketedSceneAnchorDispatch : IDisposable
     {
         var intent = current;
         if (intent is null) return null;
+        if (usePinned) return pinned;
         NativeDomainFrame? engine;
-        if (usePinned) engine = pinned;
-        else
+        var capture = engineCapture;
+        if (capture is null) return null;
+        try { engine = capture(intent); }
+        catch { return null; }
+        if (engine is not null && intent.Kind is DomainActionKind.ReturnLobby or DomainActionKind.StartNextMatch)
         {
-            var capture = engineCapture;
-            if (capture is null) return null;
-            try { engine = capture(intent); }
-            catch { return null; }
+            var scene = engine.DecodeOnce(decoder)?.Scene ?? "UNKNOWN";
+            engine = new(engine.Scope with { Scene = scene, SettlementArchived = scene == "SETTLEMENT" || settlementReturned,
+                NewMatchAdmission = settlementReturned && scene == "LOBBY" }, engine.Geometry, engine.Pixels.ToArray(), engine.Stride);
         }
-        return engine is null ? null : Authorize(engine, intent, confirming);
+        latestCapture = engine;
+        return engine;
     }
 
-    bool CanConfirm(DomainIntent intent, NativeDomainFrame engine)
+    ActionScope? ReadScope()
     {
-        DecodedDomainFrame? view;
-        try { view = decoder.Decode(engine); }
-        catch { return false; }
-        if (view is null) return false;
-        return intent.Kind switch
-        {
-            DomainActionKind.Bid => (view.Scene is "AUCTION" or "AUCTION_R1" or "AUCTION_READY")
-                && view.OwnBid?.Amount == intent.Amount,
-            DomainActionKind.ReturnLobby => view.Scene == "LOBBY"
-                && view.MatchId == intent.MatchId && view.MatchGeneration == intent.MatchGeneration,
-            DomainActionKind.StartNextMatch => (view.Scene is "AUCTION_R1" or "AUCTION_READY") && view.Round == 1
-                && !string.IsNullOrWhiteSpace(view.MatchId) && view.MatchId != intent.MatchId
-                && view.MatchGeneration > intent.MatchGeneration,
-            _ when AuctionPreparation.IsPreparation(intent.Kind) => AuctionPreparation.Confirms(intent.Kind, view.Scene, view.GoldAverageVisible)
-                && view.MatchId == intent.MatchId && view.MatchGeneration == intent.MatchGeneration
-                && view.Round == intent.Round,
-            _ => false,
+        if (usePinned) return pinned?.Scope;
+        var frame = latestCapture ?? CaptureEngine();
+        if (frame is null) return null;
+        var identity = identities.Read(frame.Scope.Window.Hwnd);
+        return frame.Scope with {
+            Window = new(identity.Hwnd, identity.Pid, identity.ProcessInstanceToken, frame.Scope.Window.FocusEpoch),
+            ForegroundMatches = focus.Capture().ForegroundId == identity.Hwnd,
         };
     }
 
@@ -268,42 +261,6 @@ sealed class TicketedSceneAnchorDispatch : IDisposable
         {
             emit(Rejected(intent, "DURABLE_NOT_SENT_RECEIPT_FAILED:" + ex.GetType().Name));
         }
-    }
-
-    NativeDomainFrame Authorize(NativeDomainFrame engine, DomainIntent intent, bool confirmingFrame)
-    {
-        DecodedDomainFrame? view = null;
-        try { view = decoder.Decode(engine); } catch { view = null; }
-        string scene = view?.Scene ?? "UNKNOWN";
-        string expected = Expected(intent.Kind);
-        bool confirmScene = intent.Kind switch
-        {
-            DomainActionKind.Bid => scene is "AUCTION" or "AUCTION_R1" or "AUCTION_READY",
-            DomainActionKind.ReturnLobby => scene == "LOBBY",
-            DomainActionKind.StartNextMatch => scene is "AUCTION_R1" or "AUCTION_READY",
-            _ when AuctionPreparation.IsPreparation(intent.Kind) => AuctionPreparation.Confirms(intent.Kind, scene, view?.GoldAverageVisible == true),
-            _ => false,
-        };
-        bool pixelsMatch = confirmingFrame ? confirmScene : scene == expected;
-        bool identity = intent.Window.Hwnd == engine.Scope.Window.Hwnd
-            && intent.Window.Pid == engine.Scope.Window.Pid
-            && intent.Window.ProcessInstanceToken == engine.Scope.Window.ProcessInstanceToken;
-        var scope = engine.Scope with
-        {
-            Budget = intent.Budget,
-            ApprovedAmountLimit = intent.Kind == DomainActionKind.Bid ? intent.MaxSafeBid : intent.Budget,
-            Scene = confirmingFrame ? scene : expected,
-            LeaseId = intent.LeaseId,
-            LeaseExpiresNs = intent.DeadlineNs,
-            TakeoverGeneration = intent.TakeoverGeneration,
-            Connected = true,
-            ExecutionAuthorized = pixelsMatch && engine.Scope.ForegroundMatches,
-            SettlementArchived = scene == "SETTLEMENT" || settlementReturned,
-            NewMatchAdmission = settlementReturned && scene == "LOBBY",
-            ApprovalId = intent.ApprovalId,
-            Window = identity ? intent.Window : engine.Scope.Window,
-        };
-        return new(scope, engine.Geometry, engine.Pixels.ToArray(), engine.Stride);
     }
 
     bool Bound(JsonObject message, DomainIntent? intent, string bootId, WindowMonitorSnapshot target)

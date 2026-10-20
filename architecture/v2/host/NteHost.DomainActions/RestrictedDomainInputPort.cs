@@ -25,13 +25,9 @@ public sealed class RestrictedDomainInputPort : IRestrictedDomainInputPort
 {
     private readonly ITicketedDomainBackend backend;
     private readonly Func<long> clock;
-    private readonly long maxSourceAgeNs;
-    public RestrictedDomainInputPort(ITicketedDomainBackend backend, Func<long> clock,
-        long maxSourceAgeNs = 500_000_000)
+    public RestrictedDomainInputPort(ITicketedDomainBackend backend, Func<long> clock)
     {
         this.backend = backend; this.clock = clock;
-        if (maxSourceAgeNs <= 0) throw new ArgumentOutOfRangeException(nameof(maxSourceAgeNs));
-        this.maxSourceAgeNs = maxSourceAgeNs;
     }
     public PortOutcome TrySend(DomainIntent intent, Func<bool> current)
     {
@@ -64,13 +60,8 @@ public sealed class RestrictedDomainInputPort : IRestrictedDomainInputPort
         long now = clock();
         // Field readback is a pre-submit check, never the accepted-bid receipt.
         // Require a newly captured field frame, not retained pixels before typing.
-        if (field == null || !field.SourceQualified || field.Amount != intent.Amount
-            || field.MatchId != intent.MatchId || field.Round != intent.Round
-            || field.FactsRevision != intent.FactsRevision || field.Window != intent.Window
-            || field.MatchGeneration != intent.MatchGeneration || field.ObservationSessionId != intent.ObservationSessionId
-            || field.TakeoverGeneration != intent.TakeoverGeneration
-            || field.CapturedNs <= replacedNs || field.CapturedNs > now
-            || now - field.CapturedNs > maxSourceAgeNs)
+        if (field == null || field.Amount != intent.Amount || field.Window != intent.Window
+            || field.CapturedNs <= replacedNs)
             return new(attempted, false, "AMOUNT_FIELD_READBACK_UNPROVEN");
         return Step(DomainPrimitive.SubmitBid);
     }

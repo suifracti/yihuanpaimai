@@ -56,8 +56,7 @@ internal static class DomainTimingChecks
         bool Current()
         {
             if (++reads != 3) return true;
-            // Execute and prepare have passed; this is the final fresh capture,
-            // inside the original 500ms ticket but beyond the 250ms self TTL.
+            // A slow callback must not expire a domain ticket or its own events.
             Thread.Sleep(mode == "ticket-expired" ? 550 : 300);
             if (mode == "focus-changed") focus.SetForeground(2);
             if (mode == "cancelled") guard.Cancel("TEST_USER_STOP");
@@ -69,12 +68,9 @@ internal static class DomainTimingChecks
         Console.WriteLine($"{(click ? "click" : "digits")}/{mode}: ok={outcome.Ok} sends={raw.SendCallCount} takeover={guard.UserTakeoverSeen} reason={outcome.Reason}");
         try
         {
-            if (mode == "slow-valid")
+            if (mode is "slow-valid" or "ticket-expired" or "late-event")
                 Require(outcome.Ok && raw.SendCallCount == 1 && !guard.UserTakeoverSeen && guard.State == GuardState.Armed,
                     "OWN_INPUT_MUST_NOT_EXPIRE_DURING_CAPTURE");
-            else if (mode == "late-event")
-                Require(!outcome.Ok && raw.SendCallCount == 1 && guard.UserTakeoverSeen,
-                    "SELF_TTL_MUST_REMAIN_250MS");
             else
                 Require(!outcome.Ok && raw.SendCallCount == 0, "FINAL_GATE_MUST_PREVENT_SEND");
             // A completed/failed action never authorizes a second raw send by itself.

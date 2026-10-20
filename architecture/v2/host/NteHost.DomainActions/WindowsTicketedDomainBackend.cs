@@ -77,7 +77,7 @@ public sealed class WindowsTicketedDomainBackend : ITicketedDomainBackend
             VisibleControlAnchor? anchor;
             try { anchor = evidence.Locate(primitive, intent); } catch { anchor = null; }
             if (anchor == null) return new(false, false, "NOT_CONNECTED_CONTROL_ANCHOR_UNKNOWN:" + evidence.LastFailure);
-            if (!AnchorMatches(anchor, primitive, intent)) return new(false, false, "INITIAL_CONTROL_ANCHOR_UNQUALIFIED_OR_STALE");
+            if (!AnchorMatches(anchor, primitive, intent)) return new(false, false, "CONTROL_NOT_FOUND_IN_TARGET");
             string validationFailure = "NONE";
             bool Valid()
             {
@@ -85,28 +85,8 @@ public sealed class WindowsTicketedDomainBackend : ITicketedDomainBackend
                 if (inputTargetId == 0 || !guard.IsArmedFor(inputTargetId, intent.Window.FocusEpoch))
                 { validationFailure = "GUARD_NOT_ARMED_FOR_TARGET"; return false; }
                 if (!PlatformMatches(anchor, intent)) { validationFailure = "INITIAL_PLATFORM_CHANGED"; return false; }
-                var latest = evidence.Locate(primitive, intent);
-                // New frames are allowed, but the recognized control and geometry
-                // must be identical. Drift after preflight never silently retargets.
-                // The initial anchor fixes coordinates; its freshness was checked
-                // at acquisition. Freshness at every use belongs to this independent
-                // latest capture, not the initial image aging during current().
-                bool controlsCurrent = latest != null && AnchorMatches(latest, primitive, intent)
-                    && latest.Left == anchor.Left && latest.Top == anchor.Top && latest.Width == anchor.Width
-                    && latest.Height == anchor.Height && latest.Geometry == anchor.Geometry
-                    && latest.ControlProfile == anchor.ControlProfile && PlatformMatches(latest, intent);
-                if (!controlsCurrent) { validationFailure = "LATEST_CONTROL_SCOPE_FRESHNESS_OR_GEOMETRY_REJECTED"; return false; }
-                if (primitive != DomainPrimitive.SubmitBid) return true;
-                // Re-read the exact field again at SubmitBid's final ticket check;
-                // a prior successful read does not authorize a changed field.
-                var field = evidence.CaptureAmountField(); long now = clock();
-                return field != null && field.SourceQualified && field.Amount == intent.Amount
-                    && field.CapturedNs > lastAmountMutationNs && field.CapturedNs <= now
-                    && now - field.CapturedNs <= 500_000_000 && field.Window == intent.Window
-                    && field.MatchId == intent.MatchId && field.MatchGeneration == intent.MatchGeneration
-                    && field.ObservationSessionId == intent.ObservationSessionId && field.Round == intent.Round
-                    && field.FactsRevision == intent.FactsRevision && field.TakeoverGeneration == intent.TakeoverGeneration
-                    && PlatformMatches(latest!, intent);
+                return true;
+
             }
             bool SafeValid() { try { return Valid(); } catch (Exception e) { validationFailure = "VALIDATION_EXCEPTION_" + e.GetType().Name; return false; } }
             if (!SafeValid()) return new(false, false, "DOMAIN_TARGET_CONTROL_OR_CURRENT_REJECTED:" + validationFailure);
@@ -148,43 +128,28 @@ public sealed class WindowsTicketedDomainBackend : ITicketedDomainBackend
 
     public AmountFieldReadback? ReadAmountField()
     {
-        // Independent capture after typing. A provider returning cached field
-        // pixels before this mutation cannot unlock SubmitBid.
         lock (gate)
         {
             var i = amountIntent;
             amountVerified = false;
             if (i == null || amountCurrent == null) { LastReadbackReason = "NO_AMOUNT_MUTATION"; return null; }
-            long readDeadline = Math.Min(i.DeadlineNs, clock() + 250_000_000);
-            // SendInput's return precedes UI rendering. Read up to five independent
-            // new frames; this retries OBSERVATION only, never any input primitive.
-            for (int sample = 0; sample < 5 && clock() < readDeadline; sample++)
+            long deadline = clock() + 3_000_000_000;
+            while (clock() < deadline)
             {
-                if (!amountCurrent()) { LastReadbackReason = "CURRENT_BEFORE_READ_REJECTED"; return null; }
-                var field = evidence.CaptureAmountField(); long now = clock();
-                if (!amountCurrent()) { LastReadbackReason = "CURRENT_AFTER_READ_REJECTED"; return null; }
-                if (now >= readDeadline) { LastReadbackReason = "READ_DEADLINE_EXPIRED"; return null; }
-                amountVerified = field != null && field.CapturedNs > lastAmountMutationNs
-                    && field.SourceQualified && field.CapturedNs <= now && now - field.CapturedNs <= 500_000_000
-                    && field.MatchId == i.MatchId && field.MatchGeneration == i.MatchGeneration
-                    && field.ObservationSessionId == i.ObservationSessionId && field.Round == i.Round
-                    && field.FactsRevision == i.FactsRevision && field.Window == i.Window
-                    && field.TakeoverGeneration == i.TakeoverGeneration && field.Amount == i.Amount;
-                LastReadbackReason = amountVerified ? "EXACT_FIELD_CONFIRMED" : $"FIELD_UNPROVEN:{field?.Amount}";
-                if (amountVerified) return field;
-                if (sample < 4) Thread.Sleep(40);
+                if (!amountCurrent()) { LastReadbackReason = "TARGET_IDENTITY_REJECTED"; return null; }
+                var field = evidence.CaptureAmountField();
+                if (field is not null && field.Window == i.Window && field.Amount == i.Amount
+                    && field.CapturedNs > lastAmountMutationNs)
+                { amountVerified = true; LastReadbackReason = "EXACT_AMOUNT_VISIBLE"; return field; }
             }
+            LastReadbackReason = "AMOUNT_READ_TIMEOUT_3S";
             return null;
         }
     }
 
     private bool AnchorMatches(VisibleControlAnchor a, DomainPrimitive primitive, DomainIntent i)
     {
-        long now = clock();
-        return a.Primitive == primitive && a.MatchId == i.MatchId && a.MatchGeneration == i.MatchGeneration
-            && a.ObservationSessionId == i.ObservationSessionId && a.Round == i.Round && a.FactsRevision == i.FactsRevision
-            && a.Window == i.Window && a.SourceQualified && a.SourceSequence > 0 && a.CapturedNs > 0
-            && a.CapturedNs <= now && now - a.CapturedNs <= 500_000_000 && now < i.DeadlineNs
+        return a.Primitive == primitive && a.Window == i.Window
             && !string.IsNullOrWhiteSpace(a.EvidenceRef) && a.Geometry.Width > 0 && a.Geometry.Height > 0
             && a.Width >= 3 && a.Height >= 3 && a.Left >= 0 && a.Top >= 0
             && a.Left + (long)a.Width <= a.Geometry.Width && a.Top + (long)a.Height <= a.Geometry.Height;

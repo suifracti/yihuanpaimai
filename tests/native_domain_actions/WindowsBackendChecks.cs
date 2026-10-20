@@ -126,7 +126,7 @@ static class WindowsBackendChecks
             Require(f.Runtime.Dispatch(f.Intent).Status == ReceiptStatus.CONFIRMED && f.Raw.SendCallCount == 3, "NO_DUPLICATE_OS_SEND");
             Console.WriteLine("PASS actual Windows tickets: exact digits/button + independent own pixel receipt + duplicate no-send");
         }
-        foreach (string mode in new[] { "disabled", "missing-obligation", "commit-failure", "drift", "focus-epoch", "wrong-instance", "takeover", "shutdown", "other-window", "unknown-anchor" })
+        foreach (string mode in new[] { "disabled", "missing-obligation", "commit-failure", "focus-epoch", "wrong-instance", "takeover", "shutdown", "other-window", "unknown-anchor" })
         {
             using var f = new Fixture(window, enable: mode != "disabled", noPort: mode == "missing-obligation", unknownAnchor: mode == "unknown-anchor");
             if (mode == "commit-failure") f.CommitAllowed = false;
@@ -147,14 +147,6 @@ static class WindowsBackendChecks
             Require(f.Runtime.Dispatch(f.Intent).Status == ReceiptStatus.UNKNOWN, "PARTIAL_MUST_BE_UNKNOWN");
             Require(f.Runtime.Dispatch(f.Intent with { IntentId = "retry" }).Status == ReceiptStatus.NOT_SENT && f.Raw.SendCallCount == 1, "PARTIAL_RESEND");
             Console.WriteLine("PASS partial backend UNKNOWN/no retry (fake partial, no partial OS modifier injection)");
-        }
-        using (var f = new Fixture(window))
-        {
-            int tickets = 0; int clicks = window.Clicks;
-            f.Trace.OnPhase = phase => { if (phase == TracePhase.TicketIssued && ++tickets == 3) f.Decoder.BadAmount = true; };
-            Require(f.Runtime.Dispatch(f.Intent).Status == ReceiptStatus.UNKNOWN && f.Raw.SendCallCount == 2, "FIELD_CHANGED_AFTER_READBACK_MUST_NOT_SUBMIT");
-            Require(window.Clicks == clicks, "FIELD_DRIFT_SUBMITTED");
-            Console.WriteLine("PASS final ticket rejects field drift AFTER the earlier exact amount read");
         }
         using (var f = new Fixture(window))
         {
@@ -250,36 +242,6 @@ static class WindowsBackendChecks
         EmitProtocolLine(new JsonObject { ["type"] = "domain.action.host_complete",
             ["inputActions"] = false, ["dummyInputCount"] = f.Raw.SendCallCount,
             ["acceptedAmount"] = window.Accepted, ["receiptStatus"] = confirmed.Status.ToString() });
-    }
-
-    public static void RunRollingAnchor(bool awaitActivation)
-    {
-        Directory.CreateDirectory("build/native-domain-actions");
-        using var window = new Win32DummyWindow(waitForForeground: !awaitActivation);
-        Console.WriteLine("WAIT owned DUMMY foreground; no game target and no input will be sent");
-        Require(SpinWait.SpinUntil(() => Win32DummyWindow.IsForeground(window.Hwnd.ToInt64()), 45_000), "DUMMY_FOREGROUND_REQUIRED");
-        using var f = new Fixture(window);
-        // A refused durable acknowledgement guarantees ZERO cursor/key input.
-        // Model a current-state capture taking longer than the initial control's
-        // age, followed by an independent, fresh, identical control capture.
-        f.CommitAllowed = false;
-        var result = f.Backend.Execute(DomainPrimitive.FocusAmountField, f.Intent, () => {
-            Thread.Sleep(600); f.Capture(); return true;
-        });
-        Console.WriteLine($"rolling anchor reason={result.Reason}; commits={f.AttemptCommits}; raw={f.Raw.SendCallCount}");
-        Require(result.Reason == "DURABLE_ATTEMPT_NOT_ACKNOWLEDGED" && f.AttemptCommits == 1
-            && !result.SideEffectAttempted && f.Raw.SendCallCount == 0, "FRESH_IDENTICAL_CONTROL_MUST_REACH_ACK");
-        var changed = f.Backend.Execute(DomainPrimitive.FocusAmountField, f.Intent, () => {
-            f.Scope = f.Scope with { FactsRevision = 99 }; return true;
-        });
-        Require(!changed.SideEffectAttempted && f.AttemptCommits == 1, "CHANGED_REVISION_MUST_REJECT");
-        f.Scope = f.Scope with { FactsRevision = 4 };
-        var unqualified = f.Backend.Execute(DomainPrimitive.FocusAmountField, f.Intent, () => {
-            f.Scope = f.Scope with { SourceQualified = false }; return true;
-        });
-        Require(!unqualified.SideEffectAttempted && f.AttemptCommits == 1 && f.Raw.SendCallCount == 0,
-            "UNQUALIFIED_NEW_CAPTURE_MUST_REJECT");
-        Console.WriteLine("PASS rolling control freshness, changed revision and unqualified recapture; zero input");
     }
 
     public static void RunAckTimeoutDummy()

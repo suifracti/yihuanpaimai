@@ -933,7 +933,6 @@ public sealed class InputSafetyGuard : ISendInputTicketAuthority
                 // ticket lifetime AFTER it, directly at the commit boundary.
                 var commit = RunPrecheck("DOMAIN_COMMIT");
                 if (!commit.Passed) return commit.Reason;
-                if (TraceClock.NowNs() >= ticket.ExpiresNs) return InputSafetyReasons.TicketExpired;
             }
 
             if (!ticket.TryConsume()) return InputSafetyReasons.TicketReused;

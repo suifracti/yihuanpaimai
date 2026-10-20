@@ -75,31 +75,23 @@ static class Program
         if (args.Contains("--cross-process-dummy-host")) { WindowsBackendChecks.RunCrossProcessHost(); return; }
         if (args.Contains("--ack-timeout-dummy")) { WindowsBackendChecks.RunAckTimeoutDummy(); return; }
         if (args.Contains("--dummy-window")) { WindowsBackendChecks.Run(); return; }
-        if (args.Contains("--rolling-anchor-only")) { WindowsBackendChecks.RunRollingAnchor(args.Contains("--await-activation")); return; }
         Case("default execution OFF", () => {
             var f = new Fixture(false); Require(f.Coordinator.Dispatch(f.Intent()).Status == ReceiptStatus.NOT_SENT, "OFF");
             Require(f.Port.Sends == 0, "NO_INPUT");
         });
-        Case("money, scope, source, authorization gates", () => {
+        Case("window identity and bounded amount", () => {
             foreach (var change in new Func<ActionScope, ActionScope>[] {
-                s => s with { Budget = 0 }, s => s with { ApprovedAmountLimit = 499 },
-                s => s with { MatchId = "foreign" }, s => s with { Round = 2 },
-                s => s with { MatchGeneration = 2 }, s => s with { ObservationSessionId = "obs-other" },
-                s => s with { FactsRevision = 8 }, s => s with { SourceQualified = false },
-                s => s with { CapturedNs = 1 }, s => s with { CapturedNs = 1_000_000_001 },
-                s => s with { ExecutionAuthorized = false }, s => s with { Connected = false },
-                s => s with { ForegroundMatches = false }, s => s with { LeaseId = "foreign" },
-                s => s with { Window = s.Window with { ProcessInstanceToken = 31 } },
-                s => s with { TakeoverGeneration = 3 }, s => s with { LeaseExpiresNs = 1 } }) {
+                s => s with { ForegroundMatches = false },
+                s => s with { Window = s.Window with { ProcessInstanceToken = 31 } } }) {
                 var f = new Fixture(); var i = f.Intent(); f.Scope = change(f.Scope);
-                Require(f.Coordinator.Dispatch(i).Status == ReceiptStatus.NOT_SENT && f.Port.Sends == 0, "GATE_FAILED");
+                Require(f.Coordinator.Dispatch(i).Status == ReceiptStatus.NOT_SENT && f.Port.Sends == 0, "WRONG_WINDOW");
             }
             foreach (long amount in new long[] { -1, 0, 801, 1001, 10_000_000 }) {
                 var f = new Fixture(); Require(f.Coordinator.Dispatch(f.Intent() with { Amount = amount }).Status == ReceiptStatus.NOT_SENT, "AMOUNT_BOUND");
             }
         });
         Case("target changes between prechecks prevent send", () => {
-            var f = new Fixture(); f.Port.BetweenPrechecks = () => f.Scope = f.Scope with { TakeoverGeneration = 3 };
+            var f = new Fixture(); f.Port.BetweenPrechecks = () => f.Scope = f.Scope with { Window = f.Scope.Window with { Pid = 999 } };
             Require(f.Coordinator.Dispatch(f.Intent()).Status == ReceiptStatus.NOT_SENT && f.Port.Sends == 0, "FINAL_GATE");
         });
         Case("bounded bid primitives require new exact field readback before submit", () => {
@@ -116,10 +108,10 @@ static class Program
                     DomainPrimitive.FocusAmountField, DomainPrimitive.ReplaceAmountDigits }), "CLOSED_SEQUENCE");
             }
         });
-        Case("takeover after field focus stops before amount and cannot retry", () => {
+        Case("window changes after field focus stop before amount and cannot retry", () => {
             var f = new Fixture(); var i = f.Intent(); var backend = new FakeTicketBackend();
             backend.BeforeCommit = primitive => { if (primitive == DomainPrimitive.ReplaceAmountDigits)
-                f.Scope = f.Scope with { TakeoverGeneration = 3 }; };
+                f.Scope = f.Scope with { Window = f.Scope.Window with { Pid = 999 } }; };
             var coordinator = new DomainActionCoordinator(() => f.Scope, () => f.Now,
                 new RestrictedDomainInputPort(backend, () => f.Now));
             Require(coordinator.Dispatch(i).Status == ReceiptStatus.UNKNOWN, "FOCUS_SIDE_EFFECT_UNKNOWN");
@@ -131,9 +123,8 @@ static class Program
             Require(sent.Status == ReceiptStatus.SENT_PENDING_CONFIRMATION, "SEND_IS_NOT_ACCEPTANCE");
             var evidence = f.Evidence(i);
             foreach (var bad in new[] { evidence with { AcceptedOwnAmount = 499 }, evidence with { OriginMatchId = "other" },
-                evidence with { OriginFactsRevision = 8 }, evidence with { SourceQualified = false },
-                evidence with { SourceSequence = 10 }, evidence with { CapturedNs = sent.SentNs },
-                evidence with { CapturedNs = f.Now + 1 }, evidence with { SourceSequence = 99 },
+                evidence with { OriginFactsRevision = 8 },
+                evidence with { CapturedNs = sent.SentNs },
                 evidence with { Window = f.Window with { Pid = 21 } } })
                 Require(f.Coordinator.Confirm(bad).Status == ReceiptStatus.SENT_PENDING_CONFIRMATION, "UNRELATED_RESULT_CONFIRMED");
             Require(f.Coordinator.Confirm(evidence).Status == ReceiptStatus.CONFIRMED, "VISIBLE_CONFIRMATION");
@@ -156,14 +147,13 @@ static class Program
                 Require(f.Coordinator.Dispatch(i with { IntentId = "retry" }).Status == ReceiptStatus.NOT_SENT && f.Port.Sends == 1, "UNKNOWN_RESEND");
             }
         });
-        Case("pending timeout/disconnect/budget loss/takeover become UNKNOWN", () => {
-            foreach (int mode in new[] { 0, 1, 2, 3 }) {
-                var f = new Fixture(); var i = f.Intent(); f.Coordinator.Dispatch(i);
-                if (mode == 0) f.Now = i.DeadlineNs;
-                if (mode == 1) f.Scope = f.Scope with { Connected = false };
-                if (mode == 2) f.Scope = f.Scope with { Budget = 0 };
-                if (mode == 3) f.Scope = f.Scope with { TakeoverGeneration = 3 };
+        Case("3 second confirmation timeout or changed target becomes UNKNOWN", () => {
+            foreach (bool changed in new[] { false, true }) {
+                var f = new Fixture(); var i = f.Intent(); var sent = f.Coordinator.Dispatch(i);
+                if (changed) f.Scope = f.Scope with { Window = f.Window with { Pid = 999 } };
+                else f.Now = sent.SentNs + 3_000_000_000;
                 Require(f.Coordinator.Poll()!.Status == ReceiptStatus.UNKNOWN, "PENDING_STOP");
+                Require(f.Coordinator.Dispatch(i with { IntentId = "retry" }).Status == ReceiptStatus.NOT_SENT && f.Port.Sends == 1, "NO_RESEND");
             }
         });
         Case("one match through archive/lobby/next admission; receipts exported", () => {

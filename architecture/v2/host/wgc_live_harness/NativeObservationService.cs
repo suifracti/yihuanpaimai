@@ -355,7 +355,7 @@ internal static class NativeObservationService
                 domainDecoderLabel = sceneAnchorDispatch is null ? "SCENE_ANCHOR_UNAVAILABLE" : "SCENE_ANCHOR";
                 domainExecutionLabel = sceneAnchorDispatch is null ? "OFF" : "OPERATOR_GATE";
             }
-            NativeDomainFrame? CaptureDomainFrame()
+            NativeDomainFrame? CaptureDomainFrame(int waitMs = 2000)
             {
                 var requestNs = ProtocolClock.NowNs();
                 lastDomainRequestNs = requestNs;
@@ -364,9 +364,8 @@ internal static class NativeObservationService
                 CapturedBgraFrame original;
                 try
                 {
-                    original = WgcDomainCaptureAdapter.CaptureForInput(
-                        (waitMs, requestedNs, deadlineNs) => capture.CaptureAfterRequest(waitMs, requestedNs, deadlineNs,
-                            () => stop.IsCancellationRequested), requestNs, requestNs + 2_000_000_000, ProtocolClock.NowNs);
+                    original = capture.CaptureAfterRequest(waitMs, requestNs, requestNs + waitMs * 1_000_000L,
+                        () => stop.IsCancellationRequested, forAction: true);
                 }
                 catch (Exception ex) { lastDomainCaptureStage = "CAPTURE_EXCEPTION:" + ex.GetType().Name; return null; }
                 lastDomainCapture = original;
@@ -464,10 +463,11 @@ internal static class NativeObservationService
                 {
                     try
                     {
-                        var domainFrame = CaptureDomainFrame();
-                        if (domainFrame is not null) sceneAnchorDispatch.Observe(domainFrame);
+                        var domainFrame = CaptureDomainFrame(Math.Min(250, sceneAnchorDispatch.ConfirmationWaitMs));
+                        sceneAnchorDispatch.Observe(domainFrame);
                     }
-                    catch { }
+                    catch { sceneAnchorDispatch.Observe(null); }
+                    if (sceneAnchorDispatch.AwaitingVisibleResult) continue;
                 }
                 if (capture.PendingOrdinaryExpiry is { } ownerDiscard) ordinaryRecovery.Begin(ownerDiscard);
                 // Admit queued SOURCE/wheel commands only after the next
@@ -1203,8 +1203,8 @@ internal static class NativeObservationService
         var geometry = ReadDomainClientGeometry(owner.TargetHwnd, frame.Width, frame.Height);
         if (geometry is null) return null;
 
-        // Read-only observation has no approved amount, action lease, focused
-        // input epoch, or connected game decoder. Those gates remain closed.
+        // This is only the target's captured image. Approved amounts and
+        // business facts are not inferred from capture success.
         var window = new WindowBinding(owner.TargetHwnd, owner.TargetPid,
             identity.ProcessInstanceToken, FocusEpoch: 0);
         var scope = new ActionScope(matchId, (int?)currentMatch?["roundNo"] ?? 0,
