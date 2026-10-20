@@ -253,6 +253,12 @@ jobs:
           "Native Main/Solver/HUD consumer contract: $status" | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Append -Encoding utf8
           if ($status -ne 'PASS') { exit 1 }
 
+      - name: Run live rule footer and saved box wiring contracts
+        shell: pwsh
+        run: |
+          python tools/run_tests.py test_live_rule_footer.LiveRuleFooterTests.test_fast_path_reads_rule_line_with_box_without_canvas test_live_rule_footer.LiveRuleFooterTests.test_run_u_box_mapping_is_present_rule_is_the_actual_missing_input --output build/ci-live-rule-footer.json
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
       - name: Run Main bridge and raw PARTIAL page contracts
         id: native-raw-archive-main
         if: steps.install-python-deps.outcome == 'success'
@@ -680,7 +686,7 @@ jobs:
           $output = dotnet run --project tests/native_domain_actions/domain-actions.csproj -- --ack-timeout-dummy 2>&1
           $testExitCode = $LASTEXITCODE
           $output | Write-Output
-          $summaryLine = @($output | Where-Object { $_ -match '^PASS Main ACK timeout blocks first primitive and receipt projection$' })
+          $summaryLine = @($output | Where-Object { $_ -match '^PASS Main ACK timeout blocks confirmation and exposes only a stop notice$' })
           if ($testExitCode -ne 0 -or $summaryLine.Count -ne 1) { $status = 'FAIL' }
           else { $status = 'PASS (zero dummy input without Main ACK)' }
           "Main ACK timeout gate: $status" | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Append -Encoding utf8

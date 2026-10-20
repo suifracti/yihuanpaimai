@@ -1249,6 +1249,9 @@ class NTEVisionPipeline:
             # The broad canvas is deliberately skipped on confirmed live
             # rounds. Read the stable box footer in the same numeric batch.
             priority_crops.append(frame[int(h * .917):int(h * .963), int(w * .38):int(w * .66)])
+            # The live fast path skips the canvas containing the rule label.
+            # Read its own line too; a known box does not imply a standard game.
+            priority_crops.append(frame[int(h * .86):int(h * .90), int(w * .47):int(w * .55)])
 
             valid_crop_indices = [i for i, crop in enumerate(priority_crops) if getattr(crop, "size", 0) > 0]
             valid_crops = [priority_crops[i] for i in valid_crop_indices]
@@ -1282,6 +1285,11 @@ class NTEVisionPipeline:
                     aligned_results[crop_index] = result
 
             footer = aligned_results[5]
+            rule_footer = aligned_results[6]
+            if round_title_confirmed and rule_footer and float(rule_footer[1] or 0) >= .85:
+                rule = extract_from_text(str(rule_footer[0] or "")).get("fieldCondition")
+                if rule and rule != "unknown":
+                    self.current_context["fieldCondition"] = rule
             if round_title_confirmed and footer and float(footer[1] or 0) >= .85:
                 from venue_box_catalog import load_catalog, normalize_venue_from_box
                 footer_text = str(footer[0] or "").strip()

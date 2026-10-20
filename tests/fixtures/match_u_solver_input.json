@@ -1,0 +1,18 @@
+{
+  "source": "run-u saved engine state and latest-business-frame.bmp; ordinary diagnostic image, not SOURCE",
+  "imageSha256": "b194336d58cecb9731d263745eaa5dde43193ec31a1666b2dcaaf7f26c1c90b6",
+  "rawBoxObservation": "皮制宝箱（高级藏品概率提升）",
+  "facts": {
+    "id": "draft_1d80d911803646fb93a77ae1559af2a9",
+    "venueId": "venue-shanhu",
+    "venue": "中级场 · 珊瑚场",
+    "boxId": "box-shanhu-leather",
+    "box": "皮制宝箱",
+    "entryCost": 5000,
+    "q": 26,
+    "goldAvg": 49228,
+    "roundNo": 3,
+    "fieldCondition": null
+  },
+  "funds": 2656178
+}
