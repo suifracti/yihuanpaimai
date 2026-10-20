@@ -213,6 +213,21 @@ class BidIntentContract(unittest.TestCase):
         self.assertEqual(value['source']['producer']['solverName'], 'auction_engine_v06')
         self.assertFalse(value['executionEnabled'])
 
+    def test_actual_solver_gold_total_does_not_require_an_invented_average(self):
+        script = """const e=require('./core/auction_engine_v06.js');
+        const ctx={matchId:'m1',round:2,q:9,goldTotal:e.GOLD_ITEMS[0][1],venue:'shanhu',fieldCondition:'standard',
+          costs:{entry:5000,sunkCost:5000,futureIncrementalCost:7000},targetProfit:30000};
+        const r=e.solveAuctionPipeline(ctx,[]);
+        const bad=e.solveAuctionPipeline({...ctx,avg:1},[]);
+        process.stdout.write(JSON.stringify({predictionSnapshot:r.predictionSnapshot,frozenPrediction:r.frozenPrediction,
+          conflicting:bad.solverStatus}));"""
+        solved=json.loads(subprocess.check_output(['node','-e',script],cwd=ROOT,text=True,encoding='utf8'))
+        facts=solved['predictionSnapshot']['input']['normalizedFacts']
+        self.assertNotIn('goldAvg',facts)
+        self.assertGreater(facts['goldTotal'],0)
+        self.assertEqual(solved['conflicting'],'no-match')
+        self.assertEqual(intent(dict(current(),**solved),amount=1000)['status'],'READY')
+
 
 if __name__ == '__main__':
     unittest.main()

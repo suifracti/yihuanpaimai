@@ -688,6 +688,7 @@
 
     const q = Number(ctx.q) || 0;
     const avg = Number(ctx.avg ?? ctx.goldAvg) || 0;
+    const goldTotal = ctx.goldTotal == null || ctx.goldTotal === "" ? null : Number(ctx.goldTotal);
     const rounding = ctx.roundingMode || "floor";
     const gridInput = ctx.publicInfo?.goldGrid ?? ctx.goldGrid;
     const totalInput = ctx.publicInfo?.totalGrid ?? ctx.totalGrid ?? ctx.totalGrids;
@@ -822,7 +823,9 @@
     const redGroups = ctx.knownRedGroups || (ctx.knownRed ? parseFlexibleKnown(ctx.knownRed, redItems, "红色").groups : []);
 
     const states = [];
-    if (!q || !avg) return { states: [], solverStatus: "incomplete", candidateGs: [], candidatePs: [] };
+    if (goldTotal !== null && (!Number.isFinite(goldTotal) || goldTotal <= 0))
+      return { states: [], solverStatus: "no-match", candidateGs: [], candidatePs: [] };
+    if (!q || (!avg && goldTotal === null)) return { states: [], solverStatus: "incomplete", candidateGs: [], candidatePs: [] };
 
     const minGoldKnown = goldGroups.reduce((s, g) => s + (g[1] || 0), 0);
     const minGold = Math.max(minGoldKnown, Number(ctx.minGold) || 0);
@@ -900,7 +903,11 @@
         if (R < minRed) continue;
         if (explicitR !== null && R !== explicitR) continue;
 
-        const b = bounds(avg, G, rounding);
+        // A revealed total is already an exact sum; do not invent an average
+        // or a gold count. If both clues exist, retain their intersection.
+        const b = avg ? bounds(avg, G, rounding) : [goldTotal, goldTotal];
+        if (goldTotal !== null) { b[0] = Math.max(b[0], goldTotal); b[1] = Math.min(b[1], goldTotal); }
+        if (b[0] > b[1]) continue;
         const remainingG = G - seed.length;
         if (remainingG < 0) continue;
         if (reachableGoldAreas && !reachableGoldAreas[0][remainingG].has(goldGrid - seedGrid)) continue;
@@ -2351,7 +2358,8 @@
     const weakPrior = weakValuePriorV06(ctx, records);
 
     const sparkleLimited = conditionRules(ctx).sparkleEvidenceOnly === true;
-    if (!q || !avg || sparkleLimited) {
+    const hasGoldTotal = Number.isFinite(Number(ctx.goldTotal)) && Number(ctx.goldTotal) > 0;
+    if (!q || (!avg && !hasGoldTotal) || sparkleLimited) {
       const fallbackWorking = {
         ...(sparkleLimited ? {evidenceBounds:sparkleEvidenceBounds(ctx)} : {}),
         center: null,
