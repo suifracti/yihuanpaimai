@@ -15,7 +15,9 @@ def advance(state, view, send, config):
             state.update(phase='stopped',reason='INSTRUMENT_'+str(receipt.get('reason') or receipt['status']),resendAllowed=False)
             return False
     if scene not in SCENES:
-        if stock.get('ready') and scene in {'AUCTION','AUCTION_READY','INSTRUMENT_LIST','INSTRUMENT_GOLD_SELECTED','SETTLEMENT'}:
+        if stock.get('ready') and (scene == 'SETTLEMENT' or
+                (scene in {'AUCTION','AUCTION_READY','INSTRUMENT_LIST','INSTRUMENT_GOLD_SELECTED'}
+                 and (view.get('engine') or {}).get('round', 0) >= 1)):
             stock['leftLobby'] = True
         return stock.get('ready') is True
     if stock.get('leftLobby'):

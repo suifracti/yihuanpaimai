@@ -3,6 +3,23 @@ from instrument_restock import advance
 
 
 class InstrumentRestockTests(unittest.TestCase):
+    def test_entry_confirmation_animation_does_not_restart_preflight(self):
+        state={'phase':'idle','restock':{'ready':True,'step':4,'spent':5000}}
+        sent=[]
+        send=lambda _,e:sent.append(e) or True
+        transient=self.view('AUCTION')
+        transient['engine']['round']=0
+        self.assertTrue(advance(state,transient,send,{}))
+        self.assertTrue(advance(state,self.view('LOBBY'),send,{}))
+        self.assertTrue(state['restock']['ready'])
+        self.assertFalse(state['restock'].get('leftLobby',False))
+        self.assertEqual(sent,[])
+        actual=self.view('AUCTION')
+        actual['engine']['round']=1
+        advance(state,actual,send,{})
+        advance(state,self.view('LOBBY'),send,{})
+        self.assertEqual(sent[-1]['intent']['kind'],'OpenToolSetup')
+
     def test_default_group_browse_select_then_stock_and_close(self):
         state, sent = {'phase':'idle'}, []
         send=lambda _,e:sent.append(e['intent']) or True
