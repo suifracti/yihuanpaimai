@@ -212,6 +212,11 @@ public sealed class SceneAnchorGameDecoder : IGameDomainFrameDecoder
             found.Add((new(DomainPrimitive.FocusAmountField, "", default, default), x, y, w, h));
         else
             found.Add((new(DomainPrimitive.FocusAmountField, "", default, default), left, top, width, height));
+        // Replacing digits is a named keyboard primitive on this same field.
+        // It needs a bound control too; otherwise every real bid stops after focus.
+        var field = found[^1];
+        found.Add((new(DomainPrimitive.ReplaceAmountDigits, "", default, default),
+            field.Left, field.Top, field.Width, field.Height));
     }
 
     static long? ReadSample(AmountSample sample, NativeDomainFrame frame, int x, int y, int w, int h)

@@ -11,6 +11,21 @@ sys.path[:0] = [str(ROOT / 'app'), str(ROOT / 'core')]
 
 
 class AutoRunWindowTests(unittest.TestCase):
+    def test_unadmitted_unknown_bid_still_stops_and_restores_without_becoming_a_fact(self):
+        import main
+        form=SimpleNamespace(finish_game_input=mock.Mock())
+        receipt=dict(kind='Bid',intentId='one',observationSessionId='obs',status='UNKNOWN',
+            matchId='match',matchGeneration=1,reason='CONTROL_NOT_FOUND')
+        with mock.patch.multiple(main,_LIVE_DOMAIN_LOOP={'phase':'bid_dispatched','bidIntentId':'one'},
+                _MAIN_WINDOW_HOLDER=[form],LATEST_PAYLOAD={},WS_EVENT_LOOP=None,
+                _NATIVE_EXPECTED_SESSION='obs',_NATIVE_OBSERVATION_SESSION='obs',
+                CURRENT_MATCH=SimpleNamespace(id='match',_seq=1),_NATIVE_DURABLE_BID_OBLIGATION_OWNER=None):
+            self.assertIsNone(main._native_domain_action_receipt_event(dict(type='domain.action.receipt',
+                receiptChannel='bid',observationSessionId='obs',receipt=receipt)))
+            self.assertEqual(main._LIVE_DOMAIN_LOOP['phase'],'stopped')
+            self.assertNotIn('bidActionReceipt',main.LATEST_PAYLOAD)
+            form.finish_game_input.assert_called_once_with('CONTROL_NOT_FOUND')
+
     def test_attach_during_auction_does_not_invent_stock_or_require_lobby_again(self):
         import main
         form=SimpleNamespace(prepare_game_input=mock.Mock(return_value=True))

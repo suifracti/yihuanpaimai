@@ -95,6 +95,14 @@ static class Program
                     Console.WriteLine("OCR "+read.Invoke(null,new object[]{(ReadOnlyMemory<byte>)pixels,w,h,w*4,box[0],box[1],box[2],box[3]}));
             }
             Require(v?.Scene==row.GetProperty("scene").GetString(),"STOCK_SCENE");
+            if(row.TryGetProperty("replaceAnchor",out var replace) && replace.GetBoolean()) {
+                var frame=new NativeDomainFrame(scope,new(w,h,0,0),pixels,w*4);
+                var intent=new DomainIntent("bind-only",DomainActionKind.Bid,scope.MatchId,scope.Round,0,442779,
+                    1000000,long.MaxValue,0,"lobby",scope.Window) {MatchGeneration=1,ObservationSessionId="test"};
+                var controls=new CapturedDomainControlEvidence(()=>frame,decoder);
+                Require(controls.Locate(DomainPrimitive.ReplaceAmountDigits,intent) is not null,"REAL_KEYPAD_REPLACE_ANCHOR_MISSING");
+                Console.WriteLine("PASS saved real keypad supplies the replace primitive anchor; no input sent");
+            }
             if(row.TryGetProperty("gold",out var g)) Require(v?.Instruments?.GoldAverage==g.GetInt32(),"GOLD_STOCK");
             if(row.TryGetProperty("cost",out var c)) Require(v?.Instruments?.RefillCost==c.GetInt64(),"REFILL_COST");
             if(row.TryGetProperty("refillFundsBefore",out var before)) {

@@ -3029,6 +3029,12 @@ def _native_domain_action_receipt_event(event: Dict[str, Any]) -> Optional[Dict[
             or channel != ("bid" if kind == "Bid" else "preparation" if preparation else "session")):
         return None
 
+    state = globals().get('_LIVE_DOMAIN_LOOP') or {}
+    if (kind == 'Bid' and receipt.get('status') in {'UNKNOWN', 'NOT_SENT'}
+            and receipt['intentId'] == state.get('bidIntentId')):
+        # Stop is independent of admitting a receipt as a committed bid fact.
+        _stop_authorized_live_domain_loop(str(receipt.get('reason') or receipt['status']))
+
     with _MANUAL_STATE_LOCK:
         if kind == "Bid":
             if (receipt.get("matchId") != CURRENT_MATCH.id
@@ -3146,7 +3152,8 @@ def _stop_authorized_live_domain_loop(reason: str) -> None:
     state = globals().get('_LIVE_DOMAIN_LOOP')
     if state is None:
         return
-    if state.get('phase') != 'stopped':
+    changed = state.get('phase') != 'stopped'
+    if changed:
         state.update(phase='stopped', reason=reason)
     reason = str(state.get('reason') or reason)
     from domain_action_session import live_domain_loop_public
@@ -3154,6 +3161,11 @@ def _stop_authorized_live_domain_loop(reason: str) -> None:
     holder = globals().get('_MAIN_WINDOW_HOLDER') or []
     if holder:
         holder[0].finish_game_input(reason)
+    loop = WS_EVENT_LOOP
+    if changed and loop is not None and loop.is_running():
+        asyncio.run_coroutine_threadsafe(broadcast_ws(json.dumps({
+            'type':'live_domain_loop_stopped','liveDomainLoop':LATEST_PAYLOAD['liveDomainLoop']
+        },ensure_ascii=False)),loop)
 
 
 def _advance_authorized_live_domain_loop(data: Dict[str, Any], frame: Dict[str, Any]) -> None:
