@@ -614,9 +614,9 @@ jobs:
           $output = dotnet run --project tests/native_domain_actions/domain-actions.csproj -- $workflowPath 2>&1
           $testExitCode = $LASTEXITCODE
           $output | Write-Output
-          $summaryLine = @($output | Where-Object { $_ -match '^PASS 11 scenarios \(fake input only\)$' })
+          $summaryLine = @($output | Where-Object { $_ -match '^PASS 13 scenarios \(fake input only\)$' })
           if ($testExitCode -ne 0 -or $summaryLine.Count -ne 1 -or -not (Test-Path $workflowPath)) { $status = 'FAIL' }
-          else { $status = 'PASS (11 scenarios)' }
+          else { $status = 'PASS (13 scenarios)' }
           "status=$status" | Out-File -FilePath $env:GITHUB_OUTPUT -Append -Encoding utf8
           "Native domain action harness: $status" | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Append -Encoding utf8
           if ($testExitCode -ne 0 -or $status -eq 'FAIL') { exit 1 }

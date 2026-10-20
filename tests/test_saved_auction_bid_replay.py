@@ -38,11 +38,13 @@ class SavedAuctionBidReplay(unittest.TestCase):
     def view(self, directory):
         ns, _, _ = _isolated_main()
         ns['time'].time = lambda: 1000
+        ns['math'] = math
         ns['_NATIVE_DOMAIN_ACTION_BOOT_ID'] = 'offline-replay'
         ns['_game_is_foreground'] = lambda _: True
         facts = self.fixture['facts']
         data = dict(self.context, sourceMatchGeneration=1, factsRevision=100,
                     observationSessionId='offline-match12', observationStatus='FRAME',
+                    timer=30, domainObservation={'readbackNs': ns['time'].monotonic_ns()}, # synthetic transport timer
                     target={'targetHwnd': 10, 'targetPid': 20, 'identity': {'ProcessInstanceToken': 30}},
                     predictionSnapshot=self.meta.get('predictionSnapshot'),
                     frozenPrediction=self.meta.get('frozenPrediction'))
