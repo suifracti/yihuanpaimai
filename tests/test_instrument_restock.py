@@ -62,6 +62,16 @@ class InstrumentRestockTests(unittest.TestCase):
         self.assertEqual(state['restock']['spent'],5000)
         self.assertEqual(sum(i['kind']=='ConfirmToolRefill' for i in sent),1)
 
+    def test_reopened_group_list_can_navigate_once_again_after_purchase(self):
+        pending=dict(intentId='reopen',kind='OpenToolSetup',matchId='lobby-obs',matchGeneration=1,
+            observationSessionId='obs',round=0)
+        state={'phase':'restocking','restock':{'pending':pending,'browsed':True,'step':4,'spent':5000}}
+        sent=[]
+        advance(state,self.view('TOOL_GROUPS',preparationReceipt=dict(pending,status='CONFIRMED')),
+                lambda _,e:sent.append(e) or True,{})
+        self.assertEqual(sent[-1]['intent']['kind'],'BrowseToolGroups')
+        self.assertEqual(state['restock']['spent'],5000)
+
     def view(self, scene='LOBBY', **extra):
         return dict(publishedScene=scene, currentFunds=200000, foreground=True,
             engine=dict(matchId='old', matchGeneration=3, round=1, factsRevision=0, observationSessionId='obs'),

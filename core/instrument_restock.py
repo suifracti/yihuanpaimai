@@ -54,6 +54,8 @@ def advance(state, view, send, config):
         if status != 'CONFIRMED':
             return False
         stock.pop('pending')
+        if pending['kind'] == 'OpenToolSetup':
+            stock.pop('browsed', None)  # Each reopened list starts at its first group.
         if pending['kind'] == 'ConfirmToolRefill':
             stock['spent'] += pending['amount']
         if pending['kind'] == 'CloseToolSetup':
