@@ -11,6 +11,14 @@ from live_shadow import _profile_cache_key, _solver_ctx
 class PredictionIsolationTests(unittest.TestCase):
     def test_solver_request_keeps_match_identity_for_result_binding(self):
         self.assertEqual(_solver_ctx({"id": "current"})["matchId"], "current")
+
+    def test_profit_policy_changes_cannot_reuse_a_previous_bid_snapshot(self):
+        context = {"matchId": "current", "q": 22, "goldAvg": 29739, "round": 1}
+        base = _profile_cache_key(context, 0)
+        for key, value in (("targetProfit", 0), ("targetProfit", 30000), ("targetROI", 0.2)):
+            changed = dict(context, **{key: value})
+            self.assertNotEqual(base, _profile_cache_key(changed, 0))
+            self.assertEqual(_solver_ctx(changed)[key], value)
     def test_new_match_frozen_only_cannot_inherit_previous_snapshot(self):
         holder = ActivePredictionSnapshotHolder()
         holder.update("first", {"matchId": "first", "forecast": {"value": 10}})

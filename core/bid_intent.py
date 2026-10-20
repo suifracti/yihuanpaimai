@@ -135,7 +135,11 @@ def build_bid_intent(event, current, *, now_ms, deadline_ms, requested_bid=None)
         return reject('COST_OR_POLICY_UNKNOWN', 'UNKNOWN')
     forecast = snap.get('forecast') or {}
     mode = (snap.get('mode') or {}).get('informationMode')
-    if mode == 'structural_only' and forecast.get('scope') == 'structural_inventory':
+    structural = forecast.get('structural') or {}
+    has_all_state_floor = (mode == 'partial_shadow'
+                          and forecast.get('scope') == 'partial_inventory_conditional'
+                          and structural.get('scope') == 'all_feasible_inventory_states')
+    if (mode == 'structural_only' and forecast.get('scope') == 'structural_inventory') or has_all_state_floor:
         bounds = (forecast.get('structural') or {}).get('feasibleRange')
         if not isinstance(bounds, list) or len(bounds) != 2 or not all(money(v) for v in bounds) or bounds[0] > bounds[1]:
             return reject('STRUCTURAL_BOUNDS_UNKNOWN', 'UNKNOWN')

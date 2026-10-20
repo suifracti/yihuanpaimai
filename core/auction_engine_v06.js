@@ -2244,6 +2244,21 @@
       diagnosticOnly
     };
 
+    // A partial historical distribution does not erase the independently
+    // computed bounds across ALL feasible states. Export those existing bounds
+    // separately; they are not quantiles of the partial distribution.
+    const sCenter = Number.isFinite(Number(formalValue?.ev)) ? Number(formalValue.ev) : (Number.isFinite(Number(dec?.structuralCenter)) ? Number(dec.structuralCenter) : null);
+    const sMin = Number.isFinite(Number(formalValue?.candidateBounds?.min)) ? Number(formalValue.candidateBounds.min) : (Number.isFinite(Number(dec?.candidateBoundsMin)) ? Number(dec.candidateBoundsMin) : null);
+    const sMax = Number.isFinite(Number(formalValue?.candidateBounds?.max)) ? Number(formalValue.candidateBounds.max) : (Number.isFinite(Number(dec?.candidateBoundsMax)) ? Number(dec.candidateBoundsMax) : null);
+    const sRefBid = Number.isFinite(Number(dec?.structuralReferenceBid)) ? Number(dec.structuralReferenceBid) : null;
+    const structural = {
+      scope: "all_feasible_inventory_states",
+      center: sCenter,
+      feasibleRange: (sMin !== null && sMax !== null) ? [sMin, sMax] : null,
+      candidateBoundsMin: sMin,
+      candidateBoundsMax: sMax,
+      recommendedMax: sRefBid
+    };
     let forecast;
     if (infoMode === "full_shadow") {
       const p20 = Number(rawShadow?.p20 ?? dec.valueP20 ?? formalValue.p20 ?? 0);
@@ -2258,24 +2273,15 @@
       forecast = {
         target: "partial_inventory_conditional_total",
         scope: "partial_inventory_conditional",
-        quantiles: null
+        quantiles: null,
+        structural
       };
     } else {
-      const sCenter = Number.isFinite(Number(formalValue?.ev)) ? Number(formalValue.ev) : (Number.isFinite(Number(dec?.structuralCenter)) ? Number(dec.structuralCenter) : null);
-      const sMin = Number.isFinite(Number(formalValue?.candidateBounds?.min)) ? Number(formalValue.candidateBounds.min) : (Number.isFinite(Number(dec?.candidateBoundsMin)) ? Number(dec.candidateBoundsMin) : null);
-      const sMax = Number.isFinite(Number(formalValue?.candidateBounds?.max)) ? Number(formalValue.candidateBounds.max) : (Number.isFinite(Number(dec?.candidateBoundsMax)) ? Number(dec.candidateBoundsMax) : null);
-      const sRefBid = Number.isFinite(Number(dec?.structuralReferenceBid)) ? Number(dec.structuralReferenceBid) : null;
       forecast = {
         target: "structural_feasible_range",
         scope: "structural_inventory",
         quantiles: null,
-        structural: {
-          center: sCenter,
-          feasibleRange: (sMin !== null && sMax !== null) ? [sMin, sMax] : null,
-          candidateBoundsMin: sMin,
-          candidateBoundsMax: sMax,
-          recommendedMax: sRefBid
-        }
+        structural
       };
     }
 

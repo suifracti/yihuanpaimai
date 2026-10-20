@@ -3169,7 +3169,7 @@ def _advance_authorized_live_domain_loop(data: Dict[str, Any], frame: Dict[str, 
             bridge = NATIVE_OBSERVATION_BRIDGE
             return bool(bridge is not None and bridge.running and bridge.send_control(envelope))
 
-        before = _LIVE_DOMAIN_LOOP.get("phase")
+        before = (_LIVE_DOMAIN_LOOP.get("phase"), _LIVE_DOMAIN_LOOP.get("reason"))
         _LIVE_DOMAIN_LOOP = advance_live_domain_loop(_LIVE_DOMAIN_LOOP, view, send)
         public = live_domain_loop_public(_LIVE_DOMAIN_LOOP)
         with _MANUAL_STATE_LOCK:
@@ -3178,7 +3178,7 @@ def _advance_authorized_live_domain_loop(data: Dict[str, Any], frame: Dict[str, 
             if isinstance(current, dict):
                 current["liveDomainLoop"] = public
             LATEST_PAYLOAD["liveDomainLoop"] = public
-        if _LIVE_DOMAIN_LOOP.get("phase") != before:
+        if (_LIVE_DOMAIN_LOOP.get("phase"), _LIVE_DOMAIN_LOOP.get("reason")) != before:
             _record_live_domain_loop(public, view)
     except Exception as exc:
         log_stage("PRESENTATION:NATIVE", f"live domain loop failed: {type(exc).__name__}: {exc}")

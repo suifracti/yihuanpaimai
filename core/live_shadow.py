@@ -362,6 +362,8 @@ def _profile_cache_key(ctx: Dict[str, Any], history_gen: int) -> str:
         "knownRed": ctx.get("knownRed") or [],
         "playedAt": ctx.get("playedAt"),
         "costs": ctx.get("costs"),
+        "targetProfit": ctx.get("targetProfit"),
+        "targetROI": ctx.get("targetROI"),
         **_profile_detail_context(ctx),
         "roundingMode": ctx.get("roundingMode") or "floor",
         "matchGeneration": ctx.get("matchGeneration") or 0,
@@ -393,6 +395,9 @@ def _solver_ctx(ctx: Dict[str, Any], records: Optional[List[Dict[str, Any]]] = N
     return {
         "matchId": ctx.get("matchId") or ctx.get("id"),
         "playedAt": ctx.get("playedAt"),
+        "round": ctx.get("round") if ctx.get("round") is not None else ctx.get("roundNo"),
+        "targetProfit": ctx.get("targetProfit"),
+        "targetROI": ctx.get("targetROI"),
         "venue": ctx.get("lobbyVenue") or ctx.get("venue") or "未知场地",
         "box": ctx.get("box") or "未知箱型",
         "fieldCondition": ctx.get("fieldCondition") or "unknown",

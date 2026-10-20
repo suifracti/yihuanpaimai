@@ -1,0 +1,33 @@
+{
+  "provenance": {
+    "sources": [
+      {
+        "path": "build/native-observation/session-c057e8435068498f89370f33b54a58b5/latest-settlement-state.json",
+        "sha256": "26fba4f4775d5335727bf93f5a0744bfa68afd885983d105f41d36e82e18606b"
+      },
+      {
+        "path": "build/goal-20261019-c/match-12/panel-open.jpg",
+        "sha256": "15bc6ec0dd6f3f08f42805913de63fe0f180bba29ae54d4d6ca565c435c12244"
+      },
+      {
+        "path": "build/goal-20261019-c/match-12/watch.log",
+        "sha256": "45d6d08132f9acfd84dac7ab3380402d5c5c2c926c7a238509296f09c1e82d7e"
+      }
+    ],
+    "note": "Private match-12 retained facts. Q22, goldAvg29739, totalGrid98 and round1 are visible before settlement. This is a Solver input replay, not a qualified FRAME replay. Funds2524575 from panel-open.jpg. Transport, authorization and clocks in test are synthetic; no game input."
+  },
+  "facts": {
+    "id": "replayfile_adf74541fe20d2939a7d",
+    "venueId": "venue-shanhu",
+    "venue": "中级场 · 珊瑚场",
+    "boxId": "box-shanhu-mechanical",
+    "box": "机械宝箱",
+    "fieldCondition": "standard",
+    "entryCost": 5000,
+    "q": 22,
+    "goldAvg": 29739,
+    "roundNo": 1,
+    "totalGrid": 98
+  },
+  "funds": 2524575
+}

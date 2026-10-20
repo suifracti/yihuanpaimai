@@ -534,7 +534,8 @@ def _dispatch_live_bid(state, view, send):
     suggestion = solver_suggestion(proposal)
     amount = None if suggestion is None else capped_send_amount(suggestion, view.get("configuredCap"), funds)
     if amount is None:
-        state["reason"] = "FUND_CAP_BLOCKS_SEND" if suggestion is not None else "NO_SOLVER_SUGGESTION"
+        state["reason"] = ("FUND_CAP_BLOCKS_SEND" if suggestion is not None else
+                           next(iter(proposal.get("prohibitions") or []), "NO_SOLVER_SUGGESTION"))
         return state
     if proposal.get("binding") != {key: engine[key] for key in
                                    ("matchId", "matchGeneration", "observationSessionId", "round", "factsRevision")}:
