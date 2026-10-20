@@ -102,13 +102,10 @@ public sealed class WindowsTicketedDomainBackend : ITicketedDomainBackend
                 catch { return new(false, false, "DURABLE_ATTEMPT_COMMIT_FAILED"); }
                 committed.Add(intent.IntentId, intent);
             }
-            InputAction action;
-            if (primitive == DomainPrimitive.ReplaceAmountDigits)
-                action = InputAction.DomainAmount(intent.Amount!.Value, SafeValid);
-            else
+            PortOutcome Click(VisibleControlAnchor control, Func<bool> valid)
             {
-                int x = anchor.Geometry.ScreenX + anchor.Left + anchor.Width / 2;
-                int y = anchor.Geometry.ScreenY + anchor.Top + anchor.Height / 2;
+                int x = control.Geometry.ScreenX + control.Left + control.Width / 2;
+                int y = control.Geometry.ScreenY + control.Top + control.Height / 2;
                 int vx = GetSystemMetrics(76), vy = GetSystemMetrics(77), vw = GetSystemMetrics(78), vh = GetSystemMetrics(79);
                 if (vw <= 1 || vh <= 1 || x < vx || y < vy || x >= vx + vw || y >= vy + vh)
                     return new(false, false, "CONTROL_OUTSIDE_VIRTUAL_DESKTOP");
@@ -116,14 +113,58 @@ public sealed class WindowsTicketedDomainBackend : ITicketedDomainBackend
                 // the exact pixel, including negative monitor coordinates.
                 int ax = (int)(((long)(x - vx) * 65536 + 32768) / vw);
                 int ay = (int)(((long)(y - vy) * 65536 + 32768) / vh);
-                action = InputAction.DomainClick(x, y, ax, ay, SafeValid);
+                var sent = guard.Execute(InputAction.DomainClick(x, y, ax, ay, valid));
+                return new(sent.SendCallCount > 0, sent.Ok, sent.Reason);
             }
-            var result = guard.Execute(action);
-            if (result.SendCallCount > 0) attemptedPrimitives.Add((intent.IntentId, primitive));
-            if (primitive == DomainPrimitive.ReplaceAmountDigits && result.SendCallCount > 0)
+            bool gameKeypad = anchor.ControlProfile == SceneAnchorGameDecoder.VerifiedGameProfile;
+            // This game's amount panel is already a keypad, not a Windows edit.
+            // Do not click a guessed "focus" point or type Ctrl+A into it.
+            if (gameKeypad && primitive == DomainPrimitive.FocusAmountField)
+            {
+                attemptedPrimitives.Add((intent.IntentId, primitive));
+                return new(false, true, "KEYPAD_ALREADY_OPEN");
+            }
+            PortOutcome result;
+            if (gameKeypad && primitive == DomainPrimitive.ReplaceAmountDigits)
+                result = ReplaceOnKeypad(intent.Amount!.Value, key =>
+                {
+                    var control = evidence.Locate(key, intent);
+                    if (control is null || !AnchorMatches(control, key, intent))
+                        return new(false, false, "KEYPAD_CONTROL_UNAVAILABLE:" + key);
+                    bool KeyCurrent() => SafeValid() && PlatformMatches(control, intent);
+                    if (!KeyCurrent()) return new(false, false, "KEYPAD_TARGET_CHANGED");
+                    return Click(control, KeyCurrent);
+                });
+            else if (primitive == DomainPrimitive.ReplaceAmountDigits)
+            {
+                var sent = guard.Execute(InputAction.DomainAmount(intent.Amount!.Value, SafeValid));
+                result = new(sent.SendCallCount > 0, sent.Ok, sent.Reason);
+            }
+            else result = Click(anchor, SafeValid);
+            if (result.SideEffectAttempted) attemptedPrimitives.Add((intent.IntentId, primitive));
+            if (primitive == DomainPrimitive.ReplaceAmountDigits && result.SideEffectAttempted)
             { lastAmountMutationNs = clock(); amountIntent = intent; amountVerified = false; amountCurrent = SafeValid; }
-            return new(result.SendCallCount > 0, result.Ok, result.Reason);
+            return result;
         }
+    }
+
+    // One Clear followed by the exact bounded digits, including repeated digits.
+    // Each step owns its normal one-use input ticket; no retry after any failure.
+    public static PortOutcome ReplaceOnKeypad(long amount, Func<DomainPrimitive, PortOutcome> click)
+    {
+        if (amount is not (> 0 and <= 9_999_999)) return new(false, false, "INVALID_AMOUNT");
+        bool attempted = false;
+        var keys = new[] { DomainPrimitive.ClearAmount }.Concat(amount.ToString(System.Globalization.CultureInfo.InvariantCulture)
+            .Select(c => (DomainPrimitive)((int)DomainPrimitive.AmountDigit0 + c - '0')));
+        foreach (var key in keys)
+        {
+            PortOutcome step;
+            try { step = click(key); }
+            catch { return new(true, false, "KEYPAD_EXCEPTION_UNKNOWN"); }
+            attempted |= step.SideEffectAttempted;
+            if (!step.Completed) return step with { SideEffectAttempted = attempted };
+        }
+        return new(attempted, true, "KEYPAD_DIGITS_SENT");
     }
 
     public AmountFieldReadback? ReadAmountField()

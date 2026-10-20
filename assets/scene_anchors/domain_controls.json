@@ -42,13 +42,24 @@
             1459,
             1004
           ]
+        },
+        {
+          "primitive": "ClearAmount",
+          "template": "amount_keypad_clear.png",
+          "search": [
+            920,
+            915,
+            1040,
+            1000
+          ],
+          "optional": true
         }
       ],
       "amountAboveSubmit": {
-        "dx": 40,
-        "dy": -180,
-        "width": 180,
-        "height": 140
+        "dx": -50,
+        "dy": -225,
+        "width": 370,
+        "height": 50
       }
     },
     {

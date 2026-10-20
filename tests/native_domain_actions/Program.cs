@@ -226,14 +226,14 @@ static class Program
             var bidPixels = new byte[width * height * 4];
             SceneAnchorGameDecoder.PaintGray(bidPixels, width * 4, 1189, 926, confirm);
             var digit = new SceneAnchorGameDecoder.GrayImage(Enumerable.Repeat((byte)255, 20 * 30).ToArray(), 20, 30);
-            SceneAnchorGameDecoder.PaintGray(bidPixels, width * 4, 1300, 760, digit);
+            SceneAnchorGameDecoder.PaintGray(bidPixels, width * 4, 1300, 710, digit);
             var bidFrame = Blank("AUCTION", 1);
             var bid = decoder.Decode(new NativeDomainFrame(bidFrame.Scope, bidFrame.Geometry, bidPixels, bidFrame.Stride));
             var submit = bid?.Controls.Single(control => control.Primitive == DomainPrimitive.SubmitBid);
             var focus = bid?.Controls.Single(control => control.Primitive == DomainPrimitive.FocusAmountField);
             Require(bid?.Scene == "AUCTION" && submit is { Left: 1189, Top: 926 }
                 && submit.Left + submit.Width / 2 > (883 + 1459) / 2 + 40, "CONFIRM_NOT_CLEAR_BUTTON");
-            Require(focus is { Left: 1300, Top: 760, Width: 20, Height: 30 }, "AMOUNT_FOCUS_FOLLOWS_GLYPH " + focus);
+            Require(focus is { Left: 1139, Top: 701, Width: 370, Height: 50 }, "AMOUNT_LINE_EXCLUDES_ALLOWED_RANGE " + focus);
             var lobbyPixels = new byte[width * height * 4];
             SceneAnchorGameDecoder.PaintGray(lobbyPixels, width * 4, 1208, 961, start);
             var lobbyFrame = Blank("LOBBY", 0);

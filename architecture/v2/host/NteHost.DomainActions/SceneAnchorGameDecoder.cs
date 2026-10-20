@@ -155,7 +155,10 @@ public sealed class SceneAnchorGameDecoder : IGameDomainFrameDecoder
             scene = frame.Scope.Round == 1 ? "AUCTION_R1" : "AUCTION";
         if (scene is null) return null;
         if (scene == "AUCTION" && auction is not null)
+        {
             AddAmountFocus(gray, frame, auction, found);
+            AddAmountKeypad(frame, found);
+        }
         var controls = found.Select(item => Anchor(item.Control.Primitive, item.Left, item.Top, item.Width, item.Height, frame)).ToArray();
         long? amount = null;
         long? committed = null;
@@ -207,16 +210,35 @@ public sealed class SceneAnchorGameDecoder : IGameDomainFrameDecoder
         int width = Math.Max(3, Scale(offset.Right, frame.Geometry.Width, catalog.ReferenceWidth));
         int height = Math.Max(3, Scale(offset.Bottom, frame.Geometry.Height, catalog.ReferenceHeight));
         if (!Inside(left, top, width, height, frame.Geometry.Width, frame.Geometry.Height)) return;
-        var bright = BrightUnion(gray, frame.Geometry.Width, left, top, width, height);
-        if (bright is (int x, int y, int w, int h))
-            found.Add((new(DomainPrimitive.FocusAmountField, "", default, default), x, y, w, h));
-        else
-            found.Add((new(DomainPrimitive.FocusAmountField, "", default, default), left, top, width, height));
+        // Read the amount line itself. The allowed-range text is not an editable
+        // amount, and shrinking to any bright glyph used to select that label.
+        found.Add((new(DomainPrimitive.FocusAmountField, "", default, default), left, top, width, height));
         // Replacing digits is a named keyboard primitive on this same field.
         // It needs a bound control too; otherwise every real bid stops after focus.
         var field = found[^1];
         found.Add((new(DomainPrimitive.ReplaceAmountDigits, "", default, default),
             field.Left, field.Top, field.Width, field.Height));
+    }
+
+    void AddAmountKeypad(NativeDomainFrame frame,
+        List<(TemplateControl Control, int Left, int Top, int Width, int Height)> found)
+    {
+        var clear = found.FirstOrDefault(x => x.Control.Primitive == DomainPrimitive.ClearAmount);
+        if (clear.Control is null) return;
+        // The observed 3x4 keypad is rigid relative to its matched Clear label.
+        // These are closed digit controls, not caller-supplied coordinates.
+        int cx = clear.Left + clear.Width / 2, cy = clear.Top + clear.Height / 2;
+        for (int digit = 0; digit <= 9; digit++)
+        {
+            int column = digit == 0 ? 0 : (digit - 1) % 3;
+            int row = digit == 0 ? 3 : (digit - 1) / 3;
+            int x = cx + Scale(-519 + column * 168, frame.Geometry.Width, catalog!.ReferenceWidth);
+            int y = cy + Scale(-384 + row * 128, frame.Geometry.Height, catalog.ReferenceHeight);
+            int size = Math.Max(3, Scale(30, frame.Geometry.Width, catalog.ReferenceWidth));
+            if (Inside(x-size/2,y-size/2,size,size,frame.Geometry.Width,frame.Geometry.Height))
+                found.Add((new((DomainPrimitive)((int)DomainPrimitive.AmountDigit0 + digit), "", default, default),
+                    x-size/2,y-size/2,size,size));
+        }
     }
 
     static long? ReadSample(AmountSample sample, NativeDomainFrame frame, int x, int y, int w, int h)
@@ -338,26 +360,6 @@ public sealed class SceneAnchorGameDecoder : IGameDomainFrameDecoder
         left = search.X + bestX;
         top = search.Y + bestY;
         return true;
-    }
-
-    static (int X, int Y, int W, int H)? BrightUnion(byte[] gray, int width, int left, int top, int regionW, int regionH)
-    {
-        int minX = int.MaxValue, minY = int.MaxValue, maxX = -1, maxY = -1, area = 0;
-        for (int row = 0; row < regionH; row++)
-        {
-            int origin = (top + row) * width + left;
-            for (int col = 0; col < regionW; col++)
-            {
-                if (gray[origin + col] <= 200) continue;
-                area++;
-                if (col < minX) minX = col;
-                if (row < minY) minY = row;
-                if (col > maxX) maxX = col;
-                if (row > maxY) maxY = row;
-            }
-        }
-        if (area < 12 || maxX - minX < 2 || maxY - minY < 2) return null;
-        return (left + minX, top + minY, maxX - minX + 1, maxY - minY + 1);
     }
 
     static bool SeatStripBright(byte[] gray, int width, int height)

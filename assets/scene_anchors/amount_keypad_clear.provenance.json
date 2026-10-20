@@ -1,0 +1,11 @@
+{
+  "source": "private real run goal-20261020-r, latest-business-frame.bmp",
+  "sourceSha256": "d869a455ae42762f7df1105271c4fa48a3e0acd8261f9fe9bef053bd2690dcbe",
+  "crop": [
+    945,
+    943,
+    1011,
+    975
+  ],
+  "purpose": "visible Clear label anchors the actual digit keypad; no account data"
+}

@@ -38,6 +38,7 @@ static class Program
             : Assembly.Load("WgcLiveHarness");
         Console.WriteLine("Host assembly: " + Host.Location);
         InputBoundary();
+        KeypadSequence();
         int stockArg = Array.IndexOf(args, "--stock-replay");
         if (stockArg >= 0) { StockReplay(args[stockArg + 1]); return 0; }
         int imageArg = Array.IndexOf(args, "--saved-image");
@@ -53,6 +54,25 @@ static class Program
         public int Sends;
         public PortOutcome TrySend(DomainIntent i, Func<bool> current)
         { Require(current(), "DISPATCH_SCOPE"); Sends++; return new(true, true, "FAKE_SENT"); }
+    }
+    static void KeypadSequence()
+    {
+        var keys=new List<DomainPrimitive>();
+        var ok=WindowsTicketedDomainBackend.ReplaceOnKeypad(343268, key=> {
+            keys.Add(key); return new(true,true,"FAKE_CLICK"); });
+        Require(ok.Completed && keys.SequenceEqual(new[]{DomainPrimitive.ClearAmount,
+            DomainPrimitive.AmountDigit3,DomainPrimitive.AmountDigit4,DomainPrimitive.AmountDigit3,
+            DomainPrimitive.AmountDigit2,DomainPrimitive.AmountDigit6,DomainPrimitive.AmountDigit8}),"EXACT_DIGITS_ONCE");
+        keys.Clear();
+        var failed=WindowsTicketedDomainBackend.ReplaceOnKeypad(343268, key=> {
+            keys.Add(key); return new(true,key!=DomainPrimitive.AmountDigit4,"FAKE_UNKNOWN"); });
+        Require(failed.SideEffectAttempted && !failed.Completed && keys.Count==3,"NO_KEY_RETRY_OR_CONTINUE_AFTER_UNKNOWN");
+        keys.Clear();
+        var changed=WindowsTicketedDomainBackend.ReplaceOnKeypad(343268,key=> {
+            keys.Add(key); return new(false,false,"TARGET_CHANGED"); });
+        Require(!changed.SideEffectAttempted && !changed.Completed && keys.Count==1,"NO_SEND_WITH_WRONG_TARGET");
+        Require(!WindowsTicketedDomainBackend.ReplaceOnKeypad(0,_=>throw new Exception()).SideEffectAttempted,"BOUNDED_AMOUNT");
+        Console.WriteLine("PASS keypad: exact repeated digits, one clear, failed/unknown step stops without resend (fake only)");
     }
     static void InputBoundary()
     {
@@ -75,6 +95,8 @@ static class Program
     static void StockReplay(string replay)
     {
         var decoder = SceneAnchorGameDecoder.Load("assets/scene_anchors");
+        decoder.ReadAmount=(SceneAnchorGameDecoder.AmountSample)Host.GetType("WgcLiveHarness.SceneAnchorOcr",true)!
+            .GetMethod("Read")!.CreateDelegate(typeof(SceneAnchorGameDecoder.AmountSample));
         var readStock = Host.GetType("WgcLiveHarness.SceneAnchorOcr", true)!.GetMethod("ReadInstruments")!
             .CreateDelegate<Func<NativeDomainFrame, string, int, InstrumentStock?>>();
         decoder.ReadInstruments = (frame, scene, top) => { Console.WriteLine("GROUP_TOP="+top); return readStock(frame,scene,top); };
@@ -102,6 +124,19 @@ static class Program
                 var controls=new CapturedDomainControlEvidence(()=>frame,decoder);
                 Require(controls.Locate(DomainPrimitive.ReplaceAmountDigits,intent) is not null,"REAL_KEYPAD_REPLACE_ANCHOR_MISSING");
                 Console.WriteLine("PASS saved real keypad supplies the replace primitive anchor; no input sent");
+            }
+            if(row.TryGetProperty("keypad",out var keypad) && keypad.GetBoolean()) {
+                Require(v is not null && v.AmountField is null,"EMPTY_KEYPAD_IS_NOT_A_BID_AMOUNT");
+                foreach(string name in new[]{"ClearAmount","AmountDigit0","AmountDigit1","AmountDigit2","AmountDigit3",
+                    "AmountDigit4","AmountDigit5","AmountDigit6","AmountDigit7","AmountDigit8","AmountDigit9"}) {
+                    Require(Enum.TryParse<DomainPrimitive>(name,out var key)
+                        && v!.Controls.Count(c=>c.Primitive==key)==1,"REAL_KEYPAD_KEY_MISSING:"+name);
+                }
+                var field=v!.Controls.Single(c=>c.Primitive==DomainPrimitive.FocusAmountField);
+                Console.WriteLine($"AMOUNT_ROI={field.Left},{field.Top},{field.Width},{field.Height}");
+                Require(field.Top>=675 && field.Top+field.Height<=750 && field.Width>=250,
+                    "FIELD_MUST_EXCLUDE_RECOMMENDATION_AND_ALLOWED_RANGE");
+                Console.WriteLine("PASS real empty keypad: named clear/digits and amount-only region; no OS input");
             }
             if(row.TryGetProperty("gold",out var g)) Require(v?.Instruments?.GoldAverage==g.GetInt32(),"GOLD_STOCK");
             if(row.TryGetProperty("cost",out var c)) Require(v?.Instruments?.RefillCost==c.GetInt64(),"REFILL_COST");

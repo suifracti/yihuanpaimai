@@ -217,9 +217,21 @@ namespace NTE.DirectComposition
                 }
                 // HUD is a passive ticket: set mouse pass-through at creation,
                 // never reconfigure it from frame/image checks.
-                cp.ExStyle |= 0x00000020 | 0x08000000; // TRANSPARENT | NOACTIVATE
+                cp.ExStyle |= 0x00080000 | 0x00000020 | 0x08000000; // LAYERED | TRANSPARENT | NOACTIVATE
                 return cp;
             }
+        }
+
+        [DllImport("user32.dll", SetLastError = true)]
+        private static extern bool SetLayeredWindowAttributes(IntPtr hwnd, uint key, byte alpha, uint flags);
+
+        protected override void OnHandleCreated(EventArgs e)
+        {
+            base.OnHandleCreated(e);
+            // Layered + Transparent passes mouse input to another process below;
+            // HTTRANSPARENT alone only traverses windows on the same UI thread.
+            // One initialization per HWND, no image-driven style updates.
+            SetLayeredWindowAttributes(this.Handle, 0, 255, 0x2); // LWA_ALPHA
         }
 
         protected override bool ShowWithoutActivation
