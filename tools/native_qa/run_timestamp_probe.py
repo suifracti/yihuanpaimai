@@ -17,7 +17,9 @@ from run_qa import OwnedJob
 ROOT = Path(__file__).resolve().parents[2]
 EVIDENCE = ROOT / "build/native-timestamp-contract-20261006"
 PROBE = EVIDENCE / "out/TimestampProbe.exe"
-HOST = ROOT / "build/native-observation"
+# One fixed host build location. This probe pins the 2026-10-05 candidate
+# hashes, so it fails closed unless that candidate is the current build.
+HOST = ROOT / "architecture" / "v2" / "host" / "wgc_live_harness" / "bin" / "Release" / "net8.0-windows10.0.19041.0"
 
 
 def prepare(executable=PROBE):

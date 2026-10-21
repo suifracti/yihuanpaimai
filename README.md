@@ -46,8 +46,10 @@
 ## 当前状态与限制
 
 - **M4b 稀疏重叠缺口已定性并修好（2026-10-21 夜）**：不是缺图，是证明方法过严。观察局 51 张原图里 20→21 是揭示期真实约 211px 的大跳，色度分数 0.868–0.948，旧实现只比梯度得到 0.676/0.651/0.74，低于 .80；同一局滚动条在揭示前不动，`TerminalContinuity` 只拿到 1 个标定样本（旧实现要求 ≥2）；揭示期间相邻帧也不是像素静止，`stationary_support_proof` 全部拒绝，覆盖链因此断开。`ec0cb10` 改成“一次内容匹配双侧约束 + 同视口证明”，阈值未降。离线重放 15 步全部 VERIFIED、Host 覆盖 COMPLETE，故意删掉 20 页仍为 PARTIAL；原实机 PARTIAL 记录保留，没有回填。
-- **跳过动画“没反应”的真实原因（2026-10-21 夜）**：点击没有失效，是实机跑的是 15:37 的旧宿主 `b5d344d0`——回执里仍带 `pressDurationMs: 80`，该字段在 `3aee32b` 已随窗口消息一起删除；修好的宿主是 `0f7dc6fa`。`8799bff` 让未显式指定宿主时选最新构建并记录所选路径，旧副本不再遮蔽新构建。run-9 用新宿主实测：1 次点击、1.55 秒后揭示结束（run-8 旧宿主是 18 次点击、27 秒），揭示期保存页从 18 张降到 2 张，收页 21 张 COMPLETE、细化 COMPLETE。证据见 `build/m4b-20261021/skip-real-click/stale-host-proof.json`。
-- **同局记录（2026-10-21 夜）**：run-8 竞拍局 `replayfile_79c95fa9…` 已把 `venue=中级场·珊瑚场`、`fieldCondition=标准对局`、q=18、金均 40836 送进求解器并 `bid CONFIRMED 403365`；结算 450000／533651／83651 为 verified 最终值，4 回合各 4 席，同局记录同时含情报 q=18 与仓库审阅包 42 个单元／14 段。run-9 为 5 回合 × 4 席、情报 q=16、审阅包 26 单元／20 段，但每回合都因 `SNAPSHOT_BINDING_INVALID` 没有出价——下一个断点在这里（快照 round／matchId 与当前局不匹配），M5 未开始。
+- **跳过动画“没反应”的真实原因（2026-10-21 夜）**：点击没有失效，是实机跑的是 15:37 的旧宿主 `b5d344d0`——回执里仍带 `pressDurationMs: 80`，该字段在 `3aee32b` 已随窗口消息一起删除；修好的宿主是 `0f7dc6fa`。run-9 用新宿主实测：1 次点击、1.55 秒后揭示结束（run-8 旧宿主是 18 次点击、27 秒），揭示期保存页从 18 张降到 2 张，收页 21 张 COMPLETE、细化 COMPLETE。此后宿主收敛为唯一固定位置 `architecture/v2/host/wgc_live_harness/bin/Release/net8.0-windows10.0.19041.0/WgcLiveHarness.exe`，run.bat、打包和 Main 都只取这里，“选最新构建”的逻辑已去掉，启动日志仍记 DLL SHA-256。证据见 `build/m4b-20261021/skip-real-click/stale-host-proof.json`。
+- **同局记录（2026-10-21 夜）**：run-8 竞拍局 `replayfile_79c95fa9…` 已把 `venue=中级场·珊瑚场`、`fieldCondition=标准对局`、q=18、金均 40836 送进求解器并 `bid CONFIRMED 403365`；结算 450000／533651／83651 为 verified 最终值，4 回合各 4 席，同局记录同时含情报 q=18 与仓库审阅包 42 个单元／14 段。run-9 也是出价局（`mode=bid`、入场已缴费、补仪器 `UseGoldAverage CONFIRMED`），事实齐全（q=16、金均 93022），但影子计算连续 6 次 `Node shadow compute timed out after 8.0s`，`solverStatus` 整局停在 `pending`、`shadowGen=0`，所以每回合的 `SNAPSHOT_BINDING_INVALID` 只是症状；下一个断点是影子 Node 计算超时，不是事实绑定。M5 未开始。
+- **细化在后台跑（2026-10-21 夜）**：run-9 的仓库细化 22:56:55 开始、23:02:39 完成（344.8 秒），22:57:53 已经进入下一局，返回和开局都没有等它。细化是一个 daemon 线程起独立子进程，每局一个 `warehouse-intake/<session>.json`，结果要过 inputFingerprint、jobId、RUNNING 状态三道校验才合并，run-7 两局分别 40／24 个单元，没有串局。已知边界：进程退出不会等细化，RUNNING 时退出会丢掉这次合并（这四个局都是在退出前跑完的）。
+- **M4b 定向复跑（2026-10-21 夜）**：鱼藏品去重 `test_warehouse_placement_resolution_v1` 8/8 通过（216 秒，含 `test_real_once10_cut_fish_tail_is_clipped_but_adjacent_complete_items_are_full`）；此前因缺私有帧被跳过的 `test_live_rule_footer`，用 run-u 真实帧 `NTE_REAL_AUCTION_REPLAY` 补跑 5/5 通过，输出 `REAL run-u rule/box -> engine -> Main -> Solver PASS [362201.4, 1291928]`。没有跳过，也没有改阈值。
 - **此前 M4b 复验（2026-10-21 白天）**：运行源码 `34e9e15`，出价/观察各一局，分别55/43张SOURCE、17/12次真实滚轮，均保存真实BOTTOM、生产收页及覆盖结果COMPLETE；两局停止回执确认Host退出，没有额外入场。出价局金均40414在剩36秒读出，但会场/箱名已映射后，`fieldCondition`仍为空，求解准入报“缺失场地规则”，未发送报价。两局均第一回合成交，没有局内显露身份的有效正例；不能宣称报价截止或M4b全项通过。
 - **此前 M4b 实机失败（2026-10-21）**：出价局被动作之间残留的焦点历史阻挡，未取得金均和出价确认；已用原故障序列修复。观察局保存了三回合四席报价和情报，金均在第一回合剩43秒时读出，局内画面没有显露具体藏品，不能冒充身份验收。结算只留下两张未合格原图，滑块变化后被旧TOP条件误停；完整仓库识别未完成。验收脚本仅按成功局数计数，又误进入一局观察，已停止并保留19张部分原图；未新增报价或使用仪器。现改按实际观察到的局次限制试验，返回未知也停，不再借采集失败追加开局。
 - **本轮离线修复**：已回到正确游戏窗口时不再因旧焦点计数永久拒绝动作；揭示时仓库位置改变继续保存/观察，缺顶部支持仍保留PARTIAL。跳过动画增加80毫秒按压再释放，真实效果待验。Native窗口消息不要求前台，明确“停止收仓”关闭租约并同时停止自动串联、恢复主窗口；Esc和普通窗口切换不接这个停止入口。定向检查和Windows构建通过；M4b未通过，因此M5桥接动作和产品状态尚未开始。
@@ -82,8 +84,10 @@ if (!(Test-Path app/config.json)) {
     Copy-Item app/config.example.json app/config.json
 }
 
-dotnet build architecture/v2/host/wgc_live_harness/WgcLiveHarness.csproj -c Release -o build/native-observation
+dotnet build architecture/v2/host/wgc_live_harness/WgcLiveHarness.csproj -c Release
 ```
+
+Host 只有一个固定位置：`architecture/v2/host/wgc_live_harness/bin/Release/net8.0-windows10.0.19041.0/WgcLiveHarness.exe`。`run.bat`、打包和 Main 都只从这里取；不再保留 `build/native-observation` 之类的副本，启动日志会记下该 DLL 的 SHA-256。
 
 **仅浏览 UI（不启动识别、隔离测试数据）**：
 

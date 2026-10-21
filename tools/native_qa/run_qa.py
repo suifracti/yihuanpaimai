@@ -24,7 +24,8 @@ ROOT = Path(__file__).resolve().parents[2]
 SOURCE_ROOT = Path(__file__).resolve().parent
 QA_ROOT = ROOT / "build" / "native_qa"
 WORKER = QA_ROOT / "out" / "BoundedWgcQaWorker.dll"
-HOST = ROOT / "build" / "native-observation"
+# One fixed host build location; no copied deployment directory.
+HOST = ROOT / "architecture" / "v2" / "host" / "wgc_live_harness" / "bin" / "Release" / "net8.0-windows10.0.19041.0"
 WORK_NS = 8_000_000_000
 TOTAL_NS = 10_000_000_000
 OBSERVATION_WINDOW_MODES = ("foreground", "background-readonly")

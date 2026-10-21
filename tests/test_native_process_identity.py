@@ -7,13 +7,13 @@ import unittest
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / 'app'))
-from native_observation import NativeObservationBridge
+from native_observation import HOST_RELATIVE_PATH, NativeObservationBridge
 
 
 class NativeProcessIdentityTests(unittest.TestCase):
     def test_spawn_receipt_matches_real_host_self_report_before_capture(self):
         host = Path(os.environ['NTE_NATIVE_IDENTITY_TEST_HOST']).resolve(strict=True)
-        self.assertTrue(host.is_relative_to(ROOT / 'build'))
+        self.assertEqual(host, (ROOT / HOST_RELATIVE_PATH).resolve(), 'use the one fixed host build')
         events, logs = [], []
         bridge = NativeObservationBridge(str(ROOT), events.append,
             lambda stage, text: logs.append({'stage': stage, 'text': text}))

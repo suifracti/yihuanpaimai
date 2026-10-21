@@ -1,6 +1,8 @@
 @echo off
 cd /d "%~dp0"
 set NTE_DEBUG=1
+rem Single host build location. Do not add a second copy.
+set "NTE_NATIVE_HOST_EXE=%~dp0..\architecture\v2\host\wgc_live_harness\bin\Release\net8.0-windows10.0.19041.0\WgcLiveHarness.exe"
 set "NTE_RUN_LOG_DIR=%~dp0..\build\native-observation\runtime-logs"
 if not exist "%NTE_RUN_LOG_DIR%" mkdir "%NTE_RUN_LOG_DIR%"
 for /f %%i in ('powershell -NoProfile -Command "Get-Date -Format yyyy-MM-dd_HH-mm-ss"') do set NTE_RUN_STAMP=%%i

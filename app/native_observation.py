@@ -7,9 +7,9 @@ observation lines back to ``main.py`` and never captures a second frame.
 
 from __future__ import annotations
 
+import hashlib
 import json
 import os
-import shutil
 import subprocess
 import sys
 import threading
@@ -23,6 +23,16 @@ from native_diagnostic_log import NativeDiagnosticLog
 from native_capture_delivery import STRICT, POLICIES
 
 OBSERVATION_WINDOW_MODES = frozenset({"foreground", "background-readonly"})
+# The host is built to exactly one place. run.bat, packaging and this bridge
+# all read it here, and the startup log records its DLL hash.
+HOST_RELATIVE_PATH = Path(
+    "architecture/v2/host/wgc_live_harness/bin/Release/net8.0-windows10.0.19041.0/WgcLiveHarness.exe"
+)
+
+
+def host_dll_sha256(host: Path) -> str:
+    dll = host.with_suffix(".dll")
+    return hashlib.sha256((dll if dll.is_file() else host).read_bytes()).hexdigest()
 
 
 class NativeObservationBridge:
@@ -438,23 +448,11 @@ class NativeObservationBridge:
         return sys.executable
 
     def _resolve_command(self) -> list[str]:
+        # One fixed build location. A second copy or a second configuration is
+        # how an unfixed host once outlived its fix, so nothing else is probed.
         configured = str(os.environ.get("NTE_NATIVE_HOST_EXE") or "").strip()
-        if configured and Path(configured).is_file():
-            return [str(Path(configured))]
-        candidates = [
-            self.repo_root / "build" / "native-observation" / "WgcLiveHarness.exe",
-            self.repo_root / "architecture" / "v2" / "host" / "wgc_live_harness" / "bin" / "Release" / "net8.0-windows10.0.19041.0" / "WgcLiveHarness.exe",
-            self.repo_root / "architecture" / "v2" / "host" / "wgc_live_harness" / "bin" / "Debug" / "net8.0-windows10.0.19041.0" / "WgcLiveHarness.exe",
-        ]
-        existing = [candidate for candidate in candidates if candidate.is_file()]
-        if existing:
-            # A copied binary outlives the fix that produced it unless the
-            # freshest file wins. An older deployment must not shadow a newer
-            # build, and the chosen path belongs in the run record.
-            chosen = max(existing, key=lambda candidate: candidate.stat().st_mtime)
-            self.log("STARTUP:NATIVE", f"host {chosen}")
-            return [str(chosen)]
-
-        dotnet = shutil.which("dotnet") or "dotnet"
-        project = self.repo_root / "architecture" / "v2" / "host" / "wgc_live_harness" / "WgcLiveHarness.csproj"
-        return [dotnet, "run", "--project", str(project), "--no-restore", "--"]
+        host = Path(configured) if configured else self.repo_root / HOST_RELATIVE_PATH
+        if not host.is_file():
+            raise RuntimeError(f"HOST_NOT_BUILT: {host}")
+        self.log("STARTUP:NATIVE", f"host {host} dllSha256 {host_dll_sha256(host)}")
+        return [str(host)]
