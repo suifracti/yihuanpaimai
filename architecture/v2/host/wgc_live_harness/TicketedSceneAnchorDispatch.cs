@@ -358,14 +358,16 @@ sealed class TicketedSceneAnchorDispatch : IDisposable
     sealed class GameFocus : IFocusSnapshotProvider
     {
         public long Target;
-        long epoch, sequence, lastForeground = long.MinValue;
-        bool seen;
+        long sequence;
         public FocusSnapshot Capture()
+            => ObserveForeground(GetForegroundWindow().ToInt64());
+
+        internal FocusSnapshot ObserveForeground(long foreground)
         {
-            long foreground = GetForegroundWindow().ToInt64();
-            if (!seen) { seen = true; lastForeground = foreground; }
-            else if (foreground != lastForeground) { lastForeground = foreground; epoch++; }
-            return new(true, Target, foreground, epoch, ++sequence, ProtocolClock.NowNs());
+            // Each send still checks the actual foreground target. Returning
+            // to that same game between actions must not invalidate all later
+            // tickets because of an unrelated historical focus counter.
+            return new(true, Target, foreground, 0, ++sequence, ProtocolClock.NowNs());
         }
         [DllImport("user32.dll")] static extern IntPtr GetForegroundWindow();
     }

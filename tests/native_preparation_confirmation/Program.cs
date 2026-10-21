@@ -37,6 +37,7 @@ static class Program
         Host = hostArg >= 0 ? new ReplayHostContext().LoadFromAssemblyPath(Path.GetFullPath(args[hostArg + 1]))
             : Assembly.Load("WgcLiveHarness");
         Console.WriteLine("Host assembly: " + Host.Location);
+        if (args.Contains("--focus-history-only")) { FocusHistory(); return 0; }
         if (args.Contains("--input-boundary-only")) { InputBoundary(); return 0; }
         int sceneArg = Array.IndexOf(args, "--scene-wait-replay");
         if (sceneArg >= 0) { SceneWaitReplay(args[sceneArg + 1]); return 0; }
@@ -58,6 +59,22 @@ static class Program
         public int Sends;
         public PortOutcome TrySend(DomainIntent i, Func<bool> current)
         { Require(current(), "DISPATCH_SCOPE"); Sends++; return new(true, true, "FAKE_SENT"); }
+    }
+    static void FocusHistory()
+    {
+        var type=Host.GetType("WgcLiveHarness.TicketedSceneAnchorDispatch+GameFocus",true)!;
+        object focus=Activator.CreateInstance(type,true)!;
+        type.GetField("Target")!.SetValue(focus,1L);
+        var observe=type.GetMethod("ObserveForeground",BindingFlags.NonPublic|BindingFlags.Instance)!;
+        FocusSnapshot Read(long foreground)=>(FocusSnapshot)observe.Invoke(focus,new object[]{foreground})!;
+        var armed=Read(1); var away=Read(2); var returned=Read(1);
+        Require(armed.ForegroundId==armed.TargetId,"INITIAL_TARGET");
+        Require(away.ForegroundId!=away.TargetId,"OTHER_FOREGROUND_STILL_REJECTED");
+        Require(returned.ForegroundId==returned.TargetId && returned.Epoch==armed.Epoch,
+            "RETURNED_GAME_MUST_NOT_INHERIT_IDLE_FOCUS_HISTORY");
+        type.GetField("Target")!.SetValue(focus,3L);
+        Require(Read(1).TargetId!=armed.TargetId,"CHANGED_TARGET_STILL_DISTINCT");
+        Console.WriteLine("PASS current target focus, away/return between actions, changed target; zero capture/input");
     }
     static bool SceneExpired(string scene, long nowMs, ref object?[] state)
     {
