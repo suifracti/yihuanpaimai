@@ -143,7 +143,8 @@ class SettlementItemRecognizer:
                     except Exception:
                         pass
 
-    def _match_side_color(self, band: np.ndarray, rar: str) -> float:
+    @staticmethod
+    def _match_side_color(band: np.ndarray, rar: str) -> float:
         if band.size == 0:
             return 0.0
         hsv = cv2.cvtColor(band, cv2.COLOR_BGR2HSV).reshape(-1, 3)
@@ -163,7 +164,8 @@ class SettlementItemRecognizer:
             return 0.0
         return float(np.count_nonzero(sat)) / float(hsv.shape[0])
 
-    def _cell_rect(self, r: int, c: int, cell_w: float, cell_h: float) -> Tuple[int, int, int, int]:
+    @staticmethod
+    def _cell_rect(r: int, c: int, cell_w: float, cell_h: float) -> Tuple[int, int, int, int]:
         return (
             int(round(c * cell_w)),
             int(round(r * cell_h)),
@@ -171,8 +173,9 @@ class SettlementItemRecognizer:
             int(round((r + 1) * cell_h)),
         )
 
-    def _cell_is_empty(self, hsv: np.ndarray, r: int, c: int, cell_w: float, cell_h: float) -> bool:
-        x1, y1, x2, y2 = self._cell_rect(r, c, cell_w, cell_h)
+    @classmethod
+    def _cell_is_empty(cls, hsv: np.ndarray, r: int, c: int, cell_w: float, cell_h: float) -> bool:
+        x1, y1, x2, y2 = cls._cell_rect(r, c, cell_w, cell_h)
         pad_x = max(1, int(0.22 * (x2 - x1)))
         pad_y = max(1, int(0.22 * (y2 - y1)))
         inner = hsv[y1 + pad_y:y2 - pad_y, x1 + pad_x:x2 - pad_x]
@@ -183,15 +186,16 @@ class SettlementItemRecognizer:
         dark = float((val < 32).mean())
         if dark > 0.45 and float(val.mean()) < 62:
             return True
-        rar, score = self._cell_rarity(hsv, r, c, cell_w, cell_h)
+        rar, score = cls._cell_rarity(hsv, r, c, cell_w, cell_h)
         gx = cv2.Sobel(gray, cv2.CV_32F, 1, 0, ksize=3)
         gy = cv2.Sobel(gray, cv2.CV_32F, 0, 1, ksize=3)
         grad = float(np.mean(np.hypot(gx, gy)))
         # 无描边 + 低纹理 = 底板空格，不是物品内部填色。
         return rar is None and float(gray.std()) < 10.0 and grad < 20.0
 
-    def _cell_rarity(self, hsv: np.ndarray, r: int, c: int, cell_w: float, cell_h: float) -> Tuple[Optional[str], float]:
-        x1, y1, x2, y2 = self._cell_rect(r, c, cell_w, cell_h)
+    @classmethod
+    def _cell_rarity(cls, hsv: np.ndarray, r: int, c: int, cell_w: float, cell_h: float) -> Tuple[Optional[str], float]:
+        x1, y1, x2, y2 = cls._cell_rect(r, c, cell_w, cell_h)
         cell = hsv[y1:y2, x1:x2]
         if cell.size == 0:
             return None, 0.0
@@ -204,7 +208,7 @@ class SettlementItemRecognizer:
             cell[:, -t:].reshape(-1, 3),
         ])
         bgr = cv2.cvtColor(ring.reshape(-1, 1, 3), cv2.COLOR_HSV2BGR)
-        scores = {rar: self._match_side_color(bgr, rar) for rar in ("gold", "purple", "blue", "green", "red", "white")}
+        scores = {rar: cls._match_side_color(bgr, rar) for rar in ("gold", "purple", "blue", "green", "red", "white")}
         rar = max(scores, key=scores.get)
         return (rar, scores[rar]) if scores[rar] >= 0.12 else (None, scores[rar])
 

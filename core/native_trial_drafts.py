@@ -420,6 +420,8 @@ class NativeTrialDraftStore:
         if not rec_id or draft.get("schemaVersion") != 7 or str(draft.get("lifecycleStatus") or "").upper() != "DRAFT" or str(draft.get("dataOrigin") or "").lower() != "live-trial":
             raise NativeTrialDraftError("仅允许保存 schema v7 的 live-trial DRAFT")
 
+        self.preserve_settlement_originals(draft)
+
         with self._lock:
             store = self._store()
             existing = store.lookup(rec_id)
@@ -508,6 +510,22 @@ class NativeTrialDraftStore:
                 )
             except Exception as exc:
                 raise NativeTrialDraftError(f"DRAFT 保存失败：{type(exc).__name__}: {exc}") from exc
+
+    def preserve_settlement_originals(self, record: Mapping[str, Any]) -> None:
+        """Carry the vision writer's bill into the isolated draft's evidence root."""
+        from runtime_data import runtime_data_paths
+        from settlement_evidence_store_v2 import KIND_MAIN, SettlementEvidenceStoreV2
+        source = SettlementEvidenceStoreV2(runtime_data_paths().root)
+        destination = SettlementEvidenceStoreV2(self.root)
+        truth = (record.get('settlement') or {}).get('truthEvidence') or {}
+        for descriptor in truth.get('fileOriginals') or []:
+            if (descriptor.get('kind') != KIND_MAIN
+                    or descriptor.get('recordStableKey') != record.get('id')
+                    or destination.verify(descriptor).get('ok')
+                    or not source.verify(descriptor).get('ok')):
+                continue
+            destination.save_original(record_stable_key=record['id'], kind=KIND_MAIN,
+                image_bytes=source.load_original(descriptor), captured_at=descriptor.get('capturedAt'))
 
     def update_reviewed_draft(
         self,

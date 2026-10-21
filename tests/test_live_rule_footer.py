@@ -33,6 +33,21 @@ def admission(facts):
 
 
 class LiveRuleFooterTests(unittest.TestCase):
+    def test_continuous_round_keeps_rule_read_when_title_is_temporarily_unreadable(self):
+        frame = np.full((1080, 1920, 3), 100, np.uint8)
+        pipe = NTEVisionPipeline()
+        pipe.current_context.update(scene='IN_AUCTION', inAuction=True, round=1)
+        ocr = Mock(return_value=([], None))
+        ocr.text_rec.side_effect = lambda crops: ([('标准对局', .99) if c.shape[:2] == (44,154)
+                                                 else ('', 0.) for c in crops], None)
+        pipe._ocr_engine = ocr
+        with patch.object(pipe, '_classify_scene_fast', return_value={'scene':'UNKNOWN'}), \
+             patch.object(pipe, '_read_df_auction_round_title', return_value=None), \
+             patch.object(pipe, '_should_run_auction_canvas_ocr', return_value=False):
+            result = pipe.process_frame(frame, prioritize_live_facts=True, include_heavy_identity=False)
+        self.assertEqual(result['fieldCondition'], 'standard')
+        self.assertIsNone(admission(dict(FIXTURE['facts'], fieldCondition=result['fieldCondition']))[1])
+
     def test_fast_path_reads_rule_line_with_box_without_canvas(self):
         frame = np.full((1080, 1920, 3), 100, np.uint8)
         for text, expected in [('标准对局', 'standard'), ('天黑了', 'dark'), ('看不清', 'unknown')]:

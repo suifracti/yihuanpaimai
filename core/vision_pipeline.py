@@ -1293,7 +1293,7 @@ class NTEVisionPipeline:
                 if re.fullmatch(r"\d+|\d{1,3}(?:[,，.．]\d{3})+", text):
                     self.current_context["auctionFunds"] = int(re.sub(r"[,，.．]", "", text))
             rule_footer = aligned_results[6]
-            if round_title_confirmed and rule_footer and float(rule_footer[1] or 0) >= .85:
+            if rule_footer and float(rule_footer[1] or 0) >= .85:
                 rule = extract_from_text(str(rule_footer[0] or "")).get("fieldCondition")
                 if rule and rule != "unknown":
                     self.current_context["fieldCondition"] = rule

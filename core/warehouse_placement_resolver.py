@@ -20,6 +20,7 @@ import cv2
 import numpy as np
 
 from catalog_validator import validate_catalog_record, validate_item_identity
+from settlement_item_recognizer import SettlementItemRecognizer
 from warehouse_grid_geometry import STATUS_OK as GRID_OK, observe_warehouse_grid, _phase
 
 
@@ -1069,6 +1070,16 @@ class WarehousePlacementResolver:
                         x1, y1 = x_lines[c], y_lines[r]
                         x2, y2 = x_lines[c + w], y_lines[r + h]
                         roi = img[y1:y2, x1:x2]
+
+                        # Classify the whole proposed item, not its internal
+                        # cells: dark interiors of large items are not empty slots.
+                        if roi.size:
+                            hsv_roi = cv2.cvtColor(roi, cv2.COLOR_BGR2HSV)
+                            rarity, _ = SettlementItemRecognizer._cell_rarity(
+                                hsv_roi, 0, 0, x2 - x1, y2 - y1)
+                            if rarity is None and SettlementItemRecognizer._cell_is_empty(
+                                    hsv_roi, 0, 0, x2 - x1, y2 - y1):
+                                continue
 
                         is_all_empty = bool(empty_map[r : r + h, c : c + w].all())
                         catalog_score, candidates_list, best_inliers = self.match_catalog_candidates(

@@ -14,7 +14,7 @@ from warehouse_catalog_geometry import CatalogGeometryIndex
 from warehouse_grid_geometry import STATUS_OK as GRID_OK, observe_warehouse_grid
 from warehouse_physical_ledger import PhysicalComponentLedger
 from warehouse_placement_resolver import WarehousePlacementResolver
-from warehouse_scrollbar_observation import warehouse_search_roi
+from warehouse_scrollbar_observation import warehouse_content_roi
 from warehouse_review_packet import (
     NOT_REVIEWABLE,
     WarehouseReviewPacketError,
@@ -91,7 +91,8 @@ class WarehouseReconstructionProcessor:
                 self._warnings.append("SOURCE_FRAME_SIZE_MISMATCH")
                 return {"accepted": False, "reason": "SOURCE_FRAME_SIZE_MISMATCH"}
             if not already_cropped:
-                x1, y1, x2, y2 = warehouse_search_roi(width, height)
+                # Item discovery stops at the grid, before the sell-quality controls.
+                x1, y1, x2, y2 = warehouse_content_roi(width, height)
                 frame = frame[y1:y2, x1:x2].copy()
                 origin = (x1, y1)
                 already_cropped = True

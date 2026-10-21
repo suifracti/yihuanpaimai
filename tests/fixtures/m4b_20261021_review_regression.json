@@ -1,0 +1,118 @@
+{
+  "recordId": "replayfile_64923d49704c5754e054",
+  "sessionId": "153557a6a26f44aaaa06f20e432c5aff",
+  "beforeJobId": "0dd66f89ccb144da9b5d9c3730c35ef2",
+  "billSha256": "3448a7abe5e3c8bc163f326c1f11e5ae0f600c4140ca8bcaf8325dc7e847b94f",
+  "actualTotal": 1485062,
+  "realizedProfit": 1251729,
+  "falseUnits": [
+    {
+      "id": "unit-world-24-0-5x1",
+      "type": "footer",
+      "bbox": [
+        1325.0,
+        780.0,
+        1590.0,
+        836.0
+      ],
+      "descriptor": {
+        "schemaVersion": "settlement-evidence-original-v2",
+        "evidenceId": "sev2_replayfile_64923d49704c5754e054_a9be454054006b6b_warehouse-segment",
+        "evidenceOrigin": "runtime-capture",
+        "recordStableKey": "replayfile_64923d49704c5754e054",
+        "kind": "warehouse-segment",
+        "capturedAt": "2026-10-21T11:09:32.2969719+00:00",
+        "storageMode": "file",
+        "relativePath": "evidence/settlement_v2/blobs/a9/a9be454054006b6b4a5f296e49e6f961a3ce7f2fe0865fdf9bc3832bad353cef.png",
+        "sha256": "a9be454054006b6b4a5f296e49e6f961a3ce7f2fe0865fdf9bc3832bad353cef",
+        "byteSize": 2014508,
+        "mimeType": "image/png",
+        "width": 1920,
+        "height": 1080,
+        "coverageMode": "viewport-segment",
+        "coverageStatus": "COVERAGE_UNPROVEN"
+      }
+    },
+    {
+      "id": "unit-world-24-5-5x1",
+      "type": "footer",
+      "bbox": [
+        1590.0,
+        780.0,
+        1855.0,
+        836.0
+      ],
+      "descriptor": {
+        "schemaVersion": "settlement-evidence-original-v2",
+        "evidenceId": "sev2_replayfile_64923d49704c5754e054_a9be454054006b6b_warehouse-segment",
+        "evidenceOrigin": "runtime-capture",
+        "recordStableKey": "replayfile_64923d49704c5754e054",
+        "kind": "warehouse-segment",
+        "capturedAt": "2026-10-21T11:09:32.2969719+00:00",
+        "storageMode": "file",
+        "relativePath": "evidence/settlement_v2/blobs/a9/a9be454054006b6b4a5f296e49e6f961a3ce7f2fe0865fdf9bc3832bad353cef.png",
+        "sha256": "a9be454054006b6b4a5f296e49e6f961a3ce7f2fe0865fdf9bc3832bad353cef",
+        "byteSize": 2014508,
+        "mimeType": "image/png",
+        "width": 1920,
+        "height": 1080,
+        "coverageMode": "viewport-segment",
+        "coverageStatus": "COVERAGE_UNPROVEN"
+      }
+    },
+    {
+      "id": "unit-world-15-7-1x1",
+      "type": "empty",
+      "bbox": [
+        1696.0,
+        516.0,
+        1749.0,
+        572.0
+      ],
+      "descriptor": {
+        "schemaVersion": "settlement-evidence-original-v2",
+        "evidenceId": "sev2_replayfile_64923d49704c5754e054_38ed448eb4e83667_warehouse-segment",
+        "evidenceOrigin": "runtime-capture",
+        "recordStableKey": "replayfile_64923d49704c5754e054",
+        "kind": "warehouse-segment",
+        "capturedAt": "2026-10-21T11:09:14.6770462+00:00",
+        "storageMode": "file",
+        "relativePath": "evidence/settlement_v2/blobs/38/38ed448eb4e83667b9a4d25956a7ab23731f9db0d695f0250b744025aa72c3b8.png",
+        "sha256": "38ed448eb4e83667b9a4d25956a7ab23731f9db0d695f0250b744025aa72c3b8",
+        "byteSize": 2008743,
+        "mimeType": "image/png",
+        "width": 1920,
+        "height": 1080,
+        "coverageMode": "viewport-segment",
+        "coverageStatus": "COVERAGE_UNPROVEN"
+      }
+    },
+    {
+      "id": "unit-world-17-7-1x1",
+      "type": "empty",
+      "bbox": [
+        1696.0,
+        508.0,
+        1749.0,
+        564.0
+      ],
+      "descriptor": {
+        "schemaVersion": "settlement-evidence-original-v2",
+        "evidenceId": "sev2_replayfile_64923d49704c5754e054_6216967a154c1111_warehouse-segment",
+        "evidenceOrigin": "runtime-capture",
+        "recordStableKey": "replayfile_64923d49704c5754e054",
+        "kind": "warehouse-segment",
+        "capturedAt": "2026-10-21T11:09:20.1199627+00:00",
+        "storageMode": "file",
+        "relativePath": "evidence/settlement_v2/blobs/62/6216967a154c11115a429258e0eb98bd5d61773499702a73f303cf44c3f214e8.png",
+        "sha256": "6216967a154c11115a429258e0eb98bd5d61773499702a73f303cf44c3f214e8",
+        "byteSize": 2005848,
+        "mimeType": "image/png",
+        "width": 1920,
+        "height": 1080,
+        "coverageMode": "viewport-segment",
+        "coverageStatus": "COVERAGE_UNPROVEN"
+      }
+    }
+  ]
+}

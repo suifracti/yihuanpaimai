@@ -120,6 +120,23 @@ class TestSettlementReviewV1(unittest.TestCase):
         self.tmp.cleanup()
 
     # ----------------------------------------------------------------- gate 1
+    def test_isolated_draft_carries_game_bill_original_into_its_own_root(self):
+        from native_trial_drafts import NativeTrialDraftStore
+        from settlement_evidence_store_v2 import KIND_MAIN, SettlementEvidenceStoreV2
+        key = 'isolated_bill_original'
+        _, png = cv2.imencode('.png', np.full((32, 48, 3), 80, np.uint8))
+        bill = SettlementEvidenceStoreV2(self.root).save_original(
+            record_stable_key=key, kind=KIND_MAIN, image_bytes=png.tobytes())
+        record = build_canonical_match_record_v7(match_id=key, played_at='2026-10-21T00:00:00Z',
+            lifecycle_status='DRAFT', source='test')
+        record['dataOrigin'] = 'live-trial'
+        record['settlement'].update(actualTotal=1485062, realizedProfit=1251729,
+                                    truthEvidence={'fileOriginals':[bill]})
+        native = NativeTrialDraftStore(Path(self.root)/'native-live-trial/canonical-history.json')
+        native.save_draft(record)
+        self.assertTrue(SettlementEvidenceStoreV2(native.root).verify(bill)['ok'])
+        self.assertEqual(native.lookup(key)['settlement']['actualTotal'], 1485062)
+
     def test_warehouse_cards_crop_their_own_saved_observations_without_exported_crop_files(self):
         import base64
         import copy
