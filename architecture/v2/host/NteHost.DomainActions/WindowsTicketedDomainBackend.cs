@@ -112,15 +112,7 @@ public sealed class WindowsTicketedDomainBackend : ITicketedDomainBackend
             {
                 int x = control.Geometry.ScreenX + control.Left + control.Width / 2;
                 int y = control.Geometry.ScreenY + control.Top + control.Height / 2;
-                int vx = GetSystemMetrics(76), vy = GetSystemMetrics(77), vw = GetSystemMetrics(78), vh = GetSystemMetrics(79);
-                if (vw <= 1 || vh <= 1 || x < vx || y < vy || x >= vx + vw || y >= vy + vh)
-                    return new(false, false, "CONTROL_OUTSIDE_VIRTUAL_DESKTOP");
-                // Pixel-center mapping is used so Windows' absolute move lands in
-                // the exact pixel, including negative monitor coordinates.
-                int ax = (int)(((long)(x - vx) * 65536 + 32768) / vw);
-                int ay = (int)(((long)(y - vy) * 65536 + 32768) / vh);
-                var sent = guard.Execute(InputAction.DomainClick(x, y, ax, ay, valid));
-                return new(sent.SendCallCount > 0, sent.Ok, sent.Reason);
+                return ClickWithTicket(x, y, valid);
             }
             bool gameKeypad = anchor.ControlProfile == SceneAnchorGameDecoder.VerifiedGameProfile;
             // This game's amount panel is already a keypad, not a Windows edit.
@@ -163,6 +155,34 @@ public sealed class WindowsTicketedDomainBackend : ITicketedDomainBackend
             { lastAmountMutationNs = clock(); amountIntent = intent; amountVerified = false; amountCurrent = SafeValid; }
             return result;
         }
+    }
+
+    // One fixed settlement control, using exactly the same ticketed click as
+    // SubmitBid. Each call gets a new ticket; skip outcomes do not reserve bids.
+    public PortOutcome ClickSettlementSkip(Func<bool> current)
+    {
+        lock (gate)
+        {
+            if (!allowGameInput || !guard.IsArmedFor(inputTargetId, 0) || !current())
+                return new(false, false, "SKIP_TARGET_NOT_CURRENT");
+            if (!GetClientRect(new(inputTargetId), out var rect)
+                || !ClientToScreen(new(inputTargetId), ref rect.Origin))
+                return new(false, false, "SKIP_CLIENT_GEOMETRY_UNAVAILABLE");
+            int x = rect.Origin.X + (int)Math.Round(rect.Right * 1499.0 / 1920);
+            int y = rect.Origin.Y + (int)Math.Round(rect.Bottom * 997.0 / 1080);
+            return ClickWithTicket(x, y, current);
+        }
+    }
+
+    private PortOutcome ClickWithTicket(int x, int y, Func<bool> current)
+    {
+        int vx = GetSystemMetrics(76), vy = GetSystemMetrics(77), vw = GetSystemMetrics(78), vh = GetSystemMetrics(79);
+        if (vw <= 1 || vh <= 1 || x < vx || y < vy || x >= vx + vw || y >= vy + vh)
+            return new(false, false, "CONTROL_OUTSIDE_VIRTUAL_DESKTOP");
+        int ax = (int)(((long)(x - vx) * 65536 + 32768) / vw);
+        int ay = (int)(((long)(y - vy) * 65536 + 32768) / vh);
+        var sent = guard.Execute(InputAction.DomainClick(x, y, ax, ay, current));
+        return new(sent.SendCallCount > 0, sent.Ok, sent.Reason);
     }
 
     public static IReadOnlyList<DomainPrimitive> KeypadSequence(long amount)

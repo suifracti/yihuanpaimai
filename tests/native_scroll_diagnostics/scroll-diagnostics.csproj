@@ -3,6 +3,7 @@
   <ItemGroup>
     <ProjectReference Include="../../architecture/v2/host/NteHost.Protocol/NteHost.Protocol.csproj" />
     <ProjectReference Include="../../architecture/v2/host/NteHost.WindowMonitor/NteHost.WindowMonitor.csproj" />
+    <ProjectReference Include="../../architecture/v2/host/NteHost.DomainActions/NteHost.DomainActions.csproj" />
     <Compile Include="../../architecture/v2/host/wgc_live_harness/RequestClockDiagnostics.cs" />
     <Compile Include="../../architecture/v2/host/wgc_live_harness/CaptureDeliveryProof.cs" />
     <Compile Include="../../architecture/v2/host/wgc_live_harness/DeliveryVisualSummary.cs" />

@@ -243,7 +243,9 @@ internal static class NativeObservationService
             scrollWindow = (context, current) => WarehouseWindowScroll.SendDown(context,
                 () => InputCurrent(context, current), WriteScrollDiagnostic);
             skipAnimationWindow = (context, current) => WarehouseWindowScroll.SendSkipAnimation(context,
-                () => InputCurrent(context, current), WriteScrollDiagnostic);
+                () => InputCurrent(context, current), WriteScrollDiagnostic,
+                click: valid => sceneAnchorDispatch?.ClickSettlementSkip(valid)
+                    ?? new(false, false, "TICKETED_SKIP_NOT_CONNECTED"));
             if (observationWindowMode == BackgroundObservationPolicy.BackgroundReadOnly
                 && !capture.IsClientAreaMappingCurrent())
                 throw new InvalidOperationException("background-client-area-mapping-unproven");

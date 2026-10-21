@@ -64,6 +64,24 @@ sealed class TicketedSceneAnchorDispatch : IDisposable
     public bool AwaitingVisibleResult { get { lock (gate) return pending is not null; } }
     public int ConfirmationWaitMs => (int)Math.Max(1, (confirmationDeadlineNs - ProtocolClock.NowNs()) / 1_000_000);
 
+    public PortOutcome ClickSettlementSkip(Func<bool> current)
+    {
+        lock (gate)
+        {
+            if (disposed || pending is not null || !current()) return new(false, false, "SKIP_UNAVAILABLE");
+            if (!focus.Activate()) return new(false, false, "SKIP_GAME_ACTIVATION_FAILED");
+            if (!armed)
+            {
+                var arm = guard.Arm(new ArmRequest(focus.Target));
+                if (!arm.Ok) return new(false, false, arm.Reason);
+                armed = true;
+            }
+            Volatile.Write(ref dispatching, 1);
+            try { return backend.ClickSettlementSkip(current); }
+            finally { Volatile.Write(ref dispatching, 0); }
+        }
+    }
+
     // Planning metadata comes from the same held WGC pixels as FRAME. These
     // anchors are deliberately unqualified for input: every dispatch still
     // reacquires an independent frame through CaptureEngine and its tickets.
@@ -359,6 +377,8 @@ sealed class TicketedSceneAnchorDispatch : IDisposable
     {
         public long Target;
         long sequence;
+        public bool Activate() => GetForegroundWindow().ToInt64() == Target
+            || SetForegroundWindow(new IntPtr(Target));
         public FocusSnapshot Capture()
             => ObserveForeground(GetForegroundWindow().ToInt64());
 
@@ -370,5 +390,6 @@ sealed class TicketedSceneAnchorDispatch : IDisposable
             return new(true, Target, foreground, 0, ++sequence, ProtocolClock.NowNs());
         }
         [DllImport("user32.dll")] static extern IntPtr GetForegroundWindow();
+        [DllImport("user32.dll")] static extern bool SetForegroundWindow(IntPtr hwnd);
     }
 }

@@ -1,5 +1,6 @@
 using System.Text.Json.Nodes;
 using WgcLiveHarness;
+using NteHost.DomainActions;
 
 internal static class SkipAnimationChecks
 {
@@ -16,7 +17,8 @@ internal static class SkipAnimationChecks
         var platform = new SkipPlatform();
         using var lease = new WarehouseEvidenceLease(root, "offline", events.Add, () => now,
             scrollDown: (_, _) => false, capturePolicy: "wgc-delivery-v1", latestSummary: () => latest,
-            skipAnimation: (c, current) => WarehouseWindowScroll.SendSkipAnimation(c, current, platform: platform));
+            skipAnimation: (c, current) => WarehouseWindowScroll.SendSkipAnimation(c, current, platform: platform,
+                click: valid => platform.Click(valid)));
         lease.UpdateContext(context);
         JsonObject Command(string operation, int ordinal = 0) => new() {
             ["type"] = WarehouseEvidenceLease.ControlType, ["schemaVersion"] = WarehouseEvidenceLease.SchemaV2,
@@ -68,8 +70,7 @@ internal static class SkipAnimationChecks
         Check(lease.IsOpen && platform.Down == sends + 1
             && (string?)events.Last()["details"]?["classification"] == "SENT", "fresh pink button permits retry after unknown");
         var third = Save(3);
-        Check(platform.Holds == platform.Down && platform.LastHoldMs == 80,
-            "background window click holds once before release");
+        Check(platform.Down == 2, "two independent attempts use the ticketed click delegate without message presses");
         latest = latest! with { SkipButtonBgr = Enumerable.Repeat((byte)60, 30).ToArray() };
         lease.Handle(third);
         Check(platform.Down == sends + 1 && lease.IsOpen
@@ -79,9 +80,13 @@ internal static class SkipAnimationChecks
         lease.Handle(fourth);
         Check(!lease.IsOpen && platform.Down == sends + 1, "changed scene stops input");
         var attempt = new WarehouseScrollAttempt();
+        Check(!WarehouseWindowScroll.SendSkipAnimation(context with { ScrollAttempt = attempt }, () => true,
+            platform: platform) && !attempt.SendInterfaceInvoked && platform.Down == 2,
+            "missing ticketed backend never falls back to window click messages");
         platform.Target = platform.Target with { Pid = 999 };
         Check(!WarehouseWindowScroll.SendSkipAnimation(context with { ScrollAttempt = attempt }, () => true,
-            platform: platform) && !attempt.SendInterfaceInvoked, "wrong window never receives a click");
+            platform: platform, click: valid => platform.Click(valid)) && !attempt.SendInterfaceInvoked,
+            "wrong window never receives a click");
         Console.WriteLine("SKIP_ANIMATION_CHECKS_PASS");
     }
     private static void Check(bool condition, string rule)
@@ -91,13 +96,10 @@ internal static class SkipAnimationChecks
         public WarehouseWindowScroll.TargetState Target = new(456,789,"HTGame.exe","UnrealWindow",true,false,true,16,9);
         public bool Timeout;
         public int Down;
-        public int Holds, LastHoldMs;
-        public void HoldButton(int milliseconds) { Holds++; LastHoldMs=milliseconds; }
         public WarehouseWindowScroll.TargetState ReadTarget(long hwnd) => Target;
-        public WarehouseWindowScroll.ScreenPoint ToScreen(long hwnd,int x,int y) => throw new Exception("skip uses client coordinates");
+        public WarehouseWindowScroll.ScreenPoint ToScreen(long hwnd,int x,int y) => throw new Exception("skip delegates real input coordinates to the ticketed backend");
         public WarehouseWindowScroll.SendResult Send(long hwnd,uint wheel,uint coordinates) => throw new Exception("skip is not wheel input");
-        public WarehouseWindowScroll.SendResult MovePointer(long hwnd,uint coordinates) => new(1,0,0);
-        public WarehouseWindowScroll.SendResult SendButton(long hwnd,bool down,uint coordinates)
-        { if (down) Down++; return new(Timeout ? 0 : 1,0,0); }
+        public PortOutcome Click(Func<bool> current)
+        { if (!current()) return new(false,false,"NOT_CURRENT"); Down++; return new(true,!Timeout,Timeout?"UNKNOWN":"OK"); }
     }
 }

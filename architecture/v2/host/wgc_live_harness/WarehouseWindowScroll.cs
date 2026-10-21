@@ -1,6 +1,7 @@
 using System.Runtime.InteropServices;
 using NteHost.WindowMonitor;
 using NteHost.Protocol;
+using NteHost.DomainActions;
 using System.Text.Json.Nodes;
 
 namespace WgcLiveHarness;
@@ -17,11 +18,6 @@ internal static class WarehouseWindowScroll
         TargetState ReadTarget(long hwnd);
         ScreenPoint ToScreen(long hwnd, int x, int y);
         SendResult Send(long hwnd, uint wheel, uint coordinates);
-        SendResult MovePointer(long hwnd, uint coordinates) =>
-            throw new NotSupportedException("SKIP_CLICK_PLATFORM_UNAVAILABLE");
-        SendResult SendButton(long hwnd, bool down, uint coordinates) =>
-            throw new NotSupportedException("SKIP_CLICK_PLATFORM_UNAVAILABLE");
-        void HoldButton(int milliseconds) => Thread.Sleep(milliseconds);
     }
 
     private sealed class Win32Platform : IPlatform
@@ -56,24 +52,11 @@ internal static class WarehouseWindowScroll
             var error = Marshal.GetLastWin32Error();
             return new(sent.ToInt64(), result.ToUInt64(), error);
         }
-        public SendResult SendButton(long hwnd, bool down, uint coordinates)
-        {
-            SetLastError(0);
-            var sent = SendMessageTimeoutW(new IntPtr(hwnd), down ? 0x0201u : 0x0202u,
-                new UIntPtr(down ? 1u : 0u), new IntPtr((long)coordinates), 0x23, 100, out var result);
-            return new(sent.ToInt64(), result.ToUInt64(), Marshal.GetLastWin32Error());
-        }
-        public SendResult MovePointer(long hwnd, uint coordinates)
-        {
-            SetLastError(0);
-            var sent = SendMessageTimeoutW(new IntPtr(hwnd), 0x0200, UIntPtr.Zero,
-                new IntPtr((long)coordinates), 0x23, 100, out var result);
-            return new(sent.ToInt64(), result.ToUInt64(), Marshal.GetLastWin32Error());
-        }
     }
 
     public static bool SendSkipAnimation(WarehouseSourceContext context, Func<bool> current,
-        Action<JsonObject>? diagnostic = null, IPlatform? platform = null)
+        Action<JsonObject>? diagnostic = null, IPlatform? platform = null,
+        Func<Func<bool>, PortOutcome>? click = null)
     {
         platform ??= new Win32Platform();
         var hwnd = (long?)context.Target["targetHwnd"] ?? 0;
@@ -87,42 +70,15 @@ internal static class WarehouseWindowScroll
                 && target.ClassName == "UnrealWindow" && target.Visible && !target.Minimized
                 && target.ClientRectAvailable && target.Width == context.Width && target.Height == context.Height;
         }
-        if (!BoundTarget()) return false;
-        // Client coordinates for this one fixed settlement control; no caller coordinates.
-        var x = (int)Math.Round(context.Width * 1499.0 / 1920);
-        var y = (int)Math.Round(context.Height * 997.0 / 1080);
-        var coordinates = (uint)((ushort)x | (uint)(ushort)y << 16);
-        if (!BoundTarget()) return false;
-        context.ScrollAttempt?.MarkSendInterfaceInvoked();
-        var releaseAttempted = false;
-        try
-        {
-            var move = platform.MovePointer(hwnd, coordinates);
-            if (move.ReturnValue == 0 || !BoundTarget()) return false;
-            var down = platform.SendButton(hwnd, true, coordinates);
-            // One short press spans a game input update; this does not wait
-            // for animation completion or promote the send to a visible effect.
-            platform.HoldButton(80);
-            // Always try the matching release if the same target/context survives,
-            // even when DOWN timed out. A release is not a second click attempt.
-            if (!BoundTarget()) return false;
-            releaseAttempted = true;
-            var up = platform.SendButton(hwnd, false, coordinates);
-            try { diagnostic?.Invoke(new JsonObject { ["stage"] = "skip-animation-send",
-                ["hwnd"] = hwnd, ["clientX"] = x, ["clientY"] = y,
-                ["downReturn"] = down.ReturnValue, ["upReturn"] = up.ReturnValue,
-                ["pressDurationMs"] = 80,
-                ["sendInterfaceInvoked"] = true, ["animationCompletionProven"] = false }); } catch { }
-            if (down.ReturnValue == 0 || up.ReturnValue == 0) return false;
-            context.ScrollAttempt?.MarkSendSucceeded();
-            return true;
-        }
-        catch
-        {
-            // Release a possibly pressed button once, only on the still-bound target.
-            try { if (!releaseAttempted && BoundTarget()) platform.SendButton(hwnd, false, coordinates); } catch { }
-            return false; // UNKNOWN is reported; a fresh button observation may retry.
-        }
+        if (click is null || !BoundTarget()) return false;
+        var outcome = click(BoundTarget);
+        if (outcome.SideEffectAttempted) context.ScrollAttempt?.MarkSendInterfaceInvoked();
+        if (outcome.Completed) context.ScrollAttempt?.MarkSendSucceeded();
+        try { diagnostic?.Invoke(new JsonObject { ["stage"] = "skip-animation-send",
+            ["hwnd"] = hwnd, ["api"] = "SendInput", ["ticketed"] = true,
+            ["sendInterfaceInvoked"] = outcome.SideEffectAttempted, ["sendCompleted"] = outcome.Completed,
+            ["reason"] = outcome.Reason, ["animationCompletionProven"] = false }); } catch { }
+        return outcome.Completed;
     }
 
     public static bool SendDown(WarehouseSourceContext context, Func<bool> current,
