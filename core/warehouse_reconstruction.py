@@ -14,7 +14,7 @@ from warehouse_catalog_geometry import CatalogGeometryIndex
 from warehouse_grid_geometry import STATUS_OK as GRID_OK, observe_warehouse_grid
 from warehouse_physical_ledger import PhysicalComponentLedger
 from warehouse_placement_resolver import WarehousePlacementResolver
-from warehouse_scrollbar_observation import warehouse_content_roi
+from warehouse_scrollbar_observation import warehouse_content_roi, observe_warehouse_scrollbar
 from warehouse_review_packet import (
     NOT_REVIEWABLE,
     WarehouseReviewPacketError,
@@ -85,6 +85,10 @@ class WarehouseReconstructionProcessor:
             self._warnings.append("STABLE_KEY_MISMATCH")
             return {"accepted": False, "reason": "STABLE_KEY_MISMATCH"}
         origin = (0, 0)
+        if observer_result is None and frame is not None:
+            # Saved-page callers can omit the live observer DTO. Recover it
+            # from these same pixels using the existing passive observer.
+            observer_result = observe_warehouse_scrollbar(frame, already_cropped=already_cropped)
         if self._placement_resolver is not None and frame is not None:
             height, width = frame.shape[:2]
             if descriptor.get("width") != width or descriptor.get("height") != height:

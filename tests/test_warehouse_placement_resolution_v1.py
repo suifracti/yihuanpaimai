@@ -64,6 +64,23 @@ class TestWarehousePlacementResolutionV1(unittest.TestCase):
     def tearDown(self):
         self.temp_dir.cleanup()
 
+    def test_saved_pixels_restore_missing_observer_without_inventing_top(self):
+        from unittest.mock import Mock
+        key = 'saved_pair_a_anchor'
+        processor = WarehouseReconstructionProcessor(key, placement_resolver=Mock())
+        for index, frame in enumerate((self.img_prev, self.img_next)):
+            descriptor = {'evidenceId':f'page-{index}', 'recordStableKey':key,
+                'sha256':str(index+1)*64, 'width':frame.shape[1], 'height':frame.shape[0]}
+            processor.accept_segment(frame,descriptor,index,already_cropped=True,
+                overlap_proof={'trusted':True,'aligned':True,'verticalOffsetPx':-90} if index else None)
+        segments = processor._physical.snapshot()['segments']
+        self.assertEqual([s['scrollState'] for s in segments], ['TOP','MIDDLE'])
+        self.assertTrue(all(s['chainOk'] for s in segments))
+        # Starting from the second original cannot manufacture a TOP anchor.
+        partial = WarehouseReconstructionProcessor(key, placement_resolver=Mock())
+        partial.accept_segment(self.img_next,descriptor,0,already_cropped=True)
+        self.assertFalse(partial._physical.snapshot()['segments'][0]['chainOk'])
+
     @unittest.skipUnless((PROJECT_ROOT / "build/t1-20261012/once10-identity/geometry-diagnosis.json").is_file(),
                          "Private once-10 geometry evidence is not distributed")
     def test_real_once10_cut_fish_tail_is_clipped_but_adjacent_complete_items_are_full(self):

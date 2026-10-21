@@ -911,6 +911,10 @@ class WarehousePlacementResolver:
                 supports = {a["origin_y"] for a in trusted if np.median(np.abs(
                     (a["origin_y"] + np.array(a["y_lines"]) - phase + period / 2) % period - period / 2)) / period <= 0.22}
                 if len(supports) >= 2:
+                    # Phase is modulo one cell. Keep the equivalent phase
+                    # nearest the TOP ruler; 53px at pitch 56 means -3px,
+                    # not an extra row removed from the warehouse origin.
+                    phase += round((anchor_y_start - phase) / period) * period
                     cell_h, anchor_y_start = period, phase
         else:
             anchor_y_start = 0.0
