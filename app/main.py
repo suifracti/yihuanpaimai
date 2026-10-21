@@ -3362,6 +3362,8 @@ def _live_loop_view(data: Dict[str, Any], published: Optional[str], funds) -> Op
             and capture.get('segmentCount', 0) > 0 and not capture.get('stopAvailable'),
         "coverageStatus": capture.get('coverageStatus'),
         "captureProgress": [capture.get(k) for k in ('state','segmentCount','scrollRequestCount')],
+        "savedSources": capture.get('segmentCount',0),
+        "scrollRequests": getattr(_NATIVE_WAREHOUSE_SOURCE_COORDINATOR,'_scroll_count',0),
         "q": data.get("q") if data.get("q") is not None else CURRENT_MATCH.facts.get("q"),
         "goldAvg": data.get("goldAvg") if data.get("goldAvg") is not None else CURRENT_MATCH.facts.get("goldAvg"),
         "goldTotal": data.get("goldTotal") if data.get("goldTotal") is not None else CURRENT_MATCH.facts.get("goldTotal"),

@@ -444,6 +444,7 @@ def live_domain_loop_public(state):
         "instrumentsReady": (state.get('restock') or {}).get('ready') is True,
         "matchesDone": state.get('matchesDone', 0),
         "completedMatches": list(state.get('completedMatches') or []),
+        "completedRuns": list(state.get('completedRuns') or []),
         "mode": state.get('mode','bid'),
     }
 
@@ -492,6 +493,8 @@ def advance_live_domain_loop(state, view, send):
             state.update(phase='collecting', reason='WAITING_WAREHOUSE_SAVE')
             return state
         state['coverage'] = view.get('coverageStatus') or 'PARTIAL'
+        state['savedSources'] = view.get('savedSources',0)
+        state['scrollRequests'] = view.get('scrollRequests',0)
         return _dispatch_live_session(state, view, send, "ReturnLobby")
     if scene == 'ENTRY_FEE':
         if state.get('phase') not in {'entry_dispatched', 'entry_paid', 'entry_unknown'}:
@@ -555,6 +558,9 @@ def _consume_live_receipt(state, view):
             if key and key not in state.setdefault('completedMatches', []):
                 state['completedMatches'].append(key)
                 state['matchesDone'] = len(state['completedMatches'])
+                state.setdefault('completedRuns',[]).append(dict(matchId=key,mode=state.get('mode','bid'),
+                    coverage=state.get('coverage','PARTIAL'),savedSources=state.get('savedSources',0),
+                    scrollRequests=state.get('scrollRequests',0)))
         else:
             state.update(phase='entry_paid' if phase == 'entry_dispatched' else 'entering', reason='WAITING_AUCTION')
         state["resendAllowed"] = False
