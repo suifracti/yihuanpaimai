@@ -464,6 +464,7 @@ def advance_live_domain_loop(state, view, send):
     if state.get("phase") == "stopped":
         return state
     _consume_live_receipt(state, view)
+    _observe_saved_return(state,view)
     if state.get("phase") == "stopped":
         return state
     scene, engine = view.get('publishedScene'), view.get('engine') or {}
@@ -554,13 +555,7 @@ def _consume_live_receipt(state, view):
         elif phase == "return_dispatched":
             state["phase"] = "return_confirmed"
             state["reason"] = None
-            key = state.get('settledMatch')
-            if key and key not in state.setdefault('completedMatches', []):
-                state['completedMatches'].append(key)
-                state['matchesDone'] = len(state['completedMatches'])
-                state.setdefault('completedRuns',[]).append(dict(matchId=key,mode=state.get('mode','bid'),
-                    coverage=state.get('coverage','PARTIAL'),savedSources=state.get('savedSources',0),
-                    scrollRequests=state.get('scrollRequests',0)))
+            _complete_returned_match(state,'HOST_CONFIRMED')
         else:
             state.update(phase='entry_paid' if phase == 'entry_dispatched' else 'entering', reason='WAITING_AUCTION')
         state["resendAllowed"] = False
@@ -575,6 +570,24 @@ def _consume_live_receipt(state, view):
         else:
             state.update(phase='idle', reason=receipt.get('reason') or status)
         state["resendAllowed"] = False
+
+
+def _complete_returned_match(state,method):
+    key=state.get('settledMatch')
+    if key and key not in state.setdefault('completedMatches',[]):
+        state['completedMatches'].append(key)
+        state['matchesDone']=len(state['completedMatches'])
+        state.setdefault('completedRuns',[]).append(dict(matchId=key,mode=state.get('mode','bid'),
+            coverage=state.get('coverage','PARTIAL'),savedSources=state.get('savedSources',0),
+            scrollRequests=state.get('scrollRequests',0),returnedBy=method))
+
+
+def _observe_saved_return(state,view):
+    if (state.get('phase')=='collecting' and view.get('publishedScene')=='LOBBY'
+            and view.get('collectionFinished') and view.get('captureRecordKey')==state.get('settledMatch')):
+        state.update(phase='return_confirmed',reason=None,coverage=view.get('coverageStatus') or 'PARTIAL',
+            savedSources=view.get('savedSources',0),scrollRequests=view.get('scrollRequests',0))
+        _complete_returned_match(state,'OBSERVED_LOBBY')  # A scene fact, never a fabricated Host receipt.
 
 
 def _dispatch_live_bid(state, view, send):

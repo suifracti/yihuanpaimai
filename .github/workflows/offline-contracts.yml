@@ -643,7 +643,7 @@ jobs:
             'Domain action session contracts: NOT_RUN (no result file)' | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Append -Encoding utf8
           } else {
             $result = Get-Content $outputPath -Raw | ConvertFrom-Json
-            if ($testExitCode -ne 0 -or $result.tests -ne 30 -or $result.failures.Count -gt 0 -or $result.errors.Count -gt 0 -or $result.skipped.Count -gt 0) { $status = 'FAIL' }
+            if ($testExitCode -ne 0 -or $result.tests -ne 31 -or $result.failures.Count -gt 0 -or $result.errors.Count -gt 0 -or $result.skipped.Count -gt 0) { $status = 'FAIL' }
             else { $status = 'PASS' }
             "Domain action session contracts: $status; tests=$($result.tests); failures=$($result.failures.Count); errors=$($result.errors.Count); skipped=$($result.skipped.Count)" | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Append -Encoding utf8
           }

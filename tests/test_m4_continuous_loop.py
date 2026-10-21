@@ -5,6 +5,32 @@ from domain_action_session import advance_live_domain_loop as advance, fresh_liv
 
 
 class ContinuousLoopTests(unittest.TestCase):
+    def test_saved_capture_can_return_while_analysis_is_aligning_and_lobby_counts_once(self):
+        import main
+        from types import SimpleNamespace
+        from unittest import mock
+        cap=SimpleNamespace(_running=False,_scroll_count=13,
+            presentation_payload=lambda:dict(state='ALIGNING',segmentCount=47,coverageStatus='COVERAGE_UNPROVEN',stopAvailable=False),
+            source=SimpleNamespace(intake=SimpleNamespace(_binding=dict(recordStableKey='finished'),_processing_binding=None)))
+        state=dict(fresh_live_domain_state(),phase='collecting',settledMatch='finished')
+        with mock.patch.multiple(main,CURRENT_MATCH=SimpleNamespace(facts={},id='finished'),
+                _NATIVE_WAREHOUSE_SOURCE_COORDINATOR=cap,_LIVE_DOMAIN_LOOP=state,
+                _NATIVE_DOMAIN_ACTION_BOOT_ID='boot',CONFIG={},LATEST_PAYLOAD={}), \
+             mock.patch.object(main,'_game_is_foreground',return_value=True):
+            data=dict(round=4,sourceMatchGeneration=2,factsRevision=1,matchId='finished',
+                observationSessionId='obs',target=dict(targetHwnd=1,targetPid=2,identity=dict(ProcessInstanceToken=3)))
+            view=main._live_loop_view(data,'SETTLEMENT',None)
+            self.assertTrue(view['collectionFinished'],'SAVED_ORIGINALS_BLOCKED_BY_BACKGROUND_ANALYSIS')
+            self.assertNotEqual(view['coverageStatus'],'COMPLETE')
+            lobby=main._live_loop_view(data,'LOBBY',200000)
+            self.assertTrue(lobby['collectionFinished'])
+            self.assertEqual(lobby['captureRecordKey'],'finished')
+            sent=[];send=lambda _,e:sent.append(e) or True
+            advance(state,lobby,send)
+            self.assertEqual(state['matchesDone'],1)
+            self.assertEqual(state['completedRuns'][0]['returnedBy'],'OBSERVED_LOBBY')
+            advance(state,lobby,send);self.assertEqual(state['matchesDone'],1)
+
     def view(self, scene, match='match-1', round=1, **extra):
         return dict(publishedScene=scene, mode='bid', foreground=True, userConfirmed=True,
             engine=dict(matchId=match,matchGeneration=2,observationSessionId='obs',round=round,factsRevision=1),

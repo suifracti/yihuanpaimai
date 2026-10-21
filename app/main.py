@@ -3231,8 +3231,9 @@ def _advance_authorized_live_domain_loop(data: Dict[str, Any], frame: Dict[str, 
             return bool(bridge is not None and bridge.running and bridge.send_control(envelope))
 
         before = (_LIVE_DOMAIN_LOOP.get("phase"), _LIVE_DOMAIN_LOOP.get("reason"))
-        from domain_action_session import _consume_live_receipt
+        from domain_action_session import _consume_live_receipt, _observe_saved_return
         _consume_live_receipt(_LIVE_DOMAIN_LOOP, view)
+        _observe_saved_return(_LIVE_DOMAIN_LOOP,view)
         view['mode'] = _live_domain_mode()
         from instrument_restock import advance as advance_restock, SCENES as restock_scenes
         restock_ready = view.get('mode') == 'observe' or advance_restock(_LIVE_DOMAIN_LOOP, view, send, CONFIG.get('autoAuction') or {})
@@ -3352,14 +3353,18 @@ def _live_loop_view(data: Dict[str, Any], published: Optional[str], funds) -> Op
     }
     directory = os.environ.get("NTE_DOMAIN_LIVE_DIR") or ""
     capture = {}
-    if published == 'SETTLEMENT' and _NATIVE_WAREHOUSE_SOURCE_COORDINATOR is not None:
+    capture_key = None
+    if published in {'SETTLEMENT','LOBBY'} and _NATIVE_WAREHOUSE_SOURCE_COORDINATOR is not None:
         capture = _NATIVE_WAREHOUSE_SOURCE_COORDINATOR.presentation_payload()
+        intake = _NATIVE_WAREHOUSE_SOURCE_COORDINATOR.source.intake
+        capture_key = (intake._processing_binding or intake._binding or {}).get('recordStableKey')
     return {
         "publishedScene": 'AUCTION_READY' if published == 'AUCTION_R1' else published,
         "mode": _live_domain_mode(),
         "frameSequence": data.get('frameSequence'),
-        "collectionFinished": capture.get('state') in {'COMPLETE','PARTIAL','ERROR'}
+        "collectionFinished": capture.get('state') in {'ALIGNING','COMPLETE','PARTIAL','ERROR'}
             and capture.get('segmentCount', 0) > 0 and not capture.get('stopAvailable'),
+        "captureRecordKey": capture_key,
         "coverageStatus": capture.get('coverageStatus'),
         "captureProgress": [capture.get(k) for k in ('state','segmentCount','scrollRequestCount')],
         "savedSources": capture.get('segmentCount',0),
