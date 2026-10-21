@@ -372,9 +372,10 @@
     mn[m][0][0] = mx[m][0][0] = 0;
     for (let i = m - 1; i >= 0; i--) {
       const price = prices[i], grid = grids[i];
+      const cap = Array.isArray(repeat) ? repeat[i] : repeat;
       for (let need = 0; need <= maxCount; need++) {
         for (let cells = 0; cells <= maxGrid; cells++) {
-          for (let take = 0; take <= Math.min(repeat, need); take++) {
+          for (let take = 0; take <= Math.min(cap, need); take++) {
             const usedGrid = take * grid;
             if (usedGrid > cells) break;
             const remNeed = need - take, remGrid = cells - usedGrid;
@@ -754,8 +755,36 @@
       }
       if (!sums.has(target)) return noMatch();
     }
-    let lowCountAreaSums = null;
+    let lowCountAreaSums = null, lowAreaSums = null;
     function lowJointAreaPossible(targetArea) {
+      if (totalItems === null) {
+        // No observed item total: the answer only depends on which areas the
+        // three low tiers can fill together. Building and scanning per-count
+        // "count:area" stamps would compute the same set at a much higher cost.
+        if (lowAreaSums === null) {
+          let combined = new Set([0]);
+          for (let index=0;index<low.length;index++) {
+            const item=low[index],counts=lowCountDomains[index],items=cat[item.color];
+            const sizes=[...new Set(items.map(x=>String(x[2]).split("x").map(Number).reduce((a,b)=>a*b,1)))];
+            const maxCount=Math.max(...counts),reachable=Array.from({length:maxCount+1},()=>new Set());
+            reachable[0].add(0);
+            for(let n=1;n<=maxCount;n++) for(const cells of reachable[n-1]) for(const size of sizes)
+              if(cells+size<=totalGrids) reachable[n].add(cells+size);
+            const options=new Set();
+            for(const count of counts) for(const cells of reachable[count]) {
+              if(item.grid!==null && cells!==item.grid) continue;
+              if((item.avg!==null || item.groups.length) && count>0 && !catalogGridPossible(items,count,cells,item.groups,item.avg===null?null:bounds(item.avg,count,rounding),count)) continue;
+              options.add(cells);
+            }
+            const next=new Set();
+            for(const have of combined) for(const add of options)
+              if(have+add<=totalGrids) next.add(have+add);
+            combined=next;
+          }
+          lowAreaSums=combined;
+        }
+        return lowAreaSums.has(targetArea);
+      }
       if (lowCountAreaSums === null) {
         let combined = new Set(["0:0"]);
         for (let index=0;index<low.length;index++) {
@@ -890,6 +919,15 @@
         }
       }
     }
+    // A leaf only counts when the gold area is exactly goldGrid, so a branch
+    // whose remaining items cannot fill the remaining area inside the observed
+    // average window is already impossible. The per-count sum tables above
+    // ignore the area and reject far less. The table is optional: a corrupted
+    // or extreme area simply falls back to the older prune.
+    const jointNeed = Math.max(0, q - seed.length);
+    const jointCells = (goldPrices.length + 1) * (jointNeed + 1) * ((goldGrid ?? 0) + 1);
+    const jointGoldSums = goldGrid === null || jointCells > 2000000 ? null
+      : jointTables(goldPrices, goldGrids, jointNeed, goldGrid, capacities);
 
     for (const P of pCandidates) {
       if ((purpleGrid !== null || purpleAvg !== null) &&
@@ -964,6 +1002,13 @@
             const nextGrid = grid + take * goldGrids[idx];
             const remNeed = G - count - take;
             if (reachableGoldAreas && !reachableGoldAreas[idx + 1][remNeed].has(goldGrid - nextGrid)) continue;
+            if (jointGoldSums) {
+              const remGrid = goldGrid - nextGrid;
+              if (remGrid < 0 || remGrid > goldGrid) continue;
+              const jmin = jointGoldSums[0][idx + 1][remNeed][remGrid];
+              const jmax = jointGoldSums[1][idx + 1][remNeed][remGrid];
+              if (jmin === INF || nextSum + jmin > b[1] || nextSum + jmax < b[0]) continue;
+            }
             if (nextSum + mn[idx + 1][remNeed] <= b[1] && nextSum + mx[idx + 1][remNeed] >= b[0]) {
               const nextCombo = [...combo];
               for (let k = 0; k < take; k++) nextCombo.push(goldPrices[idx]);

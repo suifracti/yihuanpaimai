@@ -128,5 +128,34 @@ class CompositeFeasibilityTests(unittest.TestCase):
             self.assertEqual(bool(result["states"]), expected == "incomplete")
 
 
+    def test_sparse_gold_grid_facts_keep_their_states(self):
+        # run-9 saved q=16, goldAvg=93022, goldGrid=60 and totalGrid=116 with
+        # no purple/gold/low-tier counts, so every purple split 0..16 is still
+        # possible. The gold search must stay bounded and keep the same
+        # witnesses; this pins the answer the enumeration produced before the
+        # joint (count, grid) residual-sum prune.
+        sparse = {
+            "matchId": "synthetic-sparse-gold",
+            "catalogVersion": "venue-box-catalog.alpha.2026-08-22.v1",
+            "venue": "中级场 · 珊瑚场", "box": "琉璃宝箱",
+            "fieldCondition": "standard", "roundingMode": "floor",
+            "q": 16, "avg": 93022, "goldAvg": 93022,
+            "goldGrid": 60, "totalGrid": 116, "totalGrids": 116,
+        }
+        out = run_node("""
+          const fs=require('fs'),e=require('./core/auction_engine_v06.js');
+          const ctx=JSON.parse(fs.readFileSync(0,'utf8'));
+          const r=e.solveExactStatesSync(ctx);
+          console.log(JSON.stringify({status:r.solverStatus,total:r.states.length,
+            Gs:r.candidateGs,Ps:r.candidatePs,
+            legal:r.states.every(s=>s.G+s.P+s.R===16)}));
+        """, sparse)
+        self.assertEqual(out["status"], "valid")
+        self.assertEqual(out["total"], 56)
+        self.assertEqual(out["Gs"], [6, 7, 8, 9, 10, 11, 12])
+        self.assertEqual(out["Ps"], [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10])
+        self.assertTrue(out["legal"])
+
+
 if __name__ == "__main__":
     unittest.main()
