@@ -504,7 +504,7 @@ def advance_live_domain_loop(state, view, send):
         return _dispatch_live_session(state, view, send, "StartNextMatch")
     round_key = [engine.get(k) for k in ('matchId','matchGeneration','round')]
     if scene in {'AUCTION', 'AUCTION_READY', 'AUCTION_R1', 'INSTRUMENT_LIST', 'INSTRUMENT_GOLD_SELECTED'}:
-        if state.get('phase') in {'entering', 'entry_paid', 'entry_unknown', 'return_confirmed', 'start_dispatched'}:
+        if engine.get('round',0) >= 1 and state.get('phase') in {'entering', 'entry_paid', 'entry_unknown', 'return_confirmed', 'start_dispatched'}:
             state.update(phase='idle', reason=None, bidIntentId=None, amount=None)
         if state.get('phase') == 'round_done' and round_key != state.get('finishedRound'):
             state.update(phase='idle', reason=None, bidIntentId=None, amount=None)

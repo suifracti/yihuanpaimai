@@ -6,6 +6,7 @@ using NteHost;
 using WgcLiveHarness;
 
 if (args.Contains("--mapping-only")) { MappingRecoveryChecks.Run(args[0]); return; }
+if (args.Contains("--translation-only")) { MappingRecoveryChecks.Run(args[0],translationOnly:true); return; }
 
 if (args.Contains("--retained-boundary-only")) { RetainedBoundaryContracts.Run(); return; }
 if (args.Contains("--advice-qualification-only")) { DeliveryContracts.AdviceQualificationOnly(); return; }

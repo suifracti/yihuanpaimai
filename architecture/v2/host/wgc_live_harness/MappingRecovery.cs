@@ -91,7 +91,15 @@ internal sealed class MappingRecovery
         transition("suspended", first, result);
         var deadline = checked(clock() + RetryWindowMs);
         int attempts = 0;
-        while (result.State == MappingState.Unavailable && attempts++ < MaxProbeAttempts && clock() < deadline)
+        bool MayReprobe(MappingProbe p) => p.State == MappingState.Unavailable
+            || p.State == MappingState.Changed && p.Stage == "compare" && p.Observed is { } o
+                && o.ItemWidth == p.Expected.ItemWidth && o.ItemHeight == p.Expected.ItemHeight
+                && o.ClientWidth == p.Expected.ClientWidth && o.ClientHeight == p.Expected.ClientHeight
+                && o.BoundsWidth == p.Expected.ItemWidth && o.BoundsHeight == p.Expected.ItemHeight;
+        // Window movement can straddle the separate origin/bounds OS calls.
+        // Reprobe within the existing window; only exact Current resumes, never
+        // the changed offset, and the old frame/lease epoch remains revoked.
+        while (MayReprobe(result) && attempts++ < MaxProbeAttempts && clock() < deadline)
         {
             wait((int)Math.Min(50, Math.Max(1, deadline - clock())));
             result = Read();

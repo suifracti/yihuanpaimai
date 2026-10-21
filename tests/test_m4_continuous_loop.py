@@ -59,6 +59,14 @@ class ContinuousLoopTests(unittest.TestCase):
         self.assertEqual(state['phase'],'entry_unknown');self.assertEqual(sent,[])
 
     def test_loading_and_no_frames_have_no_total_deadline(self):
+        # Real run-1 briefly showed AUCTION/round 0 before returning to the
+        # matching lobby. A paid entry must not become another Start action.
+        paid=dict(fresh_live_domain_state(),phase='entry_paid')
+        clicks=[]
+        advance(paid,self.view('AUCTION',round=0),lambda _,e: clicks.append(e) or True)
+        advance(paid,self.view('LOBBY',round=0),lambda _,e: clicks.append(e) or True)
+        self.assertEqual(paid['phase'],'entry_paid')
+        self.assertEqual(clicks,[])
         state=fresh_live_domain_state()
         for now in (1,999_000_000_000,999_999_000_000_000):
             v=self.view(None);v['nowNs']=now;advance(state,v,lambda *_:False)

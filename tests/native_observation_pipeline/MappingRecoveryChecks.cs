@@ -4,7 +4,7 @@ using WgcLiveHarness;
 internal static class MappingRecoveryChecks
 {
     private static void Check(bool value, string reason) { if (!value) throw new Exception(reason); }
-    public static void Run(string root)
+    public static void Run(string root, bool translationOnly=false)
     {
         var expected = new MappingGeometry(1922, 1112, 1920, 1080, 1, 31);
         // Independently preserved startup geometry; screen translation alone is legal.
@@ -15,6 +15,27 @@ internal static class MappingRecoveryChecks
         Check(MappingProbe.Compare(expected, observed with { ClientWidth = 1280 }, "WindowRect").State == MappingState.Changed, "measured size change missed");
         Check(MappingProbe.Compare(expected, observed with { BoundsWidth = null }, "WindowRect").State == MappingState.Unavailable, "missing measurement treated as change");
         var unavailable = current with { State = MappingState.Unavailable, Stage = "GetClientRect", Error = "win32:5", Observed = new(1922, 1112) };
+        // run-1: item/client sizes were unchanged, but separately sampled screen
+        // origins gave offset 3 instead of 1. Never accept that map. If a later
+        // full measurement is Current, the existing recovery may resume.
+        var moved = MappingProbe.Compare(expected,new(1922,1112,1920,1080,613,129,610,98,1922,1112),"DwmExtendedFrameBounds");
+        var translated = MappingProbe.Compare(expected,new(1922,1112,1920,1080,611,129,610,98,1922,1112),"DwmExtendedFrameBounds");
+        var translationRecovery=new MappingRecovery(); long translationClock=0;
+        var priorTranslationEpoch=translationRecovery.Epoch; int translationRevokes=0;
+        translationRecovery.Ensure(()=>translated,()=>false,()=>true,()=>translationRevokes++,(_,_,_)=>{},
+            ()=>translationClock,ms=>translationClock+=ms,initial:moved);
+        Check(translationRevokes==1 && !translationRecovery.IsCurrent(priorTranslationEpoch)
+            && translationRecovery.IsCurrent(translationRecovery.Epoch),"TRANSIENT_TRANSLATION_REPROBE_REQUIRED");
+        if(translationOnly) {
+            long elapsed=0; bool rejected=false;var persistent=new MappingRecovery();
+            try { persistent.Ensure(()=>moved,()=>false,()=>true,()=>{},(_,_,_)=>{},
+                ()=>elapsed,ms=>elapsed+=ms,initial:moved); }
+            catch(MappingRejectedException ex) { rejected=ex.FirstProbe==moved && ex.LastProbe==moved; }
+            Check(rejected && elapsed<=MappingRecovery.RetryWindowMs
+                && !persistent.IsCurrent(persistent.Epoch),"PERSISTENT_CHANGED_MAP_MUST_STILL_STOP");
+            Console.WriteLine("PASS translation remeasurement: exact recovery only, old epoch revoked, persistent change bounded and rejected; no capture/input");
+            return;
+        }
         long now = 0;
         int publications = 0, inputs = 0, reads = 0;
         var recovery = new MappingRecovery();
@@ -70,7 +91,8 @@ internal static class MappingRecoveryChecks
             var gate = new MappingRecovery(); long ticks = 0; int probes = 0; bool stop = false, identity = true;
             MappingRejectedException? rejected = null;
             try {
-                gate.Ensure(() => { probes++; return unavailable; }, () => stop, () => identity,
+                gate.Ensure(() => { probes++; return terminal == MappingState.Changed
+                        ? current with { State=MappingState.Changed,Observed=observed with {ClientOriginY=232} } : unavailable; }, () => stop, () => identity,
                     () => { }, (_, _, _) => { }, () => ticks,
                     ms => { ticks += ms; if (terminal == MappingState.Stopped) stop = true;
                         if (terminal == MappingState.TargetInvalid) identity = false; },

@@ -63,7 +63,7 @@ class AuctionPreparationTests(unittest.TestCase):
             self.assertEqual(sent[-1]['intent']['kind'], 'OpenBidPanel')
             self.assertEqual([row['intent']['amount'] for row in sent], [None]*4)
 
-    def test_unknown_not_sent_and_qualification_loss_do_not_click_again(self):
+    def test_nonfinancial_unknown_follows_the_observed_scene_without_reusing_a_ticket(self):
         for outcome in ('UNKNOWN', 'NOT_SENT'):
             with self.subTest(outcome=outcome), tempfile.TemporaryDirectory() as directory:
                 sent = []
@@ -72,9 +72,11 @@ class AuctionPreparationTests(unittest.TestCase):
                 self.assertEqual(len(sent), 1)
                 receipt = {**sent[0]['intent'], 'status': outcome}
                 state = advance_live_domain_loop(state, self.view(directory, 'INSTRUMENT_LIST', receipt=receipt), send)
-                self.assertEqual(state['phase'], 'stopped')
+                self.assertEqual(state['phase'], 'preparing')
+                self.assertEqual(sent[-1]['intent']['kind'],'SelectGoldAverage')
+                self.assertNotEqual(sent[0]['intent']['intentId'],sent[-1]['intent']['intentId'])
                 advance_live_domain_loop(state, self.view(directory, 'AUCTION_READY'), send)
-                self.assertEqual(len(sent), 1)
+                self.assertEqual(len(sent), 2)
         with tempfile.TemporaryDirectory() as directory:
             sent = []
             view = self.view(directory, 'AUCTION_READY')
