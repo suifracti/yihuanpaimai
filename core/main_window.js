@@ -4297,7 +4297,7 @@ function renderWarehouseCapture(capture) {
   button.disabled = !available && !running;
   button.textContent = running ? "停止采集" : "采集完整仓库";
   button.title = running
-    ? "只停止当前收页并保留已有页面；本局不重试。若结算自动收页仍开启，下一局仍可自动触发。"
+    ? "停止当前收页并保留已有页面；自动拍卖运行时，也会停止自动串联并恢复主窗口。"
     : "手动收页入口；已启用结算自动收页时，无需每局点击或重新武装。";
 
   if (message) {
