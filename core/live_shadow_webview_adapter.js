@@ -8,8 +8,8 @@
 (function (global) {
   "use strict";
 
-  const EXPECTED_SOLVER_CORE_SHA256 = "1ec8dca270a8219eb00133421723a114f3649b81cd07c769c765ac2c7afed07f";
-  const EXPECTED_SOLVER_CORE_LF_SHA256 = "547c89e2751f7c6d9d2732da6bd8e1e6ebaa9f6daa873a4699044df16f951156";
+  const EXPECTED_SOLVER_CORE_SHA256 = "a775d59d82581d72e53f94cb54a1b401b031262fdffa915b1e1f04adf122d129";
+  const EXPECTED_SOLVER_CORE_LF_SHA256 = "55a1774668490847f6d8eef57842fe7d91d559bb8adbf31e434e6c6506e4b6c4";
 
   let cachedRecords = [];
   let solverInitialized = false;

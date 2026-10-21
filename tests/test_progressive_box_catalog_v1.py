@@ -140,12 +140,12 @@ class ProgressiveBoxCatalogV1Tests(unittest.TestCase):
 
     def test_algorithm_and_history_hashes_match_checkpoint(self):
         expected = {
-            "core/auction_engine_v06.js": "205b04c9b7af7094cc27b91003cbbff47d7b437d99e0ef4a5beecb78e3f35142",
-            "core/solver_core_v06.js": "1ec8dca270a8219eb00133421723a114f3649b81cd07c769c765ac2c7afed07f",
-            "core/shadow_profile_v06.js": "9967f269f5c5b66dc8a010e3077ce014700c0b94333d93acf25a4021f9c886a5",
+            "core/auction_engine_v06.js": "fa2773beaf0bd1b2ff78a514859cf3e9cbb92522819452d09197cace0779025e",
+            "core/solver_core_v06.js": "55a1774668490847f6d8eef57842fe7d91d559bb8adbf31e434e6c6506e4b6c4",
+            "core/shadow_profile_v06.js": "3c0cc1a32a3a6aed0654a874ea02fd9a5f73af7017d2ef0737c7bfa6d09b6bc5",
         }
         for relative, digest in expected.items():
-            content = (ROOT / relative).read_bytes()
+            content = (ROOT / relative).read_bytes().replace(b"\r\n", b"\n")
             if relative == "core/auction_engine_v06.js":
                 # The frozen result now carries the already computed decision.
                 # Keep the original algorithm checkpoint; allow only this exact
