@@ -33,7 +33,7 @@ class InstrumentRestockTests(unittest.TestCase):
         self.assertTrue(advance(state,self.view(preparationReceipt=dict(sent[-1],status='CONFIRMED')),send,{}))
         self.assertFalse(any(i['kind']=='ConfirmToolRefill' for i in sent))
 
-    def test_group_navigation_is_bounded_and_unknown_stops_even_on_unrelated_scene(self):
+    def test_group_navigation_is_bounded_and_unknown_waits_for_scene_progress(self):
         for scene,status,reason in [('TOOL_GROUPS','CONFIRMED','INSTRUMENT_ADVANCED_GROUP_NOT_FOUND'),
                                     ('AUCTION','UNKNOWN','INSTRUMENT_UNKNOWN')]:
             state,sent={'phase':'idle'},[]
@@ -41,7 +41,7 @@ class InstrumentRestockTests(unittest.TestCase):
             advance(state,self.view(),send,{})
             advance(state,self.view('TOOL_GROUPS',preparationReceipt=dict(sent[-1],status='CONFIRMED')),send,{})
             advance(state,self.view(scene,preparationReceipt=dict(sent[-1],status=status)),send,{})
-            self.assertEqual(state['phase'],'stopped')
+            self.assertNotEqual(state['phase'],'stopped')
             self.assertEqual(state['reason'],reason)
             self.assertEqual(len(sent),2)
 
@@ -106,7 +106,7 @@ class InstrumentRestockTests(unittest.TestCase):
             v=self.view('TOOL_SETUP',preparationReceipt=dict(sent[-1],status=status),instruments={})
             advance(s,v,send,{})
             advance(s,v,send,{})
-            self.assertEqual(s['phase'],'stopped')
+            self.assertEqual(s['phase'],'restocking')
             self.assertEqual(len(sent),1)
         s,sent={'phase':'idle'},[]
         send=lambda _,e:sent.append(e['intent']) or True
@@ -127,4 +127,4 @@ class InstrumentRestockTests(unittest.TestCase):
                         preparationReceipt=dict(sent[-1],status='CONFIRMED'))
             advance(s,v,send,config)
             if expected:self.assertEqual(sent[-1]['kind'],expected)
-            else:self.assertEqual(s['phase'],'stopped')
+            else:self.assertEqual(s['phase'],'restocking')

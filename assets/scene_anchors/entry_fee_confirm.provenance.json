@@ -1,0 +1,11 @@
+{
+  "source": "build/m4-20261021/entry-client.bmp",
+  "sha256": "3b84acaaa9eaf19ef49929b3e8aaa9fffc07f0e89e86ff7dd4b67b951358168c",
+  "crop": [
+    1130,
+    697,
+    1185,
+    727
+  ],
+  "purpose": "Real entry-fee dialog from the accepted ad auction; label only, no account data."
+}

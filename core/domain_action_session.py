@@ -103,6 +103,9 @@ class DomainActionSession:
             # to the legacy ARCHIVED reset branch (which can auto-create a session).
             self.fsm.handle_observation(VisionObservation(round=0))
             self.phase = "LOBBY"
+        elif not receipt.get('newMatchId'):
+            # Start now confirms the fee dialog opening, not a fabricated new auction.
+            self.phase = 'ENTRY_FEE'
         else:
             new_id = receipt.get("newMatchId")
             new_generation = receipt.get("newMatchGeneration")
@@ -407,7 +410,7 @@ def commit_domain_receipt(book, receipt: dict, *, independently_qualified: bool,
 
 
 def fresh_live_domain_state():
-    """One authorized pass: bid, return, then the next match. Unknown is terminal."""
+    """One observation context across rounds and matches; unknown bids never retry."""
     return {
         "phase": "idle",
         "resendAllowed": False,
@@ -417,6 +420,8 @@ def fresh_live_domain_state():
         "bidIntentId": None,
         "returnIntentId": None,
         "startIntentId": None,
+        "matchesDone": 0,
+        "completedMatches": [],
     }
 
 
@@ -437,14 +442,17 @@ def live_domain_loop_public(state):
         "resendAllowed": False,
         "restockSpent": (state.get('restock') or {}).get('spent', 0),
         "instrumentsReady": (state.get('restock') or {}).get('ready') is True,
+        "matchesDone": state.get('matchesDone', 0),
+        "completedMatches": list(state.get('completedMatches') or []),
+        "mode": state.get('mode','bid'),
     }
 
 
 def advance_live_domain_loop(state, view, send):
     """Move the authorized loop by one observation. send(owner, envelope) -> bool.
 
-    A false or missing send does not try a second envelope. UNKNOWN and NOT_SENT
-    stop the loop. The bid uses the existing once-only ledger; return and the
+    A bid with unknown confirmation never retries. The bid uses the existing
+    once-only ledger; return and the
     next match are session envelopes with amount null, focus epoch 0, and
     takeover 0. The caller supplies the host's engine scope, not a private one.
     """
@@ -452,17 +460,56 @@ def advance_live_domain_loop(state, view, send):
         raise ValueError("LIVE_LOOP_STATE_REQUIRED")
     if not isinstance(view, dict) or not callable(send):
         raise ValueError("LIVE_LOOP_VIEW_REQUIRED")
-    if state.get("phase") in ("done", "stopped"):
+    if state.get("phase") == "stopped":
         return state
     _consume_live_receipt(state, view)
-    if state.get("phase") in ("done", "stopped"):
+    if state.get("phase") == "stopped":
         return state
-    if state.get("phase") == "idle":
-        return _dispatch_live_bid(state, view, send)
-    if state.get("phase") == "bid_confirmed":
+    scene, engine = view.get('publishedScene'), view.get('engine') or {}
+    state['mode'] = view.get('mode','bid')
+    now = view.get('nowNs', 0)
+    # Scene timeout is a progress timeout, not a total match/warehouse budget.
+    if scene is None or scene in {'UNKNOWN','LOADING'}:
+        state.pop('progressNs',None)  # Loading / no frame has no artificial total timeout.
+        return state
+    marker = (scene, engine.get('matchId'), engine.get('round'), view.get('captureProgress'))
+    if marker != state.get('progressMarker') or 'progressNs' not in state:
+        state.update(progressMarker=marker, progressNs=now)
+    if now - state['progressNs'] > 90_000_000_000:
+        state.update(phase='stopped', reason='SCENE_NO_PROGRESS_TIMEOUT', resendAllowed=False)
+        return state
+    funds = view.get('currentFunds')
+    if type(funds) is int:
+        state['funds'] = funds
+        if funds < view.get('minimumFunds', 0):
+            state.update(phase='stopped', reason='FUNDS_BELOW_MINIMUM', resendAllowed=False)
+            return state
+    if view.get('waitingRestock'):
+        return state
+    if scene == 'SETTLEMENT' and state.get('phase') != 'return_dispatched':
+        state['settledMatch'] = engine.get('matchId')
+        if not view.get('collectionFinished'):
+            state.update(phase='collecting', reason='WAITING_WAREHOUSE_SAVE')
+            return state
+        state['coverage'] = view.get('coverageStatus') or 'PARTIAL'
         return _dispatch_live_session(state, view, send, "ReturnLobby")
-    if state.get("phase") == "return_confirmed":
+    if scene == 'ENTRY_FEE':
+        if state.get('phase') not in {'entry_dispatched', 'entry_paid', 'entry_unknown'}:
+            return _dispatch_entry_fee(state, view, send)
+        return state
+    if scene == 'LOBBY' and state.get('phase') not in {'start_dispatched', 'entry_dispatched', 'entry_paid', 'entry_unknown', 'entering'}:
         return _dispatch_live_session(state, view, send, "StartNextMatch")
+    round_key = [engine.get(k) for k in ('matchId','matchGeneration','round')]
+    if scene in {'AUCTION', 'AUCTION_READY', 'AUCTION_R1', 'INSTRUMENT_LIST', 'INSTRUMENT_GOLD_SELECTED'}:
+        if state.get('phase') in {'entering', 'entry_paid', 'entry_unknown', 'return_confirmed', 'start_dispatched'}:
+            state.update(phase='idle', reason=None, bidIntentId=None, amount=None)
+        if state.get('phase') == 'round_done' and round_key != state.get('finishedRound'):
+            state.update(phase='idle', reason=None, bidIntentId=None, amount=None)
+        if state.get('phase') == 'idle':
+            if view.get('mode') == 'observe':
+                state['reason'] = 'OBSERVING_WITHOUT_INSTRUMENTS_OR_BIDS'
+                return state
+            return _dispatch_live_bid(state, view, send)
     return state
 
 
@@ -478,8 +525,7 @@ def _consume_live_receipt(state, view):
             state['phase'] = 'idle'
             state['reason'] = None
         elif receipt.get('status') in ('UNKNOWN', 'NOT_SENT'):
-            state['phase'] = 'stopped'
-            state['reason'] = receipt.get('reason') or receipt['status']
+            state.update(phase='idle', reason=receipt.get('reason') or receipt['status'])
         return
     if phase == "bid_dispatched":
         receipt, intent_id = view.get("bidReceipt"), state.get("bidIntentId")
@@ -487,6 +533,8 @@ def _consume_live_receipt(state, view):
         receipt, intent_id = view.get("sessionReceipt"), state.get("returnIntentId")
     elif phase == "start_dispatched":
         receipt, intent_id = view.get("sessionReceipt"), state.get("startIntentId")
+    elif phase == 'entry_dispatched':
+        receipt, intent_id = view.get('preparationReceipt'), (state.get('preparationIntent') or {}).get('intentId')
     else:
         return
     if not isinstance(receipt, dict) or receipt.get("intentId") != intent_id:
@@ -497,29 +545,29 @@ def _consume_live_receipt(state, view):
         return
     if status == "CONFIRMED":
         if phase == "bid_dispatched":
-            state["phase"] = "bid_confirmed"
+            state["phase"] = "round_done"
+            state['finishedRound'] = list(state.get('bidRound') or [])
             state["reason"] = None
         elif phase == "return_dispatched":
             state["phase"] = "return_confirmed"
             state["reason"] = None
+            key = state.get('settledMatch')
+            if key and key not in state.setdefault('completedMatches', []):
+                state['completedMatches'].append(key)
+                state['matchesDone'] = len(state['completedMatches'])
         else:
-            new_id = receipt.get("newMatchId")
-            engine = view.get("engine") or {}
-            new_generation = receipt.get("newMatchGeneration")
-            current_generation = engine.get("matchGeneration")
-            if (isinstance(new_id, str) and new_id and new_id != engine.get("matchId")
-                    and type(new_generation) is int and type(current_generation) is int
-                    and new_generation > current_generation):
-                state["phase"] = "done"
-                state["reason"] = None
-            else:
-                state["phase"] = "stopped"
-                state["reason"] = "NEXT_MATCH_IDENTITY_MISSING"
+            state.update(phase='entry_paid' if phase == 'entry_dispatched' else 'entering', reason='WAITING_AUCTION')
         state["resendAllowed"] = False
         return
     if status in ("UNKNOWN", "NOT_SENT"):
-        state["phase"] = "stopped"
-        state["reason"] = status
+        if phase == 'bid_dispatched' and status == 'UNKNOWN':
+            state.update(phase='stopped', reason=receipt.get('reason') or status)
+        elif phase == 'bid_dispatched':
+            state.update(phase='round_done', finishedRound=list(state.get('bidRound') or []), reason=status)
+        elif phase == 'entry_dispatched' and status == 'UNKNOWN':
+            state.update(phase='entry_unknown',reason='ENTRY_FEE_UNKNOWN_NOT_RETRIED')
+        else:
+            state.update(phase='idle', reason=receipt.get('reason') or status)
         state["resendAllowed"] = False
 
 
@@ -630,6 +678,7 @@ def _dispatch_live_bid(state, view, send):
     state["amount"] = amount
     state["funds"] = funds
     state["bidIntentId"] = domain["intentId"]
+    state['bidRound'] = [engine.get(k) for k in ('matchId','matchGeneration','round')]
     if send(owner, envelope) is not True:
         state["phase"] = "stopped"
         state["reason"] = "DISPATCH_NOT_ACCEPTED"
@@ -677,9 +726,7 @@ def _dispatch_live_preparation(state, view, send):
         return state
     intent_id = f"prepare-{engine['matchId']}-{engine['round']}-{kind}"
     attempted = state.setdefault('preparationAttempts', [])
-    if intent_id in attempted:
-        state['reason'] = 'WAITING_INDEPENDENT_PREPARATION_EFFECT'
-        return state
+    intent_id += '-' + str(len(attempted))
     intent = dict(engine, intentId=intent_id, kind=kind, amount=None, budget=funds,
         deadlineNs=min(scope['leaseExpiresNs'], view['nowNs'] + 8_000_000_000),
         takeoverGeneration=0, leaseId=scope['leaseId'], window=scope['window'],
@@ -694,6 +741,31 @@ def _dispatch_live_preparation(state, view, send):
     if send(None, envelope) is not True:
         state['phase'] = 'stopped'
         state['reason'] = 'PREPARATION_DISPATCH_NOT_ACCEPTED'
+    return state
+
+
+def _dispatch_entry_fee(state, view, send):
+    funds = state.get('funds')
+    cost = (view.get('instruments') or {}).get('refillCost')
+    if type(funds) is not int or type(cost) is not int or cost <= 0:
+        state['reason'] = 'WAITING_ENTRY_FEE_READ'
+        return state
+    floor = view.get('minimumFunds', 0)
+    if funds - cost < floor:
+        state.update(phase='stopped', reason='FUNDS_BELOW_MINIMUM')
+        return state
+    engine = _live_engine(view)
+    scope = _live_native_scope(view, engine, funds) if engine else None
+    if scope is None:
+        return state
+    intent = dict(engine, intentId='entry-' + str(view['nowNs']), kind='ConfirmEntryFee',
+        amount=cost, budget=funds-floor, minimumFunds=floor, fundsBefore=funds,
+        deadlineNs=scope['leaseExpiresNs'], takeoverGeneration=0,
+        leaseId=scope['leaseId'], window=scope['window'], approvalId=view.get('approvalId'))
+    state.update(phase='entry_dispatched', preparationIntent=intent, reason='WAITING_ENTRY_FEE_RESULT')
+    if send(None, dict(type='domain.action.dispatch',protocolVersion=1,requestId='dispatch-'+intent['intentId'],
+            bootId=view.get('bootId'),observationSessionId=engine['observationSessionId'],intent=intent)) is not True:
+        state.update(phase='idle',reason='ENTRY_NOT_SENT')
     return state
 
 
@@ -715,7 +787,7 @@ def _dispatch_live_session(state, view, send, kind):
     if kind == "ReturnLobby" and engine["round"] not in range(0, 6):
         state["reason"] = "SETTLEMENT_ROUND_UNUSABLE"
         return state
-    funds = state.get("funds")
+    funds = view.get('currentFunds') if type(view.get('currentFunds')) is int else state.get("funds")
     if type(funds) is not int or isinstance(funds, bool) or funds <= 0:
         state["reason"] = "FUNDS_NOT_ONE_INTEGER"
         return state
@@ -723,7 +795,7 @@ def _dispatch_live_session(state, view, send, kind):
     if scope is None or view.get("userConfirmed") is not True:
         state["reason"] = "LIVE_LOOP_IDENTITY_INCOMPLETE"
         return state
-    intent_id = ("return-" if kind == "ReturnLobby" else "start-") + engine["matchId"]
+    intent_id = ("return-" if kind == "ReturnLobby" else "start-") + engine["matchId"] + '-' + str(view.get('frameSequence', view['nowNs']))
     intent = {
         "intentId": intent_id,
         "kind": kind,
@@ -753,6 +825,7 @@ def _dispatch_live_session(state, view, send, kind):
         state["returnIntentId"] = intent_id
     else:
         state["startIntentId"] = intent_id
+    state['sessionIntent'] = intent
     if send(None, envelope) is not True:
         state["phase"] = "stopped"
         state["reason"] = "DISPATCH_NOT_ACCEPTED"

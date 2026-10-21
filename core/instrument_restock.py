@@ -12,8 +12,13 @@ def advance(state, view, send, config):
     if pending and all(receipt.get(k) == pending.get(k) for k in
             ('intentId', 'kind', 'matchId', 'matchGeneration', 'observationSessionId', 'round')):
         if receipt.get('status') in {'UNKNOWN', 'NOT_SENT'}:
-            state.update(phase='stopped',reason='INSTRUMENT_'+str(receipt.get('reason') or receipt['status']),resendAllowed=False)
-            return False
+            stock.pop('pending', None)
+            if pending['kind'] == 'CloseToolSetup' and scene == 'LOBBY':
+                stock['ready'] = True
+            state.update(phase=stock.get('resumePhase','idle'),
+                         reason='INSTRUMENT_'+str(receipt.get('reason') or receipt['status']))
+            if stock.get('ready'):
+                return True
     if scene not in SCENES:
         if stock.get('ready') and (scene == 'SETTLEMENT' or
                 (scene in {'AUCTION','AUCTION_READY','INSTRUMENT_LIST','INSTRUMENT_GOLD_SELECTED'}
@@ -29,7 +34,7 @@ def advance(state, view, send, config):
     stock.setdefault('resumePhase', state.get('phase') if state.get('phase') == 'return_confirmed' else 'idle')
 
     def stop(reason):
-        state.update(phase='stopped', reason=reason, resendAllowed=False)
+        state.update(phase='stopped' if 'FLOOR' in reason else 'restocking', reason=reason, resendAllowed=False)
         return False
 
     if not isinstance(config, dict):

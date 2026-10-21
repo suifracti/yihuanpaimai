@@ -154,8 +154,9 @@ class DomainActionSessionTests(unittest.TestCase):
         self.assertTrue(self.session.accept_receipt(workflow[4], now_ns=1_100_000_002))
         self.assertEqual(self.fsm.session_id, old_id)
         self.assertTrue(self.session.accept_receipt(workflow[5], now_ns=1_100_000_003))
-        self.assertEqual(self.session.match_id, "match-2")
-        self.assertEqual(self.fsm.state, SessionState.AUCTION_R1)
+        self.assertEqual(self.session.match_id, "match-1")
+        self.assertEqual(self.session.phase, 'ENTRY_FEE')
+        self.assertEqual(self.fsm.session_id, old_id)
 
 
 class AuthorizedLiveDomainLoopTests(unittest.TestCase):
@@ -235,7 +236,7 @@ class AuthorizedLiveDomainLoopTests(unittest.TestCase):
                                                 status="SENT_PENDING_CONFIRMATION"))
             state = advance_live_domain_loop(state, pending, lambda owner, envelope: sent.append(envelope) or True)
             self.assertEqual(len(sent), 1)
-            confirmed = self.view(funds=100000, scene="SETTLEMENT", round_no=2, directory=directory,
+            confirmed = self.view(funds=100000, scene="SETTLEMENT", round_no=2, directory=directory, collectionFinished=True,
                                   bidReceipt=dict(intentId=bid["intent"]["intentId"], kind="Bid", status="CONFIRMED"))
             state = advance_live_domain_loop(state, confirmed, lambda owner, envelope: sent.append(envelope) or True)
             self.assertEqual(state["phase"], "return_dispatched")
@@ -257,8 +258,8 @@ class AuthorizedLiveDomainLoopTests(unittest.TestCase):
                              sessionReceipt=dict(intentId=started["intent"]["intentId"], kind="StartNextMatch",
                                                  status="CONFIRMED", newMatchId="match-2", newMatchGeneration=2))
             state = advance_live_domain_loop(state, done, lambda owner, envelope: sent.append(envelope) or True)
-            self.assertEqual(state["phase"], "done")
-            self.assertEqual(len(sent), 3)
+            self.assertEqual(state["phase"], "bid_dispatched")
+            self.assertEqual(len(sent), 4)
             self.assertFalse(state["resendAllowed"])
 
     def test_authorized_live_loop_unknown_or_not_sent_does_not_resend(self):
@@ -292,8 +293,8 @@ class AuthorizedLiveDomainLoopTests(unittest.TestCase):
             blocked = self.view(funds=100000, scene="SETTLEMENT", round_no=2, directory=directory,
                                 bidReceipt=dict(intentId=sent[0]["intent"]["intentId"], kind="Bid", status="NOT_SENT"))
             state = advance_live_domain_loop(state, blocked, lambda owner, envelope: sent.append(envelope) or True)
-            self.assertEqual(state["phase"], "stopped")
-            self.assertEqual(state["reason"], "NOT_SENT")
+            self.assertEqual(state["phase"], "collecting")
+            self.assertEqual(state["reason"], "WAITING_WAREHOUSE_SAVE")
             self.assertEqual(len(sent), 1)
             self.assertFalse(state["resendAllowed"])
 

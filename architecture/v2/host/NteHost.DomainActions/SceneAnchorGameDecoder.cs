@@ -146,7 +146,7 @@ public sealed class SceneAnchorGameDecoder : IGameDomainFrameDecoder
             scene = "SETTLEMENT";
         else
         {
-            foreach (string name in new[] { "TOOL_REFILL_CONFIRM", "TOOL_SETUP", "TOOL_GROUPS", "LOBBY", "INSTRUMENT_GOLD_SELECTED", "INSTRUMENT_LIST", "AUCTION", "AUCTION_READY" })
+            foreach (string name in new[] { "ENTRY_FEE", "TOOL_REFILL_CONFIRM", "TOOL_SETUP", "TOOL_GROUPS", "LOBBY", "INSTRUMENT_GOLD_SELECTED", "INSTRUMENT_LIST", "AUCTION", "AUCTION_READY" })
             {
                 var spec = Scene(catalog, name);
                 if (spec is null || !AllWitnesses(gray, frame, catalog, spec)) continue;
@@ -197,7 +197,7 @@ public sealed class SceneAnchorGameDecoder : IGameDomainFrameDecoder
                 Scale(new(60, 220, 95, 900), frame.Geometry.Width, frame.Geometry.Height, catalog),
                 catalog.Threshold, out _, out int selectedTop))
             counterY = selectedTop + 4;
-        var stock = scene is "LOBBY" or "TOOL_GROUPS" or "TOOL_SETUP" or "TOOL_REFILL_CONFIRM" ? ReadInstruments?.Invoke(frame, scene, counterY) : null;
+        var stock = scene is "LOBBY" or "TOOL_GROUPS" or "TOOL_SETUP" or "TOOL_REFILL_CONFIRM" or "ENTRY_FEE" ? ReadInstruments?.Invoke(frame, scene, counterY) : null;
         if (scene == "TOOL_SETUP" && stock is not null && TryGetTemplate("tool_used_badge.png", out var used))
         {
             bool Used(Box box) => Match(gray, frame.Geometry.Width, frame.Geometry.Height, used,

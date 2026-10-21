@@ -71,6 +71,11 @@ static class SceneAnchorOcr
         long? Price(int x,int y,int w,int h) => ParseSingleAmount(Regex.Replace(
             ReadText(f.Pixels,f.Geometry.Width,f.Geometry.Height,f.Stride,x,y,w,h) ?? "", @"(?<=\d)\s+(?=\d{3}(?:\D|$))", ","));
         if (scene == "TOOL_REFILL_CONFIRM") return new(null, null, Price(715, 513, 485, 60), null);
+        if (scene == "ENTRY_FEE") {
+            var text = Regex.Replace(ReadText(f.Pixels,f.Geometry.Width,f.Geometry.Height,f.Stride,620,500,690,90) ?? "",@"\s","");
+            var fee = Regex.Match(text,@"入场费(\d+(?:[,，]\d{3})*)");
+            return new(null,null,fee.Success ? ParseSingleAmount(fee.Groups[1].Value) : null,null);
+        }
         // Isolate the white stock label from its dark outline/background. This
         // small counter otherwise produces an empty Windows OCR result.
         const int cw=115,ch=55,scale=3;

@@ -1,0 +1,68 @@
+"""Continuous sequencing only; uses the existing bid/collection/Host contracts."""
+import unittest
+from unittest.mock import patch
+from domain_action_session import advance_live_domain_loop as advance, fresh_live_domain_state
+
+
+class ContinuousLoopTests(unittest.TestCase):
+    def view(self, scene, match='match-1', round=1, **extra):
+        return dict(publishedScene=scene, mode='bid', foreground=True, userConfirmed=True,
+            engine=dict(matchId=match,matchGeneration=2,observationSessionId='obs',round=round,factsRevision=1),
+            nowNs=1_000_000,nowMs=1,deadlineNs=999_000_000,deadlineMs=999,currentFunds=200000,
+            minimumFunds=100000,window=dict(hwnd=1,pid=2,processInstanceToken=3,focusEpoch=0),
+            approvalId='approved',bootId='boot',leaseId='lease',**extra)
+
+    def test_three_matches_round_reentry_collection_and_both_modes(self):
+        state, sent = fresh_live_domain_state(), []
+        def bid(state,view,send):
+            state.update(phase='bid_dispatched',bidIntentId='b'+str(view['engine']),
+                bidRound=[view['engine'][k] for k in ('matchId','matchGeneration','round')])
+            sent.append('Bid')
+            return state
+        def send(_,envelope): sent.append(envelope['intent']['kind']); return True
+        with patch('domain_action_session._dispatch_live_bid',side_effect=bid):
+            for n in range(3):
+                match='match-'+str(n)
+                mode='observe' if n==1 else 'bid'
+                v=self.view('AUCTION',match,1);v['mode']=mode
+                advance(state,v,send)
+                if mode=='bid':
+                    advance(state,self.view('AUCTION',match,1,bidReceipt=dict(intentId=state['bidIntentId'],status='CONFIRMED')),send)
+                    self.assertEqual(state['phase'],'round_done')
+                    advance(state,self.view('AUCTION',match,2),send)
+                    self.assertEqual(state['phase'],'bid_dispatched')
+                v=self.view('SETTLEMENT',match,2,collectionFinished=False)
+                if state.get('bidIntentId'):v['bidReceipt']=dict(intentId=state['bidIntentId'],status='CONFIRMED')
+                count=len(sent);advance(state,v,send)
+                self.assertEqual(state['phase'],'collecting');self.assertEqual(len(sent),count)
+                v.update(collectionFinished=True,coverageStatus='PARTIAL')
+                advance(state,v,send); self.assertEqual(sent[-1],'ReturnLobby')
+                v=self.view('LOBBY',match,0,sessionReceipt=dict(intentId=state['returnIntentId'],status='CONFIRMED'))
+                advance(state,v,send);self.assertEqual(state['matchesDone'],n+1)
+                self.assertEqual(sent[-1],'StartNextMatch')
+                v=self.view('ENTRY_FEE',match,0,sessionReceipt=dict(intentId=state['startIntentId'],status='CONFIRMED'),
+                    instruments=dict(refillCost=5000))
+                advance(state,v,send);self.assertEqual(sent[-1],'ConfirmEntryFee')
+                v=self.view('LOBBY',match,0,preparationReceipt=dict(intentId=state['preparationIntent']['intentId'],status='CONFIRMED'))
+                before=len(sent);advance(state,v,send);self.assertEqual(len(sent),before)
+        self.assertEqual(sent.count('Bid'),4)  # Pure observation used no instruments or bids.
+        self.assertEqual(len(state['completedMatches']),3)
+
+    def test_unknown_bid_stops_but_unknown_entry_fee_is_not_resent(self):
+        sent=[];send=lambda _,e:sent.append(e) or True
+        state=dict(fresh_live_domain_state(),phase='bid_dispatched',bidIntentId='bid')
+        advance(state,self.view('AUCTION',bidReceipt=dict(intentId='bid',status='UNKNOWN')),send)
+        self.assertEqual(state['phase'],'stopped');self.assertEqual(sent,[])
+        state=dict(fresh_live_domain_state(),phase='entry_dispatched',preparationIntent=dict(intentId='fee'))
+        v=self.view('ENTRY_FEE',round=0,preparationReceipt=dict(intentId='fee',status='UNKNOWN'),instruments=dict(refillCost=5000))
+        advance(state,v,send);advance(state,v,send)
+        self.assertEqual(state['phase'],'entry_unknown');self.assertEqual(sent,[])
+
+    def test_loading_and_no_frames_have_no_total_deadline(self):
+        state=fresh_live_domain_state()
+        for now in (1,999_000_000_000,999_999_000_000_000):
+            v=self.view(None);v['nowNs']=now;advance(state,v,lambda *_:False)
+        self.assertNotEqual(state['phase'],'stopped')
+        v=self.view('ENTRY_FEE',instruments={});v['nowNs']=1
+        advance(state,v,lambda *_:False);v['nowNs']=91_000_000_002;advance(state,v,lambda *_:False)
+        self.assertEqual(state['reason'],'SCENE_NO_PROGRESS_TIMEOUT')

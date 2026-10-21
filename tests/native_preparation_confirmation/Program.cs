@@ -126,6 +126,12 @@ static class Program
                     Console.WriteLine("OCR "+read.Invoke(null,new object[]{(ReadOnlyMemory<byte>)pixels,w,h,w*4,box[0],box[1],box[2],box[3]}));
             }
             Require(v?.Scene==row.GetProperty("scene").GetString(),"STOCK_SCENE");
+            if(row.TryGetProperty("expectedRefillCost",out var expectedCost))
+            {
+                Console.WriteLine("ENTRY_FEE_OCR="+Host.GetType("WgcLiveHarness.SceneAnchorOcr",true)!.GetMethod("ReadText")!
+                    .Invoke(null,new object[]{(ReadOnlyMemory<byte>)pixels,w,h,w*4,620,500,690,90}));
+                Require(v?.Instruments?.RefillCost==expectedCost.GetInt64(),"REAL_ENTRY_FEE_READ");
+            }
             if(row.TryGetProperty("expectedFunds",out var expectedFunds)) {
                 var readText=Host.GetType("WgcLiveHarness.SceneAnchorOcr",true)!.GetMethod("ReadText")!;
                 if(v?.Scene=="LOBBY") Console.WriteLine("ACTUAL_ASSETS_TEXT="+readText.Invoke(null,new object[]{

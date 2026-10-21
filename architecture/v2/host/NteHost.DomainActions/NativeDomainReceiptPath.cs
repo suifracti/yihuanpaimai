@@ -94,7 +94,8 @@ public sealed class CapturedDomainControlEvidence : IDomainControlEvidence
         if (primitive == DomainPrimitive.ReplaceAmountDigits)
             AmountKeypad = view?.Controls.Where(c => c.Primitive == DomainPrimitive.ClearAmount
                 || c.Primitive >= DomainPrimitive.AmountDigit0 && c.Primitive <= DomainPrimitive.AmountDigit9).ToArray() ?? [];
-        if (primitive == DomainPrimitive.ConfirmToolRefill && view?.Instruments?.RefillCost != intent.Amount)
+        if (primitive is DomainPrimitive.ConfirmToolRefill or DomainPrimitive.ConfirmEntryFee
+            && view?.Instruments?.RefillCost != intent.Amount)
         { LastFailure = "REFILL_PRICE_CHANGED_OR_UNKNOWN"; return null; }
         string expectedScene = intent.Kind switch { DomainActionKind.Bid => "AUCTION",
             DomainActionKind.ReturnLobby => "SETTLEMENT", DomainActionKind.StartNextMatch => "LOBBY",
@@ -153,13 +154,11 @@ public sealed class NativeVisibleResultProducer
         }
         else if (intent.Kind == DomainActionKind.ReturnLobby)
         {
-            if (view.Scene != "LOBBY" || s.MatchId != intent.MatchId || s.MatchGeneration != intent.MatchGeneration) return null;
+            if (view.Scene != "LOBBY") return null;
         }
         else if (intent.Kind == DomainActionKind.StartNextMatch)
         {
-            if (view.Scene is not ("AUCTION_R1" or "AUCTION_READY") || view.Round != 1 || string.IsNullOrWhiteSpace(s.MatchId)
-                || s.MatchId == intent.MatchId || s.MatchGeneration <= intent.MatchGeneration) return null;
-            newMatch = s.MatchId; newGeneration = s.MatchGeneration;
+            if (view.Scene != "ENTRY_FEE") return null;
         }
         else if (AuctionPreparation.IsPreparation(intent.Kind))
         {

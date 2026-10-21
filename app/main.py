@@ -3019,7 +3019,7 @@ def _native_domain_action_receipt_event(event: Dict[str, Any]) -> Optional[Dict[
     kind = receipt.get("kind")
     channel = event.get("receiptChannel")
     from instrument_restock import KINDS as restock_kinds
-    preparation = kind in {'OpenInstrument', 'SelectGoldAverage', 'UseGoldAverage', 'OpenBidPanel'} | restock_kinds
+    preparation = kind in {'OpenInstrument', 'SelectGoldAverage', 'UseGoldAverage', 'OpenBidPanel', 'ConfirmEntryFee'} | restock_kinds
     if (not session_id or session_id != _NATIVE_EXPECTED_SESSION
             or session_id != _NATIVE_OBSERVATION_SESSION
             or receipt.get("observationSessionId") != session_id
@@ -3035,7 +3035,7 @@ def _native_domain_action_receipt_event(event: Dict[str, Any]) -> Optional[Dict[
         if receipt.get('status') == 'NOT_SENT' and receipt.get('reason') == 'ROUND_TIME_TOO_SHORT':
             state.update(phase='idle', reason='ROUND_TIME_TOO_SHORT',
                 skippedBidRound=[receipt.get(k) for k in ('matchId','matchGeneration','round')])
-        else:
+        elif receipt.get('status') == 'UNKNOWN':
             # Stop is independent of admitting a receipt as a committed bid fact.
             _stop_authorized_live_domain_loop(str(receipt.get('reason') or receipt['status']))
 
@@ -3057,9 +3057,16 @@ def _native_domain_action_receipt_event(event: Dict[str, Any]) -> Optional[Dict[
             expected = (globals().get('_LIVE_DOMAIN_LOOP') or {}).get('preparationIntent') or {}
             if (not expected or any(receipt.get(k) != expected.get(k) for k in
                     ('intentId', 'kind', 'matchId', 'matchGeneration', 'observationSessionId', 'round', 'factsRevision'))
-                    or (kind not in restock_kinds and receipt.get('matchId') != CURRENT_MATCH.id)):
+                    or (kind not in restock_kinds | {'ConfirmEntryFee'} and receipt.get('matchId') != CURRENT_MATCH.id)):
                 return None
             LATEST_PAYLOAD['preparationActionReceipt'] = copy.deepcopy(receipt)
+        elif (globals().get('_LIVE_DOMAIN_LOOP') or {}).get('sessionIntent', {}).get('intentId') == receipt['intentId']:
+            expected = _LIVE_DOMAIN_LOOP['sessionIntent']
+            if any(receipt.get(k) != expected.get(k) for k in
+                    ('kind','matchId','matchGeneration','observationSessionId','round','factsRevision')):
+                return None
+            LATEST_PAYLOAD['domainActionReceipt'] = copy.deepcopy(receipt)
+            LATEST_PAYLOAD['domainActionReceiptAccepted'] = True
         else:
             consumer = _NATIVE_DOMAIN_ACTION_SESSION
             if (consumer is None or receipt.get("matchId") != consumer.match_id
@@ -3077,6 +3084,7 @@ def _native_domain_action_receipt_event(event: Dict[str, Any]) -> Optional[Dict[
             "receiptChannel": channel,
             "currentMatch": current,
             **({'bidActionReceipt': copy.deepcopy(receipt)} if kind == 'Bid' else {}),
+            **({'domainActionReceipt': copy.deepcopy(receipt)} if kind in {'ReturnLobby','StartNextMatch'} else {}),
             **({'preparationActionReceipt': copy.deepcopy(receipt)} if preparation else {}),
         }
 
@@ -3223,11 +3231,13 @@ def _advance_authorized_live_domain_loop(data: Dict[str, Any], frame: Dict[str, 
             return bool(bridge is not None and bridge.running and bridge.send_control(envelope))
 
         before = (_LIVE_DOMAIN_LOOP.get("phase"), _LIVE_DOMAIN_LOOP.get("reason"))
+        from domain_action_session import _consume_live_receipt
+        _consume_live_receipt(_LIVE_DOMAIN_LOOP, view)
+        view['mode'] = _live_domain_mode()
         from instrument_restock import advance as advance_restock, SCENES as restock_scenes
-        restock_ready = advance_restock(_LIVE_DOMAIN_LOOP, view, send, CONFIG.get('autoAuction') or {})
-        if (_LIVE_DOMAIN_LOOP.get('phase') != 'stopped'
-                and (restock_ready or published not in restock_scenes)
-                and not (published == 'LOBBY' and _LIVE_DOMAIN_LOOP.get('phase') == 'idle')):
+        restock_ready = view.get('mode') == 'observe' or advance_restock(_LIVE_DOMAIN_LOOP, view, send, CONFIG.get('autoAuction') or {})
+        view['waitingRestock'] = not restock_ready and published in restock_scenes
+        if _LIVE_DOMAIN_LOOP.get('phase') != 'stopped':
             _LIVE_DOMAIN_LOOP = advance_live_domain_loop(_LIVE_DOMAIN_LOOP, view, send)
         public = live_domain_loop_public(_LIVE_DOMAIN_LOOP)
         with _MANUAL_STATE_LOCK:
@@ -3267,6 +3277,15 @@ def _native_domain_planning_view(data: Dict[str, Any]) -> Optional[Dict[str, Any
     return view
 
 
+def _live_domain_mode():
+    mode = (CONFIG.get('autoAuction') or {}).get('mode','bid')
+    # Only the supervised M4 harness supplies a mixed-mode acceptance sequence.
+    modes = os.environ.get('NTE_DOMAIN_VERIFY_MODES','').split(',')
+    if modes and all(item in {'bid','observe'} for item in modes):
+        mode = modes[min((globals().get('_LIVE_DOMAIN_LOOP') or {}).get('matchesDone',0),len(modes)-1)]
+    return mode
+
+
 def _live_loop_view(data: Dict[str, Any], published: Optional[str], funds) -> Optional[Dict[str, Any]]:
     from bid_intent import per_match_fund_cap
     facts_round = data.get("round")
@@ -3277,7 +3296,7 @@ def _live_loop_view(data: Dict[str, Any], published: Optional[str], funds) -> Op
     if type(facts_round) is not int or isinstance(facts_round, bool):
         facts_round = 0
     try:
-        lobby = published in {'LOBBY', 'TOOL_SETUP', 'TOOL_GROUPS', 'TOOL_REFILL_CONFIRM'}
+        lobby = published in {'LOBBY', 'TOOL_SETUP', 'TOOL_GROUPS', 'TOOL_REFILL_CONFIRM', 'ENTRY_FEE'}
         generation = 1 if lobby else int(data.get("sourceMatchGeneration"))
         revision = 0 if lobby else int(data.get("factsRevision"))
     except (TypeError, ValueError):
@@ -3332,8 +3351,17 @@ def _live_loop_view(data: Dict[str, Any], published: Optional[str], funds) -> Op
         "sourceQualified": data.get("observationStatus") == "FRAME" and data.get("scene") == "IN_AUCTION",
     }
     directory = os.environ.get("NTE_DOMAIN_LIVE_DIR") or ""
+    capture = {}
+    if published == 'SETTLEMENT' and _NATIVE_WAREHOUSE_SOURCE_COORDINATOR is not None:
+        capture = _NATIVE_WAREHOUSE_SOURCE_COORDINATOR.presentation_payload()
     return {
-        "publishedScene": published,
+        "publishedScene": 'AUCTION_READY' if published == 'AUCTION_R1' else published,
+        "mode": _live_domain_mode(),
+        "frameSequence": data.get('frameSequence'),
+        "collectionFinished": capture.get('state') in {'COMPLETE','PARTIAL','ERROR'}
+            and capture.get('segmentCount', 0) > 0 and not capture.get('stopAvailable'),
+        "coverageStatus": capture.get('coverageStatus'),
+        "captureProgress": [capture.get(k) for k in ('state','segmentCount','scrollRequestCount')],
         "q": data.get("q") if data.get("q") is not None else CURRENT_MATCH.facts.get("q"),
         "goldAvg": data.get("goldAvg") if data.get("goldAvg") is not None else CURRENT_MATCH.facts.get("goldAvg"),
         "goldTotal": data.get("goldTotal") if data.get("goldTotal") is not None else CURRENT_MATCH.facts.get("goldTotal"),

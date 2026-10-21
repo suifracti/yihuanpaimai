@@ -1,7 +1,7 @@
 namespace NteHost.DomainActions;
 
 public enum DomainActionKind { Bid, ReturnLobby, StartNextMatch, OpenInstrument, SelectGoldAverage, UseGoldAverage, OpenBidPanel,
-    OpenToolSetup, RequestToolRefill, ConfirmToolRefill, CloseToolSetup, BrowseToolGroups, SelectToolGroup }
+    OpenToolSetup, RequestToolRefill, ConfirmToolRefill, CloseToolSetup, BrowseToolGroups, SelectToolGroup, ConfirmEntryFee }
 public static class AuctionPreparation
 {
     public static string? ExpectedScene(DomainActionKind kind) => kind switch
@@ -12,13 +12,15 @@ public static class AuctionPreparation
         DomainActionKind.OpenToolSetup => "LOBBY",
         DomainActionKind.RequestToolRefill or DomainActionKind.CloseToolSetup => "TOOL_SETUP",
         DomainActionKind.ConfirmToolRefill => "TOOL_REFILL_CONFIRM",
+        DomainActionKind.ConfirmEntryFee => "ENTRY_FEE",
         DomainActionKind.BrowseToolGroups or DomainActionKind.SelectToolGroup => "TOOL_GROUPS",
         _ => null,
     };
     public static bool IsPreparation(DomainActionKind kind) => ExpectedScene(kind) is not null;
     public static bool IsLobby(DomainActionKind kind) => kind is DomainActionKind.OpenToolSetup
         or DomainActionKind.RequestToolRefill or DomainActionKind.ConfirmToolRefill or DomainActionKind.CloseToolSetup
-        or DomainActionKind.BrowseToolGroups or DomainActionKind.SelectToolGroup;
+        or DomainActionKind.BrowseToolGroups or DomainActionKind.SelectToolGroup
+        or DomainActionKind.StartNextMatch or DomainActionKind.ConfirmEntryFee;
     public static bool Confirms(DomainActionKind kind, string scene, bool goldAverageVisible = false) => kind switch
     {
         DomainActionKind.OpenInstrument => scene is "INSTRUMENT_LIST" or "INSTRUMENT_GOLD_SELECTED",
@@ -31,6 +33,7 @@ public static class AuctionPreparation
         DomainActionKind.RequestToolRefill => scene == "TOOL_REFILL_CONFIRM",
         DomainActionKind.ConfirmToolRefill => scene is "TOOL_SETUP" or "LOBBY",
         DomainActionKind.CloseToolSetup => scene == "LOBBY",
+        DomainActionKind.ConfirmEntryFee => scene is "LOBBY" or "AUCTION_R1" or "AUCTION_READY" or "AUCTION",
         _ => false,
     };
 }
@@ -135,7 +138,7 @@ public sealed class DomainActionCoordinator
             if (stopped) return NotSent("SESSION_STOPPED_UNKNOWN");
             if (pending != null) return NotSent("CONFIRMATION_PENDING");
             if (receipts.Count >= 512) return NotSent("RECEIPT_CAPACITY_STOP");
-            if (!AuctionPreparation.IsLobby(intent.Kind)
+            if (intent.Kind == DomainActionKind.Bid
                 && attempted.Contains((intent.MatchId, intent.Round, intent.Kind))) return NotSent("ACTION_ALREADY_ATTEMPTED");
             var scope = SafeRead();
             string reason = Validate(intent, scope);
@@ -154,7 +157,7 @@ public sealed class DomainActionCoordinator
             receipts.Add(intent.IntentId, (intent, receipt, scope!.SourceSequence));
             if (attemptedCommit) attempted.Add((intent.MatchId, intent.Round, intent.Kind));
             if (status == ReceiptStatus.SENT_PENDING_CONFIRMATION) pending = intent.IntentId;
-            if (status == ReceiptStatus.UNKNOWN) stopped = true;
+            if (status == ReceiptStatus.UNKNOWN && intent.Kind == DomainActionKind.Bid) stopped = true;
             return receipt;
         }
     }
@@ -182,10 +185,7 @@ public sealed class DomainActionCoordinator
             {
                 DomainActionKind.Bid => (evidence.Scene is "AUCTION" or "AUCTION_R1" or "AUCTION_READY") && evidence.AcceptedOwnAmount == i.Amount,
                 DomainActionKind.ReturnLobby => evidence.Scene == "LOBBY",
-                DomainActionKind.StartNextMatch => (evidence.Scene == "AUCTION_R1"
-                    || evidence.Scene == "AUCTION_READY" && current!.Round == 1)
-                    && !string.IsNullOrWhiteSpace(evidence.NewMatchId) && evidence.NewMatchId != i.MatchId
-                    && evidence.NewMatchGeneration > i.MatchGeneration,
+                DomainActionKind.StartNextMatch => evidence.Scene == "ENTRY_FEE",
                 _ when AuctionPreparation.IsPreparation(i.Kind) => AuctionPreparation.Confirms(i.Kind, evidence.Scene, evidence.PreparationEffectVisible),
                 _ => false,
             };
@@ -235,7 +235,7 @@ public sealed class DomainActionCoordinator
     {
         var result = entry.Receipt with { Status = ReceiptStatus.UNKNOWN, Reason = reason };
         receipts[entry.Intent.IntentId] = (entry.Intent, result, entry.Sequence);
-        stopped = true; pending = null; return result;
+        stopped = entry.Intent.Kind == DomainActionKind.Bid; pending = null; return result;
     }
     private ActionScope? SafeRead() { try { return readScope(); } catch { return null; } }
     private string Validate(DomainIntent i, ActionScope? s)
@@ -255,11 +255,11 @@ public sealed class DomainActionCoordinator
                 && i.Amount <= i.MaxSafeBid
                 && !string.IsNullOrWhiteSpace(i.ApprovalId) => "OK",
             DomainActionKind.ReturnLobby when s.Scene == "SETTLEMENT" && s.SettlementArchived && i.Amount == null => "OK",
-            DomainActionKind.StartNextMatch when s.Scene == "LOBBY" && s.SettlementArchived
-                && s.NewMatchAdmission && i.Round == 0 && i.Amount == null => "OK",
+            DomainActionKind.StartNextMatch when s.Scene == "LOBBY"
+                && i.Round == 0 && i.Amount == null => "OK",
             _ when AuctionPreparation.IsLobby(i.Kind) && i.Round == 0
                 && !string.IsNullOrWhiteSpace(i.ApprovalId)
-                && (i.Kind == DomainActionKind.ConfirmToolRefill
+                && (i.Kind is DomainActionKind.ConfirmToolRefill or DomainActionKind.ConfirmEntryFee
                     ? i.Amount is > 0 && i.Amount <= i.Budget && i.MinimumFunds >= 0 : i.Amount is null) => "OK",
             _ when AuctionPreparation.IsPreparation(i.Kind)
                 && i.Amount is null && i.Round is >= 1 and <= 5

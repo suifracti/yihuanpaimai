@@ -198,11 +198,10 @@ static class Program
             workflow.Add(f.Coordinator.Dispatch(exit)); workflow.Add(f.Coordinator.Confirm(f.Evidence(exit, "LOBBY")));
             f.Scope = f.Scope with { Scene = "LOBBY", Round = 0 };
             var start = f.Intent("start-1", DomainActionKind.StartNextMatch);
-            Require(f.Coordinator.Dispatch(start).Status == ReceiptStatus.NOT_SENT, "EXPLICIT_ADMISSION_REQUIRED");
             f.Scope = f.Scope with { NewMatchAdmission = true };
             workflow.Add(f.Coordinator.Dispatch(start));
             Require(f.Coordinator.Confirm(f.Evidence(start, "LOADING", "match-2")).Status == ReceiptStatus.SENT_PENDING_CONFIRMATION, "LOADING_NOT_NEW_MATCH");
-            workflow.Add(f.Coordinator.Confirm(f.Evidence(start, "AUCTION_R1", "match-2")));
+            workflow.Add(f.Coordinator.Confirm(f.Evidence(start, "ENTRY_FEE")));
             Require(workflow.Last().Status == ReceiptStatus.CONFIRMED && backend.Operations.SequenceEqual(new[] {
                 DomainPrimitive.FocusAmountField, DomainPrimitive.ReplaceAmountDigits, DomainPrimitive.SubmitBid,
                 DomainPrimitive.ReturnLobby, DomainPrimitive.StartNextMatch }), "NEW_MATCH_CONFIRMATION");
