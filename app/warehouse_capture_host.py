@@ -814,7 +814,7 @@ class WarehouseCaptureHost:
         from warehouse_reconstruction import WarehouseReconstructionProcessor
         from warehouse_scrollbar_observation import WarehouseScrollbarObserver, warehouse_search_roi
         from warehouse_segment_overlap import align_warehouse_segments, DIR_DOWN, TerminalContinuity
-        from warehouse_support_frame import stationary_support_proof
+        from warehouse_support_frame import stationary_support_proof, same_viewport_proof
         from warehouse_auto_confirmation import evaluate_auto_confirmation
         from warehouse_identity_review import CatalogAuthority, build_auto_identity_review_artifact
         from settlement_truth_evidence_contract import validate_settlement_evidence_original_v2
@@ -886,6 +886,17 @@ class WarehouseCaptureHost:
                     # A stationary support frame may preserve the same origin;
                     # only VERIFIED pixel motion can move a global instance.
                     physical_link = {**proof, **coverage_link}
+                else:
+                    # Settlement reveal keeps the viewport while items appear in
+                    # place. That is the same coverage, not motion and not an
+                    # identity link, so only the coverage chain is joined.
+                    same_view = same_viewport_proof(prev_crop, crop)
+                    if same_view is not None:
+                        coverage_link = {
+                            "trusted": True, "aligned": True,
+                            "proofId": same_view["proofId"],
+                            "previousEvidenceId": prev_desc["evidenceId"],
+                        }
             state = observation.get("scrollState")
             top = {"trusted": True, "proofId": f"top:{digest}"} if state in {"TOP", "NO_SCROLL"} else None
             bottom = {"trusted": True, "proofId": f"bottom:{digest}"} if state in {"BOTTOM", "NO_SCROLL"} else None

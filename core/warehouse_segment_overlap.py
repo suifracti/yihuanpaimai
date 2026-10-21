@@ -397,11 +397,13 @@ def _align_warehouse_segments(
 class TerminalContinuity:
     """Same-chain pixel/scrollbar calibration; never learns from grid aliases.
 
-    Two content matches starting at TOP bound the scale. Integer pixel and
-    thumb localization each have one-pixel uncertainty. A later sparse step,
-    including one that is still in the middle, may interpolate within the
-    smaller observed thumb step. It cannot reuse the larger content step,
-    reconnect a skipped viewport, or establish the physical bottom.
+    One content match starting at TOP already bounds the scale two-sidedly:
+    integer pixel and thumb localization each have one-pixel uncertainty, so
+    the ratio interval is [(offset-1)/(thumb+1), (offset+1)/(thumb-1)]. More
+    matches only tighten it. A later sparse step, including one that is still
+    in the middle, may interpolate within the smaller observed thumb step. It
+    cannot reuse the larger content step, reconnect a skipped viewport, or
+    establish the physical bottom.
     """
     def __init__(self):
         self.samples = []
@@ -444,7 +446,7 @@ class TerminalContinuity:
         self.end, self.shape = after, a.shape
 
     def terminal(self, a, b, max_shift_px):
-        if len(self.samples) < 2 or a.shape != self.shape or b.shape != a.shape:
+        if len(self.samples) < 1 or a.shape != self.shape or b.shape != a.shape:
             return {}
         before, after = self._observations(a, b)
         if (after.get('scrollState') not in {'MIDDLE', 'BOTTOM'}
@@ -476,7 +478,11 @@ class TerminalContinuity:
             return {}  # The calibrated interval must exclude grid-period aliases.
         gradients = [cv2.Sobel(cv2.cvtColor(im, cv2.COLOR_BGR2GRAY),
                               cv2.CV_32F, 0, 1, ksize=3) for im in (va, vb)]
-        representations = [(gradients, False, 0)]
+        # Same .80 floor, same two disjoint supports. Gradients are robust to
+        # a local brightness change; retained colour is what the blob, band and
+        # whole-view paths already match on, and reveal dimming can drop the
+        # gradient score below the floor while the content itself still aligns.
+        representations = [(gradients, False, 0), ([va, vb], False, 0)]
         vertical_traces = None
         # A clipped last item does not erase the grid below it. Measure the
         # common empty tail in both originals, retaining two disjoint portions
