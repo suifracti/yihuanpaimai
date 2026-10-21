@@ -10,6 +10,7 @@ namespace WgcLiveHarness;
 static class SceneAnchorOcr
 {
     static readonly Lazy<OcrEngine?> Engine = new(OcrEngine.TryCreateFromUserProfileLanguages);
+    static readonly Lazy<OcrEngine?> AmountEngine = new(() => OcrEngine.TryCreateFromLanguage(new Windows.Globalization.Language("en-US")));
 
     // The lobby asset bar is left of the in-auction bar. Exclude its currency
     // icon: Windows OCR can read that icon as an additional zero.
@@ -20,7 +21,7 @@ static class SceneAnchorOcr
         {
             "LOBBY" => (1340, 20, 170, 65),
             "TOOL_SETUP" or "TOOL_GROUPS" => (335, 28, 170, 65),
-            "AUCTION" or "AUCTION_READY" or "INSTRUMENT_LIST" or "INSTRUMENT_GOLD_SELECTED"
+            "AUCTION" or "AUCTION_READY" or "INSTRUMENT_LIST" or "INSTRUMENT_GOLD_SELECTED" or "INSTRUMENT_PURPLE_SELECTED"
                 => (1695, 25, 180, 65),
             _ => null
         };
@@ -49,10 +50,12 @@ static class SceneAnchorOcr
 
     public static string? ReadCommittedText(ReadOnlyMemory<byte> bgra, int width, int height, int stride,
         int x,int y,int cropWidth,int cropHeight)
-        => ReadEnlargedText(bgra,width,height,stride,x,y,cropWidth,cropHeight);
+        // This button contains Latin digits, decimal point and K/M only. Use
+        // the matching OCR language, without guessing or repairing characters.
+        => ReadEnlargedText(bgra,width,height,stride,x,y,cropWidth,cropHeight,latin:true);
 
     static string? ReadEnlargedText(ReadOnlyMemory<byte> bgra, int width, int height, int stride,
-        int left,int top,int cropWidth,int cropHeight)
+        int left,int top,int cropWidth,int cropHeight,bool latin=false)
     {
         if(left<0 || top<0 || cropWidth<3 || cropHeight<3 || left+cropWidth>width || top+cropHeight>height) return null;
         const int scale=3;
@@ -61,7 +64,7 @@ static class SceneAnchorOcr
         for(int y=0;y<h;y++) for(int x=0;x<w;x++)
             bgra.Span.Slice((top+y/scale)*stride+(left+x/scale)*4,4)
                 .CopyTo(enlarged.AsSpan((y*w+x)*4,4));
-        return ReadText(enlarged,w,h,w*4,0,0,w,h);
+        return ReadTextWithEngine(enlarged,w,h,w*4,0,0,w,h,latin ? AmountEngine.Value : Engine.Value);
     }
 
     public static InstrumentStock ReadInstruments(NativeDomainFrame f, string scene, int counterY = 235)
@@ -107,6 +110,10 @@ static class SceneAnchorOcr
         => ParseSingleAmount(ReadText(bgra, width, height, stride, x, y, w, h));
 
     public static string? ReadText(ReadOnlyMemory<byte> bgra, int width, int height, int stride, int x, int y, int w, int h)
+        => ReadTextWithEngine(bgra,width,height,stride,x,y,w,h,Engine.Value);
+
+    static string? ReadTextWithEngine(ReadOnlyMemory<byte> bgra, int width, int height, int stride, int x, int y, int w, int h,
+        OcrEngine? engine)
     {
         if (w < 3 || h < 3 || x < 0 || y < 0 || x + w > width || y + h > height) return null;
         var cropped = new byte[w * h * 4];
@@ -124,8 +131,7 @@ static class SceneAnchorOcr
         {
             try
             {
-                return Engine.Value is { } engine
-                    ? engine.RecognizeAsync(bitmap).AsTask().GetAwaiter().GetResult().Text : null;
+                return engine?.RecognizeAsync(bitmap).AsTask().GetAwaiter().GetResult().Text;
             }
             catch (Exception) { return null; }
         }

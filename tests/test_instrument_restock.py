@@ -27,7 +27,7 @@ class InstrumentRestockTests(unittest.TestCase):
         for scene,extra,kind in [
             ('TOOL_GROUPS',{},'BrowseToolGroups'),
             ('TOOL_GROUPS',{'advancedToolGroupVisible':True},'SelectToolGroup'),
-            ('TOOL_SETUP',{'instruments':{'goldAverage':1}},'CloseToolSetup')]:
+            ('TOOL_SETUP',{'instruments':{'goldAverage':1,'purpleCount':1}},'CloseToolSetup')]:
             advance(state,self.view(scene,preparationReceipt=dict(sent[-1],status='CONFIRMED'),**extra),send,{})
             self.assertEqual(sent[-1]['kind'],kind)
         self.assertTrue(advance(state,self.view(preparationReceipt=dict(sent[-1],status='CONFIRMED')),send,{}))
@@ -49,10 +49,10 @@ class InstrumentRestockTests(unittest.TestCase):
         state, sent = {'phase':'idle'}, []
         send = lambda _, e: sent.append(e['intent']) or True
         advance(state,self.view(),send,{})
-        steps=[('TOOL_SETUP',dict(goldAverage=0,refillCost=5000),'RequestToolRefill'),
+        steps=[('TOOL_SETUP',dict(goldAverage=0,purpleCount=1,refillCost=5000),'RequestToolRefill'),
                ('TOOL_REFILL_CONFIRM',dict(refillCost=5000),'ConfirmToolRefill'),
                ('LOBBY',{},'OpenToolSetup'),
-               ('TOOL_SETUP',dict(goldAverage=1,refillCost=0),'CloseToolSetup')]
+               ('TOOL_SETUP',dict(goldAverage=1,purpleCount=1,refillCost=0),'CloseToolSetup')]
         for scene,stock,expected in steps:
             receipt=dict(sent[-1],status='CONFIRMED')
             self.assertFalse(advance(state,self.view(scene,instruments=stock,preparationReceipt=receipt),send,{}))
@@ -111,7 +111,7 @@ class InstrumentRestockTests(unittest.TestCase):
         s,sent={'phase':'idle'},[]
         send=lambda _,e:sent.append(e['intent']) or True
         advance(s,self.view(),send,{})
-        v=self.view('TOOL_SETUP',instruments=dict(goldAverage=0,refillCost=150000),
+        v=self.view('TOOL_SETUP',instruments=dict(goldAverage=0,purpleCount=1,refillCost=150000),
                     preparationReceipt=dict(sent[-1],status='CONFIRMED'))
         advance(s,v,send,{})
         self.assertEqual(s['reason'],'INSTRUMENT_REFILL_WOULD_CROSS_FUNDS_FLOOR')

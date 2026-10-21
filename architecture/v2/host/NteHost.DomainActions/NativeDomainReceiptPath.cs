@@ -55,13 +55,15 @@ public sealed record CapturedOwnBid(int Slot, string PlayerIdentity, long? Amoun
         decimal scale = match.Groups[2].Value.Equals("K", StringComparison.OrdinalIgnoreCase) ? 1000 : 1000000;
         // The UI hides the last digits. At a half step either neighboring
         // rendering is consistent; the exact input was checked before Submit.
-        return expected > 0 && Math.Abs(expected / scale - shown) <= .005m;
+        decimal displayUnit = scale / 100; // K: 10; M: 10,000, including hidden trailing zeroes.
+        return expected > 0 && Math.Abs(expected - shown * scale) <= displayUnit / 2;
     }
 }
 public sealed record InstrumentStock(int? GoldAverage, int? PurpleCount, long? RefillCost, long? Funds);
 public sealed record DecodedDomainFrame(string Scene, int Round, string MatchId, long MatchGeneration,
     CapturedOwnBid? OwnBid, long? AmountField, IReadOnlyList<VisibleControlAnchor> Controls)
 { public bool GoldAverageVisible { get; init; }
+  public bool PurpleCountVisible { get; init; }
   public InstrumentStock? Instruments { get; init; } }
 public interface IGameDomainFrameDecoder
 {
@@ -100,7 +102,9 @@ public sealed class CapturedDomainControlEvidence : IDomainControlEvidence
         string expectedScene = intent.Kind switch { DomainActionKind.Bid => "AUCTION",
             DomainActionKind.ReturnLobby => "SETTLEMENT", DomainActionKind.StartNextMatch => "LOBBY",
             _ => AuctionPreparation.ExpectedScene(intent.Kind) ?? "INVALID" };
-        if (view == null || view.Scene != expectedScene
+        bool selectedList = intent.Kind is DomainActionKind.SelectGoldAverage or DomainActionKind.SelectPurpleCount
+            && view?.Scene is "INSTRUMENT_GOLD_SELECTED" or "INSTRUMENT_PURPLE_SELECTED";
+        if (view == null || (view.Scene != expectedScene && !selectedList)
             || view.MatchId != frame.Scope.MatchId || view.MatchGeneration != frame.Scope.MatchGeneration
             || view.Round != frame.Scope.Round)
         { LastFailure = $"DECODE_OR_SCOPE:expected={expectedScene},decoded={view?.Scene},scope={frame.Scope.Scene}"; return null; }
@@ -162,7 +166,8 @@ public sealed class NativeVisibleResultProducer
         }
         else if (AuctionPreparation.IsPreparation(intent.Kind))
         {
-            if (!AuctionPreparation.Confirms(intent.Kind, view.Scene, view.GoldAverageVisible)
+            if (!AuctionPreparation.Confirms(intent.Kind, view.Scene,
+                    intent.Kind == DomainActionKind.UsePurpleCount ? view.PurpleCountVisible : view.GoldAverageVisible)
                 || s.MatchId != intent.MatchId || s.MatchGeneration != intent.MatchGeneration
                 || s.Round != intent.Round) return null;
         }
@@ -171,7 +176,8 @@ public sealed class NativeVisibleResultProducer
             accepted, newMatch, view.Scene, s.SourceSequence, s.CapturedNs, s.SourceQualified, s.Window, s.TakeoverGeneration)
             { OriginMatchGeneration = intent.MatchGeneration, ObservationSessionId = s.ObservationSessionId,
               NewMatchGeneration = newGeneration, EvidenceRef = frame.EvidenceRef,
-              PreparationEffectVisible = view.GoldAverageVisible, Instruments = view.Instruments };
+              PreparationEffectVisible = intent.Kind == DomainActionKind.UsePurpleCount ? view.PurpleCountVisible : view.GoldAverageVisible,
+              Instruments = view.Instruments };
     }
 }
 

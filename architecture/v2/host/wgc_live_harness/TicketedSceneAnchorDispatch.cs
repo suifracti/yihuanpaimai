@@ -87,6 +87,7 @@ sealed class TicketedSceneAnchorDispatch : IDisposable
             ["readbackNs"] = frame.CaptureTimestampNs, ["matchId"] = scope.MatchId,
             ["matchGeneration"] = scope.MatchGeneration, ["factsRevision"] = scope.FactsRevision,
             ["round"] = scope.Round, ["scene"] = view?.Scene, ["goldAverageVisible"] = view?.GoldAverageVisible,
+            ["purpleCountVisible"] = view?.PurpleCountVisible,
             ["funds"] = funds, ["instruments"] = JsonSerializer.SerializeToNode(view?.Instruments, Json),
             ["advancedToolGroupVisible"] = view?.Controls.Any(c => c.Primitive == DomainPrimitive.SelectToolGroup) == true };
     }
@@ -100,6 +101,7 @@ sealed class TicketedSceneAnchorDispatch : IDisposable
         decoder.ReadAmount = SceneAnchorOcr.Read;
         decoder.ReadCommittedAmount = SceneAnchorOcr.Read;
         decoder.ReadCommittedText = SceneAnchorOcr.ReadCommittedText;
+        decoder.ReadIntelText = SceneAnchorOcr.ReadText;
         decoder.ReadInstruments = SceneAnchorOcr.ReadInstruments;
         var focus = new GameFocus { Target = hwnd };
         var observer = new Win32LowLevelInputObserver("scene-anchor");

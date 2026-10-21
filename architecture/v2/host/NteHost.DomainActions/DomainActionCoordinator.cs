@@ -1,7 +1,8 @@
 namespace NteHost.DomainActions;
 
 public enum DomainActionKind { Bid, ReturnLobby, StartNextMatch, OpenInstrument, SelectGoldAverage, UseGoldAverage, OpenBidPanel,
-    OpenToolSetup, RequestToolRefill, ConfirmToolRefill, CloseToolSetup, BrowseToolGroups, SelectToolGroup, ConfirmEntryFee }
+    OpenToolSetup, RequestToolRefill, ConfirmToolRefill, CloseToolSetup, BrowseToolGroups, SelectToolGroup, ConfirmEntryFee,
+    SelectPurpleCount, UsePurpleCount }
 public static class AuctionPreparation
 {
     public static string? ExpectedScene(DomainActionKind kind) => kind switch
@@ -9,6 +10,8 @@ public static class AuctionPreparation
         DomainActionKind.OpenInstrument or DomainActionKind.OpenBidPanel => "AUCTION_READY",
         DomainActionKind.SelectGoldAverage => "INSTRUMENT_LIST",
         DomainActionKind.UseGoldAverage => "INSTRUMENT_GOLD_SELECTED",
+        DomainActionKind.SelectPurpleCount => "INSTRUMENT_LIST",
+        DomainActionKind.UsePurpleCount => "INSTRUMENT_PURPLE_SELECTED",
         DomainActionKind.OpenToolSetup => "LOBBY",
         DomainActionKind.RequestToolRefill or DomainActionKind.CloseToolSetup => "TOOL_SETUP",
         DomainActionKind.ConfirmToolRefill => "TOOL_REFILL_CONFIRM",
@@ -21,11 +24,13 @@ public static class AuctionPreparation
         or DomainActionKind.RequestToolRefill or DomainActionKind.ConfirmToolRefill or DomainActionKind.CloseToolSetup
         or DomainActionKind.BrowseToolGroups or DomainActionKind.SelectToolGroup
         or DomainActionKind.StartNextMatch or DomainActionKind.ConfirmEntryFee;
-    public static bool Confirms(DomainActionKind kind, string scene, bool goldAverageVisible = false) => kind switch
+    public static bool Confirms(DomainActionKind kind, string scene, bool effectVisible = false) => kind switch
     {
-        DomainActionKind.OpenInstrument => scene is "INSTRUMENT_LIST" or "INSTRUMENT_GOLD_SELECTED",
+        DomainActionKind.OpenInstrument => scene is "INSTRUMENT_LIST" or "INSTRUMENT_GOLD_SELECTED" or "INSTRUMENT_PURPLE_SELECTED",
         DomainActionKind.SelectGoldAverage => scene == "INSTRUMENT_GOLD_SELECTED",
-        DomainActionKind.UseGoldAverage => scene == "AUCTION_READY" && goldAverageVisible,
+        DomainActionKind.UseGoldAverage => scene == "AUCTION_READY" && effectVisible,
+        DomainActionKind.SelectPurpleCount => scene == "INSTRUMENT_PURPLE_SELECTED",
+        DomainActionKind.UsePurpleCount => scene == "AUCTION_READY" && effectVisible,
         DomainActionKind.OpenBidPanel => scene == "AUCTION",
         DomainActionKind.OpenToolSetup => scene is "TOOL_SETUP" or "TOOL_GROUPS",
         DomainActionKind.BrowseToolGroups => scene == "TOOL_GROUPS",

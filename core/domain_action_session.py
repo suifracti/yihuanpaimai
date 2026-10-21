@@ -504,7 +504,7 @@ def advance_live_domain_loop(state, view, send):
     if scene == 'LOBBY' and state.get('phase') not in {'start_dispatched', 'entry_dispatched', 'entry_paid', 'entry_unknown', 'entering'}:
         return _dispatch_live_session(state, view, send, "StartNextMatch")
     round_key = [engine.get(k) for k in ('matchId','matchGeneration','round')]
-    if scene in {'AUCTION', 'AUCTION_READY', 'AUCTION_R1', 'INSTRUMENT_LIST', 'INSTRUMENT_GOLD_SELECTED'}:
+    if scene in {'AUCTION', 'AUCTION_READY', 'AUCTION_R1', 'INSTRUMENT_LIST', 'INSTRUMENT_GOLD_SELECTED', 'INSTRUMENT_PURPLE_SELECTED'}:
         if engine.get('round',0) >= 1 and state.get('phase') in {'entering', 'entry_paid', 'entry_unknown', 'return_confirmed', 'start_dispatched'}:
             state.update(phase='idle', reason=None, bidIntentId=None, amount=None)
         if state.get('phase') == 'round_done' and round_key != state.get('finishedRound'):
@@ -710,7 +710,7 @@ def _dispatch_live_bid(state, view, send):
 
 
 def _dispatch_live_preparation(state, view, send):
-    """Only acquire missing gold mean, then open the existing Solver bid panel.
+    """Acquire missing gold mean and purple count, then open the Solver panel.
 
     Each step is one named Host transaction; receipts never fill business facts.
     The saved match-12 sequence and the missed setup in match-1 are the source
@@ -730,12 +730,21 @@ def _dispatch_live_preparation(state, view, send):
     if type(q) is int and q > 0:
         proposal = build_bid_intent(view.get('proposalEvent') or {}, view['current'],
             now_ms=view['nowMs'], deadline_ms=view['deadlineMs'])
-        if scene == 'AUCTION_READY' and solver_suggestion(proposal) is not None:
+        target = None
+        if average is None and view.get('goldTotal') is None and not view.get('goldAverageVisible'):
+            target = 'GoldAverage'
+        elif view.get('purpleCount') is None and not view.get('purpleCountVisible'):
+            target = 'PurpleCount'
+        if target:
+            selected = 'INSTRUMENT_GOLD_SELECTED' if target == 'GoldAverage' else 'INSTRUMENT_PURPLE_SELECTED'
+            if scene == 'AUCTION_READY':
+                kind = 'OpenInstrument'
+            elif scene == selected:
+                kind = 'Use' + target
+            elif scene in {'INSTRUMENT_LIST','INSTRUMENT_GOLD_SELECTED','INSTRUMENT_PURPLE_SELECTED'}:
+                kind = 'Select' + target
+        elif scene == 'AUCTION_READY' and solver_suggestion(proposal) is not None:
             kind = 'OpenBidPanel'
-        elif average is None and view.get('goldTotal') is None:
-            if view.get('goldAverageVisible') is not True:
-                kind = {'AUCTION_READY': 'OpenInstrument', 'INSTRUMENT_LIST': 'SelectGoldAverage',
-                        'INSTRUMENT_GOLD_SELECTED': 'UseGoldAverage'}.get(scene)
     if kind is None:
         state['reason'] = 'ROUND_SKIPPED_NO_SOLVER_VALUE'
         return state

@@ -41,7 +41,7 @@
   },
   "autoAuction": {
     "minimumFunds": 100000,
-    "instrumentTargets": {"goldAverage": 1}
+    "instrumentTargets": {"goldAverage": 1, "purpleCount": 1}
   },
   "bid": {
     "perMatchFundCap": null,

@@ -38,6 +38,7 @@ public sealed class SceneAnchorGameDecoder : IGameDomainFrameDecoder
     public AmountSample? ReadAmount { get; set; }
     public AmountSample? ReadCommittedAmount { get; set; }
     public TextSample? ReadCommittedText { get; set; }
+    public TextSample? ReadIntelText { get; set; }
     public Func<NativeDomainFrame, string, int, InstrumentStock?>? ReadInstruments { get; set; }
 
     SceneAnchorGameDecoder(Catalog? catalog, Dictionary<string, GrayImage> templates)
@@ -146,7 +147,7 @@ public sealed class SceneAnchorGameDecoder : IGameDomainFrameDecoder
             scene = "SETTLEMENT";
         else
         {
-            foreach (string name in new[] { "ENTRY_FEE", "TOOL_REFILL_CONFIRM", "TOOL_SETUP", "TOOL_GROUPS", "LOBBY", "INSTRUMENT_GOLD_SELECTED", "INSTRUMENT_LIST", "AUCTION", "AUCTION_READY" })
+            foreach (string name in new[] { "ENTRY_FEE", "TOOL_REFILL_CONFIRM", "TOOL_SETUP", "TOOL_GROUPS", "LOBBY", "INSTRUMENT_GOLD_SELECTED", "INSTRUMENT_PURPLE_SELECTED", "INSTRUMENT_LIST", "AUCTION", "AUCTION_READY" })
             {
                 var spec = Scene(catalog, name);
                 if (spec is null || !AllWitnesses(gray, frame, catalog, spec)) continue;
@@ -191,6 +192,15 @@ public sealed class SceneAnchorGameDecoder : IGameDomainFrameDecoder
                 { DisplayText = committedText };
         bool goldVisible = catalog.GoldAverage is { } gold && Match(gray, frame.Geometry.Width, frame.Geometry.Height,
             gold.Image, Scale(gold.Search, frame.Geometry.Width, frame.Geometry.Height, catalog), catalog.Threshold, out _, out _);
+        // Instrument effect is visible text, not a count invented from a click.
+        // The existing Engine independently parses the numeric business fact.
+        bool purpleVisible = false;
+        if (scene == "AUCTION_READY" && ReadIntelText is not null) {
+            var board=Scale(new(760,275,1240,860),frame.Geometry.Width,frame.Geometry.Height,catalog);
+            string text=System.Text.RegularExpressions.Regex.Replace(ReadIntelText(frame.Pixels,frame.Geometry.Width,
+                frame.Geometry.Height,frame.Stride,board.X,board.Y,board.Right-board.X,board.Bottom-board.Y) ?? "",@"\s","");
+            purpleVisible=text.Contains("紫品计数仪器",StringComparison.Ordinal);
+        }
         int counterY = 235;
         if (scene == "TOOL_SETUP" && TryGetTemplate("tool_group_selected.png", out var group)
             && Match(gray, frame.Geometry.Width, frame.Geometry.Height, group,
@@ -207,7 +217,8 @@ public sealed class SceneAnchorGameDecoder : IGameDomainFrameDecoder
                 PurpleCount = stock.PurpleCount is { } p ? Math.Max(0, p - (Used(new(960, 675, 1070, 718)) ? 1 : 0)) : null };
         }
         return new(scene, frame.Scope.Round, frame.Scope.MatchId, frame.Scope.MatchGeneration,
-            own, amount is >= 0 and <= 9_999_999 ? amount : null, controls) { GoldAverageVisible = goldVisible, Instruments = stock };
+            own, amount is >= 0 and <= 9_999_999 ? amount : null, controls) {
+                GoldAverageVisible = goldVisible, PurpleCountVisible = purpleVisible, Instruments = stock };
     }
 
     void AddAmountFocus(byte[] gray, NativeDomainFrame frame, SceneSpec auction,

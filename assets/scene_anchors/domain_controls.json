@@ -155,6 +155,94 @@
             1000
           ],
           "primitive": "UseGoldAverage"
+        },
+        {
+          "template": "gold_average_option.png",
+          "search": [
+            175,
+            770,
+            375,
+            845
+          ],
+          "primitive": "SelectGoldAverage",
+          "optional": true
+        },
+        {
+          "template": "purple_count_option.png",
+          "search": [
+            175,
+            640,
+            375,
+            715
+          ],
+          "primitive": "SelectPurpleCount",
+          "optional": true
+        }
+      ]
+    },
+    {
+      "scene": "INSTRUMENT_PURPLE_SELECTED",
+      "witnesses": [
+        {
+          "template": "instrument_list_title.png",
+          "search": [
+            55,
+            130,
+            230,
+            190
+          ]
+        },
+        {
+          "template": "gold_average_selected.png",
+          "search": [
+            85,
+            628,
+            125,
+            678
+          ]
+        },
+        {
+          "template": "purple_count_option.png",
+          "search": [
+            175,
+            640,
+            375,
+            715
+          ]
+        }
+      ],
+      "controls": [
+        {
+          "template": "instrument_use_label.png",
+          "search": [
+            335,
+            925,
+            445,
+            1000
+          ],
+          "primitive": "UsePurpleCount"
+        },
+        {
+          "template": "gold_average_option.png",
+          "search": [
+            175,
+            770,
+            375,
+            845
+          ],
+          "primitive": "SelectGoldAverage",
+          "optional": true
+        },
+        {
+          "template": "purple_count_option.png",
+          "search": [
+            175,
+            640,
+            375,
+            715
+          ],
+          "primitive": "SelectPurpleCount",
+          "optional": true
         }
       ]
     },
@@ -181,6 +269,17 @@
             845
           ],
           "primitive": "SelectGoldAverage",
+          "optional": true
+        },
+        {
+          "template": "purple_count_option.png",
+          "search": [
+            175,
+            640,
+            375,
+            715
+          ],
+          "primitive": "SelectPurpleCount",
           "optional": true
         }
       ]
@@ -342,10 +441,10 @@
     }
   ],
   "committedSearch": [
-    1608,
-    976,
-    1882,
-    1042
+    1660,
+    987,
+    1830,
+    1028
   ],
   "goldAverageWitness": {
     "template": "gold_average_revealed.png",

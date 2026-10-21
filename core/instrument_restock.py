@@ -21,7 +21,7 @@ def advance(state, view, send, config):
                 return True
     if scene not in SCENES:
         if stock.get('ready') and (scene == 'SETTLEMENT' or
-                (scene in {'AUCTION','AUCTION_READY','INSTRUMENT_LIST','INSTRUMENT_GOLD_SELECTED'}
+                (scene in {'AUCTION','AUCTION_READY','INSTRUMENT_LIST','INSTRUMENT_GOLD_SELECTED','INSTRUMENT_PURPLE_SELECTED'}
                  and (view.get('engine') or {}).get('round', 0) >= 1)):
             stock['leftLobby'] = True
         return stock.get('ready') is True
@@ -39,7 +39,7 @@ def advance(state, view, send, config):
 
     if not isinstance(config, dict):
         return stop('INSTRUMENT_CONFIG_INVALID')
-    targets = config.get('instrumentTargets', {'goldAverage': 1})
+    targets = config.get('instrumentTargets', {'goldAverage': 1, 'purpleCount': 1})
     floor = config.get('minimumFunds', 100000)
     if (type(floor) is not int or floor < 0 or not isinstance(targets, dict)
             or any(k not in {'goldAverage', 'purpleCount'} or type(v) is not int or v < 0

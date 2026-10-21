@@ -3019,7 +3019,7 @@ def _native_domain_action_receipt_event(event: Dict[str, Any]) -> Optional[Dict[
     kind = receipt.get("kind")
     channel = event.get("receiptChannel")
     from instrument_restock import KINDS as restock_kinds
-    preparation = kind in {'OpenInstrument', 'SelectGoldAverage', 'UseGoldAverage', 'OpenBidPanel', 'ConfirmEntryFee'} | restock_kinds
+    preparation = kind in {'OpenInstrument', 'SelectGoldAverage', 'UseGoldAverage', 'SelectPurpleCount', 'UsePurpleCount', 'OpenBidPanel', 'ConfirmEntryFee'} | restock_kinds
     if (not session_id or session_id != _NATIVE_EXPECTED_SESSION
             or session_id != _NATIVE_OBSERVATION_SESSION
             or receipt.get("observationSessionId") != session_id
@@ -3376,6 +3376,8 @@ def _live_loop_view(data: Dict[str, Any], published: Optional[str], funds) -> Op
         "advancedToolGroupVisible": (data.get('domainObservation') or {}).get('advancedToolGroupVisible') is True,
         "minimumFunds": (CONFIG.get('autoAuction') or {}).get('minimumFunds', 100000),
         "goldAverageVisible": (data.get('domainObservation') or {}).get('goldAverageVisible') is True,
+        "purpleCountVisible": (data.get('domainObservation') or {}).get('purpleCountVisible') is True,
+        "purpleCount": data.get("purpleCount") if data.get("purpleCount") is not None else CURRENT_MATCH.facts.get("purpleCount"),
         "preparationReceipt": LATEST_PAYLOAD.get("preparationActionReceipt"),
         "foreground": _game_is_foreground(target),
         "userConfirmed": True,

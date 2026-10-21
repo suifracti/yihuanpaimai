@@ -14,7 +14,7 @@ sealed class Decoder(string mode) : IGameDomainFrameDecoder
     {
         Reads++; Thread.Sleep(150);
         return new("AUCTION_READY", f.Scope.Round, f.Scope.MatchId, f.Scope.MatchGeneration,
-            null, null, []) { GoldAverageVisible = mode != "no-effect" };
+            null, null, []) { GoldAverageVisible = mode != "no-effect", PurpleCountVisible = mode == "purple-effect" };
     }
 }
 sealed class CountedDecoder(IGameDomainFrameDecoder inner) : IGameDomainFrameDecoder
@@ -45,7 +45,7 @@ static class Program
         if (imageArg >= 0) { SavedImage(args[imageArg + 1]); return 0; }
         int listArg = Array.IndexOf(args, "--open-list-image");
         if (listArg >= 0) { SavedImage(args[listArg + 1], openList: true); return 0; }
-        foreach (string mode in new[] { "slow-effect", "slow-frame", "legacy-unqualified", "no-effect", "pre-click", "wrong-window" }) Check(mode);
+        foreach (string mode in new[] { "slow-effect", "slow-frame", "legacy-unqualified", "no-effect", "pre-click", "wrong-window", "purple-effect", "purple-no-effect" }) Check(mode);
         Console.WriteLine("PASS simple confirmation: one decode per frame, post-click effect, 3s UNKNOWN/no resend, correct window; zero OS input");
         return 0;
     }
@@ -70,6 +70,13 @@ static class Program
             && !Display("393.54K").MatchesAmount(393546),"REAL_HALF_STEP_AND_OUTSIDE_DISPLAY_PRECISION");
         Require(Display("393 · 54K").MatchesAmount(393545),"REAL_ENLARGED_WINDOWS_OCR_DECIMAL_MARK");
         Require(Display("1.25M").MatchesAmount(1250000),"COMPACT_M");
+        Require(Display("250.04K").MatchesAmount(250038)
+            && Display("250.04K").MatchesAmount(250035)
+            && !Display("250.04K").MatchesAmount(250034),"K_HALF_DISPLAY_UNIT_5");
+        Require(Display("1.25M").MatchesAmount(1255000)
+            && !Display("1.25M").MatchesAmount(1255001),"M_HALF_DISPLAY_UNIT_5000");
+        Require(Display("359.1K").MatchesAmount(359100)
+            && !Display("359.1K").MatchesAmount(359106),"HIDDEN_ZERO_RETAINS_HUNDREDTH_PRECISION");
         Require(Display("203,930").MatchesAmount(203930),"EXACT_INTEGER_RETAINED");
         Require(!Display("203.92K").MatchesAmount(203930)
             && !Display("允许出价范围203.93K").MatchesAmount(203930)
@@ -253,10 +260,10 @@ static class Program
         long now = TraceClock.NowNs();
         var window = new WindowBinding(1, 2, 3, 0);
         var scope = new ActionScope("match", 1, 1, 100, 100,
-            mode == "saved-open" ? "AUCTION_READY" : "INSTRUMENT_GOLD_SELECTED", "lease",
+            mode == "saved-open" ? "AUCTION_READY" : mode.StartsWith("purple-") ? "INSTRUMENT_PURPLE_SELECTED" : "INSTRUMENT_GOLD_SELECTED", "lease",
             now + 8_000_000_000, window, 0, 1, now, true, true, true, true, false, false)
             { MatchGeneration = 1, ObservationSessionId = "test", ApprovalId = "test" };
-        var intent = new DomainIntent("use", mode == "saved-open" ? DomainActionKind.OpenInstrument : DomainActionKind.UseGoldAverage, "match", 1, 1, null, 100,
+        var intent = new DomainIntent("use", mode == "saved-open" ? DomainActionKind.OpenInstrument : mode.StartsWith("purple-") ? DomainActionKind.UsePurpleCount : DomainActionKind.UseGoldAverage, "match", 1, 1, null, 100,
             now + 8_000_000_000, 0, "lease", window)
             { MatchGeneration = 1, ObservationSessionId = "test", ApprovalId = "test" };
         var synthetic = new Decoder(mode);
@@ -285,7 +292,7 @@ static class Program
         int decodes = readCount?.Invoke() ?? synthetic.Reads;
         Console.WriteLine($"{mode}: status={status} decodes={decodes} fakeSends={port.Sends} ageMs={(TraceClock.NowNs() - fresh.CapturedNs) / 1_000_000.0:F1}");
         Require(port.Sends == 1, "NO_RESEND");
-        Require(mode is "slow-effect" or "slow-frame" or "legacy-unqualified" or "saved-effect" or "saved-open" ? status == "CONFIRMED" && decodes == 1
+        Require(mode is "slow-effect" or "slow-frame" or "legacy-unqualified" or "saved-effect" or "saved-open" or "purple-effect" ? status == "CONFIRMED" && decodes == 1
             : status != "CONFIRMED", "CONFIRM_ONLY_FRESH_MATCHED_EFFECT");
         if (decodes > 0) {
             frame.DecodeOnce(decoder);
