@@ -36,6 +36,21 @@ internal static class NativeObservationService
         Converters = { new System.Text.Json.Serialization.JsonStringEnumConverter() },
     };
 
+    internal static bool UnknownSceneExpired(string scene, ref string? lastKnownScene,
+        ref long? unknownSinceMs, long nowMs)
+    {
+        if (scene != "UNKNOWN") {
+            lastKnownScene = scene;
+            unknownSinceMs = null;
+            return false;
+        }
+        unknownSinceMs ??= nowMs;
+        // A blurred frame after the loading screen is still an expected wait.
+        // UNKNOWN supplies no action/advice qualification; target, capture and
+        // pending bid confirmation checks continue independently.
+        return lastKnownScene != "AUCTION_LOADING" && nowMs - unknownSinceMs.Value >= 10000;
+    }
+
     public static int Run(string[] args)
     {
         var sessionId = $"native-live-{Guid.NewGuid():N}";
@@ -424,6 +439,7 @@ internal static class NativeObservationService
             var firstFrameWritten = false;
             var firstLobbyFrameWritten = false;
             long? unknownSinceMs = null;
+            string? lastKnownScene = null;
             long? settlementSinceMs = null;
             long? settlementSourceDeadlineNs = null;
             var settlementCollectionClosed = false;
@@ -762,12 +778,8 @@ internal static class NativeObservationService
                         qualified = domainFrame is not null, actionInput = "OFF", decoder = domainDecoderLabel,
                     });
                 }
-                if (scene == "UNKNOWN")
-                    unknownSinceMs ??= Environment.TickCount64;
-                else
-                    unknownSinceMs = null;
-                var unknownExpired = unknownSinceMs.HasValue
-                    && Environment.TickCount64 - unknownSinceMs.Value >= 10000;
+                var unknownExpired = UnknownSceneExpired(scene, ref lastKnownScene,
+                    ref unknownSinceMs, Environment.TickCount64);
                 if (scene == "SETTLEMENT")
                 {
                     settlementSinceMs ??= Environment.TickCount64;

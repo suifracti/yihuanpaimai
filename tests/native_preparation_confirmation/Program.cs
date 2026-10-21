@@ -37,6 +37,9 @@ static class Program
         Host = hostArg >= 0 ? new ReplayHostContext().LoadFromAssemblyPath(Path.GetFullPath(args[hostArg + 1]))
             : Assembly.Load("WgcLiveHarness");
         Console.WriteLine("Host assembly: " + Host.Location);
+        int sceneArg = Array.IndexOf(args, "--scene-wait-replay");
+        if (sceneArg >= 0) { SceneWaitReplay(args[sceneArg + 1]); return 0; }
+        SceneWaitChecks();
         InputBoundary();
         KeypadSequence();
         int stockArg = Array.IndexOf(args, "--stock-replay");
@@ -54,6 +57,38 @@ static class Program
         public int Sends;
         public PortOutcome TrySend(DomainIntent i, Func<bool> current)
         { Require(current(), "DISPATCH_SCOPE"); Sends++; return new(true, true, "FAKE_SENT"); }
+    }
+    static bool SceneExpired(string scene, long nowMs, ref object?[] state)
+    {
+        var args=new object?[]{scene,state[0],state[1],nowMs};
+        bool expired=(bool)Host.GetType("WgcLiveHarness.NativeObservationService",true)!
+            .GetMethod("UnknownSceneExpired",BindingFlags.NonPublic|BindingFlags.Static)!.Invoke(null,args)!;
+        state=new[]{args[1],args[2]};
+        return expired;
+    }
+    static void SceneWaitReplay(string path)
+    {
+        object?[] state={null,null};
+        int rows=0;
+        foreach(string line in File.ReadLines(path)) {
+            using var row=System.Text.Json.JsonDocument.Parse(line);
+            var r=row.RootElement;
+            string scene=r.GetProperty("scene").GetString()!;
+            long now=r.GetProperty("captureTimestampNs").GetInt64()/1_000_000;
+            Require(!SceneExpired(scene,now,ref state),"REAL_LOADING_ABORT_AT_FRAME_"+r.GetProperty("frameSequence"));
+            rows++;
+        }
+        Console.WriteLine($"PASS real scene sequence: {rows} frames, loading does not end observation; no capture/input");
+    }
+    static void SceneWaitChecks()
+    {
+        object?[] state={null,null};
+        Require(!SceneExpired("AUCTION_LOADING",0,ref state),"LOADING");
+        Require(!SceneExpired("UNKNOWN",100,ref state) && !SceneExpired("UNKNOWN",120000,ref state),"LOADING_HAS_NO_TOTAL_TIMEOUT");
+        Require(!SceneExpired("IN_AUCTION",120001,ref state),"KNOWN_RECOVERS");
+        Require(!SceneExpired("UNKNOWN",120100,ref state) && SceneExpired("UNKNOWN",130100,ref state),"UNKNOWN_DURING_AUCTION_STILL_TIMES_OUT");
+        Require(!SceneExpired("AUCTION_LOBBY",130101,ref state) && !SceneExpired("UNKNOWN",130102,ref state),"KNOWN_RESETS_UNKNOWN_TIMER");
+        Console.WriteLine("PASS loading wait and ordinary unknown-scene timeout remain distinct");
     }
     static void KeypadSequence()
     {
