@@ -46,6 +46,27 @@ class AuctionPreparationTests(unittest.TestCase):
             self.assertEqual(sent[-1]['intent']['kind'],'OpenBidPanel')
             self.assertTrue(all(e['intent']['amount'] is None for e in sent))
 
+    def test_used_instrument_round_can_bid_then_get_purple_next_round(self):
+        # run-5 actual frame: instrument disabled after gold use, bid still available.
+        with tempfile.TemporaryDirectory() as directory:
+            view=self.view(directory,'INSTRUMENT_GOLD_SELECTED')
+            sent=[]
+            send=lambda _,e:sent.append(e) or True
+            state=advance_live_domain_loop(fresh_live_domain_state(),view,send)
+            self.assertEqual(sent[-1]['intent']['kind'],'UseGoldAverage')
+            receipt=dict(sent[-1]['intent'],status='CONFIRMED')
+            ready=self.view(directory,'AUCTION_READY',average=29739,receipt=receipt)
+            ready['purpleCount']=None
+            advance_live_domain_loop(state,ready,send)
+            self.assertEqual(sent[-1]['intent']['kind'],'OpenBidPanel')
+            next_round=self.view(directory,'AUCTION_READY',average=29739,
+                receipt=dict(sent[-1]['intent'],status='CONFIRMED'))
+            next_round['engine']['round']=2
+            next_round['current']['round']=2
+            next_round['purpleCount']=None
+            advance_live_domain_loop(state,next_round,send)
+            self.assertEqual(sent[-1]['intent']['kind'],'OpenInstrument')
+
     def test_no_solver_value_after_reveal_skips_round_without_input(self):
         with tempfile.TemporaryDirectory() as directory:
             view=self.view(directory,'AUCTION_READY')

@@ -526,6 +526,8 @@ def _consume_live_receipt(state, view):
                 ('intentId', 'kind', 'matchId', 'matchGeneration', 'observationSessionId', 'round', 'factsRevision')):
             return
         if receipt.get('status') == 'CONFIRMED':
+            if intent.get('kind') in {'UseGoldAverage','UsePurpleCount'}:
+                state['instrumentUsedRound'] = [intent.get(k) for k in ('matchId','matchGeneration','round')]
             state['phase'] = 'idle'
             state['reason'] = None
         elif receipt.get('status') in ('UNKNOWN', 'NOT_SENT'):
@@ -735,6 +737,10 @@ def _dispatch_live_preparation(state, view, send):
             target = 'GoldAverage'
         elif view.get('purpleCount') is None and not view.get('purpleCountVisible'):
             target = 'PurpleCount'
+        # The real used-instrument frame disables tools but still offers Bid.
+        # Do not let a second missing instrument block this round's quote.
+        if state.get('instrumentUsedRound') == [engine.get(k) for k in ('matchId','matchGeneration','round')]:
+            target = None
         if target:
             selected = 'INSTRUMENT_GOLD_SELECTED' if target == 'GoldAverage' else 'INSTRUMENT_PURPLE_SELECTED'
             if scene == 'AUCTION_READY':
