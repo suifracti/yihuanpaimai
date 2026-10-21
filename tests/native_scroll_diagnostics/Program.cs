@@ -25,6 +25,17 @@ var target = new JsonObject { ["targetHwnd"] = 123L, ["targetPid"] = 456,
 var context = new WarehouseSourceContext("record", target, "map", 1920, 1080, true, true, long.MaxValue, 1);
 var all = new JsonArray();
 void Check(bool ok, string name) { if (!ok) throw new Exception(name); Console.WriteLine("PASS: " + name); }
+if (args.Contains("--background-scroll-only")) {
+    target["isTargetForeground"] = false;
+    target["foregroundHwnd"] = 999L;
+    var background = new FakePlatform();
+    Check(WarehouseWindowScroll.SendDown(context, () => true, platform: background)
+        && background.Sends == 1, "same-window wheel dispatch works with another foreground app");
+    background.Target = background.Target with { Pid = 999 };
+    Check(!WarehouseWindowScroll.SendDown(context, () => true, platform: background)
+        && background.Sends == 1, "background dispatch still rejects another target");
+    return;
+}
 
 foreach (var name in new[] { "pid-mismatch", "client-resized", "guard-rejected", "coordinates-failed",
     "send-error", "send-zero-no-error", "send-success-no-displacement", "guard-lost-after-send", "send-exception" })

@@ -38,3 +38,11 @@ Host 新增 `OpenToolSetup / RequestToolRefill / ConfirmToolRefill / CloseToolSe
 `auto_auction_start / auto_auction_stop` 与 `app_status.autoAuction` 按主计划 M5 接入；
 **当前尚未提供这些动作**。完成时在这里更新确切请求体及状态字段，再由前端接按钮。
 当前临时环境开关仍需在 M5 删除。费用确认的 Host 接线、持续循环及真实验收尚未完成。
+
+## 结算收仓的明确停止（2026-10-21）
+
+- 现有桥接动作 `stop_warehouse_capture` 是“停止收仓”，Native 路由调用当前自动收页的 `stop()`；立即关闭采集/滚动租约并保留已保存原图及部分记录，同时停止自动拍卖串联并恢复主窗口，不能在点击停止后又自动返回、支付下一局费用。
+- `stop_live_vision` 是“停止观察及本次自动运行”，范围更大，不应由普通 Esc、焦点切换或仓库画面位置变化代发。
+- Native 收仓没有 Esc/全局鼠标接管监听；窗口消息直接发给绑定的游戏窗口，不要求游戏在前台，不移动全局鼠标。窗口身份失效、窗口关闭或离开结算仍按实际原因保存部分结果，不能归因成用户停止。
+- 跳过动画走同一窗口消息路径：按下后保持80毫秒再释放；回执只表示发送，不证明动画已结束。按钮仍可用时可重试；本次改动尚未实机确认跳过效果。
+- 本轮M4b未通过，不接 `auto_auction_start / auto_auction_stop` 或 `app_status.autoAuction`；它们仍按M5留给后续实现，主窗口按钮和显示由Claude负责。

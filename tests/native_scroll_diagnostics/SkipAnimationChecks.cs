@@ -68,6 +68,8 @@ internal static class SkipAnimationChecks
         Check(lease.IsOpen && platform.Down == sends + 1
             && (string?)events.Last()["details"]?["classification"] == "SENT", "fresh pink button permits retry after unknown");
         var third = Save(3);
+        Check(platform.Holds == platform.Down && platform.LastHoldMs == 80,
+            "background window click holds once before release");
         latest = latest! with { SkipButtonBgr = Enumerable.Repeat((byte)60, 30).ToArray() };
         lease.Handle(third);
         Check(platform.Down == sends + 1 && lease.IsOpen
@@ -89,6 +91,8 @@ internal static class SkipAnimationChecks
         public WarehouseWindowScroll.TargetState Target = new(456,789,"HTGame.exe","UnrealWindow",true,false,true,16,9);
         public bool Timeout;
         public int Down;
+        public int Holds, LastHoldMs;
+        public void HoldButton(int milliseconds) { Holds++; LastHoldMs=milliseconds; }
         public WarehouseWindowScroll.TargetState ReadTarget(long hwnd) => Target;
         public WarehouseWindowScroll.ScreenPoint ToScreen(long hwnd,int x,int y) => throw new Exception("skip uses client coordinates");
         public WarehouseWindowScroll.SendResult Send(long hwnd,uint wheel,uint coordinates) => throw new Exception("skip is not wheel input");

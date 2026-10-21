@@ -700,8 +700,9 @@ class NativeWarehouseIntake:
 
 class WarehouseCaptureRouter:
     """Native selected commands never fall through to the legacy capture/input path."""
-    def __init__(self, legacy, native, native_selected):
+    def __init__(self, legacy, native, native_selected, on_native_stop=None):
         self.legacy, self.native, self.native_selected = legacy, native, native_selected
+        self.on_native_stop = on_native_stop
 
     def _manual(self):
         return self.native if self.native_selected() else self.legacy
@@ -720,7 +721,10 @@ class WarehouseCaptureRouter:
     def stop(self):
         if self.native_selected():
             stop = getattr(self.native, 'stop', None)
-            return stop() if stop else self.native.cancel_manual_capture()
+            result = stop() if stop else self.native.cancel_manual_capture()
+            if self.on_native_stop is not None:
+                self.on_native_stop()
+            return result
         return self.legacy.stop()
 
 

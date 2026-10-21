@@ -346,9 +346,22 @@ class NativeWarehouseAutoCapture:
             self._stop('OBSERVER_UNKNOWN')
             return
         if self._phase == 'WAIT_INITIAL':
+            if self._collect_first() and state in {'MIDDLE', 'BOTTOM'}:
+                if not observation.get('finalSettlementControlsVisible'):
+                    if self._reveal_wait_expired(observation):
+                        return
+                    # Reveal can move the viewport between saved originals.
+                    # Keep observing/using the skip control instead of treating
+                    # this as a user stop or claiming the TOP was supported.
+                    if not self._skip_revealing(observation):
+                        self._schedule_page(.65)
+                    return
+                self._coverage_pending.append({'pageOrdinal': self._seen_pages,
+                                               'reason': 'INITIAL_TOP_UNPROVEN'})
             if state not in {'TOP', 'NO_SCROLL'}:
-                self._stop('START_REQUIRES_TOP')
-                return
+                if not (self._collect_first() and state in {'MIDDLE', 'BOTTOM'}):
+                    self._stop('START_REQUIRES_TOP')
+                    return
             if self._collect_first() and self._reveal_wait_expired(observation):
                 return
             if self._collect_first() and observation.get('skipAnimationButton', {}).get('clickable'):

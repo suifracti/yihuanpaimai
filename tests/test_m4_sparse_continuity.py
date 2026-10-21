@@ -35,6 +35,37 @@ class M4SparseContinuityTests(unittest.TestCase):
         self.assertEqual(hashlib.sha256(raw).hexdigest(), page['nativeSource']['sha256'])
         return cv2.imdecode(np.frombuffer(raw, np.uint8), cv2.IMREAD_COLOR)
 
+    def test_real_reveal_viewport_change_keeps_saved_pages_and_explicit_stop(self):
+        manifest = ROOT / 'build/m4b-20261021/run-2/runtime-data/native-live-trial/warehouse-intake/38c5b64bb13543308b0c4df0cb02f3ad.json'
+        if not manifest.is_file():
+            self.skipTest('requires the retained M4b TOP then MIDDLE originals')
+        document = json.loads(manifest.read_text(encoding='utf-8'))
+        frames = []
+        for page in document['pages']:
+            raw = (manifest.parent.parent / page['nativeSource']['relativePath']).read_bytes()
+            self.assertEqual(hashlib.sha256(raw).hexdigest(), page['nativeSource']['sha256'])
+            frames.append(cv2.imdecode(np.frombuffer(raw, np.uint8), cv2.IMREAD_COLOR))
+        f = LiveRun(output=ROOT / 'build/m4b-20261021/reveal-position-replay', capture_first=True)
+        try:
+            f.source._host_limits['skipAnimationSupported'] = True
+            f.deliver(frames[0])
+            self.assertEqual(f.auto._phase, 'WAIT_SKIP_ANIMATION')
+            command = f.source._pending.copy()
+            f.auto.on_event(f.event('SKIP_ANIMATION_RESULT', command, inputActions=True,
+                reason='SKIP_ANIMATION_SENT', details={'classification':'SENT', 'sendInterfaceInvoked':True,
+                'messageCompletedNs':round(f.now*1e9), 'sourceLeaseId':command['sourceLeaseId'],
+                'animationCompletionProven':False}))
+            f.tick(); f.deliver(frames[1])
+            self.assertTrue(f.auto._active)
+            self.assertEqual(len(f.source.pages_copy()), 2)
+            self.assertEqual(f.finalizations, [])
+            self.assertFalse(any(c['operation']=='SCROLL_DOWN' for c in f.sent))
+            f.auto.stop()
+            self.assertFalse(f.auto._active)
+            self.assertEqual(len(f.source.pages_copy()), 2)
+        finally:
+            f.close()
+
     def crop(self, page):
         frame = self.frame(page)
         x, y, r, b = warehouse_search_roi(frame.shape[1], frame.shape[0])

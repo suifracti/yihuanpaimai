@@ -21,6 +21,7 @@ internal static class WarehouseWindowScroll
             throw new NotSupportedException("SKIP_CLICK_PLATFORM_UNAVAILABLE");
         SendResult SendButton(long hwnd, bool down, uint coordinates) =>
             throw new NotSupportedException("SKIP_CLICK_PLATFORM_UNAVAILABLE");
+        void HoldButton(int milliseconds) => Thread.Sleep(milliseconds);
     }
 
     private sealed class Win32Platform : IPlatform
@@ -99,6 +100,9 @@ internal static class WarehouseWindowScroll
             var move = platform.MovePointer(hwnd, coordinates);
             if (move.ReturnValue == 0 || !BoundTarget()) return false;
             var down = platform.SendButton(hwnd, true, coordinates);
+            // One short press spans a game input update; this does not wait
+            // for animation completion or promote the send to a visible effect.
+            platform.HoldButton(80);
             // Always try the matching release if the same target/context survives,
             // even when DOWN timed out. A release is not a second click attempt.
             if (!BoundTarget()) return false;
@@ -107,6 +111,7 @@ internal static class WarehouseWindowScroll
             try { diagnostic?.Invoke(new JsonObject { ["stage"] = "skip-animation-send",
                 ["hwnd"] = hwnd, ["clientX"] = x, ["clientY"] = y,
                 ["downReturn"] = down.ReturnValue, ["upReturn"] = up.ReturnValue,
+                ["pressDurationMs"] = 80,
                 ["sendInterfaceInvoked"] = true, ["animationCompletionProven"] = false }); } catch { }
             if (down.ReturnValue == 0 || up.ReturnValue == 0) return false;
             context.ScrollAttempt?.MarkSendSucceeded();

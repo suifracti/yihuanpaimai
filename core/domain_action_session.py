@@ -449,6 +449,26 @@ def live_domain_loop_public(state):
     }
 
 
+def verification_run_current(state, view):
+    """Stop a finite supervised run before restocking or entering extra games."""
+    modes = view.get('verificationModes')
+    if not (isinstance(modes, list) and modes and all(m in {'bid', 'observe'} for m in modes)):
+        return True
+    seen = state.setdefault('verificationMatches', [])
+    scene, engine = view.get('publishedScene'), view.get('engine') or {}
+    key = engine.get('matchId')
+    if scene in {'AUCTION', 'AUCTION_READY'} and engine.get('round', 0) > 0 and key and key not in seen:
+        seen.append(key)
+    receipt = view.get('sessionReceipt') or {}
+    if ((scene == 'LOBBY' and len(seen) >= len(modes))
+            or receipt.get('kind') == 'ReturnLobby' and receipt.get('status') == 'UNKNOWN'):
+        state.update(phase='stopped', reason='VERIFICATION_RUN_FINISHED_OR_RETURN_UNKNOWN')
+        return False
+    index = len(seen) if scene == 'LOBBY' else max(0, len(seen)-1)
+    view['mode'] = modes[min(index, len(modes)-1)]
+    return True
+
+
 def advance_live_domain_loop(state, view, send):
     """Move the authorized loop by one observation. send(owner, envelope) -> bool.
 
@@ -462,6 +482,8 @@ def advance_live_domain_loop(state, view, send):
     if not isinstance(view, dict) or not callable(send):
         raise ValueError("LIVE_LOOP_VIEW_REQUIRED")
     if state.get("phase") == "stopped":
+        return state
+    if not verification_run_current(state, view):
         return state
     _consume_live_receipt(state, view)
     _observe_saved_return(state,view)

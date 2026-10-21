@@ -3223,6 +3223,10 @@ def _advance_authorized_live_domain_loop(data: Dict[str, Any], frame: Dict[str, 
         view = _live_loop_view(data, published, funds)
         if view is None:
             return
+        from domain_action_session import verification_run_current
+        if not verification_run_current(_LIVE_DOMAIN_LOOP, view):
+            _stop_authorized_live_domain_loop(_LIVE_DOMAIN_LOOP['reason'])
+            return
 
         def send(owner, envelope):
             if owner is not None and not _native_bind_claimed_bid_obligation_owner(owner):
@@ -3234,7 +3238,6 @@ def _advance_authorized_live_domain_loop(data: Dict[str, Any], frame: Dict[str, 
         from domain_action_session import _consume_live_receipt, _observe_saved_return
         _consume_live_receipt(_LIVE_DOMAIN_LOOP, view)
         _observe_saved_return(_LIVE_DOMAIN_LOOP,view)
-        view['mode'] = _live_domain_mode()
         from instrument_restock import advance as advance_restock, SCENES as restock_scenes
         restock_ready = view.get('mode') == 'observe' or advance_restock(_LIVE_DOMAIN_LOOP, view, send, CONFIG.get('autoAuction') or {})
         view['waitingRestock'] = not restock_ready and published in restock_scenes
@@ -3361,6 +3364,8 @@ def _live_loop_view(data: Dict[str, Any], published: Optional[str], funds) -> Op
     return {
         "publishedScene": 'AUCTION_READY' if published == 'AUCTION_R1' else published,
         "mode": _live_domain_mode(),
+        "verificationModes": [m for m in os.environ.get('NTE_DOMAIN_VERIFY_MODES','').split(',')
+                              if m in {'bid','observe'}],
         "frameSequence": data.get('frameSequence'),
         "collectionFinished": capture.get('state') in {'ALIGNING','COMPLETE','PARTIAL','ERROR'}
             and capture.get('segmentCount', 0) > 0 and not capture.get('stopAvailable'),
@@ -9376,7 +9381,8 @@ def run_hud_app():
                 from native_content_evidence import NativeContentEvidenceSession
                 _NATIVE_CONTENT_EVIDENCE_SESSION = NativeContentEvidenceSession(native_source)
             WAREHOUSE_CAPTURE_HOST = WarehouseCaptureRouter(
-                WAREHOUSE_CAPTURE_HOST, _NATIVE_WAREHOUSE_SOURCE_COORDINATOR, native_observation_enabled)
+                WAREHOUSE_CAPTURE_HOST, _NATIVE_WAREHOUSE_SOURCE_COORDINATOR, native_observation_enabled,
+                on_native_stop=lambda: _stop_authorized_live_domain_loop('USER_STOP'))
             set_warehouse_capture_host(WAREHOUSE_CAPTURE_HOST)
             review_history = WarehouseReviewHistoryRouter(WAREHOUSE_IDENTITY_HISTORY, native_intake)
             WAREHOUSE_IDENTITY_REVIEW = WarehouseIdentityReviewRouter(
