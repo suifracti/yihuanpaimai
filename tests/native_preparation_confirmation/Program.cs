@@ -37,6 +37,7 @@ static class Program
         Host = hostArg >= 0 ? new ReplayHostContext().LoadFromAssemblyPath(Path.GetFullPath(args[hostArg + 1]))
             : Assembly.Load("WgcLiveHarness");
         Console.WriteLine("Host assembly: " + Host.Location);
+        if (args.Contains("--input-boundary-only")) { InputBoundary(); return 0; }
         int sceneArg = Array.IndexOf(args, "--scene-wait-replay");
         if (sceneArg >= 0) { SceneWaitReplay(args[sceneArg + 1]); return 0; }
         SceneWaitChecks();
@@ -121,20 +122,33 @@ static class Program
     static void InputBoundary()
     {
         var type=Host.GetType("WgcLiveHarness.TicketedSceneAnchorDispatch",true)!;
-        foreach(int sending in new[]{0,1}) {
+        foreach(int sending in new[]{0,1})
+        foreach(var origin in Enum.GetValues<InputEventOrigin>())
+        foreach(var kind in Enum.GetValues<InputEventKind>()) {
             var observer=new FakeInputObserver();
-            var guard=new InputSafetyGuard(observer,new FakeFocusSnapshotProvider(),new FakeCursorBackend(),new CountingRawInputBackend());
+            var trace=new InMemoryInputTraceSink();
+            var raw=new CountingRawInputBackend();
+            var guard=new InputSafetyGuard(observer,new FakeFocusSnapshotProvider(),new FakeCursorBackend(),raw,trace);
             object host=type.GetConstructors(BindingFlags.Instance|BindingFlags.NonPublic).Single().Invoke(
                 new object?[]{"test",new Decoder("slow-effect"),guard,null,null,null,null,null,(Action<System.Text.Json.Nodes.JsonObject>)(_=>{})});
             observer.Start(_=>{});
             Require(guard.Arm(new(1)).Ok,"FAKE_ARM");
             type.GetField("dispatching",BindingFlags.Instance|BindingFlags.NonPublic)!.SetValue(host,sending);
+            uint flags=origin==InputEventOrigin.Hardware?0u:kind==InputEventKind.KeyDown?0x10u:0x1u;
+            if(origin==InputEventOrigin.LowerIntegrityInjected) flags|=0x2u;
             type.GetMethod("OnObservedInput",BindingFlags.Instance|BindingFlags.NonPublic)!.Invoke(host,new object[]{
-                new ObservedInputEvent(InputEventKind.MouseButtonDown,InputDeviceClass.Mouse,InputEventOrigin.Hardware,0,10,20,TraceClock.NowNs(),1)});
-            Require(guard.State==(sending==0?GuardState.Armed:GuardState.Cancelled),"IDLE_ENTRY_VS_ACTIVE_TAKEOVER");
+                new ObservedInputEvent(kind,kind==InputEventKind.KeyDown?InputDeviceClass.Keyboard:InputDeviceClass.Mouse,
+                    origin,0,10,20,TraceClock.NowNs(),1) { NativeFlags=flags }});
+            bool human=sending==1 && origin==InputEventOrigin.Hardware;
+            Require(guard.State==(human?GuardState.Cancelled:GuardState.Armed)
+                && guard.UserTakeoverSeen==human,"ONLY_PHYSICAL_INPUT_TAKES_OVER:"+sending+":"+origin+":"+kind);
+            if(sending==1 && origin!=InputEventOrigin.Hardware)
+                Require(trace.Contains("OBSERVED_INJECTED_NOT_HUMAN") && guard.SelfExemptionCount==0,
+                    "FOREIGN_INJECTION_RECORDED_NOT_SELF_EXEMPTED_OR_HUMAN");
+            Require(raw.SendCallCount==0,"OBSERVER_NEVER_RESENDS_INPUT");
             observer.Stop();
         }
-        Console.WriteLine("PASS manual entry between actions does not disable later tickets; input during a transaction cancels (fake only)");
+        Console.WriteLine("PASS 30 input boundaries: idle input allowed, only hardware takes over sending, injected input is recorded separately; zero OS input");
     }
     static void StockReplay(string replay)
     {

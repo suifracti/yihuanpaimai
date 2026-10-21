@@ -504,8 +504,17 @@ public sealed class InputSafetyGuard : ISendInputTicketAuthority
         Interlocked.Increment(ref _exemptionDeniedCount);
         Interlocked.Exchange(ref _lastExemptionDenyReason, decision.Reason);
 
-        string reason = ClassifyTakeover(observed);
         _trace.Write(TracePhase.ExemptionDenied, $"{decision.Reason};{Describe(observed)}");
+        // A foreign/expired injected event is not our own input, but it is not
+        // a human takeover either. Keep its provenance without cancelling the
+        // transaction or granting a self-input exemption.
+        if (observed.Origin != InputEventOrigin.Hardware)
+        {
+            _trace.Write("OBSERVED_INJECTED_NOT_HUMAN", $"{decision.Reason};{Describe(observed)};flags=0x{observed.NativeFlags:X}");
+            return;
+        }
+
+        string reason = ClassifyTakeover(observed);
         CancelFromHook(reason, observed);
     }
 

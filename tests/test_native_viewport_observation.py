@@ -12,7 +12,7 @@ import numpy as np
 ROOT = Path(__file__).resolve().parents[1]
 sys.path[:0] = [str(ROOT / 'core'), str(ROOT / 'app'),
                str(ROOT / 'architecture/v2/host/engine_v22')]
-from nte_engine_v22 import RealEngine, qpc_ns
+from nte_engine_v22 import RealEngine, qpc_ns, STRICT
 from warehouse_viewport_scope import WarehouseViewportScope
 from current_match import CurrentMatch
 
@@ -93,6 +93,7 @@ class NativeViewportObservationTests(unittest.TestCase):
     def test_slow_observe_cancel_or_invalidated_generation_cannot_commit_or_send(self):
         for boundary in ('stop', 'generation'):
             engine = self.engine()
+            engine.capture_policy = STRICT
             entered, release = threading.Event(), threading.Event()
             def observe(*args):
                 entered.set()

@@ -69,6 +69,7 @@ FACT_KEYS = (
     "leaderBid",
     "seats",
     "roundNo",
+    "bidRounds",
     "historicalBids",
     "finalBids",
     "leaderName",
@@ -277,7 +278,7 @@ def is_missing_observation(key: str, value: Any) -> bool:
         if isinstance(value, str) and value.strip().lower() in {"unknown", "未选择", "未知", "none", ""}:
             return True
         return False
-    if key in {"seats", "intelObservations", "intelCardReadings", "publicCardEvents"}:
+    if key in {"seats", "bidRounds", "intelObservations", "intelCardReadings", "publicCardEvents"}:
         if key == "seats":
             if value is None or value == []:
                 return True
@@ -368,6 +369,7 @@ def empty_facts() -> Dict[str, Any]:
         "leaderBid": None,
         "seats": [],
         "roundNo": None,
+        "bidRounds": [],
         "historicalBids": {},
         "finalBids": {},
         "leaderName": None,
@@ -498,7 +500,7 @@ class CurrentMatch:
             return _as_int(raw)
         if key in {
             "settlementItems", "settlementTruthEvidence", "settlementEvidence",
-            "warehouse", "warehouseOccupancy", "seats", "historicalBids", "finalBids",
+            "warehouse", "warehouseOccupancy", "seats", "bidRounds", "historicalBids", "finalBids",
             "leaderTies", "intelFacts", "intelObservations", "auctionEvidence",
         }:
             return raw
@@ -645,6 +647,8 @@ class CurrentMatch:
             if "welfareReceived" in patch:
                 patch["welfareReceived"] = receipt_amount(patch["welfareReceived"])
         flat_patch = dict(patch or {})
+        if isinstance(flat_patch.get("bidding"), dict) and "rounds" in flat_patch["bidding"]:
+            flat_patch.setdefault("bidRounds", deepcopy(flat_patch["bidding"]["rounds"]))
         from intel_evidence_record import restore_intel_evidence
         for key, value in restore_intel_evidence(flat_patch).items():
             flat_patch.setdefault(key, value)
@@ -723,6 +727,13 @@ class CurrentMatch:
             source == "vision" and incoming_round is not None and previous_round is not None
             and incoming_round != previous_round
         )
+        if vision_round_rollover and "seats" not in flat_patch:
+            # A round label can arrive before its bid OCR. Retire the previous
+            # live quotes immediately; their already recorded row stays intact.
+            flat_patch["seats"] = [
+                {**seat, "bid": None, "currentBid": None, "observationStatus": "UNOBSERVED"}
+                for seat in (next_facts.get("seats") or []) if isinstance(seat, dict)
+            ]
 
         def audit(field_name: str, decision: str, reason: str, old: Any, new: Any) -> None:
             self._record_audit({
@@ -1106,6 +1117,33 @@ class CurrentMatch:
                         "sceneGeneration": scene_generation,
                         "observedAt": stamp,
                     })
+        if "seats" in accepted or "roundNo" in accepted:
+            round_no = next_facts.get("roundNo")
+            if type(round_no) is int and round_no > 0:
+                # Reuse the canonical bidding.rounds / bids.opponents shape.
+                # Unknown seats are explicit, never a zero quote or a carried
+                # previous-round amount. This table is not a Solver prediction.
+                rows = deepcopy(next_facts.get("bidRounds") or [])
+                row = next((r for r in rows if isinstance(r, dict) and r.get("round") == round_no), None)
+                if row is None:
+                    row = {"round": round_no, "bids": {"opponents": [
+                        {"slot": slot, "name": None, "bid": None, "currentBid": None,
+                         "observationStatus": "UNOBSERVED"} for slot in range(1, 5)
+                    ]}}
+                    rows.append(row)
+                seats = row.setdefault("bids", {}).setdefault("opponents", [])
+                by_slot = {seat.get("slot"): seat for seat in seats if isinstance(seat, dict)}
+                for index, seat in enumerate(next_facts.get("seats") or [] if "seats" in accepted else []):
+                    if isinstance(seat, dict):
+                        slot = seat.get("slot", index + 1)
+                        if slot in range(1, 5):
+                            by_slot[slot] = {**deepcopy(seat), "slot": slot}
+                row["bids"]["opponents"] = [by_slot.get(slot) or {
+                    "slot": slot, "name": None, "bid": None, "currentBid": None,
+                    "observationStatus": "UNOBSERVED"} for slot in range(1, 5)]
+                if rows != next_facts.get("bidRounds"):
+                    self._write_field(next_facts, "bidRounds", rows, source=source, status="observed",
+                                      protected=False, observed_at=stamp, evidence_refs=evidence_refs)
         self.facts = next_facts
         if source:
             self.source = source
@@ -1366,7 +1404,7 @@ class CurrentMatch:
                 "isMyLead": bool(snap.get("isMyLead") if snap.get("isMyLead") is not None else acquired),
                 "historicalBids": dict(snap.get("historicalBids") or {}),
                 "finalBids": dict(snap.get("finalBids") or {}),
-                "rounds": [],
+                "rounds": deepcopy(snap.get("bidRounds") or []),
             },
             "settlement": settlement_dict,
             "knownGold": known_gold,
@@ -1413,8 +1451,28 @@ class CurrentMatch:
                 ]
             }
         if isinstance(snap.get('auctionEvidence'), dict):
-            import copy
-            canonical_record['auctionEvidence'] = copy.deepcopy(snap['auctionEvidence'])
+            canonical_record['auctionEvidence'] = deepcopy(snap['auctionEvidence'])
+        if snap.get("bidRounds"):
+            # The existing Main review consumes auctionEvidence.bids. Keep raw
+            # observations intact and fill only rounds absent from that view.
+            evidence = canonical_record.setdefault("auctionEvidence", {"version": 1, "ownerMatchId": self.id})
+            projected_rounds = {row.get("round") for row in snap["bidRounds"] if isinstance(row, dict)}
+            observations = evidence["bids"] = [row for row in evidence.get("bids") or []
+                if not isinstance(row, dict) or row.get("source") != "canonical-bidding-round"
+                or row.get("round") not in projected_rounds]
+            present_rounds = {row.get("round") for row in observations if isinstance(row, dict)}
+            for row in snap["bidRounds"]:
+                if not isinstance(row, dict) or row.get("round") in present_rounds:
+                    continue
+                seats = deepcopy((row.get("bids") or {}).get("opponents") or [])
+                observation = {"round": row["round"], "seats": seats, "source": "canonical-bidding-round"}
+                capture_times = [seat["capturedAt"] for seat in seats
+                                 if isinstance(seat, dict) and isinstance(seat.get("capturedAt"), str)
+                                 and seat["capturedAt"]]
+                if capture_times:
+                    observation["capturedAt"] = max(capture_times)
+                observations.append(observation)
+                present_rounds.add(row["round"])
         from intel_evidence_record import intel_evidence_record
         evidence = intel_evidence_record(snap)
         if evidence is not None:

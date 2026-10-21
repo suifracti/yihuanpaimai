@@ -1568,11 +1568,9 @@ class RealEngine:
         expected_kind = self._identity_scope_kind(context)
         if kind != expected_kind or kind not in {"warehouse", "settlement"}:
             return
-        # Auction-grid identity loads the whole catalog and stops the frame
-        # consumer before a gold-average card can reach the live bid loop.
-        # Settlement identity stays available. The default path is unchanged.
-        if kind == "warehouse" and os.environ.get("NTE_DOMAIN_LIVE_LOOP") == "1":
-            return
+        # Recognition owns copied pixels in the existing bounded background
+        # analyzer. Keep the live bid loop on the same completion path as
+        # ordinary observation; never run catalog matching on this consumer.
         invalidation_generation = int(item.get("identityInvalidationGeneration", -1))
         if invalidation_generation != self._identity_generation():
             self.log("identity.deferred_frame_rejected", reason="INVALIDATED_BEFORE_DISPATCH",

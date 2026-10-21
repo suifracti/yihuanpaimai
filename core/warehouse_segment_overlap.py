@@ -459,7 +459,7 @@ class TerminalContinuity:
         from warehouse_grid_geometry import observe_warehouse_grid
         ga, gb = (observe_warehouse_grid(im, already_cropped=True) for im in (a, b))
         g0, g1 = ga['grid'], gb['grid']
-        if (g0['status'] != 'OK' or g1['status'] != 'OK' or gb['components']
+        if (g0['status'] != 'OK' or g1['status'] != 'OK'
                 or g0['columnCount'] != g1['columnCount']
                 or abs(g0['cellWidth'] - g1['cellWidth']) > 1
                 or abs(g0['cellHeight'] - g1['cellHeight']) > 1
@@ -476,27 +476,41 @@ class TerminalContinuity:
             return {}  # The calibrated interval must exclude grid-period aliases.
         gradients = [cv2.Sobel(cv2.cvtColor(im, cv2.COLOR_BGR2GRAY),
                               cv2.CV_32F, 0, 1, ksize=3) for im in (va, vb)]
-        representations = [(gradients, False)]
+        representations = [(gradients, False, 0)]
         vertical_traces = None
-        # Only an empty shared tail may use grid-line traces. Half-cell
-        # horizontal runs remove corner sparkles/background texture without
-        # masking a detected object, lowering correspondence floors, or
-        # inferring movement from the scrollbar alone.
-        if all(c['boundingBox'][3] <= lo for c in ga['components']):
+        # A clipped last item does not erase the grid below it. Measure the
+        # common empty tail in both originals, retaining two disjoint portions
+        # and the orthogonal columns at the same .80 correspondence floor.
+        # This proves displacement/coverage only, never item identity.
+        empty_start = max([0] + [c['boundingBox'][3] for c in ga['components']]
+                          + [c['boundingBox'][3] + hi for c in gb['components']])
+        if height - max(empty_start, hi) >= 2 * g0['cellHeight']:
             kernel = np.ones((1, max(1, int(g0['cellWidth'] / 2))), np.uint8)
             traces = [cv2.morphologyEx(g, cv2.MORPH_OPEN, kernel)
                       - cv2.morphologyEx(-g, cv2.MORPH_OPEN, kernel) for g in gradients]
-            representations.append((traces, True))
+            representations.append((traces, True, empty_start))
             vertical_kernel = np.ones((max(1, int(g0['cellHeight'] / 2)), 1), np.uint8)
             vertical = [cv2.Sobel(cv2.cvtColor(im, cv2.COLOR_BGR2GRAY),
                         cv2.CV_32F, 1, 0, ksize=3) for im in (va, vb)]
             vertical_traces = [cv2.morphologyEx(g, cv2.MORPH_OPEN, vertical_kernel)
                 - cv2.morphologyEx(-g, cv2.MORPH_OPEN, vertical_kernel) for g in vertical]
         candidates = []
-        for representation, grid_trace in representations:
-            for offset in range(lo, hi + 1):
-                shared_a = representation[0][offset:]
-                shared_b = representation[1][:-offset] if offset else representation[1]
+        def shared_parts(images, start, offset):
+            first = max(start, int(np.ceil(offset)))
+            if float(offset).is_integer():
+                dy = int(offset)
+                return images[0][first:], images[1][first-dy:height-dy]
+            # Rasterized subpixel scrolling need not land on an integer row.
+            # Register at half-pixel resolution; keep the same score floors
+            # and the calibrated search interval rather than relaxing either.
+            registered = cv2.warpAffine(images[1], np.float32([[1, 0, 0], [0, 1, offset]]),
+                                        (images[1].shape[1], height), flags=cv2.INTER_LINEAR)
+            return images[0][first:], registered[first:]
+
+        for representation, grid_trace, start in representations:
+            for offset in np.arange(lo, hi + .01, .5):
+                offset = float(offset)
+                shared_a, shared_b = shared_parts(representation, start, offset)
                 halves = [(shared_a, shared_b), *zip(np.array_split(shared_a, 2), np.array_split(shared_b, 2))]
                 if any(float(x.std()) < 8 or float(y.std()) < 8 for x, y in halves):
                     continue
@@ -504,8 +518,7 @@ class TerminalContinuity:
                 # Same .80 floor and both disjoint portions as before.
                 if min(scores) >= .80:
                     if grid_trace:
-                        ax = vertical_traces[0][offset:]
-                        bx = vertical_traces[1][:-offset] if offset else vertical_traces[1]
+                        ax, bx = shared_parts(vertical_traces, start, offset)
                         vertical_parts = [(ax,bx), *zip(np.array_split(ax,2),np.array_split(bx,2))]
                         if any(float(x.std()) < 8 or float(y.std()) < 8 for x,y in vertical_parts):
                             continue
@@ -534,7 +547,8 @@ class TerminalContinuity:
                 'terminalContinuity': {'calibration': self.samples.copy(),
                     'thumbDelta': delta, 'displacementIntervalPx': [lo, hi],
                     'gridPeriodPx': g0['cellHeight'], 'sharedGradientScores': scores,
-                    'emptySharedGridTrace': grid_trace}}
+                    'emptySharedGridTrace': grid_trace,
+                    'emptyTailStartPx': empty_start if grid_trace else None}}
 
 
 def align_warehouse_segments(prev_img, next_img, *, prev_id='', next_id='',

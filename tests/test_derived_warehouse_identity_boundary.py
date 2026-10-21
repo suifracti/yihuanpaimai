@@ -49,6 +49,7 @@ def _engine(current_match, catalog):
     engine._identity_invalidation_generation = 0
     engine._identity_analyzer = None
     engine._identity_last_committed_sequence = {}
+    engine._warehouse_activity_sources = {}
     engine.current_match = current_match
     engine.pipeline = _Pipeline(catalog)
     engine.last_context = {"scene": "IN_AUCTION", "inAuction": True, "round": 1}
