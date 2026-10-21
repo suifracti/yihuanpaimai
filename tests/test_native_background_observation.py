@@ -33,6 +33,7 @@ _MAIN_FUNCTIONS = {
     "_stop_authorized_live_domain_loop",
     "_native_domain_planning_view",
     "_live_loop_view",
+    "_live_domain_mode",
     "_game_is_foreground",
     "_native_observed_solver_facts",
     "_native_domain_action_session_observe_locked",
