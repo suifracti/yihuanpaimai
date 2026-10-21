@@ -18,6 +18,22 @@ import sys
 import time
 
 ROOT = Path(__file__).resolve().parents[1]
+HOST_CANDIDATES = (
+    ROOT / "build" / "native-observation" / "WgcLiveHarness.exe",
+    ROOT / "architecture" / "v2" / "host" / "wgc_live_harness" / "bin" / "Release" / "net8.0-windows10.0.19041.0" / "WgcLiveHarness.exe",
+    ROOT / "architecture" / "v2" / "host" / "wgc_live_harness" / "bin" / "Debug" / "net8.0-windows10.0.19041.0" / "WgcLiveHarness.exe",
+)
+
+
+def resolve_host() -> Path:
+    """Explicit path wins; otherwise the freshest built host, never a stale copy."""
+    configured = str(os.environ.get("NTE_NATIVE_HOST_EXE") or "").strip()
+    if configured:
+        return Path(configured).resolve()
+    existing = [candidate for candidate in HOST_CANDIDATES if candidate.is_file()]
+    if not existing:
+        return HOST_CANDIDATES[0].resolve()
+    return max(existing, key=lambda candidate: candidate.stat().st_mtime).resolve()
 
 
 def prepare():
@@ -29,7 +45,7 @@ def prepare():
     if (app.get("mode") != "live" or app.get("observationProfile") != "native-readonly-v1"
             or app.get("observationWindowMode") != "background-readonly"):
         raise ValueError("Select live Native background observation before preparing")
-    host = Path(os.environ.get('NTE_NATIVE_HOST_EXE', str(ROOT / 'build/native-observation/WgcLiveHarness.exe'))).resolve()
+    host = resolve_host()
     names = ["app/main.py", "app/DirectCompositionHost.dll",
              str(host), str(host.with_suffix(".dll")),
              "architecture/v2/host/engine_v22/nte_engine_v22.py", "core/warehouse_vision.py", "assets/catalog_065.json"]

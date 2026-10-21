@@ -439,15 +439,21 @@ class NativeObservationBridge:
 
     def _resolve_command(self) -> list[str]:
         configured = str(os.environ.get("NTE_NATIVE_HOST_EXE") or "").strip()
+        if configured and Path(configured).is_file():
+            return [str(Path(configured))]
         candidates = [
-            Path(configured) if configured else None,
             self.repo_root / "build" / "native-observation" / "WgcLiveHarness.exe",
             self.repo_root / "architecture" / "v2" / "host" / "wgc_live_harness" / "bin" / "Release" / "net8.0-windows10.0.19041.0" / "WgcLiveHarness.exe",
             self.repo_root / "architecture" / "v2" / "host" / "wgc_live_harness" / "bin" / "Debug" / "net8.0-windows10.0.19041.0" / "WgcLiveHarness.exe",
         ]
-        for candidate in candidates:
-            if candidate is not None and candidate.is_file():
-                return [str(candidate)]
+        existing = [candidate for candidate in candidates if candidate.is_file()]
+        if existing:
+            # A copied binary outlives the fix that produced it unless the
+            # freshest file wins. An older deployment must not shadow a newer
+            # build, and the chosen path belongs in the run record.
+            chosen = max(existing, key=lambda candidate: candidate.stat().st_mtime)
+            self.log("STARTUP:NATIVE", f"host {chosen}")
+            return [str(chosen)]
 
         dotnet = shutil.which("dotnet") or "dotnet"
         project = self.repo_root / "architecture" / "v2" / "host" / "wgc_live_harness" / "WgcLiveHarness.csproj"
