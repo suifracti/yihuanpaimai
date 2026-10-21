@@ -107,8 +107,12 @@ class NativeWarehouseIntake:
             'processingEvidenceIds': self._processing_evidence_ids,
             'coverageEvidenceIds': self._coverage_evidence_ids,
             'refinement': refinement,
-            'placementRefinementPending': not (self._resolve_placements and self._packet
-                and self._state in {'PARTIAL','COMPLETE'}),
+            # An in-flight refinement owns this manifest until it merges. A
+            # later manifest write must not clear the resume marker, or a
+            # process exit would leave the job with nothing to pick it up.
+            'placementRefinementPending': bool(refinement and refinement.get('state') in {'QUEUED', 'RUNNING'})
+                or not (self._resolve_placements and self._packet
+                        and self._state in {'PARTIAL', 'COMPLETE'}),
             'rejectedOriginals': getattr(self, '_rejected_originals', [])}, ensure_ascii=False).encode('utf-8')
         if len(raw) > MAX_MANIFEST_BYTES:
             raise IntakeRejected('LIMIT_REACHED')
@@ -615,10 +619,16 @@ class NativeWarehouseIntake:
                 try:
                     manifest = json.loads(path.read_text(encoding='utf-8'))
                     if manifest.get('state') == 'ALIGNING':
-                        return self.recover_saved_capture(path.stem)
+                        self.recover_saved_capture(path.stem)
+                        continue
                     if (self._refiner and manifest.get('state') in {'PARTIAL','COMPLETE'}
                             and manifest.get('placementRefinementPending')):
-                        reply = self._refiner.enqueue(path.stem)
+                        # A QUEUED/RUNNING refinement belonged to a process that
+                        # is gone. The manifest is its durable backlog entry, so
+                        # resume it on this launch the same way the settlement
+                        # archive resumes PENDING/PROCESSING work.
+                        state = (manifest.get('refinement') or {}).get('state')
+                        reply = self._refiner.enqueue(path.stem, resume=state in {'QUEUED','RUNNING'})
                         queued += reply.get('reason') == 'REFINEMENT_QUEUED'
                 except (ValueError, OSError):
                     continue

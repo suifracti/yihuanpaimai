@@ -456,6 +456,45 @@ class NativeWarehouseIntakeTests(unittest.TestCase):
             self.assertEqual(manifest['state'],'PARTIAL')
             self.assertTrue(manifest['placementRefinementPending'])
 
+    def test_interrupted_refinement_is_resumed_on_the_next_start(self):
+        from native_warehouse_refinement import SavedWarehouseRefinement
+        entered = threading.Event()
+        processes = []
+        class WaitingProcess:
+            def __init__(process,*args,**kwargs):
+                process.returncode = None; processes.append(process); entered.set()
+            def poll(process): return process.returncode
+            def kill(process): process.returncode = -1
+            def wait(process): return process.returncode
+        self.intake._refiner = SavedWarehouseRefinement(self.intake)
+        self.frame(163,1); self.intake.start_manual(); self.intake.capture_manual_page()
+        session = self.intake._session_id
+        manifest_path = self.store.root/'warehouse-intake'/f'{session}.json'
+        with patch('native_warehouse_refinement.subprocess.Popen',WaitingProcess):
+            self.intake.finish_manual_capture(termination_reason='INCOMPLETE')
+            self.intake.wait_processing(10)
+            self.assertTrue(entered.wait(2))
+            running = json.loads(manifest_path.read_text('utf-8'))
+            self.assertEqual(running['refinement']['state'],'RUNNING')
+            self.assertEqual(len(processes),1)
+            interrupted_token = running['refinement']['jobId']
+            # A later manifest write must not clear the marker while it runs.
+            self.intake._write_manifest(self.intake._pages)
+            self.assertTrue(json.loads(manifest_path.read_text('utf-8'))['placementRefinementPending'])
+            # The process dies here: only the manifest knows the job existed.
+            entered.clear()
+            fresh = NativeWarehouseIntake(draft_store=self.store,scope_provider=lambda:None,
+                source_provider=lambda:None)
+            reply = fresh.resume_pending()
+            self.assertEqual(reply['queued'],1)
+            self.assertTrue(entered.wait(2))
+            resumed = json.loads(manifest_path.read_text('utf-8'))
+            self.assertEqual(resumed['refinement']['state'],'RUNNING')
+            self.assertNotEqual(resumed['refinement']['jobId'],interrupted_token)
+            self.assertEqual(len(processes),2)
+            fresh._refiner.cancel(session); fresh.wait_refinement(3)
+            self.intake._refiner.cancel(session); self.intake.wait_refinement(3)
+
     def test_refinement_publishes_frozen_old_archive_after_new_session_starts(self):
         from native_warehouse_refinement import SavedWarehouseRefinement, fingerprint
         self.frame(163,1); self.intake.start_manual(); self.intake.capture_manual_page()
