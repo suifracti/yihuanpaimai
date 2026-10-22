@@ -40,8 +40,12 @@
     "dedupIntervalSeconds": 60
   },
   "autoAuction": {
+    "enabled": false,
+    "mode": "bid",
     "minimumFunds": 100000,
-    "instrumentTargets": {"goldAverage": 1, "purpleCount": 1}
+    "maxMatches": null,
+    "instrumentTargets": {"goldAverage": 1, "purpleCount": 1},
+    "comment": "enabled 由 auto_auction_start/stop 写入；mode=bid|observe；maxMatches=null 表示一直跑到手动停止。instrumentTargets 是补仪器目标，切换开关不会丢掉它。"
   },
   "bid": {
     "perMatchFundCap": null,

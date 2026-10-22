@@ -43,6 +43,7 @@ class NativeWarehouseAutoCapture:
         self._lock = source.intake._scope_lock
         self._active = False
         self._phase, self._reason = 'IDLE', None
+        self._stopped_record = None
         self._generation = 0
         self._token = self._timer = None
         self._timer_ticket = None
@@ -852,11 +853,22 @@ class NativeWarehouseAutoCapture:
 
     def stop(self):
         with self._lock:
+            intake = self.source.intake
+            binding = (getattr(intake, '_processing_binding', None)
+                       or getattr(intake, '_binding', None) or {})
+            if not binding:
+                contract = intake.source_contract() if hasattr(intake, 'source_contract') else {}
+                binding = contract.get('scope') or {}
+            self._stopped_record = str(binding.get('recordStableKey') or '') or None
             if self._active:
                 self._stop('USER_STOP')
                 return {'ok': True, 'reason': 'STOP_REQUESTED'}
             # Stopping observation revokes live collection, not already saved
             # old-match analysis. Explicit processing cancellation is separate.
+            # The reason still marks this record's collection as closed by the
+            # user, so a later presentation payload does not look like capture
+            # is still pending.
+            self._reason = 'USER_STOP'
             self.source.close_source('USER_STOP')
             return self.source.intake.end_collection('USER_STOP')
 
@@ -879,6 +891,10 @@ class NativeWarehouseAutoCapture:
                 view['available'] = bool(ready.get('ok'))
                 if self._reason:
                     view['automaticTerminationReason'] = self._reason
+                    if self._reason == 'USER_STOP':
+                        # Which record's collection the user closed. A newer
+                        # settlement must not inherit this answer.
+                        view['automaticTerminationRecord'] = self._stopped_record
                     messages = {'USER_STOP': '已停止自动收页，原图保留。',
                         'BOTTOM_SAVED_COVERAGE_PENDING': '已滚到底部并保存原图，部分页面衔接仍待核对。',
                         'WINDOW_SCROLL_NO_PROGRESS': '滚动消息未产生可核实的位移，已停止；原图保留。',

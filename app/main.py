@@ -3188,6 +3188,20 @@ def _stop_authorized_live_domain_loop(reason: str) -> None:
         },ensure_ascii=False)),loop)
 
 
+def _native_capture_stopped() -> None:
+    """Stop the current warehouse capture only.
+
+    The saved pages and any running refinement stay. The auction loop keeps its
+    phase and moves on once this settled match's coverage is closed, exactly as
+    it would after an automatic end. Re-capture of the same record is already
+    refused by the once-per-recordStableKey attempt guard, so the loop does not
+    immediately start another page run.
+    """
+    log_stage('WAREHOUSE:NATIVE_AUTO', 'capture stopped by user; loop keeps running')
+    with _MANUAL_STATE_LOCK:
+        LATEST_PAYLOAD['nativeCaptureStop'] = {'reason': 'USER_STOP'}
+
+
 def _advance_authorized_live_domain_loop(data: Dict[str, Any], frame: Dict[str, Any]) -> None:
     """One pass of the product loop behind the autoAuction switch.
 
@@ -3242,7 +3256,7 @@ def _advance_authorized_live_domain_loop(data: Dict[str, Any], frame: Dict[str, 
         _consume_live_receipt(_LIVE_DOMAIN_LOOP, view)
         _observe_saved_return(_LIVE_DOMAIN_LOOP,view)
         from instrument_restock import advance as advance_restock, SCENES as restock_scenes
-        restock_ready = view.get('mode') == 'observe' or advance_restock(_LIVE_DOMAIN_LOOP, view, send, CONFIG.get('autoAuction') or {})
+        restock_ready = view.get('mode') == 'observe' or advance_restock(_LIVE_DOMAIN_LOOP, view, send, _auto_auction_settings())
         view['waitingRestock'] = not restock_ready and published in restock_scenes
         if _LIVE_DOMAIN_LOOP.get('phase') != 'stopped':
             _LIVE_DOMAIN_LOOP = advance_live_domain_loop(_LIVE_DOMAIN_LOOP, view, send)
@@ -3285,12 +3299,24 @@ def _native_domain_planning_view(data: Dict[str, Any]) -> Optional[Dict[str, Any
 
 
 def _auto_auction_settings() -> Dict[str, Any]:
-    settings = {'enabled': False, 'mode': 'bid', 'minimumFunds': 100000, 'maxMatches': None}
+    """Defaulted settings that never narrow the file: unknown keys survive a save.
+
+    instrumentTargets is the restock goal, not a switch field. Reading only the
+    keys defined here used to drop it on the next save.
+    """
+    defaults = {'enabled': False, 'mode': 'bid', 'minimumFunds': 100000, 'maxMatches': None,
+                'instrumentTargets': {'goldAverage': 1, 'purpleCount': 1}}
+    settings = copy.deepcopy(defaults)
     raw = CONFIG.get('autoAuction')
     if isinstance(raw, dict):
-        settings.update({key: raw[key] for key in settings if key in raw})
-    if settings['mode'] not in {'bid', 'observe'}:
+        settings.update(copy.deepcopy(raw))
+    if settings.get('mode') not in {'bid', 'observe'}:
         settings['mode'] = 'bid'
+    targets = settings.get('instrumentTargets')
+    merged = dict(defaults['instrumentTargets'])
+    if isinstance(targets, dict):
+        merged.update(targets)
+    settings['instrumentTargets'] = merged
     return settings
 
 
@@ -3313,11 +3339,19 @@ def _set_auto_auction_enabled(enabled: bool) -> Dict[str, Any]:
     settings = _auto_auction_settings()
     settings['enabled'] = bool(enabled)
     next_config['autoAuction'] = settings
+    path = os.path.join(BASE_DIR, 'config.json')
+    temporary = path + '.tmp'
     try:
-        with open(os.path.join(BASE_DIR, 'config.json'), 'w', encoding='utf-8') as handle:
+        with open(temporary, 'w', encoding='utf-8') as handle:
             json.dump(next_config, handle, ensure_ascii=False, indent=2)
             handle.write('\n')
+        os.replace(temporary, path)
     except OSError as exc:
+        try:
+            if os.path.exists(temporary):
+                os.remove(temporary)
+        except OSError:
+            pass
         return {'ok': False, 'reason': str(exc)}
     CONFIG.clear(); CONFIG.update(next_config)
     if enabled:
@@ -3325,6 +3359,75 @@ def _set_auto_auction_enabled(enabled: bool) -> Dict[str, Any]:
         _auto_auction_approval_id()
     return {'ok': True, 'autoAuction': _auto_auction_settings(),
             'approvalId': _AUTO_AUCTION_APPROVAL_ID}
+
+
+def _auto_auction_public() -> Dict[str, Any]:
+    """The one shape the bridge reports for the switch, on start, stop and status."""
+    settings = _auto_auction_settings()
+    state = globals().get('_LIVE_DOMAIN_LOOP') or {}
+    phase = state.get('phase')
+    return {
+        'enabled': settings['enabled'] is True,
+        'mode': settings['mode'],
+        'minimumFunds': settings['minimumFunds'],
+        'maxMatches': settings['maxMatches'],
+        'instrumentTargets': copy.deepcopy(settings['instrumentTargets']),
+        'approvalId': globals().get('_AUTO_AUCTION_APPROVAL_ID'),
+        'running': bool(state) and settings['enabled'] is True and phase != 'stopped',
+        'phase': phase,
+        'reason': state.get('reason') or globals().get('_AUTO_AUCTION_STOP_REASON'),
+        'matchesDone': state.get('matchesDone', 0),
+        'coverage': state.get('coverage'),
+        'savedSources': state.get('savedSources', 0),
+    }
+
+
+def _observation_running() -> bool:
+    bridge = globals().get('NATIVE_OBSERVATION_BRIDGE')
+    if bridge is not None and getattr(bridge, 'running', False):
+        return True
+    process = globals().get('VISION_PROCESS')
+    return bool(process is not None and process.poll() is None)
+
+
+def _start_auto_auction() -> Dict[str, Any]:
+    """Turn the existing live loop on. This never starts a second loop."""
+    global _LIVE_DOMAIN_LOOP, _AUTO_AUCTION_STOP_REASON
+    written = _set_auto_auction_enabled(True)
+    if not written.get('ok'):
+        return {'ok': False, 'reason': 'CONFIG_WRITE_FAILED', 'message': written.get('reason'),
+                'autoAuction': _auto_auction_public()}
+    _LIVE_DOMAIN_LOOP = None
+    _AUTO_AUCTION_STOP_REASON = None
+    log_stage('AUTO_AUCTION', 'start')
+    try:
+        start_vision_worker(resume_same_match=False)
+    except Exception as exc:
+        log_stage('AUTO_AUCTION', f'observation start failed: {type(exc).__name__}: {exc}')
+    if not _observation_running():
+        _set_auto_auction_enabled(False)
+        return {'ok': False, 'reason': 'OBSERVATION_UNAVAILABLE',
+                'autoAuction': _auto_auction_public()}
+    return {'ok': True, 'autoAuction': _auto_auction_public()}
+
+
+def _stop_auto_auction(reason: str = 'USER_STOP') -> Dict[str, Any]:
+    """Stop the whole run: switch off, loop stopped, main window back with the reason."""
+    global _AUTO_AUCTION_STOP_REASON
+    reason = str(reason or 'USER_STOP')
+    _AUTO_AUCTION_STOP_REASON = reason
+    written = _set_auto_auction_enabled(False)
+    log_stage('AUTO_AUCTION', f'stop: {reason}')
+    if globals().get('_LIVE_DOMAIN_LOOP') is not None:
+        _stop_authorized_live_domain_loop(reason)
+    holder = globals().get('_MAIN_WINDOW_HOLDER') or []
+    if holder and holder[0] is not None:
+        try:
+            holder[0].announce_auto_auction_stop(reason)
+        except Exception as exc:
+            log_stage('AUTO_AUCTION', f'restore failed: {type(exc).__name__}: {exc}')
+    return {'ok': bool(written.get('ok')), 'reason': None if written.get('ok') else 'CONFIG_WRITE_FAILED',
+            'autoAuction': _auto_auction_public()}
 
 
 def _live_domain_mode():
@@ -3404,13 +3507,20 @@ def _live_loop_view(data: Dict[str, Any], published: Optional[str], funds) -> Op
         capture = _NATIVE_WAREHOUSE_SOURCE_COORDINATOR.presentation_payload()
         intake = _NATIVE_WAREHOUSE_SOURCE_COORDINATOR.source.intake
         capture_key = (intake._processing_binding or intake._binding or {}).get('recordStableKey')
+    # A user stop closes exactly the record it was pressed on. A later
+    # settlement must wait for its own capture, not inherit that answer.
+    capture_stopped_record = (capture.get('automaticTerminationRecord')
+                              if capture.get('automaticTerminationReason') == 'USER_STOP' else None)
     return {
         "publishedScene": 'AUCTION_READY' if published == 'AUCTION_R1' else published,
         "mode": _live_domain_mode(),
         "frameSequence": data.get('frameSequence'),
-        "collectionFinished": capture.get('state') in {'ALIGNING','COMPLETE','PARTIAL','ERROR'}
-            and capture.get('segmentCount', 0) > 0 and not capture.get('stopAvailable'),
+        "collectionFinished": (capture_stopped_record is not None
+                               and capture_stopped_record == match_id)
+            or (capture.get('state') in {'ALIGNING','COMPLETE','PARTIAL','ERROR'}
+                and capture.get('segmentCount', 0) > 0 and not capture.get('stopAvailable')),
         "captureRecordKey": capture_key,
+        "captureStoppedRecord": capture_stopped_record,
         "coverageStatus": capture.get('coverageStatus'),
         "captureProgress": [capture.get(k) for k in ('state','segmentCount','scrollRequestCount')],
         "savedSources": capture.get('segmentCount',0),
@@ -3420,7 +3530,7 @@ def _live_loop_view(data: Dict[str, Any], published: Optional[str], funds) -> Op
         "goldTotal": data.get("goldTotal") if data.get("goldTotal") is not None else CURRENT_MATCH.facts.get("goldTotal"),
         "instruments": (data.get('domainObservation') or {}).get('instruments'),
         "advancedToolGroupVisible": (data.get('domainObservation') or {}).get('advancedToolGroupVisible') is True,
-        "minimumFunds": (CONFIG.get('autoAuction') or {}).get('minimumFunds', 100000),
+        "minimumFunds": _auto_auction_settings()['minimumFunds'],
         "goldAverageVisible": (data.get('domainObservation') or {}).get('goldAverageVisible') is True,
         "purpleCountVisible": (data.get('domainObservation') or {}).get('purpleCountVisible') is True,
         "purpleCount": data.get("purpleCount") if data.get("purpleCount") is not None else CURRENT_MATCH.facts.get("purpleCount"),
@@ -3460,6 +3570,9 @@ def _record_live_domain_loop(public: Dict[str, Any], view: Dict[str, Any]) -> No
             "publishedScene": view.get("publishedScene"),
             "engine": view.get("engine"),
             "funds": view.get("currentFunds"),
+            "capture": {key: view.get(key) for key in
+                        ("collectionFinished", "captureRecordKey", "coverageStatus",
+                         "captureProgress", "savedSources")},
         }
         with open(os.path.join(directory, "live-loop.jsonl"), "a", encoding="utf-8") as stream:
             stream.write(json.dumps(row, ensure_ascii=False) + "\n")
@@ -5771,6 +5884,7 @@ _NATIVE_DOMAIN_ACTION_SESSION = None
 _NATIVE_DOMAIN_ACTION_SESSION_KEY: Optional[tuple[str, str, int]] = None
 _LIVE_DOMAIN_LOOP = None
 _AUTO_AUCTION_APPROVAL_ID = None
+_AUTO_AUCTION_STOP_REASON = None
 _NATIVE_DURABLE_BID_OBLIGATION_OWNER = None
 _NATIVE_DOMAIN_ACTION_BOOT_ID: Optional[str] = None
 _LIVE_VISION_EXIT_SCENES = frozenset({
@@ -9424,7 +9538,7 @@ def run_hud_app():
                 _NATIVE_CONTENT_EVIDENCE_SESSION = NativeContentEvidenceSession(native_source)
             WAREHOUSE_CAPTURE_HOST = WarehouseCaptureRouter(
                 WAREHOUSE_CAPTURE_HOST, _NATIVE_WAREHOUSE_SOURCE_COORDINATOR, native_observation_enabled,
-                on_native_stop=lambda: _stop_authorized_live_domain_loop('USER_STOP'))
+                on_native_stop=_native_capture_stopped)
             set_warehouse_capture_host(WAREHOUSE_CAPTURE_HOST)
             review_history = WarehouseReviewHistoryRouter(WAREHOUSE_IDENTITY_HISTORY, native_intake)
             WAREHOUSE_IDENTITY_REVIEW = WarehouseIdentityReviewRouter(
@@ -9452,6 +9566,9 @@ def run_hud_app():
             observation_window_mode_provider=handle_observation_window_mode,
             capture_freshness_policy_provider=handle_capture_freshness_policy,
             native_auto_warehouse_provider=handle_native_auto_warehouse_capture,
+            auto_auction_start_provider=_start_auto_auction,
+            auto_auction_stop_provider=_stop_auto_auction,
+            auto_auction_provider=_auto_auction_public,
             manual_next_match_provider=lambda req: publish_manual_payload(begin_next_manual_match(req)),
             manual_finalize_provider=lambda req: publish_manual_payload(finalize_manual_match(req)),
             manual_bootstrap_provider=lambda: publish_manual_payload(build_manual_alpha_payload()),

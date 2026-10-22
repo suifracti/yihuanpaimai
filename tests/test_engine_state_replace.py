@@ -41,7 +41,7 @@ class EngineStateReplaceTests(unittest.TestCase):
         item = {'identityInvalidationGeneration': 3, 'bgr': frame,
                 'header': {'sequence': 7, 'captureTimestampNs': 100}, 'rawSha256': 'source-hash'}
         try:
-            with patch.dict(sys.modules, {'warehouse_vision': module}), patch.dict(os.environ, {'NTE_DOMAIN_LIVE_LOOP': '1'}):
+            with patch.dict(sys.modules, {'warehouse_vision': module}):
                 engine.RealEngine._submit_deferred_identity(host, item, {'scene': 'IN_AUCTION', 'round': 1})
                 self.assertTrue(started.wait(1), 'live path must submit warehouse work')
                 self.assertFalse(release.is_set(), 'dispatch must return while recognition is still busy')
@@ -124,19 +124,13 @@ class EngineStateReplaceTests(unittest.TestCase):
                 })()
 
         Host._submit_deferred_identity = engine.RealEngine._submit_deferred_identity
-        previous = os.environ.get("NTE_DOMAIN_LIVE_LOOP")
-        os.environ["NTE_DOMAIN_LIVE_LOOP"] = "1"
-        try:
-            Host("warehouse")._submit_deferred_identity({}, {"scene": "IN_AUCTION"})
-            self.assertEqual(seen[:2], ["warehouse", "log"])
-            seen.clear()
-            Host("settlement")._submit_deferred_identity({}, {"scene": "SETTLEMENT"})
-            self.assertEqual(seen[:2], ["settlement", "log"])
-        finally:
-            if previous is None:
-                os.environ.pop("NTE_DOMAIN_LIVE_LOOP", None)
-            else:
-                os.environ["NTE_DOMAIN_LIVE_LOOP"] = previous
+        # No switch gates deferred identity: the product switch drives dispatch,
+        # recognition itself only follows the observed frame.
+        Host("warehouse")._submit_deferred_identity({}, {"scene": "IN_AUCTION"})
+        self.assertEqual(seen[:2], ["warehouse", "log"])
+        seen.clear()
+        Host("settlement")._submit_deferred_identity({}, {"scene": "SETTLEMENT"})
+        self.assertEqual(seen[:2], ["settlement", "log"])
         seen.clear()
         Host("warehouse")._submit_deferred_identity({}, {"scene": "IN_AUCTION"})
         self.assertEqual(seen[:2], ["warehouse", "log"])

@@ -32,6 +32,64 @@ class _FakeOverlay:
         self.Visible = False
 
 
+EXPECTED_ACTIONS = frozenset((
+    "auto_auction_start",
+    "auto_auction_stop",
+    "cancel_warehouse_manual_capture",
+    "cancel_warehouse_refinement",
+    "capture_warehouse_manual_page",
+    "confirm_warehouse_capture",
+    "delete_history_record",
+    "delete_history_records",
+    "delete_original_screenshot",
+    "delete_settlement_screenshot",
+    "export_history_records",
+    "export_reviewed_labels",
+    "finish_warehouse_manual_capture",
+    "get_overlay_visibility",
+    "import_history_bundle",
+    "import_settlement_screenshot",
+    "manual_bootstrap",
+    "manual_facts",
+    "manual_finalize",
+    "manual_next_match",
+    "next_match_preparation",
+    "prepare_warehouse_capture",
+    "prepare_warehouse_manual_takeover",
+    "replace_settlement_screenshot",
+    "request_app_status",
+    "request_guidebook_sources",
+    "request_legacy_archive",
+    "request_native_warehouse_archive_page",
+    "request_original_screenshots",
+    "request_settlement_review",
+    "request_warehouse_slot_evidence",
+    "rerun_settlement_recognition",
+    "restore_original_screenshot",
+    "resume_warehouse_refinement",
+    "retry_settlement_inventory_archive",
+    "save_game_screenshot",
+    "save_settlement_review",
+    "save_settlement_screenshot",
+    "select_legacy_archive_source",
+    "set_capture_freshness_policy",
+    "set_main_pin",
+    "set_native_auto_warehouse_capture",
+    "set_observation_window_mode",
+    "set_ui_appearance",
+    "settlement_item_review_action",
+    "start_live_vision",
+    "start_warehouse_capture",
+    "start_warehouse_manual_takeover",
+    "stop_warehouse_capture",
+    "toggle_main_pin",
+    "toggle_overlay",
+    "triggered_snapshot",
+    "warehouse_identity_review",
+    "warehouse_instance_decision",
+))
+
+
 class MainWindowLifecycleTests(unittest.TestCase):
     def test_guidebook_bridge_loads_local_item_pictures_and_character_portraits(self):
         import base64
@@ -376,7 +434,7 @@ class MainWindowLifecycleTests(unittest.TestCase):
         self.assertIn('src="main_window.js', html)
         self.assertIn('src="auction_engine_v06.js"', html)
         self.assertIn("AuctionEngineV06.baseCatalogFor", javascript)
-        self.assertIn("AuctionEngineV06.normalizeKnownContext", javascript)
+        self.assertIn("AuctionEngineV06.validateKnownInput", javascript)
         self.assertNotIn("mockDashboardState", javascript)
         self.assertIn("renderHistory", javascript)
         self.assertIn("历史对局", html)
@@ -398,7 +456,7 @@ class MainWindowLifecycleTests(unittest.TestCase):
         self.assertNotIn("hudWsClient", javascript)
         self.assertEqual(
             MainWindowBridge.ALLOWED_ACTIONS,
-            frozenset(("toggle_overlay", "get_overlay_visibility", "toggle_main_pin", "set_main_pin", "request_app_status", "delete_history_record", "delete_history_records", "request_legacy_archive", "select_legacy_archive_source", "request_settlement_review", "import_settlement_screenshot", "replace_settlement_screenshot", "delete_settlement_screenshot", "rerun_settlement_recognition", "save_settlement_review", "settlement_item_review_action", "manual_facts", "manual_next_match", "manual_finalize", "manual_bootstrap", "start_live_vision", "request_original_screenshots", "delete_original_screenshot", "restore_original_screenshot", "export_reviewed_labels", "triggered_snapshot", "save_settlement_screenshot", "save_game_screenshot", "start_warehouse_capture", "prepare_warehouse_capture", "confirm_warehouse_capture", "stop_warehouse_capture", "request_warehouse_slot_evidence", "warehouse_instance_decision", "warehouse_identity_review", "export_history_records", "import_history_bundle")),
+            EXPECTED_ACTIONS,
         )
 
     def test_mascot_presentation_does_not_expand_native_bridge_authority(self):
@@ -410,7 +468,7 @@ class MainWindowLifecycleTests(unittest.TestCase):
         self.assertNotIn('postNative("set_mascot_state")', javascript)
         self.assertEqual(
             MainWindowBridge.ALLOWED_ACTIONS,
-            frozenset(("toggle_overlay", "get_overlay_visibility", "toggle_main_pin", "set_main_pin", "request_app_status", "delete_history_record", "delete_history_records", "request_legacy_archive", "select_legacy_archive_source", "request_settlement_review", "import_settlement_screenshot", "replace_settlement_screenshot", "delete_settlement_screenshot", "rerun_settlement_recognition", "save_settlement_review", "settlement_item_review_action", "manual_facts", "manual_next_match", "manual_finalize", "manual_bootstrap", "start_live_vision", "request_original_screenshots", "delete_original_screenshot", "restore_original_screenshot", "export_reviewed_labels", "triggered_snapshot", "save_settlement_screenshot", "save_game_screenshot", "start_warehouse_capture", "prepare_warehouse_capture", "confirm_warehouse_capture", "stop_warehouse_capture", "request_warehouse_slot_evidence", "warehouse_instance_decision", "warehouse_identity_review", "export_history_records", "import_history_bundle")),
+            EXPECTED_ACTIONS,
         )
 
 

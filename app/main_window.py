@@ -447,6 +447,8 @@ class MainWindowBridge:
             "start_live_vision",
             "set_observation_window_mode", "set_capture_freshness_policy",
             "set_native_auto_warehouse_capture",
+            "auto_auction_start",
+            "auto_auction_stop",
             "triggered_snapshot",
             "save_settlement_screenshot",
             "save_game_screenshot",
@@ -512,6 +514,9 @@ class MainWindowBridge:
         manual_finalize_provider=None,
         manual_bootstrap_provider=None,
         start_vision_provider=None,
+        auto_auction_start_provider=None,
+        auto_auction_stop_provider=None,
+        auto_auction_provider=None,
         triggered_snapshot_provider=None,
         save_settlement_screenshot_provider=None,
         save_game_screenshot_provider=None,
@@ -546,6 +551,9 @@ class MainWindowBridge:
         self._manual_finalize_provider = manual_finalize_provider
         self._manual_bootstrap_provider = manual_bootstrap_provider
         self._start_vision_provider = start_vision_provider
+        self._auto_auction_start_provider = auto_auction_start_provider
+        self._auto_auction_stop_provider = auto_auction_stop_provider
+        self._auto_auction_provider = auto_auction_provider
         self._observation_window_mode_provider = observation_window_mode_provider
         self._capture_freshness_policy_provider = capture_freshness_policy_provider
         self._native_auto_warehouse_provider = native_auto_warehouse_provider
@@ -664,6 +672,17 @@ class MainWindowBridge:
 
             return WarehouseCaptureHost().presentation_payload()
         return host.presentation_payload()
+
+    def auto_auction_payload(self):
+        """The switch's own state; absent when no product loop is wired."""
+        if self._auto_auction_provider is None:
+            return None
+        try:
+            payload = self._auto_auction_provider()
+        except Exception as exc:
+            return {"enabled": False, "running": False, "reason": "AUTO_AUCTION_UNAVAILABLE",
+                    "message": str(exc)}
+        return payload if isinstance(payload, dict) else None
 
     def _decorate_identity_review(self, session, view) -> dict:
         payload = dict(view) if isinstance(view, dict) else {}
@@ -808,6 +827,7 @@ class MainWindowBridge:
             "solverOwner": "overlay_runtime",
             "presentationRuntime": self.presentation_runtime_payload() if include_snapshots else None,
             "warehouseCapture": self.warehouse_capture_payload() if include_snapshots else None,
+            "autoAuction": self.auto_auction_payload(),
         }
 
         if action == "toggle_main_pin":
@@ -1192,6 +1212,18 @@ class MainWindowBridge:
                     {"ok": False, "reason": "自动收页服务未就绪"})
             except Exception as exc:
                 response["nativeAutoWarehouseResult"] = {"ok": False, "reason": str(exc)}
+
+        if action in ("auto_auction_start", "auto_auction_stop"):
+            provider = (self._auto_auction_start_provider if action == "auto_auction_start"
+                        else self._auto_auction_stop_provider)
+            if provider is None:
+                response["autoAuctionCommand"] = {"ok": False, "reason": "AUTO_AUCTION_UNAVAILABLE"}
+            else:
+                try:
+                    response["autoAuctionCommand"] = provider()
+                except Exception as exc:
+                    response["autoAuctionCommand"] = {"ok": False, "reason": str(exc)}
+            response["autoAuction"] = self.auto_auction_payload()
 
         if action == 'set_capture_freshness_policy':
             provider = self._capture_freshness_policy_provider
@@ -1650,6 +1682,7 @@ def create_main_window_type(WinForms, Drawing):
             self._game_input_ready = False
             self._game_input_finished = False
             self._game_input_previous_state = None
+            self._auto_auction_stop_reason = None
 
             BaseForm.__init__(self)
 
@@ -1692,6 +1725,7 @@ def create_main_window_type(WinForms, Drawing):
             self._game_input_session = session_id
             self._game_input_ready = False
             self._game_input_finished = False
+            self._auto_auction_stop_reason = None
 
             def minimize_once():
                 if self._game_input_session != session_id or self._game_input_finished:
@@ -1714,8 +1748,24 @@ def create_main_window_type(WinForms, Drawing):
             if not self._game_input_session or self._game_input_finished:
                 return
             self._game_input_finished = True
-            session_id = self._game_input_session
+            self._auto_auction_stop_reason = str(reason)
+            self._restore_after_stop(reason, self._game_input_session)
 
+        def announce_auto_auction_stop(self, reason: str) -> None:
+            """The switch's stop always brings the main window back and says why.
+
+            This is not the capture stop: ending one warehouse page run leaves
+            the window alone and the loop running. The same reason is only
+            announced once per run; a new run clears it in prepare_game_input.
+            """
+            reason = str(reason)
+            if self._auto_auction_stop_reason == reason:
+                return
+            self._auto_auction_stop_reason = reason
+            self._game_input_finished = True
+            self._restore_after_stop(reason, self._game_input_session)
+
+        def _restore_after_stop(self, reason: str, session_id) -> None:
             def restore_once():
                 if self._game_input_session != session_id:
                     return
@@ -1792,6 +1842,9 @@ def create_main_window_type(WinForms, Drawing):
             manual_finalize_provider=None,
             manual_bootstrap_provider=None,
             start_vision_provider=None,
+            auto_auction_start_provider=None,
+            auto_auction_stop_provider=None,
+            auto_auction_provider=None,
             triggered_snapshot_provider=None,
             save_settlement_screenshot_provider=None,
             save_game_screenshot_provider=None,
@@ -1827,6 +1880,9 @@ def create_main_window_type(WinForms, Drawing):
                 manual_finalize_provider=manual_finalize_provider,
                 manual_bootstrap_provider=manual_bootstrap_provider,
                 start_vision_provider=start_vision_provider,
+                auto_auction_start_provider=auto_auction_start_provider,
+                auto_auction_stop_provider=auto_auction_stop_provider,
+                auto_auction_provider=auto_auction_provider,
                 observation_window_mode_provider=observation_window_mode_provider,
                 capture_freshness_policy_provider=capture_freshness_policy_provider,
                 native_auto_warehouse_provider=native_auto_warehouse_provider,

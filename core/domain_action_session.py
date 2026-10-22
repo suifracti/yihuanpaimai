@@ -529,7 +529,7 @@ def advance_live_domain_loop(state, view, send):
             # warehouse capture is still running. Wait for that exact record,
             # then continue with the next match instead of ending the run.
             if not (view.get('collectionFinished')
-                    and view.get('captureRecordKey') == state.get('settledMatch')):
+                    and _closed_capture_record(view) == state.get('settledMatch')):
                 state['reason'] = 'WAITING_WAREHOUSE_SAVE'
                 return state
         if state.get('phase') not in {'start_dispatched', 'entry_dispatched', 'entry_paid', 'entry_unknown', 'entering'}:
@@ -615,9 +615,20 @@ def _complete_returned_match(state,method):
             scrollRequests=state.get('scrollRequests',0),returnedBy=method))
 
 
+def _closed_capture_record(view):
+    """Which record's warehouse collection is done, however that ended.
+
+    A user stop closes only the record it was pressed on; everything else uses
+    the record the capture itself is bound to.
+    """
+    if view.get('collectionFinished') and view.get('captureStoppedRecord'):
+        return view.get('captureStoppedRecord')
+    return view.get('captureRecordKey')
+
+
 def _observe_saved_return(state,view):
     if (state.get('phase')=='collecting' and view.get('publishedScene')=='LOBBY'
-            and view.get('collectionFinished') and view.get('captureRecordKey')==state.get('settledMatch')):
+            and view.get('collectionFinished') and _closed_capture_record(view)==state.get('settledMatch')):
         state.update(phase='return_confirmed',reason=None,coverage=view.get('coverageStatus') or 'PARTIAL',
             savedSources=view.get('savedSources',0),scrollRequests=view.get('scrollRequests',0))
         _complete_returned_match(state,'OBSERVED_LOBBY')  # A scene fact, never a fabricated Host receipt.

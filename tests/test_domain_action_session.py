@@ -320,6 +320,30 @@ class AuthorizedLiveDomainLoopTests(unittest.TestCase):
             self.assertEqual(state['phase'], 'start_dispatched')
             self.assertEqual(len(sent), 1)
 
+    def test_a_capture_stopped_on_this_record_closes_it_even_without_pages(self):
+        with tempfile.TemporaryDirectory() as directory:
+            sent = []
+            scope = self.view(funds=100000, scene='LOBBY', round_no=0, directory=directory)
+            settled = scope['engine']['matchId']
+            state = fresh_live_domain_state()
+            state.update(phase='collecting', settledMatch=settled, mode='bid')
+            # Stopped while another record was bound: this settlement still waits.
+            waiting = dict(scope, collectionFinished=True, captureRecordKey=None,
+                           captureStoppedRecord='draft_other', savedSources=0,
+                           coverageStatus='PARTIAL')
+            state = advance_live_domain_loop(state, waiting,
+                                             lambda owner, envelope: sent.append(envelope) or True)
+            self.assertEqual(state['reason'], 'WAITING_WAREHOUSE_SAVE')
+            self.assertEqual(sent, [])
+            # Stopped on this record with nothing saved: close it and move on.
+            stopped = dict(scope, collectionFinished=True, captureRecordKey=None,
+                           captureStoppedRecord=settled, savedSources=0,
+                           coverageStatus='PARTIAL')
+            state = advance_live_domain_loop(state, stopped,
+                                             lambda owner, envelope: sent.append(envelope) or True)
+            self.assertEqual(state['matchesDone'], 1)
+            self.assertEqual(len(sent), 1)
+
     def test_published_bid_control_and_asset_integer_gate(self):
         import cv2
         import numpy as np

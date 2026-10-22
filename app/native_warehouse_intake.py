@@ -731,18 +731,22 @@ class WarehouseCaptureRouter:
     # The legacy prepare/confirm/start sequence arms a screenshot loop and game
     # input. Native selection owns the capture end to end, so those three must
     # answer fail-closed instead of raising or falling through to the legacy
-    # host. A caller that still asks for them gets a plain refusal.
+    # host. A caller that still asks for them gets a plain refusal. Arguments
+    # such as the arming token are forwarded untouched when legacy still owns it.
     def _reject_legacy_capture(self):
         return {'ok': False, 'reason': 'NATIVE_MANUAL_CAPTURE_ONLY'}
 
-    def prepare(self):
-        return self._reject_legacy_capture() if self.native_selected() else self.legacy.prepare()
+    def prepare(self, *args, **kwargs):
+        return (self._reject_legacy_capture() if self.native_selected()
+                else self.legacy.prepare(*args, **kwargs))
 
-    def confirm(self):
-        return self._reject_legacy_capture() if self.native_selected() else self.legacy.confirm()
+    def confirm(self, *args, **kwargs):
+        return (self._reject_legacy_capture() if self.native_selected()
+                else self.legacy.confirm(*args, **kwargs))
 
-    def start(self):
-        return self._reject_legacy_capture() if self.native_selected() else self.legacy.start()
+    def start(self, *args, **kwargs):
+        return (self._reject_legacy_capture() if self.native_selected()
+                else self.legacy.start(*args, **kwargs))
 
     def stop(self):
         if self.native_selected():

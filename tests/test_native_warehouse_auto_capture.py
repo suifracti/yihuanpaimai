@@ -162,10 +162,16 @@ class NativeAutoTests(unittest.TestCase):
             def __getattr__(self, name):
                 raise AssertionError('legacy access: ' + name)
         router = WarehouseCaptureRouter(Legacy(), auto, lambda: True)
-        token = router.prepare()['armingToken']
-        source.scope['targetInstance'] = {'targetHwnd': 99}
-        self.assertFalse(router.confirm(token)['ok'])
+        # Native owns the capture end to end: the legacy prepare/confirm/start
+        # sequence is refused explicitly instead of raising or falling through.
+        self.assertEqual(router.prepare(), {'ok': False, 'reason': 'NATIVE_MANUAL_CAPTURE_ONLY'})
+        self.assertEqual(router.confirm('arming'), {'ok': False, 'reason': 'NATIVE_MANUAL_CAPTURE_ONLY'})
+        self.assertEqual(router.start(), {'ok': False, 'reason': 'NATIVE_MANUAL_CAPTURE_ONLY'})
         self.assertEqual(source.actions, [])
+        # The native capture itself still refuses a confirmation whose scope moved.
+        token = auto.prepare()['armingToken']
+        source.scope['targetInstance'] = {'targetHwnd': 99}
+        self.assertFalse(auto.confirm(token)['ok'])
         router.stop()
         self.assertEqual(source.actions, [('CLOSE', 'USER_STOP'), ('CANCEL',)])
         from main_window import MainWindowBridge
