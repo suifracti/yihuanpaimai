@@ -3463,6 +3463,9 @@ def _live_loop_view(data: Dict[str, Any], published: Optional[str], funds) -> Op
     except (TypeError, ValueError):
         return None
     match_id = str(data.get("matchId") or "")
+    # The record whose warehouse capture a user stop would close. In the lobby
+    # match_id becomes lobby-<session>, but the settled record keeps its own key.
+    capture_record_id = match_id
     session_id = str(data.get("observationSessionId") or "")
     if lobby:
         match_id, facts_round = 'lobby-' + session_id, 0
@@ -3527,7 +3530,7 @@ def _live_loop_view(data: Dict[str, Any], published: Optional[str], funds) -> Op
         "mode": _live_domain_mode(),
         "frameSequence": data.get('frameSequence'),
         "collectionFinished": (capture_stopped_record is not None
-                               and capture_stopped_record == match_id)
+                               and capture_stopped_record == capture_record_id)
             or (capture.get('state') in {'ALIGNING','COMPLETE','PARTIAL','ERROR'}
                 and capture.get('segmentCount', 0) > 0 and not capture.get('stopAvailable')),
         "captureRecordKey": capture_key,

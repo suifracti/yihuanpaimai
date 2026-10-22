@@ -65,6 +65,33 @@ class SwitchPersistenceTests(unittest.TestCase):
         self.directory = tempfile.TemporaryDirectory()
         self.addCleanup(self.directory.cleanup)
 
+    def test_capture_stop_closes_only_the_record_it_was_pressed_on(self):
+        from test_native_background_observation import _isolated_main
+        import math
+        namespace, _, _ = _isolated_main('background-readonly')
+        namespace['CONFIG']['autoAuction'] = {'enabled': True}
+        namespace['math'] = math
+        namespace['_game_is_foreground'] = lambda target: True
+        namespace['time'].time = lambda: 1000
+        namespace['_NATIVE_DOMAIN_ACTION_BOOT_ID'] = 'boot-auto'
+        binding = SimpleNamespace(_processing_binding=None, _binding=None)
+        stopped = {'automaticTerminationReason': 'USER_STOP',
+                   'automaticTerminationRecord': 'draft_one', 'state': 'PARTIAL',
+                   'segmentCount': 0, 'coverageStatus': 'PARTIAL', 'stopAvailable': False}
+        namespace['_NATIVE_WAREHOUSE_SOURCE_COORDINATOR'] = SimpleNamespace(
+            source=SimpleNamespace(intake=binding), presentation_payload=lambda: dict(stopped))
+        data = {'matchId': 'draft_one', 'observationSessionId': 's1', 'sourceMatchGeneration': 2,
+                'factsRevision': 3, 'round': 0,
+                'target': {'targetHwnd': 1, 'targetPid': 2,
+                           'identity': {'ProcessInstanceToken': 3}}}
+        # Lobby rewrites matchId to lobby-<session>; the settled record key does not.
+        lobby = namespace['_live_loop_view'](data, 'LOBBY', None)
+        self.assertTrue(lobby['collectionFinished'])
+        self.assertEqual(lobby['captureStoppedRecord'], 'draft_one')
+        # A later settlement does not inherit the previous stop with nothing saved.
+        later = namespace['_live_loop_view'](dict(data, matchId='draft_two'), 'SETTLEMENT', None)
+        self.assertFalse(later['collectionFinished'])
+
     def _written(self):
         return json.loads((Path(self.directory.name) / 'config.json').read_text(encoding='utf-8'))
 
