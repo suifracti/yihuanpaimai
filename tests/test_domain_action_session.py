@@ -298,6 +298,28 @@ class AuthorizedLiveDomainLoopTests(unittest.TestCase):
             self.assertEqual(len(sent), 1)
             self.assertFalse(state["resendAllowed"])
 
+    def test_lobby_waits_for_the_settled_capture_then_starts_the_next_match(self):
+        with tempfile.TemporaryDirectory() as directory:
+            sent = []
+            scope = self.view(funds=100000, scene='LOBBY', round_no=0, directory=directory)
+            settled = scope['engine']['matchId']
+            state = fresh_live_domain_state()
+            state.update(phase='collecting', settledMatch=settled, mode='bid')
+            state = advance_live_domain_loop(
+                state, dict(scope, collectionFinished=False, captureRecordKey=None),
+                lambda owner, envelope: sent.append(envelope) or True)
+            self.assertEqual(state['phase'], 'collecting')
+            self.assertEqual(state['reason'], 'WAITING_WAREHOUSE_SAVE')
+            self.assertEqual(sent, [])
+            state = advance_live_domain_loop(
+                state, dict(scope, collectionFinished=True, captureRecordKey=settled,
+                            captureProgress=['COMPLETE', 20, 0], savedSources=20,
+                            coverageStatus='COMPLETE'),
+                lambda owner, envelope: sent.append(envelope) or True)
+            self.assertEqual(state['matchesDone'], 1)
+            self.assertEqual(state['phase'], 'start_dispatched')
+            self.assertEqual(len(sent), 1)
+
     def test_published_bid_control_and_asset_integer_gate(self):
         import cv2
         import numpy as np

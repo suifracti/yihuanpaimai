@@ -523,8 +523,17 @@ def advance_live_domain_loop(state, view, send):
         if state.get('phase') not in {'entry_dispatched', 'entry_paid', 'entry_unknown'}:
             return _dispatch_entry_fee(state, view, send)
         return state
-    if scene == 'LOBBY' and state.get('phase') not in {'start_dispatched', 'entry_dispatched', 'entry_paid', 'entry_unknown', 'entering'}:
-        return _dispatch_live_session(state, view, send, "StartNextMatch")
+    if scene == 'LOBBY':
+        if state.get('phase') == 'collecting':
+            # The game may return to the lobby while the settled match's
+            # warehouse capture is still running. Wait for that exact record,
+            # then continue with the next match instead of ending the run.
+            if not (view.get('collectionFinished')
+                    and view.get('captureRecordKey') == state.get('settledMatch')):
+                state['reason'] = 'WAITING_WAREHOUSE_SAVE'
+                return state
+        if state.get('phase') not in {'start_dispatched', 'entry_dispatched', 'entry_paid', 'entry_unknown', 'entering'}:
+            return _dispatch_live_session(state, view, send, "StartNextMatch")
     round_key = [engine.get(k) for k in ('matchId','matchGeneration','round')]
     if scene in {'AUCTION', 'AUCTION_READY', 'AUCTION_R1', 'INSTRUMENT_LIST', 'INSTRUMENT_GOLD_SELECTED', 'INSTRUMENT_PURPLE_SELECTED'}:
         if engine.get('round',0) >= 1 and state.get('phase') in {'entering', 'entry_paid', 'entry_unknown', 'return_confirmed', 'start_dispatched'}:

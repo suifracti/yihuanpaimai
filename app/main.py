@@ -3189,14 +3189,15 @@ def _stop_authorized_live_domain_loop(reason: str) -> None:
 
 
 def _advance_authorized_live_domain_loop(data: Dict[str, Any], frame: Dict[str, Any]) -> None:
-    """Env-gated pass of the authorized bid, return, and next-match loop.
+    """One pass of the product loop behind the autoAuction switch.
 
-    NTE_DOMAIN_LIVE_LOOP must be exactly \"1\". The bid is the Solver suggestion
+    The switch (config autoAuction.enabled) is the only gate: no environment
+    variables, no per-run verification modes. The bid is the Solver suggestion
     capped by bid.perMatchFundCap and by the single integer read from 我的资产.
     Unknown results are not sent again. This does not paint a window.
     """
     global _LIVE_DOMAIN_LOOP
-    if os.environ.get("NTE_DOMAIN_LIVE_LOOP") != "1":
+    if not _auto_auction_enabled():
         return
     try:
         from domain_action_session import (
@@ -3223,9 +3224,11 @@ def _advance_authorized_live_domain_loop(data: Dict[str, Any], frame: Dict[str, 
         view = _live_loop_view(data, published, funds)
         if view is None:
             return
-        from domain_action_session import verification_run_current
-        if not verification_run_current(_LIVE_DOMAIN_LOOP, view):
-            _stop_authorized_live_domain_loop(_LIVE_DOMAIN_LOOP['reason'])
+        view['mode'] = _live_domain_mode()
+        limit = _auto_auction_settings().get('maxMatches')
+        if isinstance(limit, int) and limit > 0 and _LIVE_DOMAIN_LOOP.get('matchesDone', 0) >= limit:
+            _LIVE_DOMAIN_LOOP.update(phase='stopped', reason='AUTO_AUCTION_MATCH_LIMIT')
+            _stop_authorized_live_domain_loop('AUTO_AUCTION_MATCH_LIMIT')
             return
 
         def send(owner, envelope):
@@ -3281,13 +3284,53 @@ def _native_domain_planning_view(data: Dict[str, Any]) -> Optional[Dict[str, Any
     return view
 
 
+def _auto_auction_settings() -> Dict[str, Any]:
+    settings = {'enabled': False, 'mode': 'bid', 'minimumFunds': 100000, 'maxMatches': None}
+    raw = CONFIG.get('autoAuction')
+    if isinstance(raw, dict):
+        settings.update({key: raw[key] for key in settings if key in raw})
+    if settings['mode'] not in {'bid', 'observe'}:
+        settings['mode'] = 'bid'
+    return settings
+
+
+def _auto_auction_enabled() -> bool:
+    return _auto_auction_settings()['enabled'] is True
+
+
+def _auto_auction_approval_id() -> str:
+    """One approval id per switched-on session, minted by the switch itself."""
+    global _AUTO_AUCTION_APPROVAL_ID
+    if not _AUTO_AUCTION_APPROVAL_ID:
+        _AUTO_AUCTION_APPROVAL_ID = 'auto-' + time.strftime('%Y%m%dT%H%M%S')
+    return _AUTO_AUCTION_APPROVAL_ID
+
+
+def _set_auto_auction_enabled(enabled: bool) -> Dict[str, Any]:
+    """The only writer of the product switch. Persists, then mirrors into CONFIG."""
+    global _AUTO_AUCTION_APPROVAL_ID
+    next_config = copy.deepcopy(CONFIG)
+    settings = _auto_auction_settings()
+    settings['enabled'] = bool(enabled)
+    next_config['autoAuction'] = settings
+    try:
+        with open(os.path.join(BASE_DIR, 'config.json'), 'w', encoding='utf-8') as handle:
+            json.dump(next_config, handle, ensure_ascii=False, indent=2)
+            handle.write('\n')
+    except OSError as exc:
+        return {'ok': False, 'reason': str(exc)}
+    CONFIG.clear(); CONFIG.update(next_config)
+    if enabled:
+        _AUTO_AUCTION_APPROVAL_ID = None
+        _auto_auction_approval_id()
+    return {'ok': True, 'autoAuction': _auto_auction_settings(),
+            'approvalId': _AUTO_AUCTION_APPROVAL_ID}
+
+
 def _live_domain_mode():
-    mode = (CONFIG.get('autoAuction') or {}).get('mode','bid')
-    # Only the supervised M4 harness supplies a mixed-mode acceptance sequence.
-    modes = os.environ.get('NTE_DOMAIN_VERIFY_MODES','').split(',')
-    if modes and all(item in {'bid','observe'} for item in modes):
-        mode = modes[min((globals().get('_LIVE_DOMAIN_LOOP') or {}).get('matchesDone',0),len(modes)-1)]
-    return mode
+    # The product switch owns the mode; the supervised mixed-mode harness that
+    # used NTE_DOMAIN_VERIFY_MODES is gone with M4b.
+    return _auto_auction_settings()['mode']
 
 
 def _live_loop_view(data: Dict[str, Any], published: Optional[str], funds) -> Optional[Dict[str, Any]]:
@@ -3364,8 +3407,6 @@ def _live_loop_view(data: Dict[str, Any], published: Optional[str], funds) -> Op
     return {
         "publishedScene": 'AUCTION_READY' if published == 'AUCTION_R1' else published,
         "mode": _live_domain_mode(),
-        "verificationModes": [m for m in os.environ.get('NTE_DOMAIN_VERIFY_MODES','').split(',')
-                              if m in {'bid','observe'}],
         "frameSequence": data.get('frameSequence'),
         "collectionFinished": capture.get('state') in {'ALIGNING','COMPLETE','PARTIAL','ERROR'}
             and capture.get('segmentCount', 0) > 0 and not capture.get('stopAvailable'),
@@ -3385,14 +3426,14 @@ def _live_loop_view(data: Dict[str, Any], published: Optional[str], funds) -> Op
         "purpleCount": data.get("purpleCount") if data.get("purpleCount") is not None else CURRENT_MATCH.facts.get("purpleCount"),
         "preparationReceipt": LATEST_PAYLOAD.get("preparationActionReceipt"),
         "foreground": _game_is_foreground(target),
-        "userConfirmed": True,
+        "userConfirmed": _auto_auction_enabled(),
         "currentFunds": funds if type(funds) is int else None,
         "configuredCap": configured_cap,
         "engine": scope,
         "proposalEvent": proposal_event,
         "current": current,
         "window": window,
-        "approvalId": "goal-20261019-authorized",
+        "approvalId": _auto_auction_approval_id(),
         "bootId": _NATIVE_DOMAIN_ACTION_BOOT_ID,
         "leaseId": "live-" + match_id,
         "ledgerPath": os.path.join(directory, "bid-ledger.json") if directory else "",
@@ -5729,6 +5770,7 @@ _LIVE_VISION_MATCH_ID: Optional[str] = None
 _NATIVE_DOMAIN_ACTION_SESSION = None
 _NATIVE_DOMAIN_ACTION_SESSION_KEY: Optional[tuple[str, str, int]] = None
 _LIVE_DOMAIN_LOOP = None
+_AUTO_AUCTION_APPROVAL_ID = None
 _NATIVE_DURABLE_BID_OBLIGATION_OWNER = None
 _NATIVE_DOMAIN_ACTION_BOOT_ID: Optional[str] = None
 _LIVE_VISION_EXIT_SCENES = frozenset({
