@@ -724,9 +724,25 @@ class WarehouseCaptureRouter:
     def __getattr__(self, name):
         if name in {'prepare_manual', 'start_manual', 'capture_manual_page', 'finish_manual_capture',
                     'resume_refinement', 'cancel_refinement', 'refinement_payload',
-                    'cancel_manual_capture', 'presentation_payload', 'review_packet_copy', 'prepare', 'confirm', 'start', '_running'}:
+                    'cancel_manual_capture', 'presentation_payload', 'review_packet_copy', '_running'}:
             return getattr(self._manual(), name)
         return getattr(self.legacy, name)
+
+    # The legacy prepare/confirm/start sequence arms a screenshot loop and game
+    # input. Native selection owns the capture end to end, so those three must
+    # answer fail-closed instead of raising or falling through to the legacy
+    # host. A caller that still asks for them gets a plain refusal.
+    def _reject_legacy_capture(self):
+        return {'ok': False, 'reason': 'NATIVE_MANUAL_CAPTURE_ONLY'}
+
+    def prepare(self):
+        return self._reject_legacy_capture() if self.native_selected() else self.legacy.prepare()
+
+    def confirm(self):
+        return self._reject_legacy_capture() if self.native_selected() else self.legacy.confirm()
+
+    def start(self):
+        return self._reject_legacy_capture() if self.native_selected() else self.legacy.start()
 
     def stop(self):
         if self.native_selected():

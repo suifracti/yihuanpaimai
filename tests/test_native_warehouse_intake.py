@@ -142,12 +142,17 @@ class NativeWarehouseIntakeTests(unittest.TestCase):
         self.assertTrue(self.intake.start_manual()['ok'])
         original = Path(self.source['path']).read_bytes()
         Path(self.source['path']).write_bytes(original[:-1] + bytes([original[-1] ^ 1]))
+        # Each attempt models one fresh delivery; the 2s freshness window must
+        # not be spent by the fixture's own disk work on a loaded machine.
+        self.source['receivedAt'] = time.monotonic()
         bad = self.intake.capture_manual_page()
         self.assertFalse(bad['ok']); self.assertEqual(bad['pageCount'], 0)
         Path(self.source['path']).write_bytes(original)
+        self.source['receivedAt'] = time.monotonic()
         with patch('native_trial_drafts.os.replace', side_effect=OSError('actual storage failure')):
             failed = self.intake.capture_manual_page()
         self.assertFalse(failed['ok']); self.assertEqual(failed['pageCount'], 0)
+        self.source['receivedAt'] = time.monotonic()
         accepted = self.intake.capture_manual_page()
         self.assertTrue(accepted['ok'], accepted)
         page = self.intake.pages_copy()[0]
@@ -171,9 +176,12 @@ class NativeWarehouseIntakeTests(unittest.TestCase):
         duplicate = self.intake.capture_manual_page()
         self.assertTrue(duplicate['duplicate']); self.assertEqual(duplicate['pageCount'], 1)
         self.frame(164, 3)
-        with patch('native_warehouse_intake.MAX_PAGES', 1):
-            limited = self.intake.capture_manual_page()
-        self.assertEqual(limited['reason'], 'LIMIT_REACHED'); self.assertEqual(limited['pageCount'], 1)
+        # Page completion follows saved coverage, not an image quota: MAX_PAGES
+        # stays None, so a fresh independent frame is still accepted.
+        import native_warehouse_intake as intake_module
+        self.assertIsNone(intake_module.MAX_PAGES)
+        self.assertTrue(self.intake.capture_manual_page()['ok'])
+        self.assertEqual(self.intake.presentation_payload()['segmentCount'], 2)
         self.source['receivedAt'] -= 10
         self.assertEqual(self.intake.capture_manual_page()['reason'], 'NO_FRESH_NATIVE_FRAME')
 
