@@ -3332,9 +3332,12 @@ def _auto_auction_approval_id() -> str:
     return _AUTO_AUCTION_APPROVAL_ID
 
 
-def _set_auto_auction_enabled(enabled: bool) -> Dict[str, Any]:
+def _set_auto_auction_enabled(enabled: bool, *, mint_ticket: Optional[bool] = None) -> Dict[str, Any]:
     """The only writer of the product switch. Persists, then mirrors into CONFIG."""
     global _AUTO_AUCTION_APPROVAL_ID
+    was_enabled = _auto_auction_enabled()
+    if mint_ticket is None:
+        mint_ticket = bool(enabled) and not was_enabled
     next_config = copy.deepcopy(CONFIG)
     settings = _auto_auction_settings()
     settings['enabled'] = bool(enabled)
@@ -3354,7 +3357,9 @@ def _set_auto_auction_enabled(enabled: bool) -> Dict[str, Any]:
             pass
         return {'ok': False, 'reason': str(exc)}
     CONFIG.clear(); CONFIG.update(next_config)
-    if enabled:
+    if mint_ticket:
+        # A new run gets a new ticket. Turning an already-on switch on again
+        # must not swap the ticket under a running loop.
         _AUTO_AUCTION_APPROVAL_ID = None
         _auto_auction_approval_id()
     return {'ok': True, 'autoAuction': _auto_auction_settings(),
@@ -3393,13 +3398,18 @@ def _observation_running() -> bool:
 def _start_auto_auction() -> Dict[str, Any]:
     """Turn the existing live loop on. This never starts a second loop."""
     global _LIVE_DOMAIN_LOOP, _AUTO_AUCTION_STOP_REASON
-    written = _set_auto_auction_enabled(True)
+    was_enabled = _auto_auction_enabled()
+    state = globals().get('_LIVE_DOMAIN_LOOP') or {}
+    resuming = was_enabled and state.get('phase') not in (None, 'stopped')
+    written = _set_auto_auction_enabled(True, mint_ticket=not resuming)
     if not written.get('ok'):
         return {'ok': False, 'reason': 'CONFIG_WRITE_FAILED', 'message': written.get('reason'),
                 'autoAuction': _auto_auction_public()}
-    _LIVE_DOMAIN_LOOP = None
-    _AUTO_AUCTION_STOP_REASON = None
-    log_stage('AUTO_AUCTION', 'start')
+    if not resuming:
+        # A new run starts clean: no carried tickets, settlement or match count.
+        _LIVE_DOMAIN_LOOP = None
+        _AUTO_AUCTION_STOP_REASON = None
+        log_stage('AUTO_AUCTION', 'start')
     try:
         start_vision_worker(resume_same_match=False)
     except Exception as exc:
@@ -3408,7 +3418,8 @@ def _start_auto_auction() -> Dict[str, Any]:
         _set_auto_auction_enabled(False)
         return {'ok': False, 'reason': 'OBSERVATION_UNAVAILABLE',
                 'autoAuction': _auto_auction_public()}
-    return {'ok': True, 'autoAuction': _auto_auction_public()}
+    return {'ok': True, 'reason': 'ALREADY_RUNNING' if resuming else None,
+            'autoAuction': _auto_auction_public()}
 
 
 def _stop_auto_auction(reason: str = 'USER_STOP') -> Dict[str, Any]:

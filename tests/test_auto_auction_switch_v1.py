@@ -26,6 +26,7 @@ FUNCTIONS = {
 
 
 def _isolated(directory, config):
+    tick = iter(range(1000000))
     tree = ast.parse((ROOT / 'app/main.py').read_text(encoding='utf-8'))
     nodes = [node for node in tree.body
              if isinstance(node, ast.FunctionDef) and node.name in FUNCTIONS]
@@ -34,7 +35,7 @@ def _isolated(directory, config):
         '__name__': 'isolated_auto_auction',
         'os': os, 'json': json, 'copy': copy, 'BASE_DIR': str(directory),
         'CONFIG': config,
-        'time': SimpleNamespace(strftime=lambda fmt: '20261022T120000'),
+        'time': SimpleNamespace(strftime=lambda fmt: '20261022T12%06d' % next(tick)),
         'log_stage': lambda *args: None,
         '_MAIN_WINDOW_HOLDER': [form],
         '_LIVE_DOMAIN_LOOP': None,
@@ -66,6 +67,23 @@ class SwitchPersistenceTests(unittest.TestCase):
 
     def _written(self):
         return json.loads((Path(self.directory.name) / 'config.json').read_text(encoding='utf-8'))
+
+    def test_start_twice_keeps_the_match_count_and_the_ticket(self):
+        namespace, _ = _isolated(self.directory.name, _config())
+        first = namespace['_start_auto_auction']()
+        ticket = first['autoAuction']['approvalId']
+        namespace['_LIVE_DOMAIN_LOOP'] = {'phase': 'idle', 'matchesDone': 3}
+        second = namespace['_start_auto_auction']()
+        self.assertTrue(second['ok'])
+        self.assertEqual(second['reason'], 'ALREADY_RUNNING')
+        self.assertEqual(namespace['_LIVE_DOMAIN_LOOP']['matchesDone'], 3)
+        self.assertEqual(second['autoAuction']['approvalId'], ticket)
+        # Starting again after a terminal stop is a new run: clean count, new ticket.
+        namespace['_LIVE_DOMAIN_LOOP'] = {'phase': 'stopped', 'matchesDone': 3}
+        third = namespace['_start_auto_auction']()
+        self.assertIsNone(third['reason'])
+        self.assertIsNone(namespace['_LIVE_DOMAIN_LOOP'])
+        self.assertNotEqual(namespace['_AUTO_AUCTION_APPROVAL_ID'], ticket)
 
     def test_start_and_stop_keep_instrument_targets_and_every_other_section(self):
         namespace, _ = _isolated(self.directory.name, _config())
