@@ -37,6 +37,7 @@ class SavedAuctionBidReplay(unittest.TestCase):
 
     def view(self, directory):
         ns, _, _ = _isolated_main()
+        ns['CONFIG']['autoAuction'] = {'enabled': True}
         ns['time'].time = lambda: 1000
         ns['math'] = math
         ns['_NATIVE_DOMAIN_ACTION_BOOT_ID'] = 'offline-replay'

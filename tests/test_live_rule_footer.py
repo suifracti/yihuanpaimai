@@ -78,18 +78,17 @@ class LiveRuleFooterTests(unittest.TestCase):
     def test_main_uses_same_frame_auction_funds_when_windows_ocr_is_missing(self):
         from test_native_background_observation import _isolated_main
         ns, _, _ = _isolated_main()
+        ns['CONFIG']['autoAuction'] = {'enabled': True}
         ns['_LIVE_DOMAIN_LOOP'] = {'phase': 'idle'}
         ns['_MAIN_WINDOW_HOLDER'] = [Mock(prepare_game_input=Mock(return_value=True))]
         ns['_native_domain_planning_view'] = lambda _: {'scene': 'AUCTION', 'funds': None}
         view = ns['_live_loop_view'] = Mock(return_value=None)
         data = {'scene': 'IN_AUCTION', 'auctionFunds': 2727464, 'observationSessionId': 'test'}
-        with patch.dict(os.environ, {'NTE_DOMAIN_LIVE_LOOP': '1'}):
-            ns['_advance_authorized_live_domain_loop'](data, {})
+        ns['_advance_authorized_live_domain_loop'](data, {})
         view.assert_called_once_with(data, 'AUCTION', 2727464)
         view.reset_mock()
         data.pop('auctionFunds')
-        with patch.dict(os.environ, {'NTE_DOMAIN_LIVE_LOOP': '1'}):
-            ns['_advance_authorized_live_domain_loop'](data, {})
+        ns['_advance_authorized_live_domain_loop'](data, {})
         view.assert_called_once_with(data, 'AUCTION', None)
 
     def test_run_u_box_mapping_is_present_rule_is_the_actual_missing_input(self):
