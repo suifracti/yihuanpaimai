@@ -3378,7 +3378,7 @@ def _auto_auction_public() -> Dict[str, Any]:
         'maxMatches': settings['maxMatches'],
         'instrumentTargets': copy.deepcopy(settings['instrumentTargets']),
         'approvalId': globals().get('_AUTO_AUCTION_APPROVAL_ID'),
-        'running': bool(state) and settings['enabled'] is True and phase != 'stopped',
+        'running': settings['enabled'] is True and phase != 'stopped',
         'phase': phase,
         'reason': state.get('reason') or globals().get('_AUTO_AUCTION_STOP_REASON'),
         'matchesDone': state.get('matchesDone', 0),

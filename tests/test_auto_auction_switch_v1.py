@@ -72,6 +72,8 @@ class SwitchPersistenceTests(unittest.TestCase):
         namespace, _ = _isolated(self.directory.name, _config())
         first = namespace['_start_auto_auction']()
         ticket = first['autoAuction']['approvalId']
+        # The switch is on before the first frame arrives; that is running.
+        self.assertTrue(first['autoAuction']['running'])
         namespace['_LIVE_DOMAIN_LOOP'] = {'phase': 'idle', 'matchesDone': 3}
         second = namespace['_start_auto_auction']()
         self.assertTrue(second['ok'])
