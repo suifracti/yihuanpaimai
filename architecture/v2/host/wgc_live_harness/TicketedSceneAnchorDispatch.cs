@@ -168,11 +168,11 @@ sealed class TicketedSceneAnchorDispatch : IDisposable
                 || !focus.Activate())
             {
                 string reason = identityMatches ? "GAME_ACTIVATION_FAILED" : "GAME_IDENTITY_CHANGED";
-                emit(new JsonObject { ["type"]="domain.action.activation",["intentId"]=intent!.IntentId,
+                Console.Error.WriteLine(new JsonObject { ["type"]="domain.action.activation",["intentId"]=intent!.IntentId,
                     ["reason"]=reason,["identityMatches"]=identityMatches,["targetHwnd"]=target.TargetHwnd,
                     ["actualPid"]=liveIdentity?.Pid,["expectedPid"]=intent.Window.Pid,
                     ["actualInstance"]=liveIdentity?.ProcessInstanceToken,["expectedInstance"]=intent.Window.ProcessInstanceToken,
-                    ["activation"]=focus.LastActivation?.DeepClone() });
+                    ["activation"]=focus.LastActivation?.DeepClone() }.ToJsonString());
                 if (intent!.Kind == DomainActionKind.Bid)
                     CommitNotSent(intent, message, acknowledgements, emit, bootId, reason);
                 else emit(Rejected(intent!, reason));
@@ -402,13 +402,17 @@ sealed class TicketedSceneAnchorDispatch : IDisposable
             var foreground = GetForegroundWindow();
             LastActivation=new JsonObject { ["foregroundBefore"]=foreground.ToInt64(),["target"]=Target };
             if (foreground.ToInt64() == Target) return true;
-            // Host's worker thread does not own the foreground input queue.
-            // Attach for this one activation, then always detach; send no keys.
+            // The caller, foreground owner and target are separate threads. Join
+            // both input queues for one activation, then detach; send no keys.
             uint caller = GetCurrentThreadId();
             uint owner = GetWindowThreadProcessId(foreground, out _);
+            uint targetOwner = GetWindowThreadProcessId(new IntPtr(Target), out _);
             bool attached = owner != 0 && owner != caller && AttachThreadInput(caller, owner, true);
+            bool targetAttached = targetOwner != 0 && targetOwner != caller && targetOwner != owner
+                && AttachThreadInput(caller, targetOwner, true);
             LastActivation["callerThread"]=caller; LastActivation["foregroundThread"]=owner;
             LastActivation["attached"]=attached;
+            LastActivation["targetThread"]=targetOwner; LastActivation["targetAttached"]=targetAttached;
             try
             {
                 bool accepted=SetForegroundWindow(new IntPtr(Target));
@@ -416,7 +420,11 @@ sealed class TicketedSceneAnchorDispatch : IDisposable
                 LastActivation["accepted"]=accepted;LastActivation["foregroundAfter"]=after;
                 return after == Target;
             }
-            finally { if (attached) AttachThreadInput(caller, owner, false); }
+            finally
+            {
+                if (targetAttached) AttachThreadInput(caller, targetOwner, false);
+                if (attached) AttachThreadInput(caller, owner, false);
+            }
         }
         public FocusSnapshot Capture()
             => ObserveForeground(GetForegroundWindow().ToInt64());
