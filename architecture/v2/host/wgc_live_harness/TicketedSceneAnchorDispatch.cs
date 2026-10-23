@@ -161,14 +161,21 @@ sealed class TicketedSceneAnchorDispatch : IDisposable
             }
             var liveIdentity = identities.Read(target.TargetHwnd);
             focus.Target = target.TargetHwnd;
-            if (liveIdentity is not { IsPresent: true }
-                || liveIdentity.Pid != intent!.Window.Pid
-                || liveIdentity.ProcessInstanceToken != intent.Window.ProcessInstanceToken
+            bool identityMatches = liveIdentity is { IsPresent: true }
+                && liveIdentity.Pid == intent!.Window.Pid
+                && liveIdentity.ProcessInstanceToken == intent.Window.ProcessInstanceToken;
+            if (!identityMatches
                 || !focus.Activate())
             {
+                string reason = identityMatches ? "GAME_ACTIVATION_FAILED" : "GAME_IDENTITY_CHANGED";
+                emit(new JsonObject { ["type"]="domain.action.activation",["intentId"]=intent!.IntentId,
+                    ["reason"]=reason,["identityMatches"]=identityMatches,["targetHwnd"]=target.TargetHwnd,
+                    ["actualPid"]=liveIdentity?.Pid,["expectedPid"]=intent.Window.Pid,
+                    ["actualInstance"]=liveIdentity?.ProcessInstanceToken,["expectedInstance"]=intent.Window.ProcessInstanceToken,
+                    ["activation"]=focus.LastActivation?.DeepClone() });
                 if (intent!.Kind == DomainActionKind.Bid)
-                    CommitNotSent(intent, message, acknowledgements, emit, bootId, "GAME_ACTIVATION_FAILED");
-                else emit(Rejected(intent!, "GAME_ACTIVATION_FAILED"));
+                    CommitNotSent(intent, message, acknowledgements, emit, bootId, reason);
+                else emit(Rejected(intent!, reason));
                 return true;
             }
             if (!armed)
@@ -388,20 +395,26 @@ sealed class TicketedSceneAnchorDispatch : IDisposable
     sealed class GameFocus : IFocusSnapshotProvider
     {
         public long Target;
+        public JsonObject? LastActivation;
         long sequence;
         public bool Activate()
         {
             var foreground = GetForegroundWindow();
+            LastActivation=new JsonObject { ["foregroundBefore"]=foreground.ToInt64(),["target"]=Target };
             if (foreground.ToInt64() == Target) return true;
             // Host's worker thread does not own the foreground input queue.
             // Attach for this one activation, then always detach; send no keys.
             uint caller = GetCurrentThreadId();
             uint owner = GetWindowThreadProcessId(foreground, out _);
             bool attached = owner != 0 && owner != caller && AttachThreadInput(caller, owner, true);
+            LastActivation["callerThread"]=caller; LastActivation["foregroundThread"]=owner;
+            LastActivation["attached"]=attached;
             try
             {
-                SetForegroundWindow(new IntPtr(Target));
-                return GetForegroundWindow().ToInt64() == Target;
+                bool accepted=SetForegroundWindow(new IntPtr(Target));
+                long after=GetForegroundWindow().ToInt64();
+                LastActivation["accepted"]=accepted;LastActivation["foregroundAfter"]=after;
+                return after == Target;
             }
             finally { if (attached) AttachThreadInput(caller, owner, false); }
         }

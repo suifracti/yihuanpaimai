@@ -37,6 +37,27 @@ static class Program
         Host = hostArg >= 0 ? new ReplayHostContext().LoadFromAssemblyPath(Path.GetFullPath(args[hostArg + 1]))
             : Assembly.Load("WgcLiveHarness");
         Console.WriteLine("Host assembly: " + Host.Location);
+        int activationArg=Array.IndexOf(args,"--controlled-focus");
+        bool gameFocus=args.Contains("--bound-game-focus");
+        if(gameFocus) activationArg=Array.IndexOf(args,"--bound-game-focus");
+        if(activationArg>=0)
+        {
+            long hwnd=long.Parse(args[activationArg+1]);
+            var name=new System.Text.StringBuilder(256);
+            GetClassName(new IntPtr(hwnd),name,name.Capacity);
+            Require(name.ToString()==(gameFocus?"UnrealWindow":"NteV22ControlledWindow"),"EXPECTED_WINDOW_CLASS");
+            bool ok=false;
+            var worker=new Thread(()=>{
+                var type=Host.GetType("WgcLiveHarness.TicketedSceneAnchorDispatch+GameFocus",true)!;
+                object focus=Activator.CreateInstance(type,true)!;
+                type.GetField("Target")!.SetValue(focus,hwnd);
+                ok=(bool)type.GetMethod("Activate")!.Invoke(focus,null)!;
+                Console.WriteLine(type.GetField("LastActivation")?.GetValue(focus));
+            });
+            worker.Start(); Require(worker.Join(5000),"ACTIVATION_BOUNDED");
+            Require(ok,"WORKER_ACTIVATES_CONTROLLED_WINDOW");
+            Console.WriteLine("PASS worker activation, no keys or clicks");return 0;
+        }
         var parseAssets=Host.GetType("WgcLiveHarness.SceneAnchorOcr",true)!.GetMethod("ParseAssets")!;
         foreach(var text in new[]{"2 ， 635 490","2 635,490","2,635,490"})
             Require((long?)parseAssets.Invoke(null,new object[]{text})==2635490,"MIXED_THOUSANDS_SEPARATORS");
@@ -65,6 +86,8 @@ static class Program
         public PortOutcome TrySend(DomainIntent i, Func<bool> current)
         { Require(current(), "DISPATCH_SCOPE"); Sends++; return new(true, true, "FAKE_SENT"); }
     }
+    [System.Runtime.InteropServices.DllImport("user32.dll",CharSet=System.Runtime.InteropServices.CharSet.Unicode)]
+    static extern int GetClassName(IntPtr hwnd,System.Text.StringBuilder name,int size);
     static void FocusHistory()
     {
         var type=Host.GetType("WgcLiveHarness.TicketedSceneAnchorDispatch+GameFocus",true)!;
