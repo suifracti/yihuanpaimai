@@ -504,6 +504,27 @@ class NativeBackgroundObservationTests(unittest.TestCase):
 
 
 class NativeHostExitReceiptTests(unittest.TestCase):
+    def test_committed_confirmation_survives_missing_host_repeat_and_rejection_is_forwarded(self):
+        from native_observation import NativeObservationBridge
+        receipt = dict(intentId='real-round-3', kind='Bid', status='CONFIRMED')
+        commit = dict(type='domain.action.receipt.commit.request', observationSessionId='obs', receipt=receipt)
+        rejected = dict(type='domain.action.dispatch.rejected', observationSessionId='obs',
+                        intentId='real-round-3', reason='DURABLE_RECEIPT_COMMIT_FAILED:VISIBLE_RESULT_CONFIRMED')
+        for accepted in (True, False):
+            with self.subTest(accepted=accepted):
+                events = []
+                child = SimpleNamespace(stdout=io.StringIO('\n'.join(json.dumps(x) for x in (commit,rejected))), poll=lambda:0)
+                bridge = NativeObservationBridge(str(ROOT),events.append,Mock(),
+                    on_obligation_request=lambda _:dict(type='domain.action.receipt.ack',accepted=accepted))
+                bridge.process=child
+                bridge.send_control=Mock(return_value=True)
+                bridge._record_status_event=Mock()
+                bridge._read_stdout(child,None)
+                confirmations=[x for x in events if x.get('type')=='domain.action.receipt']
+                self.assertEqual(len(confirmations),int(accepted))
+                if accepted: self.assertEqual(confirmations[0]['receipt'],receipt)
+                self.assertIn(rejected,events)
+
     def test_real_diagnostics_delivers_receipt_and_following_frame(self):
         from native_observation import NativeObservationBridge
         from native_diagnostic_log import NativeDiagnosticLog

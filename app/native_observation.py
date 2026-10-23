@@ -231,7 +231,7 @@ class NativeObservationBridge:
                     else:
                         self.log("STARTUP:NATIVE", f"ignored non-json native output: {line[:300]}")
                     continue
-                if isinstance(event, dict) and event.get("type") == "domain.action.receipt":
+                if isinstance(event, dict) and event.get("type") in {"domain.action.receipt", "domain.action.dispatch.rejected"}:
                     if len(line.encode("utf-8")) > 16 * 1024:
                         self.log("OBSERVATION:NATIVE", "oversized domain action receipt ignored")
                         continue
@@ -275,6 +275,17 @@ class NativeObservationBridge:
                         ack = {**ack, "type": expected_type}
                     if not self.send_control(ack):
                         self.log("OBSERVATION:NATIVE", "durable obligation ACK could not reach Host")
+                    # The committed receipt is already the authoritative result.
+                    # Do not depend on a second Host notification to advance Main.
+                    if (event.get("type") == "domain.action.receipt.commit.request"
+                            and ack.get("accepted") is True
+                            and (event.get("receipt") or {}).get("status") == "CONFIRMED"):
+                        committed = {"type": "domain.action.receipt",
+                                     "observationSessionId": event.get("observationSessionId"),
+                                     "receiptChannel": "bid", "receipt": event["receipt"]}
+                        if diagnostics is not None:
+                            diagnostics.submit("domain-action-receipts.jsonl", json.dumps(committed) + "\n")
+                        self.on_event(committed)
                     continue
                 if isinstance(event, dict) and event.get("type") in {
                     "domain.action.host_ready", "domain.action.host_complete"

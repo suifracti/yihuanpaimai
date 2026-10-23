@@ -3155,8 +3155,17 @@ def _native_dispatch_claimed_bid_to_host() -> bool:
 def _native_domain_action_dispatch_rejected(event: Dict[str, Any]) -> Dict[str, Any]:
     """Keep a host refusal off the observation-health path. It is not a frame."""
     state = globals().get('_LIVE_DOMAIN_LOOP') or {}
+    confirmed = LATEST_PAYLOAD.get('bidActionReceipt') or {}
+    committed_confirmation = (
+        str(event.get('reason') or '') == 'DURABLE_RECEIPT_COMMIT_FAILED:VISIBLE_RESULT_CONFIRMED'
+        and confirmed.get('status') == 'CONFIRMED'
+        and confirmed.get('intentId') == event.get('intentId')
+        and confirmed.get('observationSessionId') == event.get('observationSessionId')
+        and _NATIVE_DURABLE_BID_OBLIGATION_OWNER is not None
+        and _NATIVE_DURABLE_BID_OBLIGATION_OWNER.receipt_is_committed(confirmed))
     if (event.get('intentId') and event.get('intentId') == state.get('bidIntentId')
-            and event.get('observationSessionId') == _NATIVE_OBSERVATION_SESSION):
+            and event.get('observationSessionId') == _NATIVE_OBSERVATION_SESSION
+            and not committed_confirmation):
         _stop_authorized_live_domain_loop(str(event.get('reason') or 'HOST_DISPATCH_REJECTED'))
     with _MANUAL_STATE_LOCK:
         LATEST_PAYLOAD["domainActionDispatchRejected"] = {

@@ -11,6 +11,19 @@ sys.path[:0] = [str(ROOT / 'app'), str(ROOT / 'core')]
 
 
 class AutoRunWindowTests(unittest.TestCase):
+    def test_delayed_ack_does_not_erase_exact_durable_confirmation(self):
+        import main
+        for committed in (True,False):
+            with self.subTest(committed=committed):
+                receipt=dict(intentId='one',observationSessionId='obs',status='CONFIRMED')
+                with mock.patch.multiple(main,_LIVE_DOMAIN_LOOP={'phase':'bid_dispatched','bidIntentId':'one'},
+                        _MAIN_WINDOW_HOLDER=[],LATEST_PAYLOAD={'bidActionReceipt':receipt},WS_EVENT_LOOP=None,
+                        _NATIVE_OBSERVATION_SESSION='obs',
+                        _NATIVE_DURABLE_BID_OBLIGATION_OWNER=SimpleNamespace(receipt_is_committed=lambda _:committed)):
+                    main._native_domain_action_dispatch_rejected(dict(intentId='one',observationSessionId='obs',
+                        reason='DURABLE_RECEIPT_COMMIT_FAILED:VISIBLE_RESULT_CONFIRMED'))
+                    self.assertEqual(main._LIVE_DOMAIN_LOOP['phase'],'bid_dispatched' if committed else 'stopped')
+
     def test_failed_bid_receipt_commit_stops_window_without_publishing_a_bid(self):
         import main
         form=SimpleNamespace(finish_game_input=mock.Mock())
