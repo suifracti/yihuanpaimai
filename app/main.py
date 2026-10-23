@@ -3395,12 +3395,27 @@ def _observation_running() -> bool:
     return bool(process is not None and process.poll() is None)
 
 
+def _auto_auction_run_in_flight() -> bool:
+    """Switch on with no terminal stop yet — including before the first frame.
+
+    `_LIVE_DOMAIN_LOOP` is only built by the first observation frame. A start
+    pressed in that window must not read the empty slot as a new run: that
+    resets the match count and swaps the ticket under a run already accepted.
+    A ticket minted in this process is the tell that start was already taken;
+    a restart carrying `enabled=true` has none, so it still starts clean.
+    """
+    if not _auto_auction_enabled() or globals().get('_AUTO_AUCTION_STOP_REASON') is not None:
+        return False
+    state = globals().get('_LIVE_DOMAIN_LOOP')
+    if not state:
+        return bool(globals().get('_AUTO_AUCTION_APPROVAL_ID'))
+    return state.get('phase') not in (None, 'stopped')
+
+
 def _start_auto_auction() -> Dict[str, Any]:
     """Turn the existing live loop on. This never starts a second loop."""
     global _LIVE_DOMAIN_LOOP, _AUTO_AUCTION_STOP_REASON
-    was_enabled = _auto_auction_enabled()
-    state = globals().get('_LIVE_DOMAIN_LOOP') or {}
-    resuming = was_enabled and state.get('phase') not in (None, 'stopped')
+    resuming = _auto_auction_run_in_flight()
     written = _set_auto_auction_enabled(True, mint_ticket=not resuming)
     if not written.get('ok'):
         return {'ok': False, 'reason': 'CONFIG_WRITE_FAILED', 'message': written.get('reason'),

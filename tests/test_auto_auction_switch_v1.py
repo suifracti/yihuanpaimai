@@ -20,8 +20,8 @@ from main_window import MainWindowBridge  # noqa: E402
 
 FUNCTIONS = {
     '_auto_auction_settings', '_auto_auction_enabled', '_auto_auction_approval_id',
-    '_set_auto_auction_enabled', '_auto_auction_public', '_start_auto_auction',
-    '_stop_auto_auction', '_observation_running',
+    '_set_auto_auction_enabled', '_auto_auction_public', '_auto_auction_run_in_flight',
+    '_start_auto_auction', '_stop_auto_auction', '_observation_running',
 }
 
 
@@ -113,6 +113,27 @@ class SwitchPersistenceTests(unittest.TestCase):
         self.assertIsNone(third['reason'])
         self.assertIsNone(namespace['_LIVE_DOMAIN_LOOP'])
         self.assertNotEqual(namespace['_AUTO_AUCTION_APPROVAL_ID'], ticket)
+
+    def test_start_again_before_the_first_frame_is_not_a_new_run(self):
+        namespace, _ = _isolated(self.directory.name, _config())
+        first = namespace['_start_auto_auction']()
+        ticket = first['autoAuction']['approvalId']
+        # No frame has come back yet: the loop state does not exist at all.
+        self.assertIsNone(namespace['_LIVE_DOMAIN_LOOP'])
+        second = namespace['_start_auto_auction']()
+        self.assertTrue(second['ok'])
+        self.assertEqual(second['reason'], 'ALREADY_RUNNING')
+        self.assertEqual(second['autoAuction']['approvalId'], ticket)
+        self.assertIsNone(namespace['_LIVE_DOMAIN_LOOP'])
+        self.assertEqual(namespace['_AUTO_AUCTION_STOP_REASON'], None)
+        self.assertEqual(namespace['start_vision_worker'].call_count, 2)
+        # A restart carrying enabled=true has no ticket of its own: pressing
+        # start there is a new run, so the reset still happens.
+        restarted, _ = _isolated(self.directory.name, _config(enabled=True))
+        third = restarted['_start_auto_auction']()
+        self.assertIsNone(third['reason'])
+        self.assertEqual(restarted['_LIVE_DOMAIN_LOOP'], None)
+        self.assertTrue(third['autoAuction']['approvalId'].startswith('auto-'))
 
     def test_start_and_stop_keep_instrument_targets_and_every_other_section(self):
         namespace, _ = _isolated(self.directory.name, _config())
