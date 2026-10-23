@@ -986,6 +986,29 @@ class NTEVisionPipeline:
             self.current_context.update(recordStableKey=key, id=key, matchId=key)
 
     def process_frame(
+        self, frame, captured_at=None, force_refresh=False, record_stable_key=None,
+        include_heavy_identity=True, prioritize_live_facts=False, stage_timings=None,
+    ):
+        from ue4ss_observation import read_snapshot, apply_snapshot
+        self._ue4ss_snapshot = read_snapshot()
+        direct = self._ue4ss_snapshot
+        if direct:
+            scene = direct["scene"]
+            self.current_context.update(scene=scene, inAuction=True, inLobby=False,
+                                        isLoading=False, isSettlement=scene == "SETTLEMENT")
+            if scene == "IN_AUCTION" and not self._match_active:
+                self._match_active = True
+                self._match_gen += 1
+                self.current_context["matchGeneration"] = self._match_gen
+        result = self._process_visual_frame(
+            frame, captured_at, force_refresh, record_stable_key,
+            include_heavy_identity, prioritize_live_facts, stage_timings,
+        )
+        if direct and result.get("scene") == direct["scene"]:
+            apply_snapshot(result, direct)
+        return result
+
+    def _process_visual_frame(
         self,
         frame: np.ndarray,
         captured_at: Optional[str] = None,
@@ -1043,6 +1066,8 @@ class NTEVisionPipeline:
 
         # 0. 对局前：OpenCV 小图快检，毫秒级。禁止为了认大世界/都市大亨去跑 RapidOCR。
         fast = timed("sceneNavigation", self._classify_scene_fast, frame)
+        if getattr(self, "_ue4ss_snapshot", None):
+            fast = {**fast, "scene": self._ue4ss_snapshot["scene"]}
         prev = self.current_context.get("scene")
         mode_provider = getattr(self, 'recognition_mode_provider', None)
         mode = mode_provider() if mode_provider else 'auto'
@@ -1209,6 +1234,7 @@ class NTEVisionPipeline:
             intel_sig_changed = self._intel_card_stack_sig_changed(frame)
             priority_card_trigger = bool(
                 not getattr(self, "fast_live_intel", False)
+                and not (getattr(self, "_ue4ss_snapshot", None) or {}).get("cardsReadable")
                 and (
                     needs_round_extraction
                     or (intel_sig_changed and since_intel_trig >= 1.0)
@@ -2297,6 +2323,10 @@ class NTEVisionPipeline:
         self._read_df_numeric_batch(frame)
 
     def _read_df_auction_round_title(self, frame: Optional[np.ndarray]) -> Optional[int]:
+        direct = getattr(self, "_ue4ss_snapshot", None) or {}
+        raw = direct.get("curRoundIndex")
+        if direct.get("scene") == SCENE_IN_AUCTION and type(raw) is int and raw >= 0:
+            return raw + 1
         """Accept only a high-confidence, whole-token visible auction title."""
         if frame is None or getattr(frame, "size", 0) == 0:
             return None
