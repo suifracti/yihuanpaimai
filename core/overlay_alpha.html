@@ -216,6 +216,22 @@
       color: var(--text);
     }
 
+    /* Live stops the whole run, so it reads as the one red thing on the ticket. */
+    .btn-stop-run {
+      height: 32px; padding: 0 7px; gap: 4px;
+      font-size: 11px; font-weight: 600; letter-spacing: 0.5px;
+      color: var(--red);
+      background: rgba(251, 113, 133, 0.08);
+      border-color: rgba(251, 113, 133, 0.4);
+      flex: 0 0 auto;
+    }
+    .btn-stop-run:hover {
+      background: rgba(251, 113, 133, 0.2);
+      border-color: var(--red);
+      color: #fff;
+    }
+    .btn-stop-run[hidden] { display: none; }
+
     /* Expanded Pane */
     .expand {
       display: none; flex-direction: column; gap: 8px;
@@ -639,7 +655,7 @@
     .bar .center .v { font-size: 16px; color: var(--text); }
     .bar .center .band, .bar .center .support-tag { display: none; }
     .bar .actions { grid-area: actions; justify-content: flex-end; min-width: 0; }
-    .shell:not(.expanded) .actions > :not(#toggleBtn) { display: none; }
+    .shell:not(.expanded) .actions > :not(#toggleBtn):not(#autoRunStopBtn) { display: none; }
     .hud-foot { display: grid; grid-template-columns: minmax(0, 1fr) max-content; gap: 8px; min-height: 26px;
       padding: 5px 16px; border-top: 1px solid var(--border); font-size: 12px;
       color: var(--gold); }
@@ -714,6 +730,12 @@
             <line x1="5" y1="12" x2="19" y2="12"/>
           </svg>
           <span>新一局</span>
+        </button>
+        <!-- Stop the whole auto run. This one control takes the mouse; the rest
+             of the ticket keeps passing clicks to the game. -->
+        <button class="btn btn-stop-run" id="autoRunStopBtn" type="button" title="停止整个自动拍卖（只停本次收页请用主窗口收仓工具）" aria-label="停止自动拍卖" hidden>
+          <svg width="11" height="11" viewBox="0 0 24 24" fill="currentColor" stroke="none" aria-hidden="true"><rect x="6" y="6" width="12" height="12" rx="1"/></svg>
+          <span class="btn-stop-run-label">停止</span>
         </button>
         <!-- Toggle Expand -->
         <button class="btn btn-icon" id="toggleBtn" type="button" title="展开">
@@ -1349,6 +1371,9 @@
         + (foot?.getBoundingClientRect().height || 26) + 2);
       const h = expanded ? getExpandedHeight() : compactHeight;
       const sizeKey = `${expanded ? expandedWidth : collapsedWidth}x${h}`;
+      // The stop button moves with the bar, so the host needs a fresh rect even
+      // when the window size itself does not change.
+      scheduleAutoRunRect();
       if (sizeKey === lastHudSize) return;
       lastHudSize = sizeKey;
       sendHost({ action: "resize_hud", w: expanded ? expandedWidth : collapsedWidth, h,
@@ -2935,6 +2960,48 @@ function sparkleBoundsText(b) {
       window.setOverlayExpanded = setExpanded;
     }
 
+    // ---- Auto run: one small clickable stop on an otherwise click-through ticket
+    const autoRunView = { running: false, rectKey: null, frame: 0 };
+
+    function applyAutoAuctionState(state) {
+      const button = document.getElementById("autoRunStopBtn");
+      if (!button) return;
+      // `running` is the backend's own field: on before the first frame, off
+      // after any stop. A null payload means no product loop is wired.
+      const running = Boolean(state && state.running === true);
+      autoRunView.running = running;
+      button.hidden = !running;
+      scheduleAutoRunRect();
+    }
+
+    function scheduleAutoRunRect() {
+      if (autoRunView.frame) return;
+      autoRunView.frame = requestAnimationFrame(() => {
+        autoRunView.frame = 0;
+        reportAutoRunStopRect();
+      });
+    }
+
+    function reportAutoRunStopRect() {
+      const button = document.getElementById("autoRunStopBtn");
+      let rect = null;
+      if (button && !button.hidden && button.offsetParent !== null) {
+        const box = button.getBoundingClientRect();
+        if (box.width > 0 && box.height > 0) {
+          rect = { x: box.left, y: box.top, width: box.width, height: box.height };
+        }
+      }
+      const key = rect ? [rect.x, rect.y, rect.width, rect.height].map(v => Math.round(v)).join(",") : "";
+      if (key === autoRunView.rectKey) return;
+      autoRunView.rectKey = key;
+      sendHost({
+        action: "auto_run_stop_rect",
+        type: "auto_run_stop_rect",
+        rect,
+        scale: Number(window.devicePixelRatio) || 1,
+      });
+    }
+
     function bind() {
       document.querySelectorAll("details").forEach(el => el.addEventListener("toggle", () => resizeHud(document.getElementById("shell").classList.contains("expanded"))));
       ["sparkleCountInput", "sparkleNamesInput", ...extraNumericFields.map(key => key + "Input"), "intelCostInput", "otherCostInput", "futureIncrementalCostInput", "qInput", "goldAvgInput", "purpleCountInput", "leaderBidInput", "knownGoldInput", "knownRedInput", "knownPurpleInput", "knownBlueInput", "knownGreenInput", "knownWhiteInput"].forEach(id => {
@@ -3033,6 +3100,13 @@ function sparkleBoundsText(b) {
       };
 
       document.getElementById("nextBtn").onclick = openTerminal;
+      document.getElementById("autoRunStopBtn").onclick = () => {
+        // Same action as the main window's stop; this is not the capture stop.
+        sendHost({ action: "auto_auction_stop", type: "auto_auction_stop" });
+        const button = document.getElementById("autoRunStopBtn");
+        if (button) button.disabled = true;
+        window.setTimeout(() => { if (button) button.disabled = false; }, 1500);
+      };
       document.getElementById("terminalClose").onclick = () => closeTerminal(false);
       document.getElementById("terminalFinish").onclick = () => {
         document.getElementById("terminalSettlement").classList.add("open");
@@ -3091,6 +3165,9 @@ function sparkleBoundsText(b) {
       hudWsClient = ws;
       ws.onopen = () => {
         sendHost({ action: "manual_bootstrap", type: "manual_bootstrap" });
+        // A reconnect must not leave the host guessing where the stop button is.
+        autoRunView.rectKey = null;
+        scheduleAutoRunRect();
         ws.send(JSON.stringify({
           type: "report_hud_status",
           status: {
@@ -3114,6 +3191,15 @@ function sparkleBoundsText(b) {
           }
           paintVisionHealth(d);
           if (d?.type === 'vision_health') return;
+          if (d && d.type === 'app_status' && 'autoAuction' in d) {
+            applyAutoAuctionState(d.autoAuction);
+            return;
+          }
+          if (d && Object.prototype.hasOwnProperty.call(d, 'autoAuction')) {
+            // Live frames carry the same switch state, so the ticket does not
+            // keep a stale stop button after a match-limit stop.
+            applyAutoAuctionState(d.autoAuction);
+          }
           if (d?.type === 'vision_control') {
             paintManualCommandResult(d.nativeControlResult);
             return;
@@ -3143,7 +3229,13 @@ function sparkleBoundsText(b) {
       ws.onclose = () => setTimeout(connectWS, 1500);
     }
 
-    document.addEventListener("DOMContentLoaded", () => { bind(); connectWS(); });
+    document.addEventListener("DOMContentLoaded", () => {
+      bind();
+      connectWS();
+      window.addEventListener("resize", scheduleAutoRunRect);
+      // Start with no clickable area until the backend says a run is on.
+      reportAutoRunStopRect();
+    });
   </script>
 </body>
 </html>

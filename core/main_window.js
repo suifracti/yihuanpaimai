@@ -37,6 +37,9 @@ const dashboard = {
   requestSequence: 0,
   bridgeReady: Boolean(window.chrome && window.chrome.webview),
   currentView: "match",
+  lastAutoAuction: undefined,
+  autoAuctionCommandPending: false,
+  autoAuctionCommandTimer: null,
   mascotPresentation: null,
   mascotState: null,
   lastAutomaticMascotState: null,
@@ -4280,6 +4283,217 @@ function renderMatch(currentMatch, overlayVisible) {
   if (navIdEl) navIdEl.textContent = currentMatch.matchId || "--";
 }
 
+// The switch is the backend's own state (app_status.autoAuction). No local
+// loop, no local counter: 0 matches here means the backend said 0.
+const AUTO_RUN_PHASE_TEXT = {
+  idle: "待命",
+  restocking: "大厅补仪器",
+  preparing: "准备动作",
+  entering: "进入拍卖",
+  entry_dispatched: "已发送入场费",
+  entry_paid: "入场费已确认",
+  entry_unknown: "入场费结果未知",
+  bid_dispatched: "已发送报价",
+  bid_confirmed: "报价已确认",
+  round_done: "本回合结束",
+  collecting: "结算收仓",
+  return_dispatched: "正在返回大厅",
+  return_confirmed: "已回到大厅",
+  start_dispatched: "正在开始下一局",
+  done: "本次运行结束",
+  stopped: "已停止",
+};
+
+// Both the waiting reason and the stop reason arrive in the same field, so
+// this covers both. Unknown codes are shown as-is instead of hidden.
+const AUTO_RUN_REASON_TEXT = {
+  USER_STOP: "你按下了停止。",
+  AUTO_AUCTION_MATCH_LIMIT: "已到本次设置的局数上限。",
+  CONFIG_WRITE_FAILED: "配置文件写不进去，开关没有改变。",
+  OBSERVATION_UNAVAILABLE: "观察没有启动成功，开关已关回去。",
+  ALREADY_RUNNING: "这次开启已经在运行，没有重新开始。",
+  FUNDS_BELOW_MINIMUM: "资金低于设置的下限，已停止。",
+  SCENE_NO_PROGRESS_TIMEOUT: "画面长时间没有进展，已停止。",
+  VERIFICATION_RUN_FINISHED_OR_RETURN_UNKNOWN: "本次运行已结束。",
+  GAME_NOT_FOREGROUND: "游戏不在前台，先停在大厅等它回来。",
+  ROUND_TIME_TOO_SHORT: "本回合剩余时间太短，这一回合不报价。",
+  WAITING_AUCTION: "正在等进入拍卖。",
+  WAITING_ENTRY_FEE_RESULT: "正在等入场费回执。",
+  WAITING_WAREHOUSE_SAVE: "正在等本局收页保存到位，然后才回大厅。",
+  ENTRY_FEE_UNKNOWN_NOT_RETRIED: "入场费结果未知，没有重发。",
+  ENTRY_NOT_SENT: "入场没有发出。",
+  INSTRUMENTS_READY: "大厅仪器已补齐。",
+  AUTO_AUCTION_UNAVAILABLE: "桌面服务没能提供自动拍卖状态，重启应用再试。",
+};
+
+function autoRunReasonText(reason) {
+  const code = String(reason == null ? "" : reason).trim();
+  if (!code) return "";
+  if (AUTO_RUN_REASON_TEXT[code]) return AUTO_RUN_REASON_TEXT[code];
+  const waitingPrefix = "WAITING_";
+  if (code.startsWith(waitingPrefix)) return "正在等这一步完成：" + code.slice(waitingPrefix.length).toLowerCase() + "。";
+  return "后端给出的原因：" + code;
+}
+
+function autoRunTargetsText(targets) {
+  if (!targets || typeof targets !== "object") return "未设置";
+  const parts = [];
+  if (targets.goldAverage != null) parts.push("金均 " + targets.goldAverage);
+  if (targets.purpleCount != null) parts.push("紫数 " + targets.purpleCount);
+  return parts.length ? parts.join(" · ") : "未设置";
+}
+
+function autoRunCoverageText(state) {
+  if (!state) return "—";
+  const coverage = state.coverage == null ? null : String(state.coverage);
+  const saved = Number.isInteger(state.savedSources) ? state.savedSources : null;
+  const coverageLabel = { COMPLETE: "已收全", PARTIAL: "只收了一部分", COVERAGE_UNPROVEN: "覆盖未证实" }[coverage]
+    || (coverage ? coverage : null);
+  if (!coverageLabel && saved === null) return "本局还没收仓";
+  return [coverageLabel, saved === null ? null : `${saved} 张原图`].filter(Boolean).join(" · ");
+}
+
+function autoRunView(state) {
+  if (state === null || state === undefined) {
+    return {
+      stateKey: "unavailable",
+      title: "未接入",
+      note: "桌面服务没有提供自动拍卖状态；这不等于开关处于未开启。",
+      reason: "",
+      button: "此版本不提供",
+      disabled: true,
+      mode: "start",
+    };
+  }
+  const enabled = state.enabled === true;
+  const running = state.running === true;
+  const phase = state.phase == null ? null : String(state.phase);
+  const reasonText = autoRunReasonText(state.reason);
+  const phaseText = phase ? (AUTO_RUN_PHASE_TEXT[phase] || phase) : null;
+  if (running) {
+    // Enabled with no phase yet: the first frame has not arrived. This is a
+    // starting run, never "closed".
+    const starting = !phase || phase === "idle";
+    return {
+      stateKey: starting ? "starting" : "running",
+      title: starting ? "正在启动" : "自动拍卖运行中",
+      note: starting
+        ? "已开启，还在等第一帧画面；这时候停也算停这一次运行。"
+        : "主窗只在你开始后收起一次；停止后自动恢复。",
+      reason: reasonText || (starting ? "等待第一帧画面…" : (phaseText || "")),
+      button: "停止自动拍卖",
+      disabled: false,
+      mode: "stop",
+    };
+  }
+  if (phase === "stopped" || reasonText) {
+    return {
+      stateKey: "stopped",
+      title: "已停止",
+      note: "主窗已恢复；已保存的原图和记录都还在。",
+      reason: reasonText || "没有说明原因。",
+      button: "重新开始自动拍卖",
+      disabled: false,
+      mode: "start",
+    };
+  }
+  return {
+    stateKey: "off",
+    title: enabled ? "已开启 · 等待画面" : "未开启",
+    note: "开始后会先在大厅补仪器，再入场、报价、收仓，并进入下一局。",
+    reason: "",
+    button: "开始自动拍卖",
+    disabled: false,
+    mode: "start",
+  };
+}
+
+function renderAutoAuction(state, command) {
+  dashboard.lastAutoAuction = state === undefined ? dashboard.lastAutoAuction : state;
+  if (command) {
+    // Any reply ends the wait, including a refused one.
+    dashboard.autoAuctionCommandPending = false;
+    window.clearTimeout(dashboard.autoAuctionCommandTimer);
+    dashboard.autoAuctionCommandTimer = null;
+  }
+  const band = document.getElementById("auto-run-band");
+  if (!band) return;
+  const view = autoRunView(dashboard.lastAutoAuction);
+  band.dataset.state = view.stateKey;
+
+  const stateEl = document.getElementById("auto-run-state");
+  const noteEl = document.getElementById("auto-run-note");
+  const reasonEl = document.getElementById("auto-run-reason");
+  if (stateEl) stateEl.textContent = view.title;
+  if (noteEl) noteEl.textContent = view.note;
+  if (reasonEl) reasonEl.textContent = view.reason;
+
+  const setFact = (id, text, unknown) => {
+    const el = document.getElementById(id);
+    if (!el) return;
+    el.textContent = text;
+    el.classList.toggle("is-unknown", Boolean(unknown));
+  };
+  const info = dashboard.lastAutoAuction;
+  if (info && typeof info === "object") {
+    setFact("auto-run-mode", info.mode === "observe" ? "观察 · 不出价" : info.mode === "bid" ? "出价" : "未设置", !info.mode);
+    setFact("auto-run-phase", info.phase ? (AUTO_RUN_PHASE_TEXT[info.phase] || String(info.phase)) : (info.running ? "等待第一帧" : "—"), !info.phase);
+    setFact("auto-run-matches", Number.isInteger(info.matchesDone) ? `${info.matchesDone}${Number.isInteger(info.maxMatches) ? " / " + info.maxMatches : "（不限）"}` : "—", !Number.isInteger(info.matchesDone));
+    setFact("auto-run-coverage", autoRunCoverageText(info), !info.coverage && !info.savedSources);
+    setFact("auto-run-funds", Number.isFinite(info.minimumFunds) ? formatCurrency(info.minimumFunds) : "未设置", !Number.isFinite(info.minimumFunds));
+    setFact("auto-run-limit", Number.isInteger(info.maxMatches) ? `${info.maxMatches} 局` : "不限", false);
+    setFact("auto-run-targets", autoRunTargetsText(info.instrumentTargets), false);
+  } else {
+    for (const id of ["auto-run-mode", "auto-run-phase", "auto-run-matches", "auto-run-coverage", "auto-run-funds", "auto-run-limit", "auto-run-targets"]) {
+      setFact(id, "—", true);
+    }
+  }
+
+  const button = document.getElementById("auto-run-toggle");
+  const hint = document.getElementById("auto-run-hint");
+  if (button) {
+    button.dataset.mode = view.mode;
+    button.disabled = view.disabled || dashboard.autoAuctionCommandPending === true;
+    button.textContent = dashboard.autoAuctionCommandPending === true
+      ? (view.mode === "stop" ? "正在停止…" : "正在开始…")
+      : view.button;
+    button.title = view.mode === "stop"
+      ? "停止整个自动拍卖：停止派发并恢复主窗口；已保存的收页和记录保留。"
+      : "开始自动拍卖：沿用当前模式、资金下限、局数上限与补仪器目标。";
+  }
+  if (hint) {
+    if (command && command.ok === false) {
+      hint.textContent = command.message || autoRunReasonText(command.reason) || "开关没有生效。";
+    } else {
+      hint.textContent = view.mode === "stop"
+        ? "只停整个自动拍卖；只停本次收页请用下方的收仓工具。"
+        : "开始后会自动补仪器、入场、报价、收仓，并进入下一局。";
+    }
+  }
+}
+
+// The floating ticket forwards this exact stop to the same action.
+function bindAutoRunSwitch() {
+  const toggle = document.getElementById("auto-run-toggle");
+  if (!toggle) return;
+  toggle.addEventListener("click", () => {
+    requestAutoAuction(toggle.dataset.mode === "stop" ? "auto_auction_stop" : "auto_auction_start");
+  });
+}
+
+function requestAutoAuction(action) {
+  if (!isBridgeReady()) return;
+  if (dashboard.autoAuctionCommandPending === true) return;
+  dashboard.autoAuctionCommandPending = true;
+  renderAutoAuction(dashboard.lastAutoAuction);
+  postNative(action);
+  window.clearTimeout(dashboard.autoAuctionCommandTimer);
+  dashboard.autoAuctionCommandTimer = window.setTimeout(() => {
+    dashboard.autoAuctionCommandPending = false;
+    renderAutoAuction(dashboard.lastAutoAuction);
+  }, 8000);
+}
+
 function renderWarehouseCapture(capture) {
   dashboard.lastWarehouseCapture = capture;
   const slot = document.getElementById("warehouse-capture-slot");
@@ -4297,7 +4511,7 @@ function renderWarehouseCapture(capture) {
   button.disabled = !available && !running;
   button.textContent = running ? "停止采集" : "采集完整仓库";
   button.title = running
-    ? "停止当前收页并保留已有页面；自动拍卖运行时，也会停止自动串联并恢复主窗口。"
+    ? "只结束本次收页，已保存的页面和原图保留；自动拍卖不会停，仍会返回大厅并进入下一局。"
     : "手动收页入口；已启用结算自动收页时，无需每局点击或重新武装。";
 
   if (message) {
@@ -6198,6 +6412,11 @@ function handleNativeMessage(event) {
   if (payload.warehouseCapture) {
     renderWarehouseCapture(payload.warehouseCapture);
   }
+  if ("autoAuction" in payload || payload.autoAuctionCommand) {
+    // The reply to start/stop carries both the command result and the state
+    // after it; a plain status poll carries the state alone.
+    renderAutoAuction("autoAuction" in payload ? payload.autoAuction : dashboard.lastAutoAuction, payload.autoAuctionCommand || null);
+  }
   if (payload.warehouseCaptureCommand) {
     const cmd = payload.warehouseCaptureCommand;
     const confirm = document.getElementById("warehouse-capture-confirm");
@@ -6476,6 +6695,7 @@ document.addEventListener("DOMContentLoaded", () => {
     postWarehousePersist();
   });
   const warehouseToggle = document.getElementById("warehouse-capture-toggle");
+  bindAutoRunSwitch();
   if (warehouseToggle) {
     warehouseToggle.addEventListener("click", () => {
       const slot = document.getElementById("warehouse-capture-slot");

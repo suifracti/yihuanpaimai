@@ -160,6 +160,27 @@
           <p>仓库、情报、四席报价。<br>一场拍卖，一张盘面。</p>
           <button type="button" class="text-link" onclick="showView('inspection')">打开开箱查验 <span>↗</span></button>
         </div>
+        <section class="auto-run-band" id="auto-run-band" data-state="unknown" aria-label="自动拍卖开关">
+          <div class="auto-run-lead">
+            <span class="eyebrow">AUTO RUN / 自动拍卖</span>
+            <strong class="auto-run-state" id="auto-run-state">读取中</strong>
+            <span class="auto-run-note" id="auto-run-note">状态来自桌面服务，与悬浮票同一份。</span>
+            <span class="auto-run-reason" id="auto-run-reason" role="status" aria-live="polite"></span>
+          </div>
+          <dl class="auto-run-facts">
+            <div><dt>模式</dt><dd id="auto-run-mode">—</dd></div>
+            <div><dt>阶段</dt><dd id="auto-run-phase">—</dd></div>
+            <div><dt>已完成</dt><dd id="auto-run-matches">—</dd></div>
+            <div><dt>本局收仓</dt><dd id="auto-run-coverage">—</dd></div>
+            <div><dt>资金下限</dt><dd id="auto-run-funds">—</dd></div>
+            <div><dt>局数上限</dt><dd id="auto-run-limit">—</dd></div>
+            <div><dt>补仪器目标</dt><dd id="auto-run-targets">—</dd></div>
+          </dl>
+          <div class="auto-run-action">
+            <button type="button" class="auto-run-toggle" id="auto-run-toggle" disabled>读取中</button>
+            <span class="auto-run-hint" id="auto-run-hint">开始后会自动补仪器、入场、报价、收仓，并进入下一局。</span>
+          </div>
+        </section>
         <div class="workbench-canvas">
           <section class="match-focus auction-floor" aria-label="当前竞拍关键信息">
             <aside class="round-column">
@@ -257,7 +278,7 @@
                 <button class="btn-wb-action" id="warehouse-capture-toggle" type="button" disabled>采集完整仓库</button>
                 <span class="warehouse-capture-message" id="warehouse-capture-message"></span>
                 <div class="warehouse-capture-confirm" id="warehouse-capture-confirm" hidden>
-                  <p>程序仅在结算页滚动仓库；按 Esc、点击、滚轮或任意按键会立即停止；不会点击、出价或返回顶部；未完整覆盖会保存为部分。</p>
+                  <p>程序仅在结算页滚动仓库；按 Esc、点击、滚轮或任意按键会立即停止；不会点击、出价或返回顶部；未完整覆盖会保存为部分。点“停止采集”只结束本次收页，自动拍卖之后仍会返回大厅并进入下一局。</p>
                   <div class="warehouse-capture-confirm-actions">
                     <button type="button" id="warehouse-capture-cancel" class="btn-review-action">取消</button>
                     <button type="button" id="warehouse-capture-confirm-btn" class="btn-review-action btn-review-primary">确认开始</button>
@@ -1710,6 +1731,6 @@
 
   <script src="mascot_runtime_binding.js"></script>
   <script src="auction_engine_v06.js"></script>
-  <script src="main_window.js?v=20261019a"></script>
+  <script src="main_window.js?v=20261023a"></script>
 </body>
 </html>

@@ -3456,6 +3456,34 @@ def _stop_auto_auction(reason: str = 'USER_STOP') -> Dict[str, Any]:
             'autoAuction': _auto_auction_public()}
 
 
+def _dispatch_hud_auto_auction(action: str) -> Dict[str, Any]:
+    """The floating ticket calls the same switch as the main window.
+
+    This only routes the action: the start/stop decision, the ticket and the
+    state stay in `_start_auto_auction` / `_stop_auto_auction`.
+    """
+    if action == 'auto_auction_start':
+        result = _start_auto_auction()
+    else:
+        result = _stop_auto_auction('USER_STOP')
+    holder = globals().get('_MAIN_WINDOW_HOLDER') or []
+    if holder and holder[0] is not None:
+        try:
+            holder[0].post_status(action)
+        except Exception as exc:
+            log_stage('AUTO_AUCTION', f'hud status push failed: {type(exc).__name__}: {exc}')
+    loop = WS_EVENT_LOOP
+    if loop is not None and loop.is_running():
+        message = {'type': 'app_status', 'action': action,
+                   'autoAuctionCommand': result, 'autoAuction': _auto_auction_public()}
+        try:
+            asyncio.run_coroutine_threadsafe(
+                broadcast_ws(json.dumps(message, ensure_ascii=False)), loop)
+        except Exception as exc:
+            log_stage('AUTO_AUCTION', f'hud command broadcast failed: {exc}')
+    return result
+
+
 def _live_domain_mode():
     # The product switch owns the mode; the supervised mixed-mode harness that
     # used NTE_DOMAIN_VERIFY_MODES is gone with M4b.
@@ -4367,6 +4395,8 @@ def _native_observation_event(event: Dict[str, Any]) -> Optional[Dict[str, Any]]
                 elif shadow.get("shadowUpdating"):
                     data["solverStatus"] = "pending"
             data["overlayState"] = build_canonical_overlay_state(CURRENT_MATCH, data)
+            # The ticket shows the switch's own state; null means no loop wired.
+            data["autoAuction"] = _auto_auction_public()
             _native_domain_action_session_observe_locked(
                 session_id, frame, perception, qualified=True,
             )
@@ -5286,6 +5316,9 @@ async def ws_handler(websocket):
                     start_vision_worker(
                         resume_same_match=bool(data.get("resumeSameMatch"))
                     )
+                elif msg_type in ("auto_auction_start", "auto_auction_stop"):
+                    # The ticket's stop is the switch's stop, not the capture stop.
+                    _dispatch_hud_auto_auction(msg_type)
                 elif msg_type == "stop_live_vision":
                     await asyncio.to_thread(stop_vision_worker)
                     with _NATIVE_OBSERVATION_LOCK:
@@ -9430,6 +9463,19 @@ def run_hud_app():
                     start_vision_worker(
                         resume_same_match=bool(data.get("resumeSameMatch"))
                     )
+                elif action in ("auto_auction_start", "auto_auction_stop"):
+                    _dispatch_hud_auto_auction(action)
+                elif action == "auto_run_stop_rect":
+                    # Geometry only: the ticket stays click-through except here.
+                    if hasattr(overlay_form, "SetLiveControlRect"):
+                        rect = data.get("rect")
+                        if not isinstance(rect, dict):
+                            overlay_form.ClearLiveControlRect()
+                        else:
+                            overlay_form.SetLiveControlRect(
+                                float(rect.get("x") or 0), float(rect.get("y") or 0),
+                                float(rect.get("width") or 0), float(rect.get("height") or 0),
+                                float(data.get("scale") or 1), True)
                 elif action == "begin_drag":
                     if hasattr(overlay_form, "ActivateOverlay"):
                         overlay_form.ActivateOverlay()

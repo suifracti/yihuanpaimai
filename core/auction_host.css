@@ -570,3 +570,68 @@ h1, h2, .page-heading h1, .guidebook-header h1, .overview-hero-title, .object-ti
   .history-layout.record-spread { grid-template-columns: minmax(0, 1fr); }
   .record-spread .record-annotations { grid-column: 1; }
 }
+
+/* 自动拍卖开关：竞拍席首屏的一枚运行牌 */
+.auto-run-band {
+  display: grid;
+  grid-template-columns: minmax(230px, 0.9fr) minmax(0, 2.1fr) minmax(190px, auto);
+  align-items: stretch;
+  margin: 0 0 18px;
+  border: 1px solid var(--strong-line);
+  border-left: 4px solid var(--muted);
+  background: var(--canvas);
+  color: var(--ink);
+}
+.auto-run-band[data-state="running"] { border-left-color: var(--good); }
+.auto-run-band[data-state="starting"] { border-left-color: var(--warn); }
+.auto-run-band[data-state="stopped"] { border-left-color: var(--brand); }
+.auto-run-band[data-state="unavailable"] { border-left-style: dashed; }
+
+.auto-run-lead { padding: 12px 18px 12px 16px; border-right: 1px solid var(--line); display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+.auto-run-state { font-family: SimSun, "Songti SC", serif; font-size: 23px; font-weight: 700; line-height: 1.25; letter-spacing: -0.4px; }
+.auto-run-band[data-state="running"] .auto-run-state { color: var(--good); }
+.auto-run-band[data-state="starting"] .auto-run-state { color: var(--warn); }
+.auto-run-band[data-state="stopped"] .auto-run-state { color: var(--brand-ink); }
+.auto-run-note { font-size: 11px; line-height: 1.6; color: var(--muted); }
+.auto-run-reason { font-size: 12px; line-height: 1.6; color: var(--ink); min-height: 19px; }
+.auto-run-reason:empty { display: none; }
+
+.auto-run-facts {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  margin: 0;
+  padding: 0;
+  align-content: stretch;
+}
+.auto-run-facts > div { padding: 10px 14px; border-right: 1px solid var(--border-subtle, var(--line)); border-bottom: 1px solid var(--border-subtle, var(--line)); min-width: 0; }
+.auto-run-facts > div:nth-child(4n) { border-right: 0; }
+.auto-run-facts > div:nth-child(n + 5) { border-bottom: 0; }
+.auto-run-facts dt { font-family: var(--mono); font-size: 10px; letter-spacing: 1.2px; color: var(--muted); text-transform: uppercase; }
+.auto-run-facts dd { margin: 3px 0 0; font-family: var(--mono); font-size: 14px; font-variant-numeric: tabular-nums; color: var(--ink); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.auto-run-facts dd.is-unknown { color: var(--muted); }
+
+.auto-run-action { padding: 12px 16px; display: flex; flex-direction: column; justify-content: center; gap: 8px; border-left: 1px solid var(--line); }
+.auto-run-toggle {
+  min-height: 42px; padding: 0 20px;
+  border: 1px solid var(--ink); border-radius: 0;
+  background: var(--ink); color: var(--paper);
+  font-size: 14px; font-weight: 650; letter-spacing: 0.5px;
+  transition: background 120ms ease, color 120ms ease, border-color 120ms ease;
+}
+.auto-run-toggle:hover:not(:disabled) { background: var(--brand); border-color: var(--brand); color: var(--canvas); }
+.auto-run-toggle[data-mode="stop"] { background: transparent; border-color: var(--brand); color: var(--brand-ink); }
+.auto-run-toggle[data-mode="stop"]:hover:not(:disabled) { background: var(--brand); color: var(--canvas); }
+.auto-run-toggle:disabled { background: transparent; border-color: var(--line); color: var(--muted); cursor: not-allowed; }
+.auto-run-hint { font-size: 11px; line-height: 1.55; color: var(--muted); }
+
+@media (max-width: 1080px) {
+  .auto-run-band { grid-template-columns: minmax(0, 1fr); }
+  .auto-run-lead, .auto-run-action { border-right: 0; border-left: 0; }
+  .auto-run-lead { border-bottom: 1px solid var(--line); }
+  .auto-run-facts { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .auto-run-facts > div:nth-child(4n) { border-right: 1px solid var(--line); }
+  .auto-run-facts > div:nth-child(2n) { border-right: 0; }
+  .auto-run-facts > div:nth-child(n + 5) { border-bottom: 1px solid var(--line); }
+  .auto-run-facts > div:nth-last-child(-n + 2) { border-bottom: 0; }
+  .auto-run-action { border-top: 1px solid var(--line); }
+}

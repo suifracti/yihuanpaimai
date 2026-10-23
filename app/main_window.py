@@ -2698,6 +2698,9 @@ def create_main_window_type(WinForms, Drawing):
                     payload["currentMatch"] = current_match
                 wh_payload = self._bridge.warehouse_capture_payload()
                 payload["warehouseCapture"] = wh_payload
+                # Every app_status carries the switch, including this light push,
+                # so a stop started from the floating ticket shows up at once.
+                payload["autoAuction"] = self._bridge.auto_auction_payload()
                 wh_state = str(wh_payload.get("state") or "")
                 if wh_state in {"IDLE", "COMPLETE", "PARTIAL", "ERROR", "TIMEOUT", "SCENE_LEFT", "NO_SESSION"}:
                     self._bridge.set_capture_safety_override(False)

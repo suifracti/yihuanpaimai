@@ -124,6 +124,23 @@ namespace NTE.DirectComposition
                 return new IntPtr(SetWindowLong32(hWnd, nIndex, dwNewLong.ToInt32()));
         }
 
+        [DllImport("user32.dll", EntryPoint = "GetWindowLongPtrW", SetLastError = true)]
+        private static extern IntPtr GetWindowLongPtr64(IntPtr hWnd, int nIndex);
+
+        [DllImport("user32.dll", EntryPoint = "GetWindowLongW", SetLastError = true)]
+        private static extern int GetWindowLong32(IntPtr hWnd, int nIndex);
+
+        public static IntPtr GetWindowLongPtr(IntPtr hWnd, int nIndex)
+        {
+            if (IntPtr.Size == 8)
+                return GetWindowLongPtr64(hWnd, nIndex);
+            else
+                return new IntPtr(GetWindowLong32(hWnd, nIndex));
+        }
+
+        [DllImport("user32.dll")]
+        public static extern bool GetCursorPos(out Point point);
+
         public const int D3D_DRIVER_TYPE_HARDWARE = 1;
         public const uint D3D11_CREATE_DEVICE_BGRA_SUPPORT = 0x20;
         public const uint D3D11_SDK_VERSION = 7;
@@ -202,9 +219,21 @@ namespace NTE.DirectComposition
         public event Action<string> WebMessageReceivedCallback;
 
         private System.Windows.Forms.Timer _topmostTimer;
+        private System.Windows.Forms.Timer _hitTestTimer;
         private IntPtr _gameOwnerHwnd = IntPtr.Zero;
         private bool _compositionResourcesClosed;
         private const uint TopmostNoActivateFlags = 0x0013; // NOSIZE | NOMOVE | NOACTIVATE
+
+        // One small live control (the auto-run stop) may take mouse input; the
+        // rest of the ticket keeps passing every click to the game underneath.
+        private Rectangle _liveControlRect = Rectangle.Empty;   // client pixels
+        private bool _liveControlVisible;
+        private bool _mousePassThrough = true;
+        private const int GWL_EXSTYLE = -20;
+        private const int WS_EX_TRANSPARENT = 0x00000020;
+        private const int WM_NCHITTEST = 0x0084;
+        private const int HTCLIENT = 1;
+        private const int HTTRANSPARENT = -1;
 
         protected override CreateParams CreateParams
         {
@@ -232,6 +261,126 @@ namespace NTE.DirectComposition
             // HTTRANSPARENT alone only traverses windows on the same UI thread.
             // One initialization per HWND, no image-driven style updates.
             SetLayeredWindowAttributes(this.Handle, 0, 255, 0x2); // LWA_ALPHA
+            // The pass-through above is the default for the whole ticket. A live
+            // control lifts it only while the cursor is on that control.
+            if (_hitTestTimer == null)
+            {
+                _hitTestTimer = new System.Windows.Forms.Timer();
+                _hitTestTimer.Interval = 40;
+                _hitTestTimer.Tick += (s, args) => PollLiveControl();
+                _hitTestTimer.Start();
+            }
+        }
+
+        protected override void OnVisibleChanged(EventArgs e)
+        {
+            base.OnVisibleChanged(e);
+            // Hiding the ticket must not leave a solid (clickable) window behind.
+            PollLiveControl();
+        }
+
+        /// <summary>
+        /// The one control that may be clicked. Rect is in WebView CSS pixels;
+        /// the host scales it to window pixels. An empty or hidden rect restores
+        /// full mouse pass-through.
+        /// </summary>
+        public void SetLiveControlRect(double x, double y, double width, double height, double scale, bool visible)
+        {
+            if (this.InvokeRequired)
+            {
+                try
+                {
+                    this.BeginInvoke(new Action<double, double, double, double, double, bool>(
+                        SetLiveControlRect), x, y, width, height, scale, visible);
+                }
+                catch { }
+                return;
+            }
+            double factor = (scale > 0.1 && scale < 8.0) ? scale : 1.0;
+            bool usable = visible && width > 0 && height > 0;
+            _liveControlVisible = usable;
+            _liveControlRect = usable
+                ? new Rectangle(
+                    (int)Math.Round(x * factor),
+                    (int)Math.Round(y * factor),
+                    Math.Max(1, (int)Math.Round(width * factor)),
+                    Math.Max(1, (int)Math.Round(height * factor)))
+                : Rectangle.Empty;
+            PollLiveControl();
+        }
+
+        public void ClearLiveControlRect()
+        {
+            SetLiveControlRect(0, 0, 0, 0, 1.0, false);
+        }
+
+        private bool CursorOnLiveControl()
+        {
+            if (!_liveControlVisible || _liveControlRect.IsEmpty)
+            {
+                return false;
+            }
+            Point cursor;
+            if (!DCompNative.GetCursorPos(out cursor))
+            {
+                return false;
+            }
+            return _liveControlRect.Contains(this.PointToClient(cursor));
+        }
+
+        private bool ClientPointInLiveControl(IntPtr lParam)
+        {
+            if (!_liveControlVisible || _liveControlRect.IsEmpty)
+            {
+                return false;
+            }
+            long packed = lParam.ToInt64();
+            int x = unchecked((short)(packed & 0xFFFF));
+            int y = unchecked((short)((packed >> 16) & 0xFFFF));
+            return _liveControlRect.Contains(new Point(x, y));
+        }
+
+        private bool HitTestLiveControl(IntPtr lParam)
+        {
+            if (!_liveControlVisible || _liveControlRect.IsEmpty)
+            {
+                return false;
+            }
+            long packed = lParam.ToInt64();
+            int screenX = unchecked((short)(packed & 0xFFFF));
+            int screenY = unchecked((short)((packed >> 16) & 0xFFFF));
+            return _liveControlRect.Contains(this.PointToClient(new Point(screenX, screenY)));
+        }
+
+        private void PollLiveControl()
+        {
+            if (!this.IsHandleCreated)
+            {
+                return;
+            }
+            if (!this.Visible)
+            {
+                SetMousePassThrough(true);
+                return;
+            }
+            SetMousePassThrough(!CursorOnLiveControl());
+        }
+
+        private void SetMousePassThrough(bool passThrough)
+        {
+            if (_mousePassThrough == passThrough)
+            {
+                return;
+            }
+            _mousePassThrough = passThrough;
+            try
+            {
+                IntPtr style = DCompNative.GetWindowLongPtr(this.Handle, GWL_EXSTYLE);
+                long value = style.ToInt64();
+                value = passThrough ? (value | WS_EX_TRANSPARENT) : (value & ~WS_EX_TRANSPARENT);
+                DCompNative.SetWindowLongPtr(this.Handle, GWL_EXSTYLE, new IntPtr(value));
+            }
+            catch { }
         }
 
         protected override bool ShowWithoutActivation
@@ -452,6 +601,12 @@ namespace NTE.DirectComposition
                 _topmostTimer.Dispose();
                 _topmostTimer = null;
             }
+            if (_hitTestTimer != null)
+            {
+                _hitTestTimer.Stop();
+                _hitTestTimer.Dispose();
+                _hitTestTimer = null;
+            }
             WebMessageReceivedCallback = null;
             if (CompController != null)
             {
@@ -508,9 +663,19 @@ namespace NTE.DirectComposition
             }
 
             // The game underneath owns mouse interaction, including the HUD area.
+            // Only the live control's rectangle answers as a real client area.
             if (m.Msg == WM_NCHITTEST)
             {
-                m.Result = (IntPtr)(-1); // HTTRANSPARENT
+                m.Result = (IntPtr)(HitTestLiveControl(m.LParam) ? HTCLIENT : HTTRANSPARENT);
+                return;
+            }
+
+            // A click anywhere else is swallowed rather than forwarded: the
+            // window may stay solid for one poll tick after the cursor leaves.
+            if ((m.Msg == WM_LBUTTONDOWN || m.Msg == WM_LBUTTONUP || m.Msg == WM_LBUTTONDBLCLK)
+                && !ClientPointInLiveControl(m.LParam))
+            {
+                SetMousePassThrough(true);
                 return;
             }
 
