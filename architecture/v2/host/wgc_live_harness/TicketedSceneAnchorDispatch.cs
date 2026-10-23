@@ -116,7 +116,7 @@ sealed class TicketedSceneAnchorDispatch : IDisposable
         if (hwnd == 0 || publish is null) return null;
         var decoder = SceneAnchorGameDecoder.Load(anchorDirectory);
         if (!decoder.Ready) return null;
-        decoder.ReadAmount = SceneAnchorOcr.Read;
+        decoder.ReadAmount = SceneAnchorOcr.ReadAmountField;
         decoder.ReadCommittedAmount = SceneAnchorOcr.Read;
         decoder.ReadCommittedText = SceneAnchorOcr.ReadCommittedText;
         decoder.ReadIntelText = SceneAnchorOcr.ReadText;

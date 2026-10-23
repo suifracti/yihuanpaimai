@@ -199,7 +199,7 @@ static class Program
     {
         var decoder = SceneAnchorGameDecoder.Load("assets/scene_anchors");
         decoder.ReadAmount=(SceneAnchorGameDecoder.AmountSample)Host.GetType("WgcLiveHarness.SceneAnchorOcr",true)!
-            .GetMethod("Read")!.CreateDelegate(typeof(SceneAnchorGameDecoder.AmountSample));
+            .GetMethod("ReadAmountField")!.CreateDelegate(typeof(SceneAnchorGameDecoder.AmountSample));
         decoder.ReadCommittedText=(SceneAnchorGameDecoder.TextSample)Host.GetType("WgcLiveHarness.SceneAnchorOcr",true)!
             .GetMethod("ReadCommittedText")!.CreateDelegate(typeof(SceneAnchorGameDecoder.TextSample));
         var readStock = Host.GetType("WgcLiveHarness.SceneAnchorOcr", true)!.GetMethod("ReadInstruments")!
@@ -219,6 +219,12 @@ static class Program
             if(row.TryGetProperty("expectedAmount",out var expectedAmount)) {
                 var region=v?.Controls.Single(c=>c.Primitive==DomainPrimitive.FocusAmountField);
                 Console.WriteLine($"FILLED_ROI={region?.Left},{region?.Top},{region?.Width},{region?.Height}");
+                if(region is not null) {
+                    var ocr=Host.GetType("WgcLiveHarness.SceneAnchorOcr",true)!;
+                    object[] crop={(ReadOnlyMemory<byte>)pixels,w,h,w*4,region.Left,region.Top,region.Width,region.Height};
+                    Console.WriteLine("FILLED_TEXT="+ocr.GetMethod("ReadText")!.Invoke(null,crop));
+                    Console.WriteLine("FILLED_LATIN_ENLARGED="+ocr.GetMethod("ReadCommittedText")!.Invoke(null,crop));
+                }
                 Require(v?.AmountField==expectedAmount.GetInt64(),"REAL_FILLED_AMOUNT_MUST_READ_EXACTLY");
             }
             if(v?.Scene=="TOOL_SETUP") {

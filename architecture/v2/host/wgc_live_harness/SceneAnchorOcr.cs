@@ -54,6 +54,12 @@ static class SceneAnchorOcr
         // the matching OCR language, without guessing or repairing characters.
         => ReadEnlargedText(bgra,width,height,stride,x,y,cropWidth,cropHeight,latin:true);
 
+    public static long? ReadAmountField(ReadOnlyMemory<byte> bgra, int width, int height, int stride,
+        int x,int y,int cropWidth,int cropHeight)
+        // The keypad's amount contains Latin digits and separators, not Chinese.
+        // Keep exact integer parsing; do not infer digits from the requested bid.
+        => ParseSingleAmount(ReadCommittedText(bgra,width,height,stride,x,y,cropWidth,cropHeight));
+
     static string? ReadEnlargedText(ReadOnlyMemory<byte> bgra, int width, int height, int stride,
         int left,int top,int cropWidth,int cropHeight,bool latin=false)
     {
