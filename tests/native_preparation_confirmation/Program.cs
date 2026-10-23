@@ -64,6 +64,7 @@ static class Program
         foreach(var text in new[]{"0 2,635,490","2,63 490","2 635 49"})
             Require(parseAssets.Invoke(null,new object[]{text}) is null,"INVALID_BALANCE_GROUPS");
         if (args.Contains("--focus-history-only")) { FocusHistory(); return 0; }
+        if (args.Contains("--cancelled-guard-only")) { CancelledGuard(); return 0; }
         if (args.Contains("--input-boundary-only")) { InputBoundary(); return 0; }
         int sceneArg = Array.IndexOf(args, "--scene-wait-replay");
         if (sceneArg >= 0) { SceneWaitReplay(args[sceneArg + 1]); return 0; }
@@ -103,6 +104,36 @@ static class Program
         type.GetField("Target")!.SetValue(focus,3L);
         Require(Read(1).TargetId!=armed.TargetId,"CHANGED_TARGET_STILL_DISTINCT");
         Console.WriteLine("PASS current target focus, away/return between actions, changed target; zero capture/input");
+    }
+    static void CancelledGuard()
+    {
+        var type=Host.GetType("WgcLiveHarness.TicketedSceneAnchorDispatch",true)!;
+        var observer=new FakeInputObserver();
+        var raw=new CountingRawInputBackend();
+        var guard=new InputSafetyGuard(observer,new FakeFocusSnapshotProvider(),new FakeCursorBackend(),raw);
+        observer.Start(_=>{}); Require(guard.Arm(new(1)).Ok,"FAKE_ARM");
+        guard.Cancel("ORIGINAL_FAILURE");
+        var receipts=new List<System.Text.Json.Nodes.JsonObject>();
+        object dispatch=type.GetConstructors(BindingFlags.NonPublic|BindingFlags.Instance).Single().Invoke(
+            new object?[]{"test",new Decoder("slow-effect"),guard,null,null,null,null,null,
+                (Action<System.Text.Json.Nodes.JsonObject>)receipts.Add});
+        type.GetField("armed",BindingFlags.NonPublic|BindingFlags.Instance)!.SetValue(dispatch,true);
+        var intent=new DomainIntent("restock",DomainActionKind.OpenToolSetup,"lobby",0,0,null,100,1000000,0,
+            "lobby",new(1,2,3,0)){ObservationSessionId="test",MatchGeneration=1,ApprovalId="test"};
+        var options=new System.Text.Json.JsonSerializerOptions{PropertyNamingPolicy=System.Text.Json.JsonNamingPolicy.CamelCase};
+        options.Converters.Add(new System.Text.Json.Serialization.JsonStringEnumConverter());
+        var message=new System.Text.Json.Nodes.JsonObject{["protocolVersion"]=1,["requestId"]="test",
+            ["bootId"]="boot",["observationSessionId"]="test",
+            ["intent"]=System.Text.Json.JsonSerializer.SerializeToNode(intent,options)};
+        var target=new NteHost.WindowMonitor.WindowMonitorSnapshot{TargetHwnd=1,TargetPid=2,
+            TargetIdentity=new(1,2,"fake","fake","fake",true,3)};
+        type.GetMethod("TryHandle")!.Invoke(dispatch,new object?[]{message,"boot",target,null,
+            (Func<DomainIntent,NativeDomainFrame?>)(_=>throw new Exception("MUST_NOT_CAPTURE")),
+            (Action<System.Text.Json.Nodes.JsonObject>)receipts.Add});
+        Require(receipts.Count==1 && (string?)receipts[0]["type"]=="domain.action.dispatch.rejected"
+            && (string?)receipts[0]["reason"]=="INPUT_GUARD_Cancelled:ORIGINAL_FAILURE", "KEEP_FIRST_REASON_AND_STOP");
+        Require(raw.SendCallCount==0,"NO_INPUT_OR_REARM");observer.Stop();
+        Console.WriteLine("PASS cancelled guard rejects once with original reason before focus, capture or input");
     }
     static bool SceneExpired(string scene, long nowMs, ref object?[] state)
     {

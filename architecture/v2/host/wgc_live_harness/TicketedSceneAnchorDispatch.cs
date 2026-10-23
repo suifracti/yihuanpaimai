@@ -43,7 +43,16 @@ sealed class TicketedSceneAnchorDispatch : IDisposable
     {
         // Manual lobby/entry interaction between transactions is expected.
         // Takeover protects a transaction while it is actually sending input.
-        if (Volatile.Read(ref dispatching) != 0) guard.OnObservedInput(observed);
+        if (Volatile.Read(ref dispatching) != 0)
+        {
+            var before=guard.State;
+            guard.OnObservedInput(observed);
+            if(before!=guard.State) Console.Error.WriteLine(new JsonObject {
+                ["type"]="domain.action.input-state",["reason"]=guard.CancelReason,
+                ["state"]=guard.State.ToString(),["eventKind"]=observed.Kind.ToString(),
+                ["origin"]=observed.Origin.ToString(),["nativeFlags"]=observed.NativeFlags
+            }.ToJsonString());
+        }
     }
 
     TicketedSceneAnchorDispatch(string sessionId, IGameDomainFrameDecoder decoder, InputSafetyGuard guard,
@@ -157,6 +166,14 @@ sealed class TicketedSceneAnchorDispatch : IDisposable
                 emit(new JsonObject { ["type"] = "domain.action.dispatch.rejected",
                     ["observationSessionId"] = sessionId, ["reason"] = "DISPATCH_SCOPE_INVALID",
                     ["inputActions"] = false, ["decoder"] = "SCENE_ANCHOR" });
+                return true;
+            }
+            if(armed && !guard.IsArmedFor(target.TargetHwnd, intent!.Window.FocusEpoch))
+            {
+                string reason="INPUT_GUARD_"+guard.State+":"+guard.CancelReason;
+                if(intent.Kind==DomainActionKind.Bid)
+                    CommitNotSent(intent,message,acknowledgements,emit,bootId,reason);
+                else emit(Rejected(intent,reason));
                 return true;
             }
             var liveIdentity = identities.Read(target.TargetHwnd);
