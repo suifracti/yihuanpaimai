@@ -12,7 +12,7 @@
 build/takeover_20260905/repro-venv/Scripts/python.exe tools/ue4ss/prepare.py
 ```
 
-现场必须取得当轮进程内加载授权，M6/自动拍卖保持停止。游戏退出后：
+2026-10-23 最新安排：用户已授权与 M6 连续十局一同运行。按字段接管：已实测的回合、箱子、账单使用直读；金均、紫数、四席报价在同屏核对前使用原识别，原始直读只作对照。缺字段不阻断流程，仓库仍截图识别，不另建循环。安装和撤载仍在游戏退出后进行：
 
 ```powershell
 $game = 'D:\Games\Neverness To Everness\Client\WindowsNoEditor\HT\Binaries\Win64'
@@ -20,9 +20,9 @@ tools/ue4ss/session.ps1 -Action Check -GameDir $game
 tools/ue4ss/session.ps1 -Action Install -GameDir $game
 ```
 
-已有 `dwmapi.dll` 或 `ue4ss/` 就停止，不覆盖原文件，不同时加载 Anomaly。原启动器正常启动一次；用户本人手动入场、使情报出现并自然到结算。探针不发输入、不购买/使用仪器、不报价、不进入下一局。普通 Lua 读取修正可以在这次运行内更新 `reader.lua`；原生加载器和 hooks 不换装。
+已有 `dwmapi.dll` 或 `ue4ss/` 就停止，不覆盖原文件，不同时加载 Anomaly。原启动器正常启动；当前已授权由现有 M6 流程入场、补金均/紫数至各1、出价（资金下限100000）和连续十局。探针不发输入、不购买/使用仪器、不报价、不进入下一局。普通 Lua 读取修正可以在这次运行内更新 `reader.lua`；原生加载器和 hooks 不换装。
 
-助手照原有入口运行，自动拍卖开关保持关闭；原截图、账单图和收仓继续使用既有流程。`NTE_UE4SS_SNAPSHOT` 可指定隔离现场的观察文件；默认位置为 `build/ue4ss/auction.json`。移除载荷或通道失效后自动回到识别，没有值清空操作。
+助手照原有入口运行，自动拍卖由已有开始/停止动作控制；原截图、账单图和收仓继续使用既有流程。`NTE_UE4SS_SNAPSHOT` 可指定隔离现场的观察文件；默认位置为 `build/ue4ss/auction.json`。移除载荷或通道失效后自动回到识别，没有值清空操作。
 
 结束时先保存 `build/ue4ss/runtime-*.log` 和游戏 `ue4ss/UE4SS.log`，正常退出。按安装身份只撤本次新增载荷：
 

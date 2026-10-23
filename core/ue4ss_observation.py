@@ -13,6 +13,10 @@ import re
 import time
 from pathlib import Path
 
+# Field-by-field rollout: these fields have a real screen comparison. Others
+# remain in evidence until checked; the existing image readers keep supplying them.
+VERIFIED_FIELDS = frozenset({"round", "venue", "venueId", "box", "boxId"})
+
 
 def snapshot_path():
     return Path(os.environ.get("NTE_UE4SS_SNAPSHOT") or
@@ -65,9 +69,10 @@ def displayed_amount(text):
     return None
 
 
-def apply_snapshot(context, data):
+def apply_snapshot(context, data, *, verified_fields=None):
     """Overlay only values actually obtained; keep all other recognition facts."""
-    patch = text_facts(data)
+    verified = VERIFIED_FIELDS if verified_fields is None else frozenset(verified_fields)
+    patch = {k: v for k, v in text_facts(data).items() if k in verified}
     if data["scene"] == "IN_AUCTION":
         from venue_box_catalog import load_catalog, normalize_vision_venue, normalize_venue_from_box
         catalog = load_catalog()
@@ -85,7 +90,7 @@ def apply_snapshot(context, data):
     context.update(patch)
     if data["scene"] == "IN_AUCTION":
         seats = {s.get("slot"): copy.deepcopy(s) for s in context.get("seats", []) if isinstance(s, dict)}
-        for row in data.get("seats", []):
+        for row in (data.get("seats", []) if "seats" in verified else []):
             slot = row.get("slot")
             if type(slot) is not int or not 1 <= slot <= 4:
                 continue
@@ -131,7 +136,7 @@ def apply_snapshot(context, data):
         history.append({"capturedAt": data.get("readUtc"), "data": raw})
     context["auctionEvidence"] = evidence
     readings = context.setdefault("intelCardReadings", [])
-    for card in data.get("cards", []):
+    for card in (data.get("cards", []) if "intelCards" in verified else []):
         raw_text = " ".join((card.get("title") or "", card.get("content") or "")).strip()
         if raw_text and not any(r.get("source") == "ue4ss_ui" and r.get("rawText") == raw_text for r in readings):
             readings.append({"source": "ue4ss_ui", "is_physical_ocr": False,

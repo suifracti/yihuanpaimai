@@ -18,6 +18,16 @@ from live_match_transport import LiveMatchPublisher, LiveMatchReceiver, LiveMatc
 
 
 class LiveMatchTransportTests(unittest.TestCase):
+    def test_return_scenes_cannot_copy_old_bill_into_next_draft(self):
+        from test_native_viewport_observation import NativeViewportObservationTests
+        engine = NativeViewportObservationTests().engine()
+        for scene in ("AUCTION_LOADING", "CITY_TYCOON_HUB", "CITY_LEISURE_MENU", "OPEN_WORLD", "AUCTION_LOBBY"):
+            engine.current_match = CurrentMatch()
+            engine._apply_pipeline_context({"scene": scene, "actualTotal": 1289124,
+                "clearingPrice": 1400000, "settlementData": {"actualTotal": 1289124}},
+                "2026-10-23T05:43:18+00:00")
+            self.assertFalse(engine.current_match.has_any_fact(), scene)
+
     def test_native_auction_intel_survives_settlement_without_bill_text(self):
         import importlib.util
         spec = importlib.util.spec_from_file_location(
@@ -283,6 +293,8 @@ class LiveMatchTransportTests(unittest.TestCase):
         engine._warehouse_activity_sources = {("old",): {"matchId": old_match_id}}
         engine._warehouse_review_vision = {"old": True}
         engine._warehouse_review_scope = {"old": True}
+        from warehouse_viewport_scope import WarehouseViewportScope
+        engine._warehouse_viewport_scope = WarehouseViewportScope()
         engine.pipeline = SimpleNamespace(
             _match_gen=1, _session_generation=0, current_context={}
         )
@@ -306,7 +318,7 @@ class LiveMatchTransportTests(unittest.TestCase):
                 "q": 17, "goldAvg": 55444, "purpleCount": 9,
                 "box": "旧局箱型", "fieldCondition": "standard", "knownGold": "旧局藏品",
             },
-            {"header": {"sequence": 6}},
+            {"header": {"sequence": 6}, "bgr": __import__("numpy").zeros((1080, 1920, 3), dtype="uint8")},
             lobby_time,
         )
         self.assertNotEqual(engine.current_match.id, old_match_id)
@@ -337,7 +349,7 @@ class LiveMatchTransportTests(unittest.TestCase):
                 "lobbyVenueKey": None, "lobbyVenue": None,
                 "lobbyVenueSource": "unrecognized", "lobbyVenueObservedAt": None,
             },
-            {"header": {"sequence": 7}},
+            {"header": {"sequence": 7}, "bgr": __import__("numpy").zeros((1080, 1920, 3), dtype="uint8")},
             "2026-09-24T11:40:23.000000+00:00",
         )
         self.assertIsNone(engine._pending_lobby_venue)
@@ -351,7 +363,7 @@ class LiveMatchTransportTests(unittest.TestCase):
                 "lobbyVenueSource": "template", "lobbyVenueScore": 0.99760913848877,
                 "lobbyVenueObservedAt": lobby_time,
             },
-            {"header": {"sequence": 8}},
+            {"header": {"sequence": 8}, "bgr": __import__("numpy").zeros((1080, 1920, 3), dtype="uint8")},
             lobby_time,
         )
         pending_lobby_venue = copy.deepcopy(engine._pending_lobby_venue)
@@ -363,7 +375,7 @@ class LiveMatchTransportTests(unittest.TestCase):
                 "scene": "AUCTION_LOADING", "inAuction": False, "isLoading": True,
                 "loadingDirection": "to_auction", "matchGeneration": 2,
             },
-            {"header": {"sequence": 9}},
+            {"header": {"sequence": 9}, "bgr": __import__("numpy").zeros((1080, 1920, 3), dtype="uint8")},
             "2026-09-24T11:40:25.000000+00:00",
         )
         self.assertIsNotNone(engine._pending_lobby_venue)
@@ -373,7 +385,7 @@ class LiveMatchTransportTests(unittest.TestCase):
         with patch.object(module.time, "monotonic", return_value=100.0):
             engine._apply_observation_context(
                 {"scene": "UNKNOWN", "inAuction": False, "q": 999, "matchGeneration": 2},
-                {"header": {"sequence": 10}}, "2026-09-24T11:40:26+00:00")
+                {"header": {"sequence": 10}, "bgr": __import__("numpy").zeros((1080, 1920, 3), dtype="uint8")}, "2026-09-24T11:40:26+00:00")
         self.assertIsNotNone(engine._pending_lobby_venue)
         self.assertIsNone(engine.current_match.facts["q"])
         self.assertIsNone(main._native_accept_observation_locked({
@@ -400,7 +412,7 @@ class LiveMatchTransportTests(unittest.TestCase):
                 "purpleCount": None, "box": "螺钿宝箱 · 古董类概率提升",
                 "fieldCondition": "unknown", "entryCost": 0,
             },
-            {"header": {"sequence": 10}},
+            {"header": {"sequence": 10}, "bgr": __import__("numpy").zeros((1080, 1920, 3), dtype="uint8")},
             active_time,
         )
         facts = engine.current_match.facts

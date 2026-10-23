@@ -635,9 +635,7 @@ def _observe_saved_return(state,view):
 
 
 def _dispatch_live_bid(state, view, send):
-    if view.get("foreground") is not True:
-        state["reason"] = "GAME_NOT_FOREGROUND"
-        return state
+    # Foreground acquisition belongs to the bound Host dispatch, not a polling wait.
     engine = _live_engine(view)
     if engine is not None and engine.get('round') in range(1,6):
         round_key = [engine.get(k) for k in ('matchId','matchGeneration','round')]
@@ -846,9 +844,7 @@ def _dispatch_entry_fee(state, view, send):
 
 
 def _dispatch_live_session(state, view, send, kind):
-    if view.get("foreground") is not True:
-        state["reason"] = "GAME_NOT_FOREGROUND"
-        return state
+    # Host activates only this intent's verified game window before input.
     expected = "SETTLEMENT" if kind == "ReturnLobby" else "LOBBY"
     if view.get("publishedScene") != expected:
         state["reason"] = "WAITING_" + expected

@@ -1178,7 +1178,7 @@ class RealEngine:
         lobby_handoff: Optional[dict] = None,
     ) -> None:
         scene = str(context.get("scene") or "UNKNOWN")
-        if scene in {"AUCTION_LOBBY", "AUCTION_LOADING", "UNKNOWN"}:
+        if scene not in {"IN_AUCTION", "SETTLEMENT"}:
             # Lobby and loading observations must not mutate the last match.
             # The lobby venue remains a scoped candidate until a corresponding
             # fresh in-auction frame proves the entry boundary.

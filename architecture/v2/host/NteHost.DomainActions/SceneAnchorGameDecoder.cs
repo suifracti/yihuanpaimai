@@ -156,7 +156,9 @@ public sealed class SceneAnchorGameDecoder : IGameDomainFrameDecoder
             }
         }
         if (scene is null && SeatStripBright(gray, frame.Geometry.Width, frame.Geometry.Height))
-            scene = frame.Scope.Round == 1 ? "AUCTION_R1" : "AUCTION";
+            // Seats establish the auction, not an open amount/confirm panel.
+            // Wait for the existing OpenBidPanel/SubmitBid controls to decide.
+            scene = "AUCTION_WAITING";
         if (scene is null) return null;
         if (scene == "AUCTION" && auction is not null)
         {
@@ -167,7 +169,7 @@ public sealed class SceneAnchorGameDecoder : IGameDomainFrameDecoder
         long? amount = null;
         long? committed = null;
         string? committedText = null;
-        if (scene is "AUCTION" or "AUCTION_R1" or "AUCTION_READY")
+        if (scene is "AUCTION" or "AUCTION_R1" or "AUCTION_READY" or "AUCTION_WAITING")
         {
             var focus = found.FirstOrDefault(item => item.Control.Primitive == DomainPrimitive.FocusAmountField);
             if (focus.Control is not null && ReadAmount is not null)

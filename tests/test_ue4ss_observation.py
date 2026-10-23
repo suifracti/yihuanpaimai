@@ -27,6 +27,19 @@ def observation():
 
 
 class Ue4ssObservationTests(unittest.TestCase):
+    def test_unverified_fields_stay_on_image_path(self):
+        context = {"goldAvg": 99, "purpleCount": 3, "q": 9,
+                   "seats": [{"slot": 1, "currentBid": 400}]}
+        apply_snapshot(context, observation())
+        self.assertEqual((context["goldAvg"], context["purpleCount"], context["q"]), (99, 3, 9))
+        self.assertEqual(context["seats"][0]["currentBid"], 400)
+        self.assertEqual(context["round"], 2)
+        self.assertEqual(context["intelCardReadings"], [])
+        self.assertTrue(context["auctionEvidence"]["ue4ss"][0]["data"]["cards"])
+        apply_snapshot(context, observation(), verified_fields={"round", "goldAvg"})
+        self.assertEqual(context["goldAvg"], 64836)
+        self.assertEqual(context["purpleCount"], 3)
+
     def test_live_null_settlement_and_rich_box(self):
         # 2026-10-23 field: the existing pipeline initializes settlementData
         # to None; the footer carries rich-text tags, not plain OCR text.
@@ -50,7 +63,9 @@ class Ue4ssObservationTests(unittest.TestCase):
         engine = NativeViewportObservationTests().engine()
         engine.venue_catalog = load_catalog()
         engine.venue_catalog_provenance = canonical_catalog_provenance(engine.venue_catalog)
-        context = {"scene": "IN_AUCTION", "inAuction": True, "recordStableKey": engine.current_match.id}
+        context = {"scene": "IN_AUCTION", "inAuction": True, "recordStableKey": engine.current_match.id,
+                   "goldAvg": 64836, "purpleCount": 12, "q": 21, "fieldCondition": "standard",
+                   "seats": [{"slot": 1, "currentBid": 120000}]}
         apply_snapshot(context, observation())
         engine._apply_pipeline_context(context, "2026-10-23T09:00:00Z")
         main_match = CurrentMatch()

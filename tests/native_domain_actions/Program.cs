@@ -281,7 +281,7 @@ static class Program
             };
             var closedFrame = Blank("AUCTION", 1);
             var closedView = decoder.Decode(new NativeDomainFrame(closedFrame.Scope, closedFrame.Geometry, closed, closedFrame.Stride));
-            Require(closedView?.Scene == "AUCTION_R1" && closedView.OwnBid?.Amount == 300000
+            Require(closedView?.Scene == "AUCTION_WAITING" && closedView.OwnBid?.Amount == 300000
                 && readX == 1660 && readY == 987 && readW == 1830 - 1660 && readH == 1028 - 987
                 && readX + readW <= width && readY + readH <= height, "COMMITTED_SEARCH_BOX " + readX + "," + readY + " " + readW + "x" + readH);
             decoder.ReadCommittedAmount = null;

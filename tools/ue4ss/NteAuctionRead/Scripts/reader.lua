@@ -178,6 +178,7 @@ return function()
                     -- displayed. Keep the existing bid reader in charge until
                     -- the actual round-cell binding is established.
                     out.seats[#out.seats+1]={slot=#out.seats+1,instance=n,name=text(o,"TextPlayerName"),
+                        rawBidText=text(o,"TextBidMoney"), observedRoundIndex=raw,
                         isMe=valid(mine) and mine:IsVisible() or nil}
                 end
             end,{})

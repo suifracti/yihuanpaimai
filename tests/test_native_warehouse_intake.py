@@ -464,6 +464,37 @@ class NativeWarehouseIntakeTests(unittest.TestCase):
             self.assertEqual(manifest['state'],'PARTIAL')
             self.assertTrue(manifest['placementRefinementPending'])
 
+    def test_completed_result_is_recovered_before_starting_another_worker(self):
+        from native_warehouse_refinement import SavedWarehouseRefinement, fingerprint
+        self.frame(163, 1); self.intake.start_manual(); self.intake.capture_manual_page()
+        self.intake.finish_manual_capture(termination_reason='INCOMPLETE'); self.intake.wait_processing(10)
+        session = self.intake._session_id
+        path = self.store.root/'warehouse-intake'/f'{session}.json'
+        manifest = json.loads(path.read_text('utf-8'))
+        saved = self.store.lookup(self.scope['recordStableKey'])['settlement']
+        work = self.store.root/'warehouse-refinement'/session
+        work.mkdir(parents=True, exist_ok=True)
+        token = 'a'*32
+        result = {'jobId':token, 'inputFingerprint':fingerprint(manifest),
+            'evidence':{'review_units':saved['reviewUnits'],
+                        'identity_review':saved['warehouseIdentityReview'],
+                        'review_packet':saved['warehouseReviewPacket']},
+            'summary':{'fixture':'completed-before-main-exited'}}
+        (work/(token+'.json')).write_text(json.dumps(result), encoding='utf-8')
+        manifest['placementRefinementPending'] = True
+        manifest['refinement'] = {'state':'FAILED', 'jobId':'b'*32,
+            'inputFingerprint':fingerprint(manifest), 'reason':'REFINEMENT_TIME_LIMIT:NO_PROGRESS'}
+        path.write_text(json.dumps(manifest), encoding='utf-8')
+        fresh = NativeWarehouseIntake(draft_store=self.store, scope_provider=lambda:None,
+            source_provider=lambda:None)
+        with patch('native_warehouse_refinement.subprocess.Popen', side_effect=AssertionError('must reuse saved result')):
+            fresh.resume_pending()
+            fresh.wait_refinement(3)
+            self.assertEqual(fresh.refinement_payload(self.scope['recordStableKey'])['state'], 'COMPLETE')
+            self.assertFalse(fresh.refinement_payload(self.scope['recordStableKey'])['pending'])
+            fresh.resume_pending()
+            self.assertEqual(fresh.resume_refinement(session)['reason'], 'REFINEMENT_COMPLETE')
+
     def test_interrupted_refinement_is_resumed_on_the_next_start(self):
         from native_warehouse_refinement import SavedWarehouseRefinement
         entered = threading.Event()
@@ -498,7 +529,7 @@ class NativeWarehouseIntakeTests(unittest.TestCase):
             self.assertTrue(entered.wait(2))
             resumed = json.loads(manifest_path.read_text('utf-8'))
             self.assertEqual(resumed['refinement']['state'],'RUNNING')
-            self.assertNotEqual(resumed['refinement']['jobId'],interrupted_token)
+            self.assertEqual(resumed['refinement']['jobId'],interrupted_token)
             self.assertEqual(len(processes),2)
             fresh._refiner.cancel(session); fresh.wait_refinement(3)
             self.intake._refiner.cancel(session); self.intake.wait_refinement(3)

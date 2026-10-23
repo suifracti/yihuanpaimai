@@ -188,7 +188,7 @@ public sealed class DomainActionCoordinator
                 && evidence.CapturedNs > entry.Receipt.SentNs;
             matches &= i.Kind switch
             {
-                DomainActionKind.Bid => (evidence.Scene is "AUCTION" or "AUCTION_R1" or "AUCTION_READY") && evidence.AcceptedOwnAmount == i.Amount,
+                DomainActionKind.Bid => (evidence.Scene is "AUCTION" or "AUCTION_R1" or "AUCTION_READY" or "AUCTION_WAITING") && evidence.AcceptedOwnAmount == i.Amount,
                 DomainActionKind.ReturnLobby => evidence.Scene == "LOBBY",
                 DomainActionKind.StartNextMatch => evidence.Scene == "ENTRY_FEE",
                 _ when AuctionPreparation.IsPreparation(i.Kind) => AuctionPreparation.Confirms(i.Kind, evidence.Scene, evidence.PreparationEffectVisible),

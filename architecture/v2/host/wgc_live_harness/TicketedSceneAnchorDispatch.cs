@@ -159,6 +159,18 @@ sealed class TicketedSceneAnchorDispatch : IDisposable
                     ["inputActions"] = false, ["decoder"] = "SCENE_ANCHOR" });
                 return true;
             }
+            var liveIdentity = identities.Read(target.TargetHwnd);
+            focus.Target = target.TargetHwnd;
+            if (liveIdentity is not { IsPresent: true }
+                || liveIdentity.Pid != intent!.Window.Pid
+                || liveIdentity.ProcessInstanceToken != intent.Window.ProcessInstanceToken
+                || !focus.Activate())
+            {
+                if (intent!.Kind == DomainActionKind.Bid)
+                    CommitNotSent(intent, message, acknowledgements, emit, bootId, "GAME_ACTIVATION_FAILED");
+                else emit(Rejected(intent!, "GAME_ACTIVATION_FAILED"));
+                return true;
+            }
             if (!armed)
             {
                 focus.Target = target.TargetHwnd;

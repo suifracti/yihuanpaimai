@@ -102,7 +102,8 @@ static class PreparationChecks
             for (int y = 0; y < height; y++)
                 Buffer.BlockCopy(bytes, offset + (signedHeight < 0 ? y : height - 1 - y) * width * 4,
                     pixels, y * width * 4, width * 4);
-            var scope = new Fixture().Scope with { SourceQualified = false };
+            var scope = new Fixture().Scope with { SourceQualified = false,
+                Round = row.TryGetProperty("round", out var round) ? round.GetInt32() : 1 };
             var frame = new NativeDomainFrame(scope, new(width, height, 0, 0), pixels, width * 4);
             var timer = Stopwatch.StartNew();
             var view = decoder.Decode(frame);

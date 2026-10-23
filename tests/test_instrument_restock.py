@@ -3,6 +3,14 @@ from instrument_restock import advance
 
 
 class InstrumentRestockTests(unittest.TestCase):
+    def test_background_lobby_dispatches_to_host_for_game_activation(self):
+        state, sent = {'phase':'idle'}, []
+        view = self.view()
+        view['foreground'] = False
+        advance(state,view,lambda _,e:sent.append(e) or True,{})
+        self.assertEqual(sent[0]['intent']['kind'],'OpenToolSetup')
+        self.assertEqual(sent[0]['intent']['window'],view['window'])
+
     def test_entry_confirmation_animation_does_not_restart_preflight(self):
         state={'phase':'idle','restock':{'ready':True,'step':4,'spent':5000}}
         sent=[]

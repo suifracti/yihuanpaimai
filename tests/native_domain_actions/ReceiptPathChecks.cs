@@ -6,7 +6,8 @@ static class ReceiptPathChecks
     sealed class Decoder : IGameDomainFrameDecoder
     {
         public bool TypedOnly, OtherSeat, CachedSeat;
-        public DecodedDomainFrame Decode(NativeDomainFrame f) => new("AUCTION", f.Scope.Round,
+        public string Scene = "AUCTION";
+        public DecodedDomainFrame Decode(NativeDomainFrame f) => new(Scene, f.Scope.Round,
             f.Scope.MatchId, f.Scope.MatchGeneration,
             new(OtherSeat ? 2 : 1, "self", 500, !TypedOnly, CachedSeat ? "old-frame" : f.EvidenceRef), 500, []);
     }
@@ -20,6 +21,11 @@ static class ReceiptPathChecks
         var good = new NativeDomainFrame(f.Scope, geometry, pixels, 16);
         var decoder = new Decoder(); var producer = new NativeVisibleResultProducer(decoder, () => f.Now);
         Require(producer.FromCapture(i, receipt, good, new(1, "self")) != null, "OWN_FRESH_PRODUCER");
+        decoder.Scene = "AUCTION_WAITING";
+        var closedPanel = producer.FromCapture(i, receipt, good, new(1, "self"));
+        Require(closedPanel != null && f.Coordinator.Confirm(closedPanel).Status == ReceiptStatus.CONFIRMED,
+            "CLOSED_PANEL_CONFIRMS_ACTUAL_OWN_BID");
+        decoder.Scene = "AUCTION";
         foreach (var bad in new[] {
             f.Scope with { CapturedNs = receipt.SentNs }, f.Scope with { Round = 2 },
             f.Scope with { MatchId = "other" }, f.Scope with { MatchGeneration = 2 },

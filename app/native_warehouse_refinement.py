@@ -50,11 +50,26 @@ class SavedWarehouseRefinement:
             if session in self._events:
                 return {'ok':not self._events[session].is_set(),
                     'reason':'REFINEMENT_CANCEL_PENDING' if self._events[session].is_set() else 'REFINEMENT_ALREADY_QUEUED'}
+            if previous.get('state') == 'COMPLETE' and previous.get('inputFingerprint') == fingerprint(manifest):
+                return {'ok':True,'reason':'REFINEMENT_COMPLETE'}
+            if previous.get('state') == 'CANCELLED' and not resume:
+                return {'ok':True,'reason':'REFINEMENT_CANCELLED'}
+            # Main may have exited after its child wrote the result. Reuse that
+            # exact saved input before replacing its job id or starting analysis.
+            work = self.intake.draft_store.root/'warehouse-refinement'/session
+            for output in sorted(work.glob('*.json')):
+                result = json.loads(output.read_text(encoding='utf-8'))
+                if (result.get('jobId') == output.stem
+                        and result.get('inputFingerprint') == fingerprint(manifest)):
+                    self._publish_result(manifest, result, output)
+                    return {'ok':True,'reason':'REFINEMENT_COMPLETE','sessionId':session}
             if previous.get('state') in {'COMPLETE','CANCELLED','FAILED'} and not resume:
                 return {'ok':True,'reason':'REFINEMENT_'+previous['state']}
             if len(self._events) >= 16:
                 return {'ok':False,'reason':'REFINEMENT_QUEUE_LIMIT'}
-            event = threading.Event(); token = uuid.uuid4().hex
+            event = threading.Event()
+            token = (previous.get('jobId') if previous.get('state') in {'QUEUED','RUNNING'}
+                     and previous.get('inputFingerprint') == fingerprint(manifest) else None) or uuid.uuid4().hex
             manifest['refinement'] = {'state':'QUEUED','jobId':token,
                 'inputFingerprint':fingerprint(manifest),'inactivityTimeoutSeconds':REFINEMENT_SECONDS}
             manifest['placementRefinementPending'] = True
@@ -124,6 +139,30 @@ class SavedWarehouseRefinement:
         env = os.environ.copy(); env['PYTHONIOENCODING'] = 'utf-8'
         command = [sys.executable,str(Path(__file__).resolve()),'--worker',
             str(self.intake.draft_store.root),session,token]
+        # A surviving child owns the analysis lock even after Main exits.
+        # Reopening Main watches that job instead of starting the same input again.
+        from history_file_lock import history_file_lock
+        last_progress, log_size = time.perf_counter(), -1
+        while True:
+            try:
+                with history_file_lock(work/'analysis', timeout=0):
+                    pass
+                break
+            except TimeoutError:
+                if event.wait(.1): return
+                log_path = work/'worker.log'
+                size = log_path.stat().st_size if log_path.exists() else 0
+                if size != log_size:
+                    last_progress, log_size = time.perf_counter(), size
+                if time.perf_counter()-last_progress > REFINEMENT_SECONDS:
+                    raise TimeoutError('REFINEMENT_TIME_LIMIT:NO_PROGRESS')
+        if output.is_file():
+            result = json.loads(output.read_text(encoding='utf-8'))
+            with self.intake._scope_lock, self.intake._lock:
+                current = json.loads(path.read_text(encoding='utf-8'))
+                if not event.is_set() and current['refinement']['jobId'] == token:
+                    self._publish_result(current,result,output)
+            return
         with (work/'worker.log').open('w',encoding='utf-8') as log:
             process = subprocess.Popen(command,cwd=ROOT,env=env,stdin=subprocess.DEVNULL,
                 stdout=log,stderr=subprocess.STDOUT,creationflags=subprocess.CREATE_NO_WINDOW if os.name=='nt' else 0)
@@ -152,23 +191,33 @@ class SavedWarehouseRefinement:
             if (fingerprint(current) != state['inputFingerprint'] or result.get('jobId') != token
                     or result.get('inputFingerprint') != state['inputFingerprint']):
                 raise ValueError('STALE_REFINEMENT_RESULT')
-            key = current['scope']['recordStableKey']
-            if self.intake.draft_store.lookup(key) is None: raise ValueError('OLD_DRAFT_UNAVAILABLE')
-            evidence = result['evidence']; packet = evidence['review_packet']
-            if packet.get('recordStableKey') != key: raise ValueError('REFINEMENT_RECORD_MISMATCH')
-            self.intake._verify_saved_pages(current['pages'],binding=current['scope'])
-            saved = self.intake.history_store.persist_warehouse_evidence(key,record_stable_key=key,**evidence)
-            if saved is None: raise ValueError('REFINEMENT_HISTORY_REJECTED')
-            current['refinement'].update(state='COMPLETE',elapsedSeconds=time.perf_counter()-started,
-                resultPath=str(output.relative_to(self.intake.draft_store.root)),summary=result['summary'])
-            current['placementRefinementPending'] = False
-            current['resultSourceFingerprint'] = packet['sourceFingerprint']
-            coverage = packet['warehouseCoverage']['status']
-            current['state'] = 'COMPLETE' if coverage == 'COMPLETE' else 'PARTIAL'
-            write_manifest(path,current)
-            if self.intake._session_id == session and self.intake._generation == current['generation']:
-                self.intake._packet, self.intake._resolve_placements = packet, True
-                self.intake._coverage, self.intake._state = coverage,current['state']
+            self._publish_result(current, result, output, time.perf_counter()-started)
+
+    def _publish_result(self, current, result, output, elapsed=None):
+        key = current['scope']['recordStableKey']
+        if result.get('inputFingerprint') != fingerprint(current):
+            raise ValueError('STALE_REFINEMENT_RESULT')
+        if self.intake.draft_store.lookup(key) is None: raise ValueError('OLD_DRAFT_UNAVAILABLE')
+        evidence = result['evidence']; packet = evidence['review_packet']
+        if packet.get('recordStableKey') != key: raise ValueError('REFINEMENT_RECORD_MISMATCH')
+        self.intake._verify_saved_pages(current['pages'],binding=current['scope'])
+        saved = self.intake.history_store.persist_warehouse_evidence(key,record_stable_key=key,**evidence)
+        if saved is None: raise ValueError('REFINEMENT_HISTORY_REJECTED')
+        current['refinement'] = dict(current.get('refinement') or {})
+        current['refinement'].pop('reason', None)
+        current['refinement'].update(state='COMPLETE',jobId=result['jobId'],
+            inputFingerprint=result['inputFingerprint'],
+            elapsedSeconds=elapsed if elapsed is not None else result['summary'].get('analysisSeconds'),
+            resultPath=str(output.relative_to(self.intake.draft_store.root)),summary=result['summary'])
+        current['placementRefinementPending'] = False
+        current['resultSourceFingerprint'] = packet['sourceFingerprint']
+        coverage = packet['warehouseCoverage']['status']
+        current['state'] = 'COMPLETE' if coverage == 'COMPLETE' else 'PARTIAL'
+        session = current['sessionId']
+        write_manifest(self._path(session),current)
+        if self.intake._session_id == session and self.intake._generation == current['generation']:
+            self.intake._packet, self.intake._resolve_placements = packet, True
+            self.intake._coverage, self.intake._state = coverage,current['state']
 
 
 def analyze_saved(root, session, token):
@@ -251,4 +300,10 @@ def analyze_saved(root, session, token):
 
 if __name__ == '__main__':
     if len(sys.argv) != 5 or sys.argv[1] != '--worker': raise SystemExit('Saved worker arguments required')
-    analyze_saved(Path(sys.argv[2]),sys.argv[3],sys.argv[4])
+    sys.path.insert(0,str(ROOT/'core'))
+    from history_file_lock import history_file_lock
+    root, session, token = Path(sys.argv[2]),sys.argv[3],sys.argv[4]
+    work = root/'warehouse-refinement'/session
+    with history_file_lock(work/'analysis'):
+        if not (work/(token+'.json')).is_file():
+            analyze_saved(root,session,token)
