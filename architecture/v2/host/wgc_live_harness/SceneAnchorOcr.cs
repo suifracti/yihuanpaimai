@@ -20,7 +20,7 @@ static class SceneAnchorOcr
         return scene switch
         {
             "LOBBY" => (1340, 20, 170, 65),
-            "TOOL_SETUP" or "TOOL_GROUPS" => (335, 28, 170, 65),
+            "TOOL_SETUP" or "TOOL_GROUPS" => (320, 28, 185, 65),
             "AUCTION" or "AUCTION_READY" or "INSTRUMENT_LIST" or "INSTRUMENT_GOLD_SELECTED" or "INSTRUMENT_PURPLE_SELECTED"
                 => (1695, 25, 180, 65),
             _ => null
