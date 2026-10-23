@@ -3,11 +3,39 @@ local source = debug.getinfo(1, "S").source:gsub("^@", "")
 local dir = source:match("^(.*[/\\])") or "./"
 local round = dofile(dir .. "round.lua")
 local function get(fn) local ok, v = pcall(fn); if ok then return v end end
-local function valid(o) return o ~= nil and o:IsValid() end
-local function visible(o) return valid(o) and o:IsVisible() end
+local function valid(o) return get(function() return o ~= nil and o:IsValid() end) == true end
+local function visible(o)
+    if not valid(o) then return false end
+    local seen = {}
+    while valid(o) do
+        local name = o:GetFullName()
+        if seen[name] then return false end
+        seen[name] = true
+        if not o:IsVisible() then return false end
+        local parent = o:GetParent()
+        if not valid(parent) then
+            -- A nested UserWidget's root has no panel parent. Its owning
+            -- UserWidget may still be collapsed (cached default bid text).
+            local tree = o:GetOuter()
+            if valid(tree) and tree:IsA("/Script/UMG.WidgetTree") then
+                local owner = tree:GetOuter()
+                if valid(owner) and owner:IsA("/Script/UMG.UserWidget") then parent=owner end
+            end
+        end
+        o = parent
+    end
+    return true
+end
 local function str(v) if type(v) == "string" then return v end; return v:ToString() end
-local function array(v)
-    local a = {}; for i = 1, #v do a[i] = v[i] end; return a
+local function array(v, returned)
+    local a = {}
+    for i = 1, #v do
+        -- This fixed UE4SS build returns UFunction array elements as
+        -- RemoteUnrealParam (LuaUObject.cpp GetNonTrivialLocal/GetParam).
+        -- Property-backed TArrays already return their values directly.
+        a[i] = returned and v[i]:get() or v[i]
+    end
+    return a
 end
 local function text(o, name)
     return get(function()
@@ -18,7 +46,7 @@ end
 local function current(class)
     local found = {}
     for _, o in ipairs(FindAllOf(class) or {}) do
-        if valid(o) and not o:GetFullName():find("Default__", 1, true) and o:IsVisible() then found[#found+1] = o end
+        if valid(o) and not o:GetFullName():find("Default__", 1, true) and visible(o) then found[#found+1] = o end
     end
     if #found == 1 then return found[1] end
 end
@@ -98,11 +126,13 @@ return function()
                     end
                 end
             end
-            local shown = get(function() return array(list:GetDisplayedEntryWidgets()) end)
+            local shown = get(function() return array(list:GetDisplayedEntryWidgets(), true) end)
             if shown then
                 out.cardsReadable=true
                 for _, w in ipairs(shown) do
-                    if visible(w) and w:IsA("/Script/HTGame.HTUI_BidKingInfoListItem") then card_widgets[w:GetFullName()]=w end
+                    if visible(w) and w:IsA("/Script/HTGame.HTUI_BidKingInfoListItem") then
+                        card_widgets[w:GetFullName()]=w
+                    else out.cardsReadable=false end
                 end
             end
         end
@@ -143,7 +173,11 @@ return function()
             walk(players,function(o,n)
                 if o:IsA("/Script/HTGame.HTUI_BidKingCloneBidSlot") then
                     local mine=get(function() return o:GetPropertyValue("ImageMineFlag") end)
-                    out.seats[#out.seats+1]={slot=#out.seats+1,instance=n,name=text(o,"TextPlayerName"),bidText=text(o,"TextBidMoney"),
+                    -- Field evidence showed TextBidMoney retaining the same
+                    -- designer default on all four seats while no bid was
+                    -- displayed. Keep the existing bid reader in charge until
+                    -- the actual round-cell binding is established.
+                    out.seats[#out.seats+1]={slot=#out.seats+1,instance=n,name=text(o,"TextPlayerName"),
                         isMe=valid(mine) and mine:IsVisible() or nil}
                 end
             end,{})

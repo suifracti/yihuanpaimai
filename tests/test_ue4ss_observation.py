@@ -27,6 +27,22 @@ def observation():
 
 
 class Ue4ssObservationTests(unittest.TestCase):
+    def test_live_null_settlement_and_rich_box(self):
+        # 2026-10-23 field: the existing pipeline initializes settlementData
+        # to None; the footer carries rich-text tags, not plain OCR text.
+        data = observation()
+        data.update(scene="SETTLEMENT", cards=[], seats=[], bill={
+            "bidText": "666,888", "valueText": "1,001,417", "incomeText": "334,529"})
+        context = {"settlementData": None}
+        apply_snapshot(context, data)
+        self.assertEqual(context["settlementData"]["actualTotal"], 1001417)
+        data = observation()
+        data["texts"] = [{"text": "实木宝箱<Grey>（</><Orange>中级藏品</><Grey>概率提升）</>"}]
+        context = {}
+        apply_snapshot(context, data)
+        self.assertTrue(context.get("boxId"))
+        self.assertTrue(context.get("venueId"))
+
     def test_data_enters_engine_main_projection_and_same_record(self):
         from test_native_viewport_observation import NativeViewportObservationTests
         from venue_box_catalog import load_catalog, canonical_catalog_provenance

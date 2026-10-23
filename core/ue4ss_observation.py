@@ -75,7 +75,8 @@ def apply_snapshot(context, data):
             normalized = normalize_vision_venue(catalog, patch["venue"])
             if normalized.get("venueId"):
                 patch["venueId"] = normalized["venueId"]
-        boxes = [normalize_venue_from_box(catalog, row.get("text")) for row in data.get("texts", [])]
+        boxes = [normalize_venue_from_box(catalog, re.sub(r"<[^>]*>", "", row.get("text", "")))
+                 for row in data.get("texts", [])]
         boxes = {row["boxId"]: row for row in boxes if row.get("status") == "NORMALIZED"}
         if len(boxes) == 1:
             box = next(iter(boxes.values()))
@@ -100,7 +101,9 @@ def apply_snapshot(context, data):
             context["seats"] = [seats[k] for k in sorted(seats)]
     elif data["scene"] == "SETTLEMENT":
         bill = data.get("bill") or {}
-        settlement = context.setdefault("settlementData", {})
+        settlement = context.get("settlementData")
+        if not isinstance(settlement, dict):
+            settlement = context["settlementData"] = {}
         for field, target in (("bidText", "clearingPrice"), ("valueText", "actualTotal"), ("incomeText", "profit")):
             amount = displayed_amount(bill.get(field))
             if amount is not None:
