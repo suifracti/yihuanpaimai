@@ -389,8 +389,22 @@ sealed class TicketedSceneAnchorDispatch : IDisposable
     {
         public long Target;
         long sequence;
-        public bool Activate() => GetForegroundWindow().ToInt64() == Target
-            || SetForegroundWindow(new IntPtr(Target));
+        public bool Activate()
+        {
+            var foreground = GetForegroundWindow();
+            if (foreground.ToInt64() == Target) return true;
+            // Host's worker thread does not own the foreground input queue.
+            // Attach for this one activation, then always detach; send no keys.
+            uint caller = GetCurrentThreadId();
+            uint owner = GetWindowThreadProcessId(foreground, out _);
+            bool attached = owner != 0 && owner != caller && AttachThreadInput(caller, owner, true);
+            try
+            {
+                SetForegroundWindow(new IntPtr(Target));
+                return GetForegroundWindow().ToInt64() == Target;
+            }
+            finally { if (attached) AttachThreadInput(caller, owner, false); }
+        }
         public FocusSnapshot Capture()
             => ObserveForeground(GetForegroundWindow().ToInt64());
 
@@ -403,5 +417,8 @@ sealed class TicketedSceneAnchorDispatch : IDisposable
         }
         [DllImport("user32.dll")] static extern IntPtr GetForegroundWindow();
         [DllImport("user32.dll")] static extern bool SetForegroundWindow(IntPtr hwnd);
+        [DllImport("kernel32.dll")] static extern uint GetCurrentThreadId();
+        [DllImport("user32.dll")] static extern uint GetWindowThreadProcessId(IntPtr hwnd, out uint pid);
+        [DllImport("user32.dll")] static extern bool AttachThreadInput(uint caller, uint owner, bool attach);
     }
 }

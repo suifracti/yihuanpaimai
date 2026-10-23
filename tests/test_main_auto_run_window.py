@@ -11,6 +11,17 @@ sys.path[:0] = [str(ROOT / 'app'), str(ROOT / 'core')]
 
 
 class AutoRunWindowTests(unittest.TestCase):
+    def test_restock_refusal_stops_immediately_only_for_current_intent_and_session(self):
+        import main
+        for intent, session, stopped in [('stock-one', 'obs', True), ('old', 'obs', False), ('stock-one', 'old', False)]:
+            with self.subTest(intent=intent, session=session), mock.patch.multiple(main,
+                    _LIVE_DOMAIN_LOOP={'phase':'restocking','restock':{'pending':{'intentId':'stock-one'}}},
+                    _MAIN_WINDOW_HOLDER=[],LATEST_PAYLOAD={},WS_EVENT_LOOP=None,
+                    _NATIVE_OBSERVATION_SESSION='obs'):
+                main._native_domain_action_dispatch_rejected(dict(intentId=intent,observationSessionId=session,
+                    reason='GAME_ACTIVATION_FAILED'))
+                self.assertEqual(main._LIVE_DOMAIN_LOOP['phase'],'stopped' if stopped else 'restocking')
+
     def test_delayed_ack_does_not_erase_exact_durable_confirmation(self):
         import main
         for committed in (True,False):

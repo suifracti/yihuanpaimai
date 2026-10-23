@@ -3163,7 +3163,10 @@ def _native_domain_action_dispatch_rejected(event: Dict[str, Any]) -> Dict[str, 
         and confirmed.get('observationSessionId') == event.get('observationSessionId')
         and _NATIVE_DURABLE_BID_OBLIGATION_OWNER is not None
         and _NATIVE_DURABLE_BID_OBLIGATION_OWNER.receipt_is_committed(confirmed))
-    if (event.get('intentId') and event.get('intentId') == state.get('bidIntentId')
+    active_intents = {state.get('bidIntentId'), state.get('returnIntentId'), state.get('startIntentId'),
+                      (state.get('preparationIntent') or {}).get('intentId'),
+                      ((state.get('restock') or {}).get('pending') or {}).get('intentId')}
+    if (event.get('intentId') and event.get('intentId') in active_intents
             and event.get('observationSessionId') == _NATIVE_OBSERVATION_SESSION
             and not committed_confirmation):
         _stop_authorized_live_domain_loop(str(event.get('reason') or 'HOST_DISPATCH_REJECTED'))
