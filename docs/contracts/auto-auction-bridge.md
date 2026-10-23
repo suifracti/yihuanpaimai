@@ -96,7 +96,7 @@ Host 新增 `OpenToolSetup / RequestToolRefill / ConfirmToolRefill / CloseToolSe
 | `minimumFunds` | int | 大厅补仪器的资金下限 |
 | `maxMatches` | int / null | `null` 表示一直跑；整数是本次开启后的局数上限 |
 | `instrumentTargets` | `{goldAverage,purpleCount}` | 补仪器目标；切换开关不会丢 |
-| `approvalId` | string / null | 本次开启生成的一次性票据 `auto-<YYYYmmddTHHMMSS>` |
+| `approvalId` | string / null | 本次运行的授权票据 `auto-<YYYYmmddTHHMMSS>`；每次开启生成一次，重复开始不换 |
 | `running` | bool | `enabled` 且 `phase != "stopped"`；开启后等第一帧也算运行中 |
 | `phase` | string / null | `liveDomainLoop.phase` 原值 |
 | `reason` | string / null | 停止原因或当前等待原因 |
