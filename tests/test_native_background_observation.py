@@ -35,6 +35,7 @@ _MAIN_FUNCTIONS = {
     "_live_loop_view",
     "_live_domain_mode",
     "_auto_auction_settings", "_auto_auction_enabled", "_auto_auction_approval_id",
+    "_auto_auction_public",
     "_game_is_foreground",
     "_native_observed_solver_facts",
     "_native_domain_action_session_observe_locked",
