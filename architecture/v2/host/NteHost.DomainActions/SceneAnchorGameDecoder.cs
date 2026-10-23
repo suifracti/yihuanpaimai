@@ -147,7 +147,7 @@ public sealed class SceneAnchorGameDecoder : IGameDomainFrameDecoder
             scene = "SETTLEMENT";
         else
         {
-            foreach (string name in new[] { "ENTRY_FEE", "TOOL_REFILL_CONFIRM", "TOOL_SETUP", "TOOL_GROUPS", "LOBBY", "INSTRUMENT_GOLD_SELECTED", "INSTRUMENT_PURPLE_SELECTED", "INSTRUMENT_LIST", "AUCTION", "AUCTION_READY" })
+            foreach (string name in new[] { "BID_WARNING", "ENTRY_FEE", "TOOL_REFILL_CONFIRM", "TOOL_SETUP", "TOOL_GROUPS", "LOBBY", "INSTRUMENT_GOLD_SELECTED", "INSTRUMENT_PURPLE_SELECTED", "INSTRUMENT_LIST", "AUCTION", "AUCTION_READY" })
             {
                 var spec = Scene(catalog, name);
                 if (spec is null || !AllWitnesses(gray, frame, catalog, spec)) continue;
@@ -218,9 +218,19 @@ public sealed class SceneAnchorGameDecoder : IGameDomainFrameDecoder
                 GoldAverage = stock.GoldAverage is { } g ? Math.Max(0, g - (Used(new(960, 806, 1070, 850)) ? 1 : 0)) : null,
                 PurpleCount = stock.PurpleCount is { } p ? Math.Max(0, p - (Used(new(960, 675, 1070, 718)) ? 1 : 0)) : null };
         }
+        long? warningAmount = null;
+        if (scene == "BID_WARNING" && ReadIntelText is not null)
+        {
+            var box=Scale(new(540,505,1380,575),frame.Geometry.Width,frame.Geometry.Height,catalog);
+            string text=System.Text.RegularExpressions.Regex.Replace(ReadIntelText(frame.Pixels,
+                frame.Geometry.Width,frame.Geometry.Height,frame.Stride,box.X,box.Y,
+                box.Right-box.X,box.Bottom-box.Y) ?? "",@"\s","").Replace('，', ',');
+            var match=System.Text.RegularExpressions.Regex.Match(text,@"当前(?:出)?价(\d+(?:,\d{3})*)疑似异常过高");
+            if(match.Success && long.TryParse(match.Groups[1].Value.Replace(",",""),out long value)) warningAmount=value;
+        }
         return new(scene, frame.Scope.Round, frame.Scope.MatchId, frame.Scope.MatchGeneration,
             own, amount is >= 0 and <= 9_999_999 ? amount : null, controls) {
-                GoldAverageVisible = goldVisible, PurpleCountVisible = purpleVisible, Instruments = stock };
+                BidWarningAmount = warningAmount, GoldAverageVisible = goldVisible, PurpleCountVisible = purpleVisible, Instruments = stock };
     }
 
     void AddAmountFocus(byte[] gray, NativeDomainFrame frame, SceneSpec auction,

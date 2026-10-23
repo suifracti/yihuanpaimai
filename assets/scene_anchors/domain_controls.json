@@ -5,6 +5,32 @@
   "comment": "Search boxes are the published scene-anchor regions. A click is the center of the matched template, computed by WindowsTicketedDomainBackend, never the center of the search box.",
   "scenes": [
     {
+      "scene": "BID_WARNING",
+      "witnesses": [
+        {
+          "template": "bid_warning_question.png",
+          "search": [
+            900,
+            495,
+            1390,
+            585
+          ]
+        }
+      ],
+      "controls": [
+        {
+          "primitive": "ConfirmBidWarning",
+          "template": "entry_fee_confirm.png",
+          "search": [
+            1080,
+            670,
+            1240,
+            770
+          ]
+        }
+      ]
+    },
+    {
       "scene": "ENTRY_FEE",
       "witnesses": [
         {

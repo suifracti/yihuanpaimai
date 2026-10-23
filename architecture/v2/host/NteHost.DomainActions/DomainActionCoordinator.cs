@@ -119,6 +119,7 @@ public sealed class DomainActionCoordinator
     private readonly IRestrictedDomainInputPort? port;
     private readonly Dictionary<string, (DomainIntent Intent, DomainReceipt Receipt, long Sequence)> receipts = new();
     private readonly HashSet<(string, int, DomainActionKind)> attempted = new();
+    private readonly HashSet<string> warningAttempted = new();
     private string? pending;
     private bool stopped;
 
@@ -208,6 +209,33 @@ public sealed class DomainActionCoordinator
             confirmed = confirmed with { EvidenceRef = evidence.EvidenceRef };
             receipts[i.IntentId] = (i, confirmed, entry.Sequence); pending = null;
             return confirmed;
+        }
+    }
+
+    // A visible high-price dialog is a distinct, one-shot continuation of the
+    // existing bid, never a retry of SubmitBid or an UNKNOWN receipt.
+    public DomainReceipt? ContinueBidWarning(string intentId, long amount, ActionScope frame,
+        Func<Func<bool>, PortOutcome> send)
+    {
+        lock (gate)
+        {
+            if (pending != intentId || !receipts.TryGetValue(intentId, out var entry)) return null;
+            var i=entry.Intent;
+            if (entry.Receipt.Status != ReceiptStatus.SENT_PENDING_CONFIRMATION || i.Kind != DomainActionKind.Bid) return entry.Receipt;
+            if (clock() >= entry.Receipt.SentNs+3_000_000_000) return Stop(entry,"VISIBLE_RESULT_TIMEOUT_3S");
+            if (warningAttempted.Contains(intentId)) return entry.Receipt;
+            if (amount != i.Amount || frame.Scene != "BID_WARNING" || frame.Window != i.Window
+                || frame.MatchId != i.MatchId || frame.MatchGeneration != i.MatchGeneration
+                || frame.ObservationSessionId != i.ObservationSessionId || frame.Round != i.Round
+                || frame.CapturedNs <= entry.Receipt.SentNs) return entry.Receipt;
+            warningAttempted.Add(intentId); // Includes a throwing/unknown API result.
+            PortOutcome result;
+            try { result=send(()=>Validate(i,SafeRead())=="OK"); }
+            catch { result=new(true,false,"BID_WARNING_EXCEPTION_UNKNOWN"); }
+            if (!result.Completed) return Stop(entry,"BID_WARNING_"+result.Reason);
+            var receipt=entry.Receipt with {SentNs=clock(),Reason="BID_WARNING_SENT_PENDING_CONFIRMATION"};
+            receipts[intentId]=(i,receipt,entry.Sequence);
+            return receipt;
         }
     }
 

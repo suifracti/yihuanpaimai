@@ -75,8 +75,13 @@ public sealed class WindowsTicketedDomainBackend : ITicketedDomainBackend
                 && (primitive != DomainPrimitive.ReplaceAmountDigits || fillAttempts >= 2)) return new(false, false, "PRIMITIVE_ALREADY_ATTEMPTED");
             if (primitive == DomainPrimitive.ReplaceAmountDigits && !attemptedPrimitives.Contains((intent.IntentId, DomainPrimitive.FocusAmountField)))
                 return new(false, false, "AMOUNT_FIELD_NOT_FOCUSED");
-            if (primitive == DomainPrimitive.SubmitBid && (amountIntent != intent || !amountVerified))
+            if (primitive is DomainPrimitive.SubmitBid or DomainPrimitive.ConfirmBidWarning && (amountIntent != intent || !amountVerified))
                 return new(false, false, "AMOUNT_FIELD_NOT_VERIFIED");
+            if (primitive == DomainPrimitive.ConfirmBidWarning && !HasTimeToConfirm(intent))
+                return new(false, false, "ROUND_TIME_TOO_SHORT");
+            if (primitive == DomainPrimitive.ConfirmBidWarning
+                && !attemptedPrimitives.Contains((intent.IntentId, DomainPrimitive.SubmitBid)))
+                return new(false, false, "BID_WARNING_WITHOUT_SUBMISSION");
             if (intent.Amount is not (> 0 and <= 9_999_999) && intent.Kind == DomainActionKind.Bid)
                 return new(false, false, "INVALID_AMOUNT");
             VisibleControlAnchor? anchor;
@@ -236,7 +241,7 @@ public sealed class WindowsTicketedDomainBackend : ITicketedDomainBackend
     }
     private static bool KindAllows(DomainActionKind kind, DomainPrimitive primitive) => kind switch
     {
-        DomainActionKind.Bid => primitive is DomainPrimitive.FocusAmountField or DomainPrimitive.ReplaceAmountDigits or DomainPrimitive.SubmitBid,
+        DomainActionKind.Bid => primitive is DomainPrimitive.FocusAmountField or DomainPrimitive.ReplaceAmountDigits or DomainPrimitive.SubmitBid or DomainPrimitive.ConfirmBidWarning,
         DomainActionKind.ReturnLobby => primitive == DomainPrimitive.ReturnLobby,
         DomainActionKind.StartNextMatch => primitive == DomainPrimitive.StartNextMatch,
         _ when AuctionPreparation.IsPreparation(kind) => primitive.ToString() == kind.ToString(),

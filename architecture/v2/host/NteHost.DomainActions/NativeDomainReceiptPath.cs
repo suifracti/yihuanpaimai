@@ -62,7 +62,8 @@ public sealed record CapturedOwnBid(int Slot, string PlayerIdentity, long? Amoun
 public sealed record InstrumentStock(int? GoldAverage, int? PurpleCount, long? RefillCost, long? Funds);
 public sealed record DecodedDomainFrame(string Scene, int Round, string MatchId, long MatchGeneration,
     CapturedOwnBid? OwnBid, long? AmountField, IReadOnlyList<VisibleControlAnchor> Controls)
-{ public bool GoldAverageVisible { get; init; }
+{ public long? BidWarningAmount { get; init; }
+  public bool GoldAverageVisible { get; init; }
   public bool PurpleCountVisible { get; init; }
   public InstrumentStock? Instruments { get; init; } }
 public interface IGameDomainFrameDecoder
@@ -99,7 +100,9 @@ public sealed class CapturedDomainControlEvidence : IDomainControlEvidence
         if (primitive is DomainPrimitive.ConfirmToolRefill or DomainPrimitive.ConfirmEntryFee
             && view?.Instruments?.RefillCost != intent.Amount)
         { LastFailure = "REFILL_PRICE_CHANGED_OR_UNKNOWN"; return null; }
-        string expectedScene = intent.Kind switch { DomainActionKind.Bid => "AUCTION",
+        if (primitive == DomainPrimitive.ConfirmBidWarning && view?.BidWarningAmount != intent.Amount)
+        { LastFailure = "BID_WARNING_AMOUNT_MISMATCH"; return null; }
+        string expectedScene = primitive == DomainPrimitive.ConfirmBidWarning ? "BID_WARNING" : intent.Kind switch { DomainActionKind.Bid => "AUCTION",
             DomainActionKind.ReturnLobby => "SETTLEMENT", DomainActionKind.StartNextMatch => "LOBBY",
             _ => AuctionPreparation.ExpectedScene(intent.Kind) ?? "INVALID" };
         bool selectedList = intent.Kind is DomainActionKind.SelectGoldAverage or DomainActionKind.SelectPurpleCount
@@ -218,6 +221,14 @@ public sealed class NativeDomainActionRuntime
             try { result = producer.FromCapture(intent, pending, frame, ownSeat); }
             catch { result = null; }
             return result == null ? pending : Emit(coordinator.Confirm(result));
+        }
+    }
+    public DomainReceipt? ContinueBidWarning(string intentId, long amount, ActionScope frame,
+        Func<Func<bool>, PortOutcome> send)
+    {
+        lock (gate) {
+            var result=coordinator.ContinueBidWarning(intentId, amount, frame, send);
+            return result?.Status == ReceiptStatus.UNKNOWN ? Emit(result) : result;
         }
     }
     public DomainReceipt? Poll()

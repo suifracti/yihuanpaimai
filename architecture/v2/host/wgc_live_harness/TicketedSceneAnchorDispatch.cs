@@ -240,8 +240,22 @@ sealed class TicketedSceneAnchorDispatch : IDisposable
             DomainReceipt? receipt;
             try
             {
-                receipt = engine is null ? runtime.Poll() : runtime.OnIndependentCapture(intent.IntentId, engine,
-                    new OwnSeatBinding(SceneAnchorGameDecoder.OwnCommittedBidSlot, SceneAnchorGameDecoder.OwnCommittedBidIdentity));
+                DomainReceipt? continuation=null;
+                if (engine is not null && intent.Kind == DomainActionKind.Bid
+                    && engine.DecodeOnce(decoder) is {Scene: "BID_WARNING", BidWarningAmount: { } amount})
+                {
+                    Volatile.Write(ref dispatching,1);
+                    try {
+                        continuation=runtime.ContinueBidWarning(intent.IntentId,amount,
+                            engine.Scope with {Scene="BID_WARNING"},
+                            valid=>backend.Execute(DomainPrimitive.ConfirmBidWarning,intent,valid));
+                        if (continuation?.Status == ReceiptStatus.SENT_PENDING_CONFIRMATION)
+                            confirmationDeadlineNs=continuation.SentNs+3_000_000_000;
+                    }
+                    finally { Volatile.Write(ref dispatching,0); }
+                }
+                receipt = continuation ?? (engine is null ? runtime.Poll() : runtime.OnIndependentCapture(intent.IntentId, engine,
+                    new OwnSeatBinding(SceneAnchorGameDecoder.OwnCommittedBidSlot, SceneAnchorGameDecoder.OwnCommittedBidIdentity)));
             }
             finally
             {

@@ -63,6 +63,7 @@ static class Program
             Require((long?)parseAssets.Invoke(null,new object[]{text})==2635490,"MIXED_THOUSANDS_SEPARATORS");
         foreach(var text in new[]{"0 2,635,490","2,63 490","2 635 49"})
             Require(parseAssets.Invoke(null,new object[]{text}) is null,"INVALID_BALANCE_GROUPS");
+        if (args.Contains("--bid-warning-only")) { BidWarningChecks(); return 0; }
         if (args.Contains("--focus-history-only")) { FocusHistory(); return 0; }
         if (args.Contains("--cancelled-guard-only")) { CancelledGuard(); return 0; }
         if (args.Contains("--input-boundary-only")) { InputBoundary(); return 0; }
@@ -80,6 +81,46 @@ static class Program
         foreach (string mode in new[] { "slow-effect", "slow-frame", "legacy-unqualified", "no-effect", "pre-click", "wrong-window", "purple-effect", "purple-no-effect" }) Check(mode);
         Console.WriteLine("PASS simple confirmation: one decode per frame, post-click effect, 3s UNKNOWN/no resend, correct window; zero OS input");
         return 0;
+    }
+    static void BidWarningChecks()
+    {
+        foreach(var mode in new[]{"success","no-effect","wrong-amount","wrong-window","wrong-round","pre-click","unknown","throws","expired"})
+        {
+            long now=10_000_000_000;
+            var scope=new ActionScope("match",1,1,5_000_000,0,"AUCTION","lease",0,new(1,2,3,0),0,1,now,
+                true,true,true,true,false,false) { MatchGeneration=1,ObservationSessionId="test" };
+            var intent=new DomainIntent("bid",DomainActionKind.Bid,"match",1,1,1729462,5_000_000,
+                now+30_000_000_000,0,"lease",scope.Window) {MatchGeneration=1,ObservationSessionId="test",MaxSafeBid=2_000_000,ApprovalId="test"};
+            var port=new SentPort(); var coordinator=new DomainActionCoordinator(()=>scope,()=>now,port);
+            var pending=coordinator.Dispatch(intent); Require(pending.Status==ReceiptStatus.SENT_PENDING_CONFIRMATION,"INITIAL_SENT");
+            now+=100_000_000;
+            var frame=scope with {Scene="BID_WARNING",CapturedNs=now,SourceSequence=2};
+            if(mode=="wrong-window") frame=frame with {Window=new(4,2,3,0)};
+            if(mode=="wrong-round") frame=frame with {Round=2};
+            if(mode=="pre-click") frame=frame with {CapturedNs=pending.SentNs};
+            if(mode=="expired") now+=3_000_000_000;
+            int clicks=0;
+            PortOutcome Click(Func<bool> current) { Require(current(),"CURRENT_WINDOW");clicks++;
+                if(mode=="throws") throw new Exception("unknown"); return new(true,mode!="unknown","TEST"); }
+            var next=coordinator.ContinueBidWarning("bid",mode=="wrong-amount"?1729463:1729462,frame,Click);
+            bool valid=mode is "success" or "no-effect" or "unknown" or "throws";
+            Require(clicks==(valid?1:0),"WARNING_CLICK_SCOPE:"+mode);
+            coordinator.ContinueBidWarning("bid",mode=="wrong-amount"?1729463:1729462,frame,Click);
+            Require(clicks==(valid?1:0),"WARNING_NEVER_RESENT:"+mode);
+            Require(port.Sends==1,"SUBMIT_NEVER_RESENT");
+            if(mode=="success") {
+                now+=50_000_000;
+                var proof=new VisibleResult("bid",DomainActionKind.Bid,"match",1,1,1729462,null,"AUCTION_WAITING",3,now,
+                    true,scope.Window,0) {OriginMatchGeneration=1,ObservationSessionId="test"};
+                Require(coordinator.Confirm(proof).Status==ReceiptStatus.CONFIRMED,"FINAL_VISIBLE_ACCEPTANCE");
+            } else {
+                now+=4_000_000_000;
+                var end=coordinator.Poll() ?? next;
+                Require(end?.Status==ReceiptStatus.UNKNOWN,"UNCONFIRMED_STOPS:"+mode);
+                coordinator.Dispatch(intent);Require(port.Sends==1,"UNKNOWN_NO_RETRY");
+            }
+        }
+        Console.WriteLine("PASS high-price dialog: exact amount/window/round/post-click, one continuation, confirmed only after own bid, unknown/exception/timeout no resend; zero OS input");
     }
     sealed class SentPort : IRestrictedDomainInputPort
     {
@@ -233,6 +274,8 @@ static class Program
             .GetMethod("ReadAmountField")!.CreateDelegate(typeof(SceneAnchorGameDecoder.AmountSample));
         decoder.ReadCommittedText=(SceneAnchorGameDecoder.TextSample)Host.GetType("WgcLiveHarness.SceneAnchorOcr",true)!
             .GetMethod("ReadCommittedText")!.CreateDelegate(typeof(SceneAnchorGameDecoder.TextSample));
+        decoder.ReadIntelText=(SceneAnchorGameDecoder.TextSample)Host.GetType("WgcLiveHarness.SceneAnchorOcr",true)!
+            .GetMethod("ReadText")!.CreateDelegate(typeof(SceneAnchorGameDecoder.TextSample));
         var readStock = Host.GetType("WgcLiveHarness.SceneAnchorOcr", true)!.GetMethod("ReadInstruments")!
             .CreateDelegate<Func<NativeDomainFrame, string, int, InstrumentStock?>>();
         decoder.ReadInstruments = (frame, scene, top) => { Console.WriteLine("GROUP_TOP="+top); return readStock(frame,scene,top); };
@@ -246,7 +289,19 @@ static class Program
             var scope = new ActionScope("lobby-test",0,0,1000000,0,"LOBBY","lobby",0,new(1,2,3,0),0,1,1,true,true,true,true,false,false)
                 {MatchGeneration=1,ObservationSessionId="test"};
             var v=decoder.Decode(new(scope,new(w,h,0,0),pixels,w*4));
-            Console.WriteLine(System.Text.Json.JsonSerializer.Serialize(new {path=row.GetProperty("path").GetString(),v?.Scene,v?.Instruments,v?.AmountField,controls=v?.Controls.Select(x=>x.Primitive.ToString())}));
+            Console.WriteLine(System.Text.Json.JsonSerializer.Serialize(new {path=row.GetProperty("path").GetString(),v?.Scene,v?.Instruments,v?.AmountField,v?.BidWarningAmount,controls=v?.Controls.Select(x=>x.Primitive.ToString())}));
+            if(row.TryGetProperty("expectedWarningAmount",out var warning)) {
+                Console.WriteLine("WARNING_TEXT="+Host.GetType("WgcLiveHarness.SceneAnchorOcr",true)!.GetMethod("ReadText")!
+                    .Invoke(null,new object[]{(ReadOnlyMemory<byte>)pixels,w,h,w*4,540,505,840,70}));
+                Require(v?.BidWarningAmount==warning.GetInt64(),"REAL_WARNING_EXACT_AMOUNT");
+                var captured=new NativeDomainFrame(scope,new(w,h,0,0),pixels,w*4);
+                var evidence=new CapturedDomainControlEvidence(()=>captured,decoder);
+                var intent=new DomainIntent("warning",DomainActionKind.Bid,scope.MatchId,0,0,warning.GetInt64(),5000000,
+                    long.MaxValue,0,"test",scope.Window) {MatchGeneration=1,ObservationSessionId="test"};
+                Require(evidence.Locate(DomainPrimitive.ConfirmBidWarning,intent) is not null,"REAL_WARNING_CONTROL");
+                Require(evidence.Locate(DomainPrimitive.ConfirmBidWarning,intent with {Amount=1729463}) is null,"WRONG_DIALOG_AMOUNT_REJECTED");
+                Require(v?.OwnBid is null,"DIALOG_IS_NOT_ACCEPTED_BID");
+            }
             if(row.TryGetProperty("expectedAmount",out var expectedAmount)) {
                 var region=v?.Controls.Single(c=>c.Primitive==DomainPrimitive.FocusAmountField);
                 Console.WriteLine($"FILLED_ROI={region?.Left},{region?.Top},{region?.Width},{region?.Height}");
