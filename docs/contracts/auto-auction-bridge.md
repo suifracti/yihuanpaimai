@@ -68,6 +68,10 @@ Host 新增 `OpenToolSetup / RequestToolRefill / ConfirmToolRefill / CloseToolSe
   `OBSERVATION_UNAVAILABLE`（观察没起来）。后者会把 `enabled` 写回 `false`，不留半开状态。
 - 成功时 `liveDomainLoop` 重置为 `null`，下一帧用 `fresh_live_domain_state()` 重新开始；
   旧的票据、`settledMatch`、`matchesDone` 都不跨这次开启复用。
+- 已在运行时再点开始是幂等的：回包 `ok=true`、`autoAuctionCommand.reason="ALREADY_RUNNING"`，
+  不重置循环、不换 `approvalId`、不清 `matchesDone`。**第一帧还没回来时也算已在运行**，
+  这段等待里重复点开始同样不会另开一次运行；只有循环 `phase="stopped"`（或进程重启后
+  开关仍是 `true` 但本进程没发票据）才按新运行处理。
 - 开启后每一帧只走 `_advance_authorized_live_domain_loop` 这一条路；没有帧就没有动作。
 
 ### 停止
@@ -116,11 +120,11 @@ Host 新增 `OpenToolSetup / RequestToolRefill / ConfirmToolRefill / CloseToolSe
 - 收页停掉后 `collectionFinished` 以 `USER_STOP` 为真，循环照常往下走；即使一张也没存到，
   也不会把这一局卡在 `WAITING_WAREHOUSE_SAVE`。
 - `stop_live_vision` 范围更大，是“停止观察及本次自动运行”，不应由普通 Esc 代发。
-- Native 收仓没有 Esc/全局鼠标接管监听；窗口消息直接发给绑定窗口，不要求游戏在前台，
+- Native 收仓没有 Esc/全局鼠标接管监听；滚动用发给绑定窗口的窗口消息，不要求游戏在前台，
   不移动全局鼠标。窗口身份失效、窗口关闭或离开结算仍按实际原因保存部分结果，
   不能归因成用户停止。
-- 跳过动画走同一窗口消息路径：按下后保持 80 毫秒再释放；回执只表示发送，不证明动画已结束。
-  按钮仍可用时可重试。
+- 跳过动画是真实点击（票控 `SendInput` 落在按钮中心），没有按压时长参数；回执只表示已发送
+  （`SENT` / `UNKNOWN` / `NOT_SENT`），不证明动画已结束，也不证明揭示完成。按钮仍可用时可重试。
 
 ## 连续局的保存语义
 
