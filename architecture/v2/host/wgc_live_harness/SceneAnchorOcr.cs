@@ -34,8 +34,8 @@ static class SceneAnchorOcr
     {
         // Windows OCR also represents the visible comma groups as spaces.
         // Accept complete groups of three only, within this single balance ROI.
-        string value=(text ?? "").Trim();
-        if (Regex.IsMatch(value,@"^\d{1,3}(?:\s+\d{3})+$"))
+        string value=Regex.Replace((text ?? "").Trim(),@"\s*[,，]\s*",",");
+        if (Regex.IsMatch(value,@"^\d{1,3}(?:(?:,|\s+)\d{3})+$"))
             value=Regex.Replace(value,@"\s+",",");
         return ParseSingleAmount(value);
     }

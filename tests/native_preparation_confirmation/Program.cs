@@ -37,6 +37,11 @@ static class Program
         Host = hostArg >= 0 ? new ReplayHostContext().LoadFromAssemblyPath(Path.GetFullPath(args[hostArg + 1]))
             : Assembly.Load("WgcLiveHarness");
         Console.WriteLine("Host assembly: " + Host.Location);
+        var parseAssets=Host.GetType("WgcLiveHarness.SceneAnchorOcr",true)!.GetMethod("ParseAssets")!;
+        foreach(var text in new[]{"2 ， 635 490","2 635,490","2,635,490"})
+            Require((long?)parseAssets.Invoke(null,new object[]{text})==2635490,"MIXED_THOUSANDS_SEPARATORS");
+        foreach(var text in new[]{"0 2,635,490","2,63 490","2 635 49"})
+            Require(parseAssets.Invoke(null,new object[]{text}) is null,"INVALID_BALANCE_GROUPS");
         if (args.Contains("--focus-history-only")) { FocusHistory(); return 0; }
         if (args.Contains("--input-boundary-only")) { InputBoundary(); return 0; }
         int sceneArg = Array.IndexOf(args, "--scene-wait-replay");
