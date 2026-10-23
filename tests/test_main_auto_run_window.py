@@ -125,6 +125,18 @@ class AutoRunWindowTests(unittest.TestCase):
         self.assertEqual(calls.count('show'), 2)
         self.assertIn('AUTO_AUCTION_MATCH_LIMIT', form.Text)
 
+    def test_same_reason_still_restores_a_minimised_window(self):
+        form, calls, _ = self.window()
+        form.announce_auto_auction_stop('USER_STOP')
+        self.assertEqual(calls.count('show'), 1)
+        # A run that never dispatched input has no prepare_game_input to clear
+        # the reason; minimising afterwards must not swallow the next stop.
+        form.WindowState = 1  # Minimized
+        form.announce_auto_auction_stop('USER_STOP')
+        self.assertEqual(form.WindowState, 0)
+        self.assertEqual(calls.count('show'), 2)
+        self.assertEqual(calls.count('activate'), 2)
+
     def test_game_input_restore_and_capture_stop_are_separate_decisions(self):
         form, calls, _ = self.window()
         self.assertTrue(form.prepare_game_input('one'))

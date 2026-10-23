@@ -1755,11 +1755,16 @@ def create_main_window_type(WinForms, Drawing):
             """The switch's stop always brings the main window back and says why.
 
             This is not the capture stop: ending one warehouse page run leaves
-            the window alone and the loop running. The same reason is only
-            announced once per run; a new run clears it in prepare_game_input.
+            the window alone and the loop running. Repeating the same reason is
+            a no-op only while the window is already back: a run that never
+            dispatched input has no prepare_game_input to clear the reason, and
+            a minimised window still has to come back.
             """
             reason = str(reason)
-            if self._auto_auction_stop_reason == reason:
+            already_back = (self._auto_auction_stop_reason == reason
+                            and getattr(self, "Visible", True)
+                            and self.WindowState != WinForms.FormWindowState.Minimized)
+            if already_back:
                 return
             self._auto_auction_stop_reason = reason
             self._game_input_finished = True
