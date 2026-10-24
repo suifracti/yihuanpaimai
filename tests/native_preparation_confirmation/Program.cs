@@ -324,6 +324,17 @@ static class Program
                 Console.WriteLine("ENTRY_FEE_OCR="+Host.GetType("WgcLiveHarness.SceneAnchorOcr",true)!.GetMethod("ReadText")!
                     .Invoke(null,new object[]{(ReadOnlyMemory<byte>)pixels,w,h,w*4,620,500,690,90}));
                 Require(v?.Instruments?.RefillCost==expectedCost.GetInt64(),"REAL_ENTRY_FEE_READ");
+                if(v?.Scene=="ENTRY_FEE") {
+                    var evidence=new CapturedDomainControlEvidence(()=>new(scope,new(w,h,0,0),pixels,w*4),decoder);
+                    var intent=new DomainIntent("entry",DomainActionKind.ConfirmEntryFee,scope.MatchId,0,0,expectedCost.GetInt64(),5000000,
+                        long.MaxValue,0,"test",scope.Window) {MatchGeneration=1,ObservationSessionId="test"};
+                    Require(evidence.Locate(DomainPrimitive.ConfirmEntryFee,intent) is not null,"REAL_ENTRY_FEE_CONTROL");
+                    Require(evidence.Locate(DomainPrimitive.ConfirmEntryFee,intent with {Amount=expectedCost.GetInt64()+1}) is null,
+                        "CHANGED_ENTRY_FEE_REJECTED");
+                    var parse=Host.GetType("WgcLiveHarness.SceneAnchorOcr",true)!.GetMethod("ParseSingleAmount")!;
+                    foreach(var unknown in new[]{"匹配成功后将扣除入场费，是否继续？","入场费5,00，是否继续？","入场费5,000 余额100,000"})
+                        Require(parse.Invoke(null,new object[]{unknown}) is null,"MISSING_OR_AMBIGUOUS_ENTRY_PRICE_REJECTED");
+                }
             }
             if(row.TryGetProperty("expectedFunds",out var expectedFunds)) {
                 var readText=Host.GetType("WgcLiveHarness.SceneAnchorOcr",true)!.GetMethod("ReadText")!;

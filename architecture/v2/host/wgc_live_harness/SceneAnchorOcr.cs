@@ -81,9 +81,11 @@ static class SceneAnchorOcr
             ReadText(f.Pixels,f.Geometry.Width,f.Geometry.Height,f.Stride,x,y,w,h) ?? "", @"(?<=\d)\s+(?=\d{3}(?:\D|$))", ","));
         if (scene == "TOOL_REFILL_CONFIRM") return new(null, null, Price(715, 513, 485, 60), null);
         if (scene == "ENTRY_FEE") {
-            var text = Regex.Replace(ReadText(f.Pixels,f.Geometry.Width,f.Geometry.Height,f.Stride,620,500,690,90) ?? "",@"\s","");
-            var fee = Regex.Match(text,@"入场费(\d+(?:[,，]\d{3})*)");
-            return new(null,null,fee.Success ? ParseSingleAmount(fee.Groups[1].Value) : null,null);
+            // The scene anchors already identify this dialog. A cursor can
+            // obscure the word "费" while leaving the single price readable.
+            // Parse that price, without requiring the surrounding prose twice.
+            var text = ReadText(f.Pixels,f.Geometry.Width,f.Geometry.Height,f.Stride,620,500,690,90);
+            return new(null,null,ParseSingleAmount(text),null);
         }
         // Isolate the white stock label from its dark outline/background. This
         // small counter otherwise produces an empty Windows OCR result.
