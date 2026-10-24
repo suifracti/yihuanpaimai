@@ -299,7 +299,9 @@ public sealed class Win32LowLevelInputObserver : IInputObserver
 
     private double Percentile(double percentile)
     {
-        int count = Volatile.Read(ref _latencySampleCount);
+        // The counter includes callbacks after the fixed sample buffer fills.
+        // Diagnostics must only copy the samples that were actually retained.
+        int count = Math.Min(Volatile.Read(ref _latencySampleCount), _latencySamplesUs.Length);
         if (count <= 0)
         {
             return 0;
