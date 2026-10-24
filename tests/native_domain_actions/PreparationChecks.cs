@@ -9,6 +9,18 @@ static class PreparationChecks
     static void Require(bool yes, string reason) { if (!yes) throw new Exception(reason); }
     public static void Run(string? replayPath)
     {
+        foreach(var scene in new[]{"TOOL_REFILL_CONFIRM","ENTRY_FEE","TOOL_SETUP","TOOL_GROUPS"})
+        {
+            var f=new Fixture(); f.Scope=f.Scope with {Scene=scene,Round=0};
+            var i=f.Intent("cancel-"+scene,DomainActionKind.CancelKnownPopup) with {RecoveryScene=scene};
+            Require(f.Coordinator.Dispatch(i).Status==ReceiptStatus.SENT_PENDING_CONFIRMATION,"CANCEL_DISPATCH");
+            Require(f.Coordinator.Confirm(f.Evidence(i,scene)).Status==ReceiptStatus.SENT_PENDING_CONFIRMATION,"UNCHANGED_POPUP_NOT_CONFIRMED");
+            Require(f.Coordinator.Confirm(f.Evidence(i,"LOBBY")).Status==ReceiptStatus.CONFIRMED,"CANCEL_CONFIRMED");
+            f.Coordinator.Dispatch(i);Require(f.Port.Sends==1,"CANCEL_TICKET_ONCE");
+        }
+        {var f=new Fixture();var i=f.Intent("wrong-cancel",DomainActionKind.CancelKnownPopup) with {Round=0,RecoveryScene="AUCTION"};
+         Require(f.Coordinator.Dispatch(i).Status==ReceiptStatus.NOT_SENT,"UNKNOWN_POPUP_NOT_CLICKED");}
+        Console.WriteLine("PASS known popup cancellation: four scenes, unchanged rejection, one-shot, unknown rejection");
         var kinds = new[] { DomainActionKind.OpenInstrument, DomainActionKind.SelectGoldAverage,
             DomainActionKind.UseGoldAverage, DomainActionKind.OpenBidPanel };
         foreach (var kind in kinds)
@@ -114,6 +126,8 @@ static class PreparationChecks
                 Require(view!.GoldAverageVisible == goldExpected.GetBoolean(), "REAL_GOLD_EFFECT:" + path);
             Require(view!.Controls.All(a => !a.SourceQualified), "PLANNING_MUST_NOT_GRANT_INPUT");
             var names = view.Controls.Select(a => a.Primitive.ToString()).ToArray();
+            if (row.TryGetProperty("requiredControls", out var required))
+                foreach(var control in required.EnumerateArray()) Require(names.Contains(control.GetString()), "REQUIRED_CONTROL_MISSING");
             if (row.TryGetProperty("absentControls", out var absent))
                 foreach (var control in absent.EnumerateArray())
                     Require(!names.Contains(control.GetString()), "ABSENT_CONTROL_PUBLISHED:" + control.GetString());

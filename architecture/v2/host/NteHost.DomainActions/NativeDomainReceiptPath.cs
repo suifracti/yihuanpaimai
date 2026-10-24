@@ -107,7 +107,8 @@ public sealed class CapturedDomainControlEvidence : IDomainControlEvidence
             _ => AuctionPreparation.ExpectedScene(intent.Kind) ?? "INVALID" };
         bool selectedList = intent.Kind is DomainActionKind.SelectGoldAverage or DomainActionKind.SelectPurpleCount
             && view?.Scene is "INSTRUMENT_GOLD_SELECTED" or "INSTRUMENT_PURPLE_SELECTED";
-        if (view == null || (view.Scene != expectedScene && !selectedList)
+        bool cancellingKnownPopup = intent.Kind == DomainActionKind.CancelKnownPopup && AuctionPreparation.IsKnownPopup(view?.Scene) && view?.Scene == intent.RecoveryScene;
+        if (view == null || (view.Scene != expectedScene && !selectedList && !cancellingKnownPopup)
             || view.MatchId != frame.Scope.MatchId || view.MatchGeneration != frame.Scope.MatchGeneration
             || view.Round != frame.Scope.Round)
         { LastFailure = $"DECODE_OR_SCOPE:expected={expectedScene},decoded={view?.Scene},scope={frame.Scope.Scene}"; return null; }

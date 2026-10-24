@@ -3019,7 +3019,7 @@ def _native_domain_action_receipt_event(event: Dict[str, Any]) -> Optional[Dict[
     kind = receipt.get("kind")
     channel = event.get("receiptChannel")
     from instrument_restock import KINDS as restock_kinds
-    preparation = kind in {'OpenInstrument', 'SelectGoldAverage', 'UseGoldAverage', 'SelectPurpleCount', 'UsePurpleCount', 'OpenBidPanel', 'ConfirmEntryFee'} | restock_kinds
+    preparation = kind in {'OpenInstrument', 'SelectGoldAverage', 'UseGoldAverage', 'SelectPurpleCount', 'UsePurpleCount', 'OpenBidPanel', 'ConfirmEntryFee', 'CancelKnownPopup'} | restock_kinds
     if (not session_id or session_id != _NATIVE_EXPECTED_SESSION
             or session_id != _NATIVE_OBSERVATION_SESSION
             or receipt.get("observationSessionId") != session_id
@@ -3268,9 +3268,11 @@ def _advance_authorized_live_domain_loop(data: Dict[str, Any], frame: Dict[str, 
         _consume_live_receipt(_LIVE_DOMAIN_LOOP, view)
         _observe_saved_return(_LIVE_DOMAIN_LOOP,view)
         from instrument_restock import advance as advance_restock, SCENES as restock_scenes
-        restock_ready = view.get('mode') == 'observe' or advance_restock(_LIVE_DOMAIN_LOOP, view, send, _auto_auction_settings())
+        from startup_popup_recovery import advance as recover_startup
+        recovering = recover_startup(_LIVE_DOMAIN_LOOP, view, send)
+        restock_ready = recovering or view.get('mode') == 'observe' or advance_restock(_LIVE_DOMAIN_LOOP, view, send, _auto_auction_settings())
         view['waitingRestock'] = not restock_ready and published in restock_scenes
-        if _LIVE_DOMAIN_LOOP.get('phase') != 'stopped':
+        if not recovering and _LIVE_DOMAIN_LOOP.get('phase') != 'stopped':
             _LIVE_DOMAIN_LOOP = advance_live_domain_loop(_LIVE_DOMAIN_LOOP, view, send)
         public = live_domain_loop_public(_LIVE_DOMAIN_LOOP)
         with _MANUAL_STATE_LOCK:

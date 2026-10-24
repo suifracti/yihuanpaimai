@@ -2,7 +2,7 @@ namespace NteHost.DomainActions;
 
 public enum DomainActionKind { Bid, ReturnLobby, StartNextMatch, OpenInstrument, SelectGoldAverage, UseGoldAverage, OpenBidPanel,
     OpenToolSetup, RequestToolRefill, ConfirmToolRefill, CloseToolSetup, BrowseToolGroups, SelectToolGroup, ConfirmEntryFee,
-    SelectPurpleCount, UsePurpleCount }
+    SelectPurpleCount, UsePurpleCount, CancelKnownPopup }
 public static class AuctionPreparation
 {
     public static string? ExpectedScene(DomainActionKind kind) => kind switch
@@ -16,14 +16,16 @@ public static class AuctionPreparation
         DomainActionKind.RequestToolRefill or DomainActionKind.CloseToolSetup => "TOOL_SETUP",
         DomainActionKind.ConfirmToolRefill => "TOOL_REFILL_CONFIRM",
         DomainActionKind.ConfirmEntryFee => "ENTRY_FEE",
+        DomainActionKind.CancelKnownPopup => "KNOWN_POPUP",
         DomainActionKind.BrowseToolGroups or DomainActionKind.SelectToolGroup => "TOOL_GROUPS",
         _ => null,
     };
+    public static bool IsKnownPopup(string? scene) => scene is "TOOL_REFILL_CONFIRM" or "ENTRY_FEE" or "TOOL_SETUP" or "TOOL_GROUPS";
     public static bool IsPreparation(DomainActionKind kind) => ExpectedScene(kind) is not null;
     public static bool IsLobby(DomainActionKind kind) => kind is DomainActionKind.OpenToolSetup
         or DomainActionKind.RequestToolRefill or DomainActionKind.ConfirmToolRefill or DomainActionKind.CloseToolSetup
         or DomainActionKind.BrowseToolGroups or DomainActionKind.SelectToolGroup
-        or DomainActionKind.StartNextMatch or DomainActionKind.ConfirmEntryFee;
+        or DomainActionKind.StartNextMatch or DomainActionKind.ConfirmEntryFee or DomainActionKind.CancelKnownPopup;
     public static bool Confirms(DomainActionKind kind, string scene, bool effectVisible = false) => kind switch
     {
         DomainActionKind.OpenInstrument => scene is "INSTRUMENT_LIST" or "INSTRUMENT_GOLD_SELECTED" or "INSTRUMENT_PURPLE_SELECTED",
@@ -38,6 +40,7 @@ public static class AuctionPreparation
         DomainActionKind.RequestToolRefill => scene == "TOOL_REFILL_CONFIRM",
         DomainActionKind.ConfirmToolRefill => scene is "TOOL_SETUP" or "LOBBY",
         DomainActionKind.CloseToolSetup => scene == "LOBBY",
+        DomainActionKind.CancelKnownPopup => scene is "LOBBY" or "TOOL_SETUP" or "TOOL_GROUPS",
         DomainActionKind.ConfirmEntryFee => scene is "LOBBY" or "AUCTION_R1" or "AUCTION_READY" or "AUCTION",
         _ => false,
     };
@@ -52,6 +55,7 @@ public sealed record DomainIntent(string IntentId, DomainActionKind Kind, string
     public string ObservationSessionId { get; init; } = "";
     public long MaxSafeBid { get; init; }
     public string ApprovalId { get; init; } = "";
+    public string RecoveryScene { get; init; } = "";
     public int GoldStockBefore { get; init; }
     public int PurpleStockBefore { get; init; }
     public long MinimumFunds { get; init; }
@@ -201,6 +205,7 @@ public sealed class DomainActionCoordinator
                 _ when AuctionPreparation.IsPreparation(i.Kind) => AuctionPreparation.Confirms(i.Kind, evidence.Scene, evidence.PreparationEffectVisible),
                 _ => false,
             };
+            if (i.Kind == DomainActionKind.CancelKnownPopup) matches &= evidence.Scene != i.RecoveryScene;
             if (i.Kind == DomainActionKind.ConfirmToolRefill)
                 matches &= (evidence.Scene == "LOBBY"
                     ? i.Amount is > 0 && i.FundsBefore >= i.Amount
@@ -287,6 +292,8 @@ public sealed class DomainActionCoordinator
             return "INVALID_INTENT";
         if (s is null || s.Window != i.Window || !s.ForegroundMatches)
             return "TARGET_IDENTITY_REJECTED";
+        if (i.Kind == DomainActionKind.CancelKnownPopup && (!AuctionPreparation.IsKnownPopup(i.RecoveryScene) || s.Scene != i.RecoveryScene))
+            return "RECOVERY_SCENE_MISMATCH";
         return i.Kind switch
         {
             DomainActionKind.Bid when i.Round is >= 1 and <= 5
