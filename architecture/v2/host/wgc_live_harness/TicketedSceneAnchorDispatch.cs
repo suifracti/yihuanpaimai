@@ -127,6 +127,7 @@ sealed class TicketedSceneAnchorDispatch : IDisposable
             ["matchGeneration"] = scope.MatchGeneration, ["factsRevision"] = scope.FactsRevision,
             ["round"] = scope.Round, ["scene"] = view?.Scene, ["goldAverageVisible"] = view?.GoldAverageVisible,
             ["purpleCountVisible"] = view?.PurpleCountVisible,
+            ["sale"] = JsonSerializer.SerializeToNode(view?.Sale, Json),
             ["funds"] = funds, ["instruments"] = JsonSerializer.SerializeToNode(view?.Instruments, Json),
             ["advancedToolGroupVisible"] = view?.Controls.Any(c => c.Primitive == DomainPrimitive.SelectToolGroup) == true };
     }
@@ -176,7 +177,7 @@ sealed class TicketedSceneAnchorDispatch : IDisposable
         while (!disposed && !runCancelled(intent.ApprovalId))
         {
             long now = ProtocolClock.NowNs();
-            if (intent.Kind != DomainActionKind.ReturnLobby && !AuctionPreparation.IsLobby(intent.Kind)
+            if (intent.Kind is not (DomainActionKind.ReturnLobby or DomainActionKind.SellNonRed) && !AuctionPreparation.IsLobby(intent.Kind)
                 && intent.Round > 0 && intent.RoundDeadlineNs - now <
                 (intent.Kind == DomainActionKind.Bid ? 6_000_000_000 : 3_000_000_000)) return false;
             if (courtesy.IsIdle(now))
@@ -397,7 +398,7 @@ sealed class TicketedSceneAnchorDispatch : IDisposable
         try { engine = capture(intent); }
         catch { return null; }
         engine = LobbyFrame(engine, intent);
-        if (engine is not null && intent.Kind is DomainActionKind.ReturnLobby or DomainActionKind.StartNextMatch or DomainActionKind.CancelKnownPopup)
+        if (engine is not null && intent.Kind is DomainActionKind.ReturnLobby or DomainActionKind.SellNonRed or DomainActionKind.StartNextMatch or DomainActionKind.CancelKnownPopup)
         {
             var scene = engine.DecodeOnce(decoder)?.Scene ?? "UNKNOWN";
             engine = new(engine.Scope with { Scene = scene, SettlementArchived = scene == "SETTLEMENT" || settlementReturned,
@@ -480,6 +481,7 @@ sealed class TicketedSceneAnchorDispatch : IDisposable
                 && intent.Amount is > 0 and <= 9_999_999
                 && intent.Amount <= intent.MaxSafeBid && intent.Amount <= intent.Budget
                 && !string.IsNullOrWhiteSpace(intent.ApprovalId);
+        if (intent.Kind == DomainActionKind.SellNonRed) return intent.Amount is null && intent.SettlementAcquired && !string.IsNullOrWhiteSpace(intent.ApprovalId);
         if (intent.Kind == DomainActionKind.ReturnLobby) return intent.Amount is null;
         if (intent.Kind == DomainActionKind.StartNextMatch) return intent.Amount is null && intent.Round == 0;
         if (AuctionPreparation.IsPreparation(intent.Kind)) return !string.IsNullOrWhiteSpace(intent.ApprovalId)
@@ -502,7 +504,7 @@ sealed class TicketedSceneAnchorDispatch : IDisposable
     static string Expected(DomainActionKind kind) => kind switch
     {
         DomainActionKind.Bid => "AUCTION",
-        DomainActionKind.ReturnLobby => "SETTLEMENT",
+        DomainActionKind.ReturnLobby or DomainActionKind.SellNonRed => "SETTLEMENT",
         DomainActionKind.StartNextMatch => "LOBBY",
         _ => AuctionPreparation.ExpectedScene(kind) ?? "INVALID",
     };
@@ -520,7 +522,7 @@ sealed class TicketedSceneAnchorDispatch : IDisposable
         public bool CommitBeforeInput(DomainIntent intent) => intent.Kind switch
         {
             DomainActionKind.Bid => Bid?.CommitBeforeInput(intent) == true,
-            DomainActionKind.ReturnLobby or DomainActionKind.StartNextMatch => true,
+            DomainActionKind.ReturnLobby or DomainActionKind.SellNonRed or DomainActionKind.StartNextMatch => true,
             _ when AuctionPreparation.IsPreparation(intent.Kind) => true,
             _ => false,
         };

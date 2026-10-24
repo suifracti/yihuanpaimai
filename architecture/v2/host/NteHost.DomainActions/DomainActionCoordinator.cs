@@ -2,7 +2,7 @@ namespace NteHost.DomainActions;
 
 public enum DomainActionKind { Bid, ReturnLobby, StartNextMatch, OpenInstrument, SelectGoldAverage, UseGoldAverage, OpenBidPanel,
     OpenToolSetup, RequestToolRefill, ConfirmToolRefill, CloseToolSetup, BrowseToolGroups, SelectToolGroup, ConfirmEntryFee,
-    SelectPurpleCount, UsePurpleCount, CancelKnownPopup }
+    SelectPurpleCount, UsePurpleCount, CancelKnownPopup, SellNonRed }
 public static class AuctionPreparation
 {
     public static string? ExpectedScene(DomainActionKind kind) => kind switch
@@ -61,6 +61,7 @@ public sealed record DomainIntent(string IntentId, DomainActionKind Kind, string
     public long MinimumFunds { get; init; }
     public long FundsBefore { get; init; }
     public long RoundDeadlineNs { get; init; }
+    public bool SettlementAcquired { get; init; }
 }
 
 // Produced from the current qualified Native/Engine state, never from the intent itself.
@@ -81,6 +82,7 @@ public sealed record VisibleResult(string IntentId, DomainActionKind Kind, strin
     WindowBinding Window, long TakeoverGeneration)
 {
     public bool PreparationEffectVisible { get; init; }
+    public bool SaleConfirmed { get; init; }
     public InstrumentStock? Instruments { get; init; }
     public long OriginMatchGeneration { get; init; }
     public string ObservationSessionId { get; init; } = "";
@@ -201,6 +203,7 @@ public sealed class DomainActionCoordinator
             {
                 DomainActionKind.Bid => (evidence.Scene is "AUCTION" or "AUCTION_R1" or "AUCTION_READY" or "AUCTION_WAITING") && evidence.AcceptedOwnAmount == i.Amount,
                 DomainActionKind.ReturnLobby => evidence.Scene == "LOBBY",
+                DomainActionKind.SellNonRed => evidence.Scene == "SETTLEMENT" && evidence.SaleConfirmed,
                 DomainActionKind.StartNextMatch => evidence.Scene == "ENTRY_FEE",
                 _ when AuctionPreparation.IsPreparation(i.Kind) => AuctionPreparation.Confirms(i.Kind, evidence.Scene, evidence.PreparationEffectVisible),
                 _ => false,
@@ -300,6 +303,8 @@ public sealed class DomainActionCoordinator
                 && i.Amount is > 0 and <= 9_999_999 && i.Amount <= i.Budget
                 && i.Amount <= i.MaxSafeBid
                 && !string.IsNullOrWhiteSpace(i.ApprovalId) => "OK",
+            DomainActionKind.SellNonRed when s.Scene == "SETTLEMENT" && s.SettlementArchived && i.SettlementAcquired
+                && i.Amount is null && !string.IsNullOrWhiteSpace(i.ApprovalId) => "OK",
             DomainActionKind.ReturnLobby when s.Scene == "SETTLEMENT" && s.SettlementArchived && i.Amount == null => "OK",
             DomainActionKind.StartNextMatch when s.Scene == "LOBBY"
                 && i.Round == 0 && i.Amount == null => "OK",

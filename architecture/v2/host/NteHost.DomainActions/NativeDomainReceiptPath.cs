@@ -65,7 +65,8 @@ public sealed record DecodedDomainFrame(string Scene, int Round, string MatchId,
 { public long? BidWarningAmount { get; init; }
   public bool GoldAverageVisible { get; init; }
   public bool PurpleCountVisible { get; init; }
-  public InstrumentStock? Instruments { get; init; } }
+  public InstrumentStock? Instruments { get; init; }
+  public SettlementSale? Sale { get; init; } }
 public interface IGameDomainFrameDecoder
 {
     // All fields must derive from THIS frame's pixels. Existing cached seats/myBid
@@ -102,8 +103,10 @@ public sealed class CapturedDomainControlEvidence : IDomainControlEvidence
         { LastFailure = "REFILL_PRICE_CHANGED_OR_UNKNOWN"; return null; }
         if (primitive == DomainPrimitive.ConfirmBidWarning && view?.BidWarningAmount != intent.Amount)
         { LastFailure = "BID_WARNING_AMOUNT_MISMATCH"; return null; }
+        if (primitive == DomainPrimitive.SellNonRed && view?.Sale?.Ready != true)
+        { LastFailure="SALE_SELECTION_NOT_READY_RED_MUST_BE_OFF"; return null; }
         string expectedScene = primitive == DomainPrimitive.ConfirmBidWarning ? "BID_WARNING" : intent.Kind switch { DomainActionKind.Bid => "AUCTION",
-            DomainActionKind.ReturnLobby => "SETTLEMENT", DomainActionKind.StartNextMatch => "LOBBY",
+            DomainActionKind.ReturnLobby or DomainActionKind.SellNonRed => "SETTLEMENT", DomainActionKind.StartNextMatch => "LOBBY",
             _ => AuctionPreparation.ExpectedScene(intent.Kind) ?? "INVALID" };
         bool selectedList = intent.Kind is DomainActionKind.SelectGoldAverage or DomainActionKind.SelectPurpleCount
             && view?.Scene is "INSTRUMENT_GOLD_SELECTED" or "INSTRUMENT_PURPLE_SELECTED";
@@ -118,6 +121,7 @@ public sealed class CapturedDomainControlEvidence : IDomainControlEvidence
         LastFailure = matches is { Length: 1 } ? "OK" : "CONTROL_BINDING_OR_MATCH_COUNT:" + matches?.Length;
         return matches is { Length: 1 } ? matches[0] : null;
     }
+    public SettlementSale? CaptureSaleSelection() { var f=capture(); return f?.DecodeOnce(decoder)?.Sale; }
     public AmountFieldReadback? CaptureAmountField()
     {
         var frame = capture();
@@ -160,6 +164,11 @@ public sealed class NativeVisibleResultProducer
                 || !view.OwnBid.MatchesAmount(amount)) return null;
             accepted = amount;
         }
+        else if (intent.Kind == DomainActionKind.SellNonRed)
+        {
+            if (view.Scene != "SETTLEMENT" || s.MatchId != intent.MatchId || s.MatchGeneration != intent.MatchGeneration
+                || !(view.Sale?.Sold == true || intent.FundsBefore > 0 && view.Sale?.Funds > intent.FundsBefore)) return null;
+        }
         else if (intent.Kind == DomainActionKind.ReturnLobby)
         {
             if (view.Scene != "LOBBY") return null;
@@ -181,7 +190,7 @@ public sealed class NativeVisibleResultProducer
             { OriginMatchGeneration = intent.MatchGeneration, ObservationSessionId = s.ObservationSessionId,
               NewMatchGeneration = newGeneration, EvidenceRef = frame.EvidenceRef,
               PreparationEffectVisible = intent.Kind == DomainActionKind.UsePurpleCount ? view.PurpleCountVisible : view.GoldAverageVisible,
-              Instruments = view.Instruments };
+              Instruments = view.Instruments, SaleConfirmed = intent.Kind == DomainActionKind.SellNonRed };
     }
 }
 

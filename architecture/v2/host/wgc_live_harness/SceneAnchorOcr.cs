@@ -21,7 +21,7 @@ static class SceneAnchorOcr
         {
             "LOBBY" => (1340, 20, 170, 65),
             "TOOL_SETUP" or "TOOL_GROUPS" => (320, 28, 185, 65),
-            "AUCTION" or "AUCTION_READY" or "INSTRUMENT_LIST" or "INSTRUMENT_GOLD_SELECTED" or "INSTRUMENT_PURPLE_SELECTED"
+            "SETTLEMENT" or "AUCTION" or "AUCTION_READY" or "INSTRUMENT_LIST" or "INSTRUMENT_GOLD_SELECTED" or "INSTRUMENT_PURPLE_SELECTED"
                 => (1695, 25, 180, 65),
             _ => null
         };
@@ -75,7 +75,7 @@ static class SceneAnchorOcr
 
     public static InstrumentStock ReadInstruments(NativeDomainFrame f, string scene, int counterY = 235)
     {
-        if (scene is "LOBBY" or "TOOL_GROUPS") return new(null, null, null,
+        if (scene is "LOBBY" or "TOOL_GROUPS" or "SETTLEMENT") return new(null, null, null,
             ReadAssets(f.Pixels, f.Geometry.Width, f.Geometry.Height, f.Stride, scene));
         long? Price(int x,int y,int w,int h) => ParseSingleAmount(Regex.Replace(
             ReadText(f.Pixels,f.Geometry.Width,f.Geometry.Height,f.Stride,x,y,w,h) ?? "", @"(?<=\d)\s+(?=\d{3}(?:\D|$))", ","));

@@ -90,6 +90,17 @@
             1750,
             1032
           ]
+        },
+        {
+          "primitive": "SellNonRed",
+          "template": "settlement_sell_button.png",
+          "search": [
+            1660,
+            835,
+            1790,
+            945
+          ],
+          "optional": true
         }
       ]
     },

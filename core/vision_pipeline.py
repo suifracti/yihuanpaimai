@@ -3068,6 +3068,13 @@ class NTEVisionPipeline:
             nh = (max(ys) - min(ys)) / max(1, screen_h)
             nw = (max(xs) - min(xs)) / max(1, screen_w)
 
+            # Name labels sit above each seat's history badges and amount line.
+            numeric_name_slot = next((slot for slot in range(1, 5)
+                if .075 <= nx <= .29 and abs(ny - (.185 + .15*(slot-1))) <= .018), None)
+            if numeric_name_slot and re.fullmatch(r"[0-9]{1,14}", raw):
+                slot_items.append((numeric_name_slot, nx, ny, nh, nw, raw))
+                continue
+
             leftover = re.sub(r"[\d,\uff0c.\uff0e\u3001KkWwMm\u4e07\u5343%'\"\`\u2019]", "", raw)
             tokens = self._split_hist_tokens(raw) if not leftover else []
             history_slot = next((i + 1 for i, (lo, hi) in enumerate(history_amount_bands)
@@ -3108,6 +3115,11 @@ class NTEVisionPipeline:
         pending_hist: List[Tuple[int, int, int]] = []
 
         for slot_id, nx, ny, nh, nw, compact in slot_items:
+            numeric_name = (.075 <= nx <= .29 and abs(ny - (.185 + .15*(slot_id-1))) <= .018
+                            and re.fullmatch(r"[0-9]{1,14}", compact))
+            if numeric_name:
+                self._slot_names[slot_id] = compact
+                continue
             non_numeric = re.sub(r"[\d,\uff0c.\uff0e\u3001KkWwMm\u4e07\u5343%'\"\`\u2019.\-]", "", compact)
             has_chinese_name = bool(re.search(r"[\u4e00-\u9fa5]", non_numeric))
             tokens = self._split_hist_tokens(compact)
@@ -3170,6 +3182,11 @@ class NTEVisionPipeline:
         cur_bids: Dict[int, Optional[int]] = {1: None, 2: None, 3: None, 4: None}
 
         for slot_id, nx, ny, nh, nw, compact in slot_items:
+            numeric_name = (.075 <= nx <= .29 and abs(ny - (.185 + .15*(slot_id-1))) <= .018
+                            and re.fullmatch(r"[0-9]{1,14}", compact))
+            if numeric_name:
+                self._slot_names[slot_id] = compact
+                continue
             non_numeric = re.sub(r"[\d,\uff0c.\uff0e\u3001KkWwMm\u4e07\u5343%'\"\`\u2019.\-]", "", compact)
             has_chinese_name = bool(re.search(r"[\u4e00-\u9fa5]", non_numeric))
             tokens = self._split_hist_tokens(compact)
@@ -4476,7 +4493,10 @@ class NTEVisionPipeline:
         if not raw:
             return None
 
-        # Fail-closed: exclude numbers / amounts / currencies
+        # A digits-only nickname is valid inside the bounded winner-name ROI.
+        if re.fullmatch(r"[0-9]{1,14}", raw):
+            return raw
+        # Reject formatted amounts/currencies, not numeric nicknames.
         if parse_money_amount(raw) > 0:
             return None
         if re.search(r"^\d+$", raw):
@@ -4555,12 +4575,14 @@ class NTEVisionPipeline:
                 if cleaned:
                     winner_candidates.append((score, ny, cleaned))
 
-        if not winner_candidates and frame is not None and getattr(frame, "size", 0) > 0:
-            rx1 = int(0.06 * screen_w)
-            rx2 = int(0.42 * screen_w)
-            ry1 = int(0.20 * screen_h)
-            ry2 = int(0.40 * screen_h)
+        if (not winner_candidates or max(row[0] for row in winner_candidates) < .85) and frame is not None and getattr(frame, "size", 0) > 0:
+            # The small nickname (including "1") is separate from the avatar.
+            # Enlarge the same label instead of discarding numeric nicknames.
+            rx1, rx2 = round(215 * screen_w / 1920), round(780 * screen_w / 1920)
+            ry1, ry2 = round(240 * screen_h / 1080), round(390 * screen_h / 1080)
             crop = frame[ry1:ry2, rx1:rx2]
+            if crop.size:
+                crop = cv2.resize(crop, None, fx=2, fy=2)
             if crop.size > 0 and min(crop.shape[:2]) >= 10:
                 crop_res, _ = self.ocr(crop)
                 for cbox, ctext, cscore in (crop_res or []):

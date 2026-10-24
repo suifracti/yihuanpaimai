@@ -3025,7 +3025,7 @@ def _native_domain_action_receipt_event(event: Dict[str, Any]) -> Optional[Dict[
             or receipt.get("observationSessionId") != session_id
             or not isinstance(receipt.get("intentId"), str) or not receipt["intentId"]
             or receipt.get("status") not in {"NOT_SENT", "SENT_PENDING_CONFIRMATION", "CONFIRMED", "UNKNOWN"}
-            or (kind not in {"Bid", "ReturnLobby", "StartNextMatch"} and not preparation)
+            or (kind not in {"Bid", "ReturnLobby", "StartNextMatch", "SellNonRed"} and not preparation)
             or channel != ("bid" if kind == "Bid" else "preparation" if preparation else "session")):
         return None
 
@@ -3084,7 +3084,7 @@ def _native_domain_action_receipt_event(event: Dict[str, Any]) -> Optional[Dict[
             "receiptChannel": channel,
             "currentMatch": current,
             **({'bidActionReceipt': copy.deepcopy(receipt)} if kind == 'Bid' else {}),
-            **({'domainActionReceipt': copy.deepcopy(receipt)} if kind in {'ReturnLobby','StartNextMatch'} else {}),
+            **({'domainActionReceipt': copy.deepcopy(receipt)} if kind in {'ReturnLobby','StartNextMatch','SellNonRed'} else {}),
             **({'preparationActionReceipt': copy.deepcopy(receipt)} if preparation else {}),
         }
 
@@ -3598,6 +3598,8 @@ def _live_loop_view(data: Dict[str, Any], published: Optional[str], funds) -> Op
     return {
         "publishedScene": 'AUCTION_READY' if published == 'AUCTION_R1' else published,
         "mode": _live_domain_mode(),
+        "settlementAcquired": (data.get('isAcquired') if type(data.get('isAcquired')) is bool else
+            CURRENT_MATCH.facts.get('isAcquired') if str(CURRENT_MATCH.id) == match_id else None),
         "frameSequence": data.get('frameSequence'),
         "collectionFinished": (capture_stopped_record is not None
                                and capture_stopped_record == capture_record_id)

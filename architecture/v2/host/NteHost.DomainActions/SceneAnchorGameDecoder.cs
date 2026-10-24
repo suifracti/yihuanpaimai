@@ -165,6 +165,18 @@ public sealed class SceneAnchorGameDecoder : IGameDomainFrameDecoder
             AddAmountFocus(gray, frame, auction, found);
             AddAmountKeypad(frame, found);
         }
+        var sale = scene == "SETTLEMENT" ? SettlementSale.Read(frame) : null;
+        if(sale is not null) {
+            var funds=ReadInstruments?.Invoke(frame,scene,0)?.Funds;
+            var region=Scale(new(1665,840,1780,945),frame.Geometry.Width,frame.Geometry.Height,catalog);
+            var text=System.Text.RegularExpressions.Regex.Replace(ReadIntelText?.Invoke(frame.Pixels,frame.Geometry.Width,
+                frame.Geometry.Height,frame.Stride,region.X,region.Y,region.Right-region.X,region.Bottom-region.Y) ?? "",@"\s","");
+            sale=sale with { Funds=funds, Sold=text is "已售出" or "出售成功" };
+            for(int index=0;index<6;index++) {
+                var (x,y,r)=SettlementSale.Circle(frame.Geometry.Width,frame.Geometry.Height,index);
+                found.Add((new(SettlementSale.Toggles[index],"",default,default),x-r,y-r,2*r,2*r));
+            }
+        }
         var controls = found.Select(item => Anchor(item.Control.Primitive, item.Left, item.Top, item.Width, item.Height, frame)).ToArray();
         long? amount = null;
         long? committed = null;
@@ -230,7 +242,7 @@ public sealed class SceneAnchorGameDecoder : IGameDomainFrameDecoder
         }
         return new(scene, frame.Scope.Round, frame.Scope.MatchId, frame.Scope.MatchGeneration,
             own, amount is >= 0 and <= 9_999_999 ? amount : null, controls) {
-                BidWarningAmount = warningAmount, GoldAverageVisible = goldVisible, PurpleCountVisible = purpleVisible, Instruments = stock };
+                BidWarningAmount = warningAmount, GoldAverageVisible = goldVisible, PurpleCountVisible = purpleVisible, Instruments = stock, Sale = sale };
     }
 
     void AddAmountFocus(byte[] gray, NativeDomainFrame frame, SceneSpec auction,

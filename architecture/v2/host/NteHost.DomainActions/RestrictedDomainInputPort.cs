@@ -4,7 +4,7 @@ public enum DomainPrimitive { FocusAmountField, ReplaceAmountDigits, SubmitBid, 
     OpenInstrument, SelectGoldAverage, UseGoldAverage, OpenBidPanel,
     OpenToolSetup, RequestToolRefill, ConfirmToolRefill, CloseToolSetup, BrowseToolGroups, SelectToolGroup,
     ConfirmEntryFee, ClearAmount, AmountDigit0, AmountDigit1, AmountDigit2, AmountDigit3, AmountDigit4,
-    AmountDigit5, AmountDigit6, AmountDigit7, AmountDigit8, AmountDigit9, SelectPurpleCount, UsePurpleCount, ConfirmBidWarning, CancelKnownPopup }
+    AmountDigit5, AmountDigit6, AmountDigit7, AmountDigit8, AmountDigit9, SelectPurpleCount, UsePurpleCount, ConfirmBidWarning, CancelKnownPopup, SellNonRed, SaleWhite, SaleGreen, SaleBlue, SalePurple, SaleGold, SaleRed }
 public sealed record AmountFieldReadback(long Amount, string MatchId, int Round, long FactsRevision,
     WindowBinding Window, long TakeoverGeneration, long CapturedNs, bool SourceQualified)
 {
@@ -21,6 +21,7 @@ public interface ITicketedDomainBackend
     // attempts include cursor preparation and partial/throwing native sends.
     PortOutcome Execute(DomainPrimitive primitive, DomainIntent intent, Func<bool> current);
     AmountFieldReadback? ReadAmountField();
+    SettlementSale? ReadSaleSelection() => null;
     bool HasTimeToFillAndConfirm(DomainIntent intent) => true;
     bool HasTimeToConfirm(DomainIntent intent) => true;
 }
@@ -45,6 +46,23 @@ public sealed class RestrictedDomainInputPort : IRestrictedDomainInputPort
                 return result;
             }
             catch { return new(true, false, "PRIMITIVE_EXCEPTION_UNKNOWN"); }
+        }
+        if (intent.Kind == DomainActionKind.SellNonRed) {
+            // Cancel red first; every toggle is followed by a new image read.
+            var selection=backend.ReadSaleSelection();
+            if(selection is null) return new(false,false,"SALE_SELECTION_UNREADABLE");
+            foreach(int index in new[] {5,0,1,2,3,4}) {
+                bool desired=index!=5;
+                if(selection.Selected[index]==desired) continue;
+                var toggle=Step(SettlementSale.Toggles[index]);
+                if(!toggle.Completed) return new(false,false,"SALE_SELECTION_FAILED:"+toggle.Reason);
+                var after=backend.ReadSaleSelection();
+                if(after is null || after.Selected[index]!=desired)
+                    return new(false,false,index==5 ? "SALE_RED_NOT_CANCELLED" : "SALE_SELECTION_NOT_CHANGED");
+                selection=after;
+            }
+            // Locate(SellNonRed) also checks all six states in the final pre-click frame.
+            return Step(DomainPrimitive.SellNonRed);
         }
         if (intent.Kind == DomainActionKind.ReturnLobby) return Step(DomainPrimitive.ReturnLobby);
         if (intent.Kind == DomainActionKind.StartNextMatch) return Step(DomainPrimitive.StartNextMatch);

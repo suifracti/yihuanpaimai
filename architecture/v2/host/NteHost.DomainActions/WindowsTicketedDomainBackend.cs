@@ -18,6 +18,7 @@ public interface IDomainControlEvidence
     // Null means not connected. No fixed game coordinates or dummy-profile fallback.
     VisibleControlAnchor? Locate(DomainPrimitive primitive, DomainIntent intent);
     AmountFieldReadback? CaptureAmountField();
+    SettlementSale? CaptureSaleSelection() => null;
 }
 public interface IExecutionObligationPort
 {
@@ -214,6 +215,7 @@ public sealed class WindowsTicketedDomainBackend : ITicketedDomainBackend
     public bool HasTimeToConfirm(DomainIntent intent) => !allowGameInput
         || intent.RoundDeadlineNs - clock() >= 3_000_000_000;
 
+    public SettlementSale? ReadSaleSelection() => evidence.CaptureSaleSelection();
     public AmountFieldReadback? ReadAmountField()
     {
         lock (gate)
@@ -259,6 +261,7 @@ public sealed class WindowsTicketedDomainBackend : ITicketedDomainBackend
     {
         DomainActionKind.Bid => primitive is DomainPrimitive.FocusAmountField or DomainPrimitive.ReplaceAmountDigits or DomainPrimitive.SubmitBid or DomainPrimitive.ConfirmBidWarning,
         DomainActionKind.ReturnLobby => primitive == DomainPrimitive.ReturnLobby,
+        DomainActionKind.SellNonRed => primitive == DomainPrimitive.SellNonRed || SettlementSale.Toggles.Contains(primitive),
         DomainActionKind.StartNextMatch => primitive == DomainPrimitive.StartNextMatch,
         _ when AuctionPreparation.IsPreparation(kind) => primitive.ToString() == kind.ToString(),
         _ => false,

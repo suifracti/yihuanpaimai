@@ -67,6 +67,22 @@ class MainDomainActionReceiptTests(unittest.TestCase):
             self.assertNotIn('bidActionReceipt',latest)
             self.assertEqual(app_main.CURRENT_MATCH.id,'old-match')
 
+    def test_sale_receipt_reaches_main_session_channel(self):
+        intent=dict(intentId='sale',kind='SellNonRed',matchId='mine',
+                    matchGeneration=1,observationSessionId='obs-1',round=5,factsRevision=9)
+        receipt=dict(intent,status='CONFIRMED')
+        latest={}
+        with mock.patch.multiple(app_main,CURRENT_MATCH=SimpleNamespace(id='mine'),
+            LATEST_PAYLOAD=latest,_LIVE_DOMAIN_LOOP={'sessionIntent':intent},
+            _NATIVE_EXPECTED_SESSION='obs-1',_NATIVE_OBSERVATION_SESSION='obs-1',WS_EVENT_LOOP=None), \
+            mock.patch.object(app_main,'get_current_match_presentation_summary',return_value={}), \
+            mock.patch.object(app_main,'_native_post_main_status'):
+            out=app_main._native_domain_action_receipt_event(dict(type='domain.action.receipt',
+                observationSessionId='obs-1',receiptChannel='session',receipt=receipt))
+            self.assertEqual(out['domainActionReceipt'],receipt)
+            self.assertEqual(latest['domainActionReceipt'],receipt)
+            self.assertNotIn('bidActionReceipt',latest)
+
     def test_match_limit_is_checked_after_counting_return_before_restock(self):
         state={'phase':'collecting','matchesDone':0}
         with mock.patch.multiple(app_main, _LIVE_DOMAIN_LOOP=state,

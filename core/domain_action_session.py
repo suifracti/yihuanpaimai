@@ -446,6 +446,7 @@ def live_domain_loop_public(state):
         "completedMatches": list(state.get('completedMatches') or []),
         "completedRuns": list(state.get('completedRuns') or []),
         "mode": state.get('mode','bid'),
+        "settlementSale": state.get("settlementSale"),
     }
 
 
@@ -505,7 +506,7 @@ def advance_live_domain_loop(state, view, send):
     funds = view.get('currentFunds')
     if type(funds) is int:
         state['funds'] = funds
-        if funds < view.get('minimumFunds', 0):
+        if scene != "SETTLEMENT" and funds < view.get('minimumFunds', 0):
             state.update(phase='stopped', reason='FUNDS_BELOW_MINIMUM', resendAllowed=False)
             return state
     if view.get('waitingRestock'):
@@ -518,6 +519,20 @@ def advance_live_domain_loop(state, view, send):
         state['coverage'] = view.get('coverageStatus') or 'PARTIAL'
         state['savedSources'] = view.get('savedSources',0)
         state['scrollRequests'] = view.get('scrollRequests',0)
+        sale = state.get('settlementSale') or {}
+        if sale.get('matchId') != engine.get('matchId'):
+            sale = {'matchId': engine.get('matchId'), 'attempts': 0, 'status': 'pending'}
+            state['settlementSale'] = sale
+        if view.get('mode') == 'observe' or view.get('settlementAcquired') is not True:
+            sale.update(status='skipped', reason='OBSERVE_MODE' if view.get('mode') == 'observe' else 'NOT_SELF_ACQUIRED')
+        if sale['status'] == 'pending':
+            if state.get('phase') == 'sale_dispatched':
+                return state
+            if sale['attempts'] < 3:
+                sale['attempts'] += 1
+                sale.setdefault('fundsBefore', view.get('currentFunds'))
+                return _dispatch_live_session(state, view, send, "SellNonRed")
+            sale.update(status='unconfirmed', reason=sale.get('reason') or 'SALE_NOT_CONFIRMED')
         return _dispatch_live_session(state, view, send, "ReturnLobby")
     if scene == 'ENTRY_FEE':
         if state.get('phase') not in {'entry_dispatched', 'entry_paid', 'entry_unknown'}:
@@ -550,6 +565,20 @@ def advance_live_domain_loop(state, view, send):
 
 def _consume_live_receipt(state, view):
     phase = state.get("phase")
+    if phase == "sale_dispatched":
+        receipt, intent = view.get('sessionReceipt') or {}, state.get('sessionIntent') or {}
+        if any(receipt.get(k) != intent.get(k) for k in ('intentId','kind','matchId','matchGeneration','observationSessionId')):
+            return
+        if receipt.get('status') in {'CONFIRMED','NOT_SENT','UNKNOWN'}:
+            sale=state['settlementSale']
+            reason=receipt.get('reason') or receipt['status']
+            sale.update(reason=reason, receipt=receipt)
+            if receipt['status']=='CONFIRMED': sale['status']='sold'
+            elif 'SALE_RED_NOT_CANCELLED' in reason or 'SALE_SELECTION_' in reason:
+                sale['status']='skipped'
+            # Sale is retryable. A new request re-reads selection and keeps red off.
+            state.update(phase='sale_checked', reason=reason)
+        return
     if phase == "preparing":
         receipt = view.get("preparationReceipt")
         intent = state.get("preparationIntent") or {}
@@ -868,7 +897,7 @@ def _dispatch_entry_fee(state, view, send):
 
 def _dispatch_live_session(state, view, send, kind):
     # Host activates only this intent's verified game window before input.
-    expected = "SETTLEMENT" if kind == "ReturnLobby" else "LOBBY"
+    expected = "LOBBY" if kind == "StartNextMatch" else "SETTLEMENT"
     if view.get("publishedScene") != expected:
         state["reason"] = "WAITING_" + expected
         return state
@@ -890,7 +919,9 @@ def _dispatch_live_session(state, view, send, kind):
     if scope is None or view.get("userConfirmed") is not True:
         state["reason"] = "LIVE_LOOP_IDENTITY_INCOMPLETE"
         return state
-    intent_id = ("return-" if kind == "ReturnLobby" else "start-") + engine["matchId"] + '-' + str(view.get('frameSequence', view['nowNs']))
+    intent_id = ({"ReturnLobby":"return-", "StartNextMatch":"start-", "SellNonRed":"sale-"}[kind]) + engine["matchId"] + '-' + str(view.get('frameSequence', view['nowNs']))
+    if kind == 'SellNonRed':
+        intent_id += '-' + str(state['settlementSale']['attempts'])
     intent = {
         "intentId": intent_id,
         "kind": kind,
@@ -918,15 +949,18 @@ def _dispatch_live_session(state, view, send, kind):
     }
     if kind == "ReturnLobby":
         state["returnIntentId"] = intent_id
-    else:
+    elif kind == 'StartNextMatch':
         state["startIntentId"] = intent_id
+    if kind == 'SellNonRed':
+        intent.update(settlementAcquired=view.get('settlementAcquired') is True,
+                      fundsBefore=(state.get('settlementSale') or {}).get('fundsBefore') or 0)
     state['sessionIntent'] = intent
     if send(None, envelope) is not True:
         state["phase"] = "stopped"
         state["reason"] = "DISPATCH_NOT_ACCEPTED"
         state["resendAllowed"] = False
         return state
-    state["phase"] = "return_dispatched" if kind == "ReturnLobby" else "start_dispatched"
+    state["phase"] = {"ReturnLobby":"return_dispatched", "SellNonRed":"sale_dispatched", "StartNextMatch":"start_dispatched"}[kind]
     state["reason"] = "WAITING_VISIBLE_RESULT"
     state["resendAllowed"] = False
     return state
