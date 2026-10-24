@@ -4,6 +4,21 @@ using NteHost.Protocol;
 
 var folder = args.Length > 0 ? args[0] : throw new Exception("isolated fixture root required");
 Directory.CreateDirectory(folder);
+if (args.Contains("--state-file-only"))
+{
+    var path=Path.Combine(folder,"state-fixture.json");
+    File.WriteAllText(path,"{\"currentMatch\":{\"id\":\"same-match\"}}");
+    using (var writer=new FileStream(path,FileMode.Open,FileAccess.ReadWrite,FileShare.None))
+        if (EngineStateFile.Read(path,diagnosticOnly:true) is not null) throw new Exception("LOCK_MUST_NOT_INVENT_STATE");
+    if ((string?)EngineStateFile.Read(path)?["currentMatch"]?["id"]!="same-match") throw new Exception("READ_AFTER_RELEASE");
+    File.WriteAllText(path,"{incomplete");
+    if (EngineStateFile.Read(path,diagnosticOnly:true) is not null) throw new Exception("MALFORMED_MUST_NOT_INVENT_STATE");
+    bool strictFailed=false;
+    try { EngineStateFile.Read(path); } catch (System.Text.Json.JsonException) { strictFailed=true; }
+    if (!strictFailed) throw new Exception("BUSINESS_READ_MUST_NOT_HIDE_FAILURE");
+    Console.WriteLine("PASS locked diagnostic omitted, released snapshot read, malformed diagnostic omitted, business failure retained");
+    return;
+}
 if (args.Length > 2 && args[1] == "--protocol-fixture")
 {
     // Fake compositor/context, actual original-file IO and actual stdin/stdout.

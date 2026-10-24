@@ -301,8 +301,8 @@ internal static class NativeObservationService
                     var original = capture.CaptureAfterRequest(frameWaitMs, request.Gate, request.Deadline, cancelled, evidenceLease.PendingRequestClockSample);
                     var comparisonNs = ProtocolClock.NowNs();
                     var currentTarget = monitor.Snapshot();
-                    var currentState = ReadJsonObject(Path.Combine(workDir, "engine_state.json"));
-                    var domainFrame = capture.IsFrameCurrent(original)
+                    var currentState = EngineStateFile.Read(Path.Combine(workDir, "engine_state.json"), diagnosticOnly: true);
+                    var domainFrame = currentState is not null && capture.IsFrameCurrent(original)
                         && IsObservationIdentityUsable(currentTarget, observationWindowMode)
                         && BackgroundObservationPolicy.IsSameObservationTarget(currentTarget, target)
                         && capture.IsClientAreaMappingCurrent()
@@ -1672,11 +1672,7 @@ internal static class NativeObservationService
 
     private static JsonObject? ReadJsonObject(string path)
     {
-        if (!File.Exists(path))
-        {
-            return null;
-        }
-        return JsonNode.Parse(File.ReadAllText(path)) as JsonObject;
+        return EngineStateFile.Read(path);
     }
 
     private static int ParseInt(string[] args, string name, int fallback)
