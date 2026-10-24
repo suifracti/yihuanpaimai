@@ -71,11 +71,10 @@ class NativeWarehouseSourceCoordinator:
         return result
 
     def _source_is_current(self):
+        # Admission checked the frame age before encoding/storage. Saving that
+        # immutable frame must not expire it; only a revoked request or changed
+        # observation binding can invalidate the final archive write.
         return bool(self._state == 'REQUEST_PENDING' and self._pending and self._source
-            and self._clock() < self._pending_until and self._clock() < self._deadline
-            and (validate_delivery(self._source.get('deliveryProof'), self._qpc(),
-                    session=self._binding['scope']['observationSessionId'], require_progress=True) is None
-                if self._delivery() else 0 <= self._qpc() - self._source['sourceTimestampNs'] <= 2_000_000_000)
             and self._same_contract(self.intake.source_contract()))
 
     def _reply(self, ok, reason):

@@ -66,6 +66,25 @@ class NativeWarehouseSourceTests(unittest.TestCase):
         self.coordinator.on_event(event)
         return event
 
+    def test_archive_commit_still_rejects_revoked_request_or_changed_scope(self):
+        contract = copy.deepcopy(self.intake.source_contract())
+        contract.update(sessionId='saved', generation=1, state='MANUAL_CAPTURING')
+        contract['scope']['recordStableKey'] = 'this-match'
+        self.coordinator._binding = copy.deepcopy(contract)
+        self.coordinator._state = 'REQUEST_PENDING'
+        self.coordinator._pending = {'commandId': 'pending'}
+        self.coordinator._source = {'admitted': True}
+        with patch.object(self.intake, 'source_contract', return_value=contract):
+            self.assertTrue(self.coordinator._source_is_current())
+            contract['scope']['recordStableKey'] = 'next-match'
+            self.assertFalse(self.coordinator._source_is_current())
+            contract['scope']['recordStableKey'] = 'this-match'
+            self.coordinator._state = 'CLOSED'
+            self.assertFalse(self.coordinator._source_is_current())
+            self.coordinator._state = 'REQUEST_PENDING'
+            self.coordinator._pending = None
+            self.assertFalse(self.coordinator._source_is_current())
+
     def test_trigger_probe_events_are_single_pending_ordered_and_scope_bound(self):
         qpc = [time.perf_counter_ns()]
         coordinator = NativeWarehouseSourceCoordinator(self.intake,
@@ -324,16 +343,16 @@ class NativeWarehouseSourceTests(unittest.TestCase):
             descriptor = original_save(**kwargs)
             self.coordinator._qpc = lambda: original_qpc() + 3_000_000_000
             return descriptor
-        rejected_before = sum(c.get('result') == 'REJECTED' for c in self.sent)
+        saved_before = sum(c.get('result') == 'SAVED' for c in self.sent)
         try:
             with patch.object(self.intake.evidence_store, 'save_original', side_effect=expire_after_real_store):
                 self.assertTrue(ui.dispatch({'action': 'capture_warehouse_manual_page'})['warehouseCaptureCommand']['ok'])
-                self.wait_for(lambda: sum(c.get('result') == 'REJECTED' for c in self.sent) > rejected_before)
+                self.wait_for(lambda: sum(c.get('result') == 'SAVED' for c in self.sent) > saved_before)
         finally:
             self.coordinator._qpc = original_qpc
-        self.assertEqual(len(self.intake.pages_copy()), 1)
-        self.assertEqual(self.coordinator.presentation_payload()['sourceReason'], 'SOURCE_LEASE_EXPIRED')
-        self.assertEqual(ui.dispatch({'action': 'request_app_status'})['warehouseCapture']['segmentCount'], 1)
+        self.assertEqual(len(self.intake.pages_copy()), 2)
+        self.assertEqual(self.coordinator.presentation_payload()['sourceReason'], 'PAGE_ACCEPTED')
+        self.assertEqual(ui.dispatch({'action': 'request_app_status'})['warehouseCapture']['segmentCount'], 2)
         self.assertEqual(source_frames_before,
             self.intake.draft_store.lookup(self.scope['recordStableKey'])['auctionEvidence']['nativeObservation']['sourceFrames'])
         self.assertEqual(ordinary, [])
