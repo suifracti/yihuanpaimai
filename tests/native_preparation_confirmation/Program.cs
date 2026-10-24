@@ -69,11 +69,11 @@ static class Program
         if (args.Contains("--input-boundary-only")) { InputBoundary(); return 0; }
         int sceneArg = Array.IndexOf(args, "--scene-wait-replay");
         if (sceneArg >= 0) { SceneWaitReplay(args[sceneArg + 1]); return 0; }
+        int stockArg = Array.IndexOf(args, "--stock-replay");
+        if (stockArg >= 0) { StockReplay(args[stockArg + 1]); return 0; }
         SceneWaitChecks();
         InputBoundary();
         KeypadSequence();
-        int stockArg = Array.IndexOf(args, "--stock-replay");
-        if (stockArg >= 0) { StockReplay(args[stockArg + 1]); return 0; }
         int imageArg = Array.IndexOf(args, "--saved-image");
         if (imageArg >= 0) { SavedImage(args[imageArg + 1]); return 0; }
         int listArg = Array.IndexOf(args, "--open-list-image");

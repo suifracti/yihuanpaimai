@@ -332,19 +332,26 @@ internal static class NativeObservationService
             long lastDomainRequestNs = 0;
             long lastDomainImageRequestNs = 0;
             string lastDomainCaptureStage = "NOT_REQUESTED";
-            bool domainRejectionSaved = false;
+            var domainRejectionsSaved = new HashSet<string>();
             void PublishDomainAction(JsonObject message)
             {
-                if (!domainRejectionSaved && (string?)message["type"] == "domain.action.receipt"
+                if ((string?)message["type"] == "domain.action.receipt"
                     && (string?)message["receipt"]?["status"] is "NOT_SENT" or "UNKNOWN")
                 {
-                    domainRejectionSaved = true;
+                    // A normal ReturnLobby timeout must not consume the only
+                    // evidence slot for a later, different action failure.
+                    string failureKey = $"{message["receipt"]?["kind"]}:{message["receipt"]?["status"]}:{message["receipt"]?["reason"]}";
+                    bool firstFailure = domainRejectionsSaved.Count == 0;
+                    if (!domainRejectionsSaved.Add(failureKey)) { EmitLine(message); return; }
+                    string suffix = firstFailure ? "" : "-" + Convert.ToHexString(
+                        System.Security.Cryptography.SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(failureKey)))[..12];
+                    string diagnosticName = "domain-rejected-diagnostic" + suffix;
                     try
                     {
                         var image = lastDomainCapture;
-                        var path = image is null ? null : Path.Combine(workDir, "domain-rejected-diagnostic.bmp");
+                        var path = image is null ? null : Path.Combine(workDir, diagnosticName + ".bmp");
                         if (image is not null) WriteBmp(path!, image.Width, image.Height, image.Pixels);
-                        File.WriteAllText(Path.Combine(workDir, "domain-rejected-diagnostic.json"),
+                        File.WriteAllText(Path.Combine(workDir, diagnosticName + ".json"),
                             JsonSerializer.Serialize(new {
                                 diagnosticOnly = true, sourceQualified = false, inputActions = false,
                                 requestNs = lastDomainRequestNs, stage = lastDomainCaptureStage,
