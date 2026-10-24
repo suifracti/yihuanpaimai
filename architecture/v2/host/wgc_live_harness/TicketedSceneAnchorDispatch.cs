@@ -385,7 +385,7 @@ sealed class TicketedSceneAnchorDispatch : IDisposable
         try { engine = capture(intent); }
         catch { return null; }
         engine = LobbyFrame(engine, intent);
-        if (engine is not null && intent.Kind is DomainActionKind.ReturnLobby or DomainActionKind.StartNextMatch)
+        if (engine is not null && intent.Kind is DomainActionKind.ReturnLobby or DomainActionKind.StartNextMatch or DomainActionKind.CancelKnownPopup)
         {
             var scene = engine.DecodeOnce(decoder)?.Scene ?? "UNKNOWN";
             engine = new(engine.Scope with { Scene = scene, SettlementArchived = scene == "SETTLEMENT" || settlementReturned,

@@ -3057,7 +3057,7 @@ def _native_domain_action_receipt_event(event: Dict[str, Any]) -> Optional[Dict[
             expected = (globals().get('_LIVE_DOMAIN_LOOP') or {}).get('preparationIntent') or {}
             if (not expected or any(receipt.get(k) != expected.get(k) for k in
                     ('intentId', 'kind', 'matchId', 'matchGeneration', 'observationSessionId', 'round', 'factsRevision'))
-                    or (kind not in restock_kinds | {'ConfirmEntryFee'} and receipt.get('matchId') != CURRENT_MATCH.id)):
+                    or (kind not in restock_kinds | {'ConfirmEntryFee', 'CancelKnownPopup'} and receipt.get('matchId') != CURRENT_MATCH.id)):
                 return None
             LATEST_PAYLOAD['preparationActionReceipt'] = copy.deepcopy(receipt)
         elif (globals().get('_LIVE_DOMAIN_LOOP') or {}).get('sessionIntent', {}).get('intentId') == receipt['intentId']:

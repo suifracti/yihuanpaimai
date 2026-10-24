@@ -67,6 +67,22 @@ class MainDomainActionReceiptTests(unittest.TestCase):
             self.assertNotIn('bidActionReceipt',latest)
             self.assertEqual(app_main.CURRENT_MATCH.id,'old-match')
 
+    def test_startup_cancel_receipt_reaches_recovery_without_auction_identity(self):
+        intent=dict(intentId='refill',kind='CancelKnownPopup',matchId='lobby-obs-1',
+                    matchGeneration=1,observationSessionId='obs-1',round=0,factsRevision=0)
+        receipt=dict(intent,status='CONFIRMED')
+        latest={}
+        with mock.patch.multiple(app_main,CURRENT_MATCH=SimpleNamespace(id='old-match'),
+            LATEST_PAYLOAD=latest,_LIVE_DOMAIN_LOOP={'preparationIntent':intent},
+            _NATIVE_EXPECTED_SESSION='obs-1',_NATIVE_OBSERVATION_SESSION='obs-1',WS_EVENT_LOOP=None), \
+            mock.patch.object(app_main,'get_current_match_presentation_summary',return_value={}), \
+            mock.patch.object(app_main,'_native_post_main_status'):
+            out=app_main._native_domain_action_receipt_event(dict(type='domain.action.receipt',
+                observationSessionId='obs-1',receiptChannel='preparation',receipt=receipt))
+            self.assertEqual(out['preparationActionReceipt'],receipt)
+            self.assertNotIn('bidActionReceipt',latest)
+            self.assertEqual(app_main.CURRENT_MATCH.id,'old-match')
+
     def test_lobby_planning_does_not_require_a_fabricated_auction_round(self):
         planning=dict(schemaVersion='domain-planning-view.v1',planningOnly=True,inputActions=False,
                       scene='LOBBY',frameSequence=1,readbackNs=100,round=0,matchId='')
