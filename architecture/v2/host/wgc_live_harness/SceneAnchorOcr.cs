@@ -45,7 +45,7 @@ static class SceneAnchorOcr
         if (AssetsRegion(scene, width, height) is not { } r) return null;
         // Small bold balance digits lost the 7 in the real 2,732,464 frame.
         // Enlarge the same crop; do not repair or guess missing OCR digits.
-        return ReadEnlargedText(bgra,width,height,stride,r.X,r.Y,r.W,r.H);
+        return ReadEnlargedText(bgra,width,height,stride,r.X,r.Y,r.W,r.H,latin:true);
     }
 
     public static string? ReadCommittedText(ReadOnlyMemory<byte> bgra, int width, int height, int stride,
