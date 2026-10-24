@@ -1,0 +1,43 @@
+{
+  "ctx": {
+    "q": 26,
+    "goldAvg": 29504,
+    "goldTotal": null,
+    "purpleCount": null,
+    "goldCount": null,
+    "redCount": null,
+    "knownGold": "",
+    "knownPurple": "",
+    "knownRed": "",
+    "fieldCondition": "standard",
+    "catalogVersion": "venue-box-catalog.alpha.2026-08-22.v1",
+    "playedAt": "2026-10-24T06:34:05+00:00",
+    "costs": {
+      "entry": 5000,
+      "intel": 0,
+      "other": 0,
+      "sunkCost": 5000,
+      "futureIncrementalCost": 0,
+      "total": 5000
+    },
+    "goldGrid": null,
+    "purpleGrid": null,
+    "totalGrid": 158,
+    "venue": "中级场 · 珊瑚场",
+    "box": "实木宝箱",
+    "matchId": "draft_dd1a7da2ea194adbb412f8e926eefd34",
+    "avg": 29504,
+    "round": 1,
+    "roundingMode": "floor"
+  },
+  "records": [],
+  "provenance": {
+    "run": "input-courtesy-20261024/live-ten-03",
+    "matchId": "draft_dd1a7da2ea194adbb412f8e926eefd34",
+    "round": 1,
+    "qObservedAt": "2026-10-24T06:33:55.108500+00:00",
+    "totalGridObservedAt": "2026-10-24T06:33:57.813404+00:00",
+    "goldAvgObservedAt": "2026-10-24T06:34:03.079354+00:00",
+    "meaning": "Real observed pre-bid facts; no settlement-only inventory; history empty in isolated replay."
+  }
+}

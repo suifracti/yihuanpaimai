@@ -823,8 +823,19 @@
       const items=cat[color],sizes=items.map(x=>String(x[2]).split("x").map(Number).reduce((a,b)=>a*b,1));
       const from=explicit ?? count*Math.min(...sizes),to=explicit ?? Math.min(totalGrids,count*Math.max(...sizes));
       const domain=[];
-      for(let area=from;area<=to;area++)
-        if(catalogGridPossible(items,count,area,groups,average===null?null:bounds(average,count,rounding))) domain.push(area);
+      if (!groups.length && average === null) {
+        // The same bounded inventory answers every target area. Build it once,
+        // keeping the existing two-copies-per-catalog-identity limit.
+        const reachable=Array.from({length:count+1},()=>new Uint8Array(to+1));
+        reachable[0][0]=1;
+        for(const size of sizes) for(let copy=0;copy<2;copy++)
+          for(let n=count;n>=1;n--) for(let area=size;area<=to;area++)
+            if(reachable[n-1][area-size]) reachable[n][area]=1;
+        for(let area=from;area<=to;area++) if(reachable[count][area]) domain.push(area);
+      } else {
+        for(let area=from;area<=to;area++)
+          if(catalogGridPossible(items,count,area,groups,average===null?null:bounds(average,count,rounding))) domain.push(area);
+      }
       highAreaCache.set(key,domain);return domain;
     }
     function wholeGridPossible(goldArea, P, R) {

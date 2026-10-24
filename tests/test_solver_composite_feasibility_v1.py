@@ -41,6 +41,24 @@ def run_node(script, payload):
 
 
 class CompositeFeasibilityTests(unittest.TestCase):
+    def test_real_match_total_grid_finishes_within_live_compute_window(self):
+        # Fifth match of live-ten-03: Q=26, gold average=29504, total area=158
+        # were all visible before bidding. The old per-area DP took >8 seconds
+        # and production repeatedly killed it without publishing a quote.
+        request = (ROOT / "tests/fixtures/live_ten03_match5_solver.json").read_text(encoding="utf-8")
+        result = subprocess.run(
+            [NODE, str(ROOT / "core/live_shadow_runtime.js"), "--once"],
+            input=request, cwd=ROOT, capture_output=True, text=True,
+            encoding="utf-8", timeout=8,
+        )
+        self.assertEqual(result.returncode, 0, result.stderr)
+        output = json.loads(result.stdout)
+        expected = [{"G": g, "P": p, "R": 26-g-p}
+                    for p in range(23) for g in range(4, 27-p)]
+        self.assertEqual(output["exactStates"], expected)
+        self.assertEqual(output["expandedStates"], expected)
+        self.assertTrue(output["ok"])
+
     def test_confirmed_identity_price_and_area_must_share_one_witness(self):
         cases = [
             ({}, "valid"),
