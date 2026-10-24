@@ -160,6 +160,49 @@ class DomainActionSessionTests(unittest.TestCase):
 
 
 class AuthorizedLiveDomainLoopTests(unittest.TestCase):
+    def test_legacy_ledger_blocks_same_match_and_preserves_other_matches(self):
+        from domain_action_session import _live_bid_ledger_path
+        with tempfile.TemporaryDirectory() as directory:
+            view = self.view(funds=100000, scene='AUCTION', round_no=1, directory=directory)
+            advance_live_domain_loop(fresh_live_domain_state(), view, lambda *args: True)
+            base = Path(view['ledgerPath'])
+            scoped = _live_bid_ledger_path(base, view['engine'])
+            legacy = base.with_name(f"{base.stem}-{view['engine']['matchGeneration']}-r1.json")
+            scoped.rename(legacy)
+            scoped.with_name(scoped.name + '.owner').rename(legacy.with_name(legacy.name + '.owner'))
+            original = legacy.read_bytes()
+            self.assertEqual(_live_bid_ledger_path(base, view['engine']), legacy)
+            other = dict(view['engine'], matchId='different-match')
+            self.assertNotEqual(_live_bid_ledger_path(base, other), legacy)
+            self.assertEqual(legacy.read_bytes(), original)
+            legacy.unlink()  # Ownership without its ledger is never an empty budget.
+            self.assertEqual(_live_bid_ledger_path(base, other), legacy)
+
+    def test_new_match_after_restart_does_not_collide_with_previous_round_ledger(self):
+        with tempfile.TemporaryDirectory() as directory:
+            sent = []
+            view = self.view(funds=100000, scene='AUCTION', round_no=1, directory=directory)
+            advance_live_domain_loop(fresh_live_domain_state(), view,
+                                    lambda *args: sent.append(args) or True)
+            old_files = {p: p.read_bytes() for p in Path(directory).iterdir()}
+            # Same generation/round after a new observation, different real match.
+            import copy
+            next_view = copy.deepcopy(view)
+            for scope in (next_view['engine'], next_view['current'], next_view['proposalEvent'],
+                          next_view['proposalEvent']['predictionSnapshot']):
+                scope['matchId'] = 'next-real-match'
+            state = advance_live_domain_loop(fresh_live_domain_state(), next_view,
+                                            lambda *args: sent.append(args) or True)
+            self.assertEqual(state['phase'], 'bid_dispatched')
+            self.assertEqual(len(sent), 2)
+            self.assertTrue(all(p.read_bytes() == raw for p, raw in old_files.items()))
+            # Restarting this SAME match must still refuse, even with a new approval.
+            next_view['approvalId'] = 'another-run'
+            again = advance_live_domain_loop(fresh_live_domain_state(), next_view,
+                                            lambda *args: sent.append(args) or True)
+            self.assertEqual(again['reason'], 'RESEND_BLOCKED')
+            self.assertEqual(len(sent), 2)
+
     def view(self, *, funds, scene, round_no, directory, **extra):
         from test_bid_intent_contract import current, event
         scope = current()

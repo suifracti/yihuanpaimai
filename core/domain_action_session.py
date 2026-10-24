@@ -699,8 +699,7 @@ def _dispatch_live_bid(state, view, send):
         state["reason"] = "LIVE_LOOP_IDENTITY_INCOMPLETE"
         return state
     from pathlib import Path
-    path = Path(ledger_path)
-    path = path.with_name(f"{path.stem}-{engine['matchGeneration']}-r{engine['round']}{path.suffix}")
+    path = _live_bid_ledger_path(Path(ledger_path), engine)
     if path.exists() or path.with_name(path.name + ".owner").exists():
         state["phase"] = "stopped"
         state["reason"] = "RESEND_BLOCKED"
@@ -752,6 +751,26 @@ def _dispatch_live_bid(state, view, send):
     state["reason"] = "WAITING_VISIBLE_RESULT"
     state["resendAllowed"] = False
     return state
+
+
+def _live_bid_ledger_path(base, engine):
+    """Round numbers restart; match identity must distinguish durable ledgers."""
+    import hashlib
+    import json
+    from durable_bid_obligations import DurableBidIntentBook
+    legacy = base.with_name(f"{base.stem}-{engine['matchGeneration']}-r{engine['round']}{base.suffix}")
+    if legacy.exists() or legacy.with_name(legacy.name + '.owner').exists():
+        try:
+            ledger_id = json.loads(legacy.read_bytes())['state']['ledgerId']
+            # Read-only validation of the old format; never reset/recover its grants.
+            old = DurableBidIntentBook(legacy, ledger_id=ledger_id)._read()
+            old_match = old['terms']['binding']['matchId']
+            if not old_match or old_match == engine['matchId']:
+                return legacy
+        except (OSError, ValueError, TypeError, KeyError, RuntimeError):
+            return legacy  # Incomplete/corrupt legacy ownership still blocks sending.
+    match_key = hashlib.sha256(engine['matchId'].encode('utf-8')).hexdigest()
+    return base.with_name(f"{base.stem}-{match_key}-r{engine['round']}{base.suffix}")
 
 
 def _dispatch_live_preparation(state, view, send):
