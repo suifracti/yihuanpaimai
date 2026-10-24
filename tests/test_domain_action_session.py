@@ -225,6 +225,18 @@ class AuthorizedLiveDomainLoopTests(unittest.TestCase):
         base.update(extra)
         return base
 
+    def test_zero_entry_fee_is_valid_but_missing_or_negative_is_not(self):
+        from domain_action_session import _dispatch_entry_fee
+        for cost in (0, 5000, None, -1):
+            view = self.view(funds=200000, scene='ENTRY_FEE', round_no=0,
+                             directory='build', instruments={'refillCost': cost}, minimumFunds=100000)
+            state, sent = fresh_live_domain_state(), []
+            state['funds'] = 200000
+            _dispatch_entry_fee(state, view, lambda _, e: sent.append(e) or True)
+            self.assertEqual(len(sent), int(cost in (0, 5000)))
+            if sent:
+                self.assertEqual(sent[0]['intent']['amount'], cost)
+
     def test_short_round_is_skipped_without_a_ledger_and_next_round_can_bid(self):
         with tempfile.TemporaryDirectory() as directory:
             sent = []

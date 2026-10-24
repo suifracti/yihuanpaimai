@@ -311,7 +311,8 @@ public sealed class DomainActionCoordinator
             _ when AuctionPreparation.IsLobby(i.Kind) && i.Round == 0
                 && !string.IsNullOrWhiteSpace(i.ApprovalId)
                 && (i.Kind is DomainActionKind.ConfirmToolRefill or DomainActionKind.ConfirmEntryFee
-                    ? i.Amount is > 0 && i.Amount <= i.Budget && i.MinimumFunds >= 0 : i.Amount is null) => "OK",
+                    ? (i.Kind == DomainActionKind.ConfirmEntryFee ? i.Amount is >= 0 : i.Amount is > 0)
+                        && i.Amount <= i.Budget && i.MinimumFunds >= 0 : i.Amount is null) => "OK",
             _ when AuctionPreparation.IsPreparation(i.Kind)
                 && i.Amount is null && i.Round is >= 1 and <= 5
                 && !string.IsNullOrWhiteSpace(i.ApprovalId) => "OK",

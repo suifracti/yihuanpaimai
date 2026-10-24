@@ -873,7 +873,7 @@ def _dispatch_live_preparation(state, view, send):
 def _dispatch_entry_fee(state, view, send):
     funds = state.get('funds')
     cost = (view.get('instruments') or {}).get('refillCost')
-    if type(funds) is not int or type(cost) is not int or cost <= 0:
+    if type(funds) is not int or type(cost) is not int or cost < 0:
         state['reason'] = 'WAITING_ENTRY_FEE_READ'
         return state
     floor = view.get('minimumFunds', 0)
