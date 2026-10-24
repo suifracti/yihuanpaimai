@@ -294,7 +294,8 @@ class NativeWarehouseAutoCapture:
         # OPEN snapshots retain the last operation reason until another
         # request; ignore only the exact safe receipt already consumed above.
         elif (snap['reason'] not in {'SOURCE_READY', 'SOURCE_REQUESTED', 'SAVED', 'WINDOW_WHEEL_MESSAGE_SENT',
-                                    'SKIP_ANIMATION_SENT', 'SKIP_ANIMATION_NOT_SENT', 'SKIP_ANIMATION_UNKNOWN'}
+                                    'SKIP_ANIMATION_SENT', 'SKIP_ANIMATION_NOT_SENT', 'SKIP_ANIMATION_UNKNOWN',
+                                    'SKIP_ANIMATION_RECEIPT_TIMEOUT'}
             and not (self._phase == 'WAIT_STABLE'
                 and snap['reason'] in {'SCROLL_CONTENT_CHANGED_BEFORE_SEND', 'SCROLL_SUPPORT_EXPIRED_BEFORE_SEND'}
                 and self._consumed_scroll_recheck is not None
@@ -787,6 +788,11 @@ class NativeWarehouseAutoCapture:
             if not self._active or (generation is not None and generation != self._generation):
                 return
             if self._delivery() and not self._guard():
+                return
+            if self._phase == 'WAIT_SKIP_ANIMATION':
+                # The source timer can release a delayed skip ACK without an
+                # event. Consume that result before requesting another page.
+                self._advance()
                 return
             self._diagnose('page-wait-checked', clock=self._clock(), due=self._due,
                 deadline=self._deadline, sourceState=self.source.source_session_snapshot()['state'])

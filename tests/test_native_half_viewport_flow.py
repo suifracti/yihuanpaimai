@@ -133,6 +133,40 @@ def viewport(offset, *, settlement_finished=True):
 
 
 class HalfViewportFlowTests(unittest.TestCase):
+    def test_late_skip_receipt_keeps_collection_open_and_requests_new_source(self):
+        from native_warehouse_reveal_marker import RevealMarker
+        f = LiveRun(capture_first=True)
+        self.addCleanup(f.close)
+        f.source._host_limits['skipAnimationSupported'] = True
+        marker = Mock(spec=RevealMarker)
+        marker.observe.return_value = {'status': 'NOT_DETECTED', 'animationState': 'UNKNOWN'}
+        marker.skip_button.return_value = {'clickable': True}
+        f.auto._marker = marker
+        f.deliver(viewport(0, settlement_finished=False))
+        command = copy.deepcopy(f.source._pending)
+        self.assertEqual(f.auto._phase, 'WAIT_SKIP_ANIMATION')
+        f.now += 3  # Real live-ten-05: skip ACK arrived after the local 2s timer.
+        f.auto.poll()
+        self.assertTrue(f.auto._active)
+        ack = f.event('SKIP_ANIMATION_RESULT', command, inputActions=True,
+            reason='SKIP_ANIMATION_SENT', details={'classification': 'SENT',
+                'sendInterfaceInvoked': True, 'messageCompletedNs': round(f.now*1e9),
+                'sourceLeaseId': command['sourceLeaseId'], 'animationCompletionProven': False})
+        f.auto.on_event(ack)
+        self.assertEqual(f.auto._phase, 'WAIT_INITIAL')
+        self.assertFalse(f.source.source_session_snapshot()['skipAnimationResult']['animationCompletionProven'])
+        f.tick()
+        pending = copy.deepcopy(f.source._pending)
+        self.assertEqual(pending['operation'], 'REQUEST_PAGE')
+        f.auto.on_event(ack)
+        self.assertEqual(f.source._pending, pending)
+        self.assertEqual(len(f.source.pages_copy()), 1)
+        self.assertFalse(any(c['operation'] == 'SCROLL_DOWN' for c in f.sent))
+        marker.skip_button.return_value = {'clickable': False}
+        f.deliver(viewport(0)); f.tick(); f.deliver(viewport(0))
+        self.assertTrue(f.auto._active)
+        self.assertEqual(f.sent[-1]['operation'], 'SCROLL_DOWN')
+
     def test_hint_uses_business_domain_without_becoming_source(self):
         from warehouse_scrollbar_observation import warehouse_content_roi
         f = LiveRun(output=ROOT/'build/t1-20261012/content-hint-domain', capture_first=True)

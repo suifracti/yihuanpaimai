@@ -778,7 +778,17 @@ class NativeWarehouseSourceCoordinator:
                 self._close('SOURCE_PUBLISH_UNSUPPORTED_OR_TIMEOUT')
             elif self._state in {'OPEN', 'REQUEST_PENDING', 'SCROLL_PENDING', 'SKIP_PENDING'} and self._clock() >= self._deadline:
                 self._close('ABSOLUTE_SETTLEMENT_BUDGET_EXPIRED')
-            elif self._state in {'REQUEST_PENDING', 'SCROLL_PENDING', 'SKIP_PENDING'} and self._clock() >= self._pending_until:
+            elif self._state == 'SKIP_PENDING' and self._clock() >= self._pending_until:
+                # Skip is a repeatable convenience click, not a SOURCE/scroll
+                # verdict. A delayed ACK must not discard the collection.
+                self._skip_result = {'classification': 'UNKNOWN', 'sendInterfaceInvoked': None,
+                    'animationCompletionProven': False, 'reason': 'SKIP_ANIMATION_RECEIPT_TIMEOUT'}
+                self._last_scroll_ns = self._qpc()  # New pixels only; not a claimed send time.
+                self._saved_source = self._duplicate_proof = None
+                self._pending = None
+                self._state, self._reason = 'OPEN', 'SKIP_ANIMATION_RECEIPT_TIMEOUT'
+                self._schedule(max(0, self._deadline - self._clock()))
+            elif self._state in {'REQUEST_PENDING', 'SCROLL_PENDING'} and self._clock() >= self._pending_until:
                 self._close('SOURCE_REQUEST_TIMEOUT')
 
     def close_source(self, reason):
