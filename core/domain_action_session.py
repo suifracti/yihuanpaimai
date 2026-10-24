@@ -775,7 +775,8 @@ def _dispatch_live_preparation(state, view, send):
         target = None
         if average is None and view.get('goldTotal') is None and not view.get('goldAverageVisible'):
             target = 'GoldAverage'
-        elif view.get('purpleCount') is None and not view.get('purpleCountVisible'):
+        elif (view.get('purpleCount') is None and not view.get('purpleCountVisible')
+                and not (scene == 'AUCTION_READY' and solver_suggestion(proposal) is not None)):
             target = 'PurpleCount'
         # The real used-instrument frame disables tools but still offers Bid.
         # Do not let a second missing instrument block this round's quote.
@@ -804,7 +805,7 @@ def _dispatch_live_preparation(state, view, send):
     intent = dict(engine, intentId=intent_id, kind=kind, amount=None, budget=funds,
         deadlineNs=min(scope['leaseExpiresNs'], view['nowNs'] + 8_000_000_000),
         takeoverGeneration=0, leaseId=scope['leaseId'], window=scope['window'],
-        maxSafeBid=0, approvalId=view.get('approvalId'))
+        maxSafeBid=0, approvalId=view.get('approvalId'), roundDeadlineNs=view.get('roundDeadlineNs', 0))
     envelope = dict(type='domain.action.dispatch', protocolVersion=1,
         requestId='dispatch-' + intent_id, bootId=view.get('bootId'),
         observationSessionId=engine['observationSessionId'], intent=intent)

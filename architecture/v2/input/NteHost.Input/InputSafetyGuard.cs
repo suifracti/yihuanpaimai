@@ -10,6 +10,8 @@ public enum GuardState
 
 public sealed record InputSafetyOptions
 {
+    public Action<ObservedInputEvent>? HardwareYield { get; init; }
+    public Func<bool>? DomainYieldRequested { get; init; }
     /// <summary>OFF unless the explicit domain adapter owns this guard.</summary>
     public bool EnableRestrictedDomainActions { get; init; }
     /// <summary>Upper bound on how many self-injected events one arming generation may absorb.</summary>
@@ -486,6 +488,7 @@ public sealed class InputSafetyGuard : ISendInputTicketAuthority
 
         if (Volatile.Read(ref _stateAtomic) != (int)GuardState.Armed)
         {
+            if (observed.Origin == InputEventOrigin.Hardware) _options.HardwareYield?.Invoke(observed);
             // Not armed: the event is recorded and then dropped. It must not push
             // the guard into a takeover state, and it must not be exempted either.
             Interlocked.Increment(ref _ignoredWhileUnarmedCount);
@@ -515,6 +518,11 @@ public sealed class InputSafetyGuard : ISendInputTicketAuthority
         }
 
         string reason = ClassifyTakeover(observed);
+        if (_options.HardwareYield is { } yield)
+        {
+            yield(observed);
+            return;
+        }
         CancelFromHook(reason, observed);
     }
 
@@ -702,9 +710,12 @@ public sealed class InputSafetyGuard : ISendInputTicketAuthority
         Interlocked.Increment(ref _precheckFailCount);
 
         // Fail closed: disarm and make the cursor decision now, once.
-        Interlocked.CompareExchange(
-            ref _stateAtomic, (int)GuardState.Cancelled, (int)GuardState.Armed);
-        Interlocked.CompareExchange(ref _cancelReason, reason, null);
+        if (!(action.IsDomain && _raw.SendCallCount == sendBefore && _options.DomainYieldRequested?.Invoke() == true))
+        {
+            Interlocked.CompareExchange(
+                ref _stateAtomic, (int)GuardState.Cancelled, (int)GuardState.Armed);
+            Interlocked.CompareExchange(ref _cancelReason, reason, null);
+        }
 
         _trace.Write(TracePhase.SendInputSkipped, $"{stage}:{reason}");
         FinalizeCursorLocked();

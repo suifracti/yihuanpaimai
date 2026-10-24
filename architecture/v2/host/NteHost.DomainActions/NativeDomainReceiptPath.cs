@@ -205,7 +205,9 @@ public sealed class NativeDomainActionRuntime
             if (intents.TryGetValue(intent.IntentId, out var prior) && prior != intent)
                 throw new ArgumentException("IMMUTABLE_INTENT_CONFLICT");
             intents[intent.IntentId] = intent;
-            return Emit(coordinator.Dispatch(intent));
+            var receipt = coordinator.Dispatch(intent);
+            return receipt.Status == ReceiptStatus.NOT_SENT && receipt.Reason == "USER_INPUT_YIELD"
+                ? receipt : Emit(receipt);
         }
     }
     public DomainReceipt? OnIndependentCapture(string intentId, NativeDomainFrame frame, OwnSeatBinding? ownSeat)

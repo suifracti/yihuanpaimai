@@ -38,21 +38,14 @@ sealed class TicketedSceneAnchorDispatch : IDisposable
     bool armed;
     bool disposed;
     int dispatching;
+    readonly UserInputCourtesy courtesy = new();
+    Func<string, bool> runCancelled = _ => false;
+    long inputSequence;
+    string runApproval = "";
 
     void OnObservedInput(ObservedInputEvent observed)
     {
-        // Manual lobby/entry interaction between transactions is expected.
-        // Takeover protects a transaction while it is actually sending input.
-        if (Volatile.Read(ref dispatching) != 0)
-        {
-            var before=guard.State;
-            guard.OnObservedInput(observed);
-            if(before!=guard.State) Console.Error.WriteLine(new JsonObject {
-                ["type"]="domain.action.input-state",["reason"]=guard.CancelReason,
-                ["state"]=guard.State.ToString(),["eventKind"]=observed.Kind.ToString(),
-                ["origin"]=observed.Origin.ToString(),["nativeFlags"]=observed.NativeFlags
-            }.ToJsonString());
-        }
+        guard.OnObservedInput(observed); // own cursor moves are exempted before hardware yield
     }
 
     TicketedSceneAnchorDispatch(string sessionId, IGameDomainFrameDecoder decoder, InputSafetyGuard guard,
@@ -78,7 +71,11 @@ sealed class TicketedSceneAnchorDispatch : IDisposable
         lock (gate)
         {
             if (disposed || pending is not null || !current()) return new(false, false, "SKIP_UNAVAILABLE");
-            if (!focus.Activate()) return new(false, false, "SKIP_GAME_ACTIVATION_FAILED");
+            if (!courtesy.IsIdle(ProtocolClock.NowNs()) || runCancelled(runApproval))
+                return new(false, false, "USER_INPUT_YIELD");
+            inputSequence = courtesy.Sequence;
+            using var borrowed = focus.Borrow(() => courtesy.Uninterrupted(inputSequence));
+            if (!borrowed.Activated) return new(false, false, "SKIP_GAME_ACTIVATION_FAILED");
             if (!armed)
             {
                 var arm = guard.Arm(new ArmRequest(focus.Target));
@@ -86,7 +83,7 @@ sealed class TicketedSceneAnchorDispatch : IDisposable
                 armed = true;
             }
             Volatile.Write(ref dispatching, 1);
-            try { return backend.ClickSettlementSkip(current); }
+            try { return backend.ClickSettlementSkip(() => current() && InputUninterrupted()); }
             finally { Volatile.Write(ref dispatching, 0); }
         }
     }
@@ -120,7 +117,7 @@ sealed class TicketedSceneAnchorDispatch : IDisposable
     }
 
     public static TicketedSceneAnchorDispatch? TryCreate(string anchorDirectory, string sessionId, long hwnd,
-        Action<JsonObject> publish)
+        Action<JsonObject> publish, Func<string, bool>? runCancelled = null)
     {
         if (hwnd == 0 || publish is null) return null;
         var decoder = SceneAnchorGameDecoder.Load(anchorDirectory);
@@ -132,9 +129,11 @@ sealed class TicketedSceneAnchorDispatch : IDisposable
         decoder.ReadInstruments = SceneAnchorOcr.ReadInstruments;
         var focus = new GameFocus { Target = hwnd };
         var observer = new Win32LowLevelInputObserver("scene-anchor");
-        var guard = new InputSafetyGuard(observer, focus, new Win32CursorBackend(), new Win32RawInputBackend(), null,
-            new InputSafetyOptions { EnableRestrictedDomainActions = true, RestoreCursorOnCleanRelease = false });
         TicketedSceneAnchorDispatch? dispatch = null;
+        var guard = new InputSafetyGuard(observer, focus, new Win32CursorBackend(), new Win32RawInputBackend(), null,
+            new InputSafetyOptions { EnableRestrictedDomainActions = true, RestoreCursorOnCleanRelease = false,
+                HardwareYield = _ => dispatch?.courtesy.HardwareInput(ProtocolClock.NowNs()),
+                DomainYieldRequested = () => dispatch is not null && !dispatch.courtesy.Uninterrupted(dispatch.inputSequence) });
         if (!observer.Start(observed => dispatch?.OnObservedInput(observed)).Ok)
         {
             observer.Stop();
@@ -144,11 +143,47 @@ sealed class TicketedSceneAnchorDispatch : IDisposable
         var evidence = new CapturedDomainControlEvidence(() => dispatch!.CaptureEngine(), decoder);
         var backend = new WindowsTicketedDomainBackend(guard, evidence, obligations, ProtocolClock.NowNs, hwnd, allowGameInput: true);
         var coordinator = new DomainActionCoordinator(() => dispatch!.ReadScope(), ProtocolClock.NowNs,
-            new RestrictedDomainInputPort(backend, ProtocolClock.NowNs));
+            new CourtesyPort(new RestrictedDomainInputPort(backend, ProtocolClock.NowNs), () => dispatch!.InputUninterrupted()),
+            () => !dispatch!.InputUninterrupted());
         var runtime = new NativeDomainActionRuntime(coordinator, new(decoder, ProtocolClock.NowNs), obligations,
             message => dispatch!.publish(message));
         dispatch = new(sessionId, decoder, guard, observer, focus, obligations, backend, runtime, publish);
+        dispatch.runCancelled = runCancelled ?? (_ => false);
         return dispatch;
+    }
+
+    bool InputUninterrupted() => !disposed && !runCancelled(runApproval)
+        && courtesy.Uninterrupted(inputSequence);
+
+    bool WaitForIdle(DomainIntent intent)
+    {
+        bool announced = false;
+        while (!disposed && !runCancelled(intent.ApprovalId))
+        {
+            long now = ProtocolClock.NowNs();
+            if (intent.Kind != DomainActionKind.ReturnLobby && !AuctionPreparation.IsLobby(intent.Kind)
+                && intent.Round > 0 && intent.RoundDeadlineNs - now <
+                (intent.Kind == DomainActionKind.Bid ? 6_000_000_000 : 3_000_000_000)) return false;
+            if (courtesy.IsIdle(now)) return true;
+            if (!announced)
+            {
+                Console.Error.WriteLine(new JsonObject { ["type"]="domain.action.yield",
+                    ["intentId"]=intent.IntentId,["reason"]="WAITING_USER_IDLE",["atNs"]=now }.ToJsonString());
+                announced = true;
+            }
+            Thread.Sleep(25);
+        }
+        return false;
+    }
+
+    sealed class CourtesyPort(IRestrictedDomainInputPort inner, Func<bool> uninterrupted) : IRestrictedDomainInputPort
+    {
+        public PortOutcome TrySend(DomainIntent intent, Func<bool> current)
+        {
+            var result = inner.TrySend(intent, () => uninterrupted() && current());
+            return UserInputCourtesy.CanRetry(result, !uninterrupted())
+                ? new(false, false, "USER_INPUT_YIELD") { BidConfirmationAttempted = false } : result;
+        }
     }
 
     public bool TryHandle(JsonObject message, string bootId, WindowMonitorSnapshot target,
@@ -176,13 +211,29 @@ sealed class TicketedSceneAnchorDispatch : IDisposable
                 else emit(Rejected(intent,reason));
                 return true;
             }
+            runApproval = intent!.ApprovalId;
+            while (true)
+            {
+            if (!WaitForIdle(intent))
+            {
+                string reason = runCancelled(runApproval) || disposed ? "USER_STOP" : "ROUND_TIME_TOO_SHORT";
+                if (intent.Kind == DomainActionKind.Bid)
+                    CommitNotSent(intent, message, acknowledgements, emit, bootId, reason);
+                else publish(new JsonObject { ["type"]="domain.action.receipt",["observationSessionId"]=sessionId,
+                    ["receiptChannel"]=AuctionPreparation.IsPreparation(intent.Kind) ? "preparation" : "session",
+                    ["receipt"]=JsonSerializer.SerializeToNode(new DomainReceipt(intent.IntentId,intent.Kind,intent.MatchId,
+                        intent.Round,intent.FactsRevision,ReceiptStatus.NOT_SENT,reason,intent.Amount) {
+                        MatchGeneration=intent.MatchGeneration,ObservationSessionId=sessionId,ApprovalId=intent.ApprovalId },Json) });
+                return true;
+            }
+            inputSequence = courtesy.Sequence;
             var liveIdentity = identities.Read(target.TargetHwnd);
             focus.Target = target.TargetHwnd;
             bool identityMatches = liveIdentity is { IsPresent: true }
                 && liveIdentity.Pid == intent!.Window.Pid
                 && liveIdentity.ProcessInstanceToken == intent.Window.ProcessInstanceToken;
-            if (!identityMatches
-                || !focus.Activate())
+            using var borrowed = identityMatches ? focus.Borrow(() => courtesy.Uninterrupted(inputSequence)) : null;
+            if (!identityMatches || borrowed?.Activated != true)
             {
                 string reason = identityMatches ? "GAME_ACTIVATION_FAILED" : "GAME_IDENTITY_CHANGED";
                 Console.Error.WriteLine(new JsonObject { ["type"]="domain.action.activation",["intentId"]=intent!.IntentId,
@@ -220,10 +271,17 @@ sealed class TicketedSceneAnchorDispatch : IDisposable
             Volatile.Write(ref dispatching, 1);
             try { receipt = runtime.Dispatch(intent); }
             finally { Volatile.Write(ref dispatching, 0); current = pending; }
+            if (receipt.Status == ReceiptStatus.NOT_SENT && receipt.Reason == "USER_INPUT_YIELD")
+            {
+                backend.ResetUnsubmittedEdit(intent);
+                borrowed?.Dispose(); // return focus before waiting for another idle interval
+                continue;
+            }
             if (receipt.Status == ReceiptStatus.SENT_PENDING_CONFIRMATION)
             { pending = intent; confirmationDeadlineNs = receipt.SentNs + 3_000_000_000; }
             else if (receipt.Status == ReceiptStatus.UNKNOWN) pending = null;
             return true;
+            }
         }
     }
 
@@ -241,14 +299,18 @@ sealed class TicketedSceneAnchorDispatch : IDisposable
             try
             {
                 DomainReceipt? continuation=null;
-                if (engine is not null && intent.Kind == DomainActionKind.Bid
+                if (engine is not null && intent.Kind == DomainActionKind.Bid && courtesy.IsIdle(ProtocolClock.NowNs())
                     && engine.DecodeOnce(decoder) is {Scene: "BID_WARNING", BidWarningAmount: { } amount})
                 {
+                    inputSequence = courtesy.Sequence;
+                    using var borrowed = focus.Borrow(() => courtesy.Uninterrupted(inputSequence));
                     Volatile.Write(ref dispatching,1);
                     try {
                         continuation=runtime.ContinueBidWarning(intent.IntentId,amount,
                             engine.Scope with {Scene="BID_WARNING"},
-                            valid=>backend.Execute(DomainPrimitive.ConfirmBidWarning,intent,valid));
+                            valid=>borrowed.Activated
+                                ? backend.Execute(DomainPrimitive.ConfirmBidWarning,intent,()=>InputUninterrupted() && valid())
+                                : new(false,false,"GAME_ACTIVATION_FAILED"));
                         if (continuation?.Status == ReceiptStatus.SENT_PENDING_CONFIRMATION)
                             confirmationDeadlineNs=continuation.SentNs+3_000_000_000;
                     }
@@ -428,16 +490,51 @@ sealed class TicketedSceneAnchorDispatch : IDisposable
         public long Target;
         public JsonObject? LastActivation;
         long sequence;
+        public BorrowedFocus Borrow(Func<bool> noHardwareInput) => new(this, noHardwareInput);
+        public sealed class BorrowedFocus : IDisposable
+        {
+            readonly GameFocus owner;
+            readonly Func<bool> noHardwareInput;
+            readonly long original;
+            readonly WindowIdentity? originalIdentity;
+            readonly Point cursor;
+            bool disposed;
+            public bool Activated { get; }
+            public BorrowedFocus(GameFocus owner, Func<bool> noHardwareInput)
+            {
+                this.owner=owner; this.noHardwareInput=noHardwareInput;
+                original=GetForegroundWindow().ToInt64();
+                originalIdentity=new WindowIdentityReader().Read(original);
+                GetCursorPos(out cursor);
+                Activated=owner.Activate();
+            }
+            public void Dispose()
+            {
+                if (disposed) return;
+                disposed=true;
+                // If the user chose a different window, never pull focus away.
+                if (original==0 || original==owner.Target || GetForegroundWindow().ToInt64()!=owner.Target) return;
+                var now=new WindowIdentityReader().Read(original);
+                if (now is not {IsPresent:true} || originalIdentity is null
+                    || now.Pid!=originalIdentity.Pid || now.ProcessInstanceToken!=originalIdentity.ProcessInstanceToken) return;
+                bool restored=owner.ActivateWindow(original);
+                if (restored && noHardwareInput()) SetCursorPos(cursor.X,cursor.Y);
+                Console.Error.WriteLine(new JsonObject { ["type"]="domain.action.focus-return",
+                    ["target"]=original,["restored"]=restored,["atNs"]=ProtocolClock.NowNs() }.ToJsonString());
+            }
+        }
         public bool Activate()
+            => ActivateWindow(Target);
+        bool ActivateWindow(long target)
         {
             var foreground = GetForegroundWindow();
-            LastActivation=new JsonObject { ["foregroundBefore"]=foreground.ToInt64(),["target"]=Target };
-            if (foreground.ToInt64() == Target) return true;
+            LastActivation=new JsonObject { ["foregroundBefore"]=foreground.ToInt64(),["target"]=target };
+            if (foreground.ToInt64() == target) return true;
             // The caller, foreground owner and target are separate threads. Join
             // both input queues for one activation, then detach; send no keys.
             uint caller = GetCurrentThreadId();
             uint owner = GetWindowThreadProcessId(foreground, out _);
-            uint targetOwner = GetWindowThreadProcessId(new IntPtr(Target), out _);
+            uint targetOwner = GetWindowThreadProcessId(new IntPtr(target), out _);
             bool attached = owner != 0 && owner != caller && AttachThreadInput(caller, owner, true);
             bool targetAttached = targetOwner != 0 && targetOwner != caller && targetOwner != owner
                 && AttachThreadInput(caller, targetOwner, true);
@@ -446,10 +543,10 @@ sealed class TicketedSceneAnchorDispatch : IDisposable
             LastActivation["targetThread"]=targetOwner; LastActivation["targetAttached"]=targetAttached;
             try
             {
-                bool accepted=SetForegroundWindow(new IntPtr(Target));
+                bool accepted=SetForegroundWindow(new IntPtr(target));
                 long after=GetForegroundWindow().ToInt64();
                 LastActivation["accepted"]=accepted;LastActivation["foregroundAfter"]=after;
-                return after == Target;
+                return after == target;
             }
             finally
             {
@@ -468,6 +565,9 @@ sealed class TicketedSceneAnchorDispatch : IDisposable
             return new(true, Target, foreground, 0, ++sequence, ProtocolClock.NowNs());
         }
         [DllImport("user32.dll")] static extern IntPtr GetForegroundWindow();
+        [StructLayout(LayoutKind.Sequential)] struct Point { public int X,Y; }
+        [DllImport("user32.dll")] static extern bool GetCursorPos(out Point point);
+        [DllImport("user32.dll")] static extern bool SetCursorPos(int x,int y);
         [DllImport("user32.dll")] static extern bool SetForegroundWindow(IntPtr hwnd);
         [DllImport("kernel32.dll")] static extern uint GetCurrentThreadId();
         [DllImport("user32.dll")] static extern uint GetWindowThreadProcessId(IntPtr hwnd, out uint pid);

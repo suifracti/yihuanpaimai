@@ -7,6 +7,16 @@ import test_domain_action_session as domain_tests
 
 
 class AuctionPreparationTests(unittest.TestCase):
+    def test_run14_ready_quote_does_not_wait_for_optional_purple_count(self):
+        # Both run14 R2 sequences already had gold mean and a valid quote;
+        # fetching purple count delayed panel opening by 7 / 8.3 seconds.
+        with tempfile.TemporaryDirectory() as directory:
+            view = self.view(directory, 'AUCTION_READY', average=29739)
+            view['purpleCount'] = None
+            sent = []
+            advance_live_domain_loop(fresh_live_domain_state(), view, lambda _, e: sent.append(e) or True)
+            self.assertEqual(sent[0]['intent']['kind'], 'OpenBidPanel')
+
     def view(self, directory, scene, *, average=None, receipt=None):
         view = domain_tests.AuthorizedLiveDomainLoopTests().view(
             funds=2524575, scene=scene, round_no=1, directory=directory)
@@ -36,6 +46,7 @@ class AuctionPreparationTests(unittest.TestCase):
                 receipt=dict(sent[-1]['intent'],status='CONFIRMED') if sent else None
                 view=self.view(directory,scene,average=29739,receipt=receipt)
                 view['purpleCount']=None
+                view['proposalEvent']['predictionSnapshot']['status']['solverStatus']='incomplete'
                 advance_live_domain_loop(state,view,send)
                 self.assertEqual(sent[-1]['intent']['kind'],expected)
             view=self.view(directory,'AUCTION_READY',average=29739,
@@ -46,7 +57,7 @@ class AuctionPreparationTests(unittest.TestCase):
             self.assertEqual(sent[-1]['intent']['kind'],'OpenBidPanel')
             self.assertTrue(all(e['intent']['amount'] is None for e in sent))
 
-    def test_used_instrument_round_can_bid_then_get_purple_next_round(self):
+    def test_used_instrument_round_and_next_ready_quote_can_bid(self):
         # run-5 actual frame: instrument disabled after gold use, bid still available.
         with tempfile.TemporaryDirectory() as directory:
             view=self.view(directory,'INSTRUMENT_GOLD_SELECTED')
@@ -63,9 +74,12 @@ class AuctionPreparationTests(unittest.TestCase):
                 receipt=dict(sent[-1]['intent'],status='CONFIRMED'))
             next_round['engine']['round']=2
             next_round['current']['round']=2
+            next_round['proposalEvent']['round']=2
+            next_round['proposalEvent']['predictionSnapshot']['round']=2
+            next_round['proposalEvent']['predictionSnapshot']['input']['normalizedFacts']['round']=2
             next_round['purpleCount']=None
             advance_live_domain_loop(state,next_round,send)
-            self.assertEqual(sent[-1]['intent']['kind'],'OpenInstrument')
+            self.assertEqual(sent[-1]['intent']['kind'],'OpenBidPanel')
 
     def test_no_solver_value_after_reveal_skips_round_without_input(self):
         with tempfile.TemporaryDirectory() as directory:

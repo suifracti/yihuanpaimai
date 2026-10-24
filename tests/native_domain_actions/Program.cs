@@ -73,6 +73,7 @@ static class Program
     static void Case(string name, Action action) { action(); cases++; Console.WriteLine("PASS " + name); }
     static void Main(string[] args)
     {
+        if (args.Contains("--courtesy-only")) { CourtesyChecks.Run(); return; }
         if (args.Contains("--preparation-only")) { PreparationChecks.Run(args.LastOrDefault()); return; }
         if (args.Contains("--input-source-only")) { InputCaptureChecks.Run(); return; }
         if (args.Contains("--input-future-only")) { InputCaptureChecks.RunFuture(); return; }

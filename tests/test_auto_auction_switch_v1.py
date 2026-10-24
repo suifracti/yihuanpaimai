@@ -41,7 +41,7 @@ def _isolated(directory, config):
         '_LIVE_DOMAIN_LOOP': None,
         '_AUTO_AUCTION_APPROVAL_ID': None,
         '_AUTO_AUCTION_STOP_REASON': None,
-        'NATIVE_OBSERVATION_BRIDGE': SimpleNamespace(running=True),
+        'NATIVE_OBSERVATION_BRIDGE': SimpleNamespace(running=True, send_control=Mock(return_value=True)),
         'start_vision_worker': Mock(return_value=object()),
         '_stop_authorized_live_domain_loop': Mock(),
     }
@@ -61,6 +61,14 @@ def _config(**auto_auction):
 
 
 class SwitchPersistenceTests(unittest.TestCase):
+    def test_stop_interrupts_host_idle_wait_for_this_run(self):
+        with tempfile.TemporaryDirectory() as directory:
+            ns, _ = _isolated(directory, _config(enabled=True))
+            ns['_AUTO_AUCTION_APPROVAL_ID'] = 'run-courtesy'
+            ns['_stop_auto_auction']()
+            ns['NATIVE_OBSERVATION_BRIDGE'].send_control.assert_called_once_with(
+                {'type': 'domain.action.cancel', 'approvalId': 'run-courtesy'})
+
     def setUp(self):
         self.directory = tempfile.TemporaryDirectory()
         self.addCleanup(self.directory.cleanup)

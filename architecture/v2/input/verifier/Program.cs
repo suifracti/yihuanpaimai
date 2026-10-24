@@ -178,6 +178,7 @@ internal static class Program
     {
         try
         {
+            if (args.Contains("--courtesy-only")) return DomainTimingChecks.RunCourtesy();
             if (args.Contains("--domain-timing-only")) return DomainTimingChecks.Run();
             if (args.Contains("--amount-keypad-only")) return DomainTimingChecks.RunKeypad();
 

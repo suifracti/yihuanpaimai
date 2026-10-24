@@ -6,6 +6,34 @@ namespace NteHost.Input.Verifier;
 // installs hooks or invokes an OS input API. Delays model independent capture.
 internal static class DomainTimingChecks
 {
+    public static int RunCourtesy()
+    {
+        var observer=new FakeInputObserver(); var focus=new FakeFocusSnapshotProvider();
+        var raw=new CountingRawInputBackend(); bool interrupted=false; int hardware=0;
+        var guard=new InputSafetyGuard(observer,focus,new FakeCursorBackend(),raw,null,
+            new InputSafetyOptions {EnableRestrictedDomainActions=true,RestoreCursorOnCleanRelease=false,
+                HardwareYield=_=>{interrupted=true;hardware++;},DomainYieldRequested=()=>interrupted});
+        observer.Start(e=>guard.OnObservedInput(e));
+        Require(guard.Arm(new(1)).Ok,"ARM");
+        int reads=0;
+        bool Current() {
+            if (++reads==3) observer.Emit(new(InputEventKind.KeyDown,InputDeviceClass.Keyboard,
+                InputEventOrigin.Hardware,0,0,0,TraceClock.NowNs(),1));
+            return !interrupted;
+        }
+        var result=guard.Execute(InputAction.DomainClick(10,20,100,200,Current));
+        Require(!result.Ok && raw.SendCallCount==0 && guard.State==GuardState.Armed && hardware==1,
+            "HARDWARE_BEFORE_SEND_YIELDS_WITHOUT_CANCELLING");
+        interrupted=false;
+        Require(guard.Execute(InputAction.DomainClick(10,20,100,200,()=>true)).Ok && raw.SendCallCount==1,
+            "FRESH_TICKET_RESUMES_AFTER_IDLE");
+        guard.Cancel("USER_STOP");
+        Require(!guard.Execute(InputAction.DomainClick(10,20,100,200,()=>true)).Ok && raw.SendCallCount==1,
+            "EXPLICIT_STOP_STILL_BLOCKS_INPUT");
+        guard.Release(); observer.Stop();
+        Console.WriteLine("PASS hardware yield, fresh ticket resume, explicit stop; fake input only");
+        return 0;
+    }
     public static int RunKeypad()
     {
         foreach(string mode in new[]{"ok","wrong-window","partial","throw"})

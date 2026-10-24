@@ -3454,6 +3454,13 @@ def _stop_auto_auction(reason: str = 'USER_STOP') -> Dict[str, Any]:
     global _AUTO_AUCTION_STOP_REASON
     reason = str(reason or 'USER_STOP')
     _AUTO_AUCTION_STOP_REASON = reason
+    bridge = globals().get('NATIVE_OBSERVATION_BRIDGE')
+    if bridge is not None and getattr(bridge, 'running', False):
+        try:
+            bridge.send_control({'type': 'domain.action.cancel',
+                                 'approvalId': globals().get('_AUTO_AUCTION_APPROVAL_ID') or ''})
+        except Exception as exc:
+            log_stage('AUTO_AUCTION', f'cancel delivery failed: {type(exc).__name__}: {exc}')
     written = _set_auto_auction_enabled(False)
     log_stage('AUTO_AUCTION', f'stop: {reason}')
     if globals().get('_LIVE_DOMAIN_LOOP') is not None:

@@ -101,6 +101,7 @@ internal static class NativeObservationService
         var controlQueue = new BlockingCollection<JsonObject>(32);
         var evidenceQueue = new BlockingCollection<JsonObject>(8);
         var actionAcknowledgements = new DomainActionAcknowledgementRouter();
+        var cancelledRuns = new ConcurrentDictionary<string, byte>();
         Func<WarehouseSourceContext, Func<bool>, bool>? scrollWindow = null;
         Func<WarehouseSourceContext, Func<bool>, bool>? skipAnimationWindow = null;
         Func<DeliveryVisualSummary?> latestSummary = () => null;
@@ -133,7 +134,7 @@ internal static class NativeObservationService
             stop.Cancel();
         }
         StartControlReader(controlQueue, evidenceQueue, evidenceLease, StopTransport,
-            actionAcknowledgements);
+            actionAcknowledgements, approval => cancelledRuns.TryAdd(approval, 0));
 
         EmitStatus(sessionId, "STARTING", "explicit-start", new
         {
@@ -372,7 +373,8 @@ internal static class NativeObservationService
                 var anchorDirectory = Environment.GetEnvironmentVariable("NTE_SCENE_ANCHOR_DIR");
                 sceneAnchorDispatch = string.IsNullOrWhiteSpace(anchorDirectory)
                     ? null
-                    : TicketedSceneAnchorDispatch.TryCreate(anchorDirectory, sessionId, target.TargetHwnd, PublishDomainAction);
+                    : TicketedSceneAnchorDispatch.TryCreate(anchorDirectory, sessionId, target.TargetHwnd, PublishDomainAction,
+                        approval => stop.IsCancellationRequested || cancelledRuns.ContainsKey(approval));
                 domainDecoderLabel = sceneAnchorDispatch is null ? "SCENE_ANCHOR_UNAVAILABLE" : "SCENE_ANCHOR";
                 domainExecutionLabel = sceneAnchorDispatch is null ? "OFF" : "OPERATOR_GATE";
             }
@@ -1125,7 +1127,8 @@ internal static class NativeObservationService
 
     private static void StartControlReader(BlockingCollection<JsonObject> queue,
         BlockingCollection<JsonObject> evidenceQueue, WarehouseEvidenceLease evidenceLease,
-        Action<string> stopTransport, DomainActionAcknowledgementRouter actionAcknowledgements)
+        Action<string> stopTransport, DomainActionAcknowledgementRouter actionAcknowledgements,
+        Action<string> cancelRun)
     {
         var reader = new Thread(() =>
         {
@@ -1148,6 +1151,11 @@ internal static class NativeObservationService
                     try { message = JsonNode.Parse(raw) as JsonObject; }
                     catch (System.Text.Json.JsonException) { continue; }
                     if (message is null) continue;
+                    if ((string?)message["type"] == "domain.action.cancel")
+                    {
+                        if ((string?)message["approvalId"] is {Length: > 0} approval) cancelRun(approval);
+                        continue; // interrupt idle waits without waiting behind a dispatch
+                    }
                     if ((string?)message["type"] is "domain.action.obligation.ack" or "domain.action.receipt.ack")
                     {
                         // ACKs unblock the single restricted-action transaction directly;

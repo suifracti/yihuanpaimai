@@ -117,6 +117,7 @@ public sealed class DomainActionCoordinator
     private readonly Func<ActionScope?> readScope;
     private readonly Func<long> clock;
     private readonly IRestrictedDomainInputPort? port;
+    private readonly Func<bool> yieldRequested;
     private readonly Dictionary<string, (DomainIntent Intent, DomainReceipt Receipt, long Sequence)> receipts = new();
     private readonly HashSet<(string, int, DomainActionKind)> attempted = new();
     private readonly HashSet<string> warningAttempted = new();
@@ -124,9 +125,10 @@ public sealed class DomainActionCoordinator
     private bool stopped;
 
     public DomainActionCoordinator(Func<ActionScope?> readScope, Func<long> clock,
-        IRestrictedDomainInputPort? port = null)
+        IRestrictedDomainInputPort? port = null, Func<bool>? yieldRequested = null)
     {
         this.readScope = readScope; this.clock = clock; this.port = port;
+        this.yieldRequested = yieldRequested ?? (() => false);
     }
 
     public DomainReceipt Dispatch(DomainIntent intent)
@@ -148,12 +150,16 @@ public sealed class DomainActionCoordinator
                 && attempted.Contains((intent.MatchId, intent.Round, intent.Kind))) return NotSent("ACTION_ALREADY_ATTEMPTED");
             var scope = SafeRead();
             string reason = Validate(intent, scope);
-            if (reason != "OK") return NotSent(reason);
+            if (reason != "OK") return NotSent(yieldRequested() ? "USER_INPUT_YIELD" : reason);
             if (port == null) return NotSent("EXECUTION_OFF_NO_TICKET_PORT");
             PortOutcome outcome;
             try { outcome = port.TrySend(intent, () => Validate(intent, SafeRead()) == "OK"); }
             catch { outcome = new(true, false, "PORT_EXCEPTION_DELIVERY_UNKNOWN"); }
             bool attemptedCommit = outcome.BidConfirmationAttempted ?? outcome.SideEffectAttempted;
+            // Same intent may wait/retry only before its irreversible confirmation.
+            // No receipt or attempted claim is created for a yielded draft edit.
+            if (!attemptedCommit && outcome.Reason == "USER_INPUT_YIELD")
+                return NotSent(outcome.Reason);
             long sentNs = attemptedCommit ? clock() : 0; // Draft edits are not a submitted bid.
             var status = !attemptedCommit ? ReceiptStatus.NOT_SENT
                 : outcome.Completed ? ReceiptStatus.SENT_PENDING_CONFIRMATION : ReceiptStatus.UNKNOWN;

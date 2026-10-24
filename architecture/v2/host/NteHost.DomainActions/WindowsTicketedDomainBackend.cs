@@ -59,6 +59,18 @@ public sealed class WindowsTicketedDomainBackend : ITicketedDomainBackend
     private VisibleControlAnchor? amountAnchor;
     private IReadOnlyList<VisibleControlAnchor> amountKeys = [];
 
+    public void ResetUnsubmittedEdit(DomainIntent intent)
+    {
+        lock (gate)
+        {
+            if (attemptedPrimitives.Contains((intent.IntentId, DomainPrimitive.SubmitBid))) return;
+            attemptedPrimitives.Remove((intent.IntentId, DomainPrimitive.FocusAmountField));
+            attemptedPrimitives.Remove((intent.IntentId, DomainPrimitive.ReplaceAmountDigits));
+            amountIntent = null; amountVerified = false; amountAnchor = null;
+            amountKeys = []; fillAttempts = 0;
+        }
+    }
+
     // allowGameInput must remain FALSE for offline integration. It is a second,
     // explicit operator gate; neither a READY intent nor a recognized ROI sets it.
     public WindowsTicketedDomainBackend(InputSafetyGuard guard, IDomainControlEvidence evidence,
@@ -214,6 +226,10 @@ public sealed class WindowsTicketedDomainBackend : ITicketedDomainBackend
             amountVerified = field is not null && field.Window == i.Window && field.Amount == i.Amount
                 && field.CapturedNs > lastAmountMutationNs;
             LastReadbackReason = amountVerified ? "EXACT_AMOUNT_VISIBLE" : "AMOUNT_READBACK_MISMATCH";
+            if (amountVerified)
+                Console.Error.WriteLine(System.Text.Json.JsonSerializer.Serialize(new {
+                    type="domain.action.timeline", stage="amount_verified", intentId=i.IntentId,
+                    matchId=i.MatchId, round=i.Round, amount=i.Amount, atNs=clock() }));
             return field;
         }
     }
