@@ -93,8 +93,13 @@ sealed class TicketedSceneAnchorDispatch : IDisposable
                 armed = true;
             }
             Volatile.Write(ref dispatching, 1);
+            Volatile.Write(ref activeFocus, borrowed);
             try { return backend.ClickSettlementSkip(() => current() && InputUninterrupted()); }
-            finally { Volatile.Write(ref dispatching, 0); }
+            finally
+            {
+                Volatile.Write(ref activeFocus, null);
+                Volatile.Write(ref dispatching, 0);
+            }
         }
     }
 
@@ -174,7 +179,14 @@ sealed class TicketedSceneAnchorDispatch : IDisposable
             if (intent.Kind != DomainActionKind.ReturnLobby && !AuctionPreparation.IsLobby(intent.Kind)
                 && intent.Round > 0 && intent.RoundDeadlineNs - now <
                 (intent.Kind == DomainActionKind.Bid ? 6_000_000_000 : 3_000_000_000)) return false;
-            if (courtesy.IsIdle(now)) return true;
+            if (courtesy.IsIdle(now))
+            {
+                Console.Error.WriteLine(new JsonObject { ["type"]="domain.action.idle-ready",
+                    ["intentId"]=intent.IntentId,["hardwareEvents"]=courtesy.Sequence,
+                    ["waitedForIdle"]=announced,["observer"]=JsonSerializer.SerializeToNode(observer.Diagnostics()),
+                    ["atNs"]=now }.ToJsonString());
+                return true;
+            }
             if (!announced)
             {
                 Console.Error.WriteLine(new JsonObject { ["type"]="domain.action.yield",
@@ -550,7 +562,9 @@ sealed class TicketedSceneAnchorDispatch : IDisposable
                 bool restored=owner.ActivateWindow(original);
                 if (restored && noHardwareInput()) SetCursorPos(cursor.X,cursor.Y);
                 Console.Error.WriteLine(new JsonObject { ["type"]="domain.action.focus-return",
-                    ["target"]=original,["restored"]=restored,["atNs"]=ProtocolClock.NowNs() }.ToJsonString());
+                    ["target"]=original,["restored"]=restored,
+                    ["activation"]=owner.LastActivation?.DeepClone(),
+                    ["hardwareInterrupted"]=!noHardwareInput(),["atNs"]=ProtocolClock.NowNs() }.ToJsonString());
             }
         }
         public bool Activate()

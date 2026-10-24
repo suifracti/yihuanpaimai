@@ -14,7 +14,14 @@ internal static class DomainTimingChecks
             new InputSafetyOptions {EnableRestrictedDomainActions=true,RestoreCursorOnCleanRelease=false,
                 HardwareYield=_=>{interrupted=true;hardware++;},DomainYieldRequested=()=>interrupted});
         observer.Start(e=>guard.OnObservedInput(e));
+        observer.Emit(new(InputEventKind.MouseMove,InputDeviceClass.Mouse,
+            InputEventOrigin.Hardware,0,10,20,TraceClock.NowNs(),1));
+        Require(hardware==1 && guard.State==GuardState.Disarmed,"UNARMED_MOUSE_UPDATES_IDLE");
+        interrupted=false; hardware=0;
         Require(guard.Arm(new(1)).Ok,"ARM");
+        observer.Emit(new(InputEventKind.KeyDown,InputDeviceClass.Keyboard,
+            InputEventOrigin.Injected,0,0,0,TraceClock.NowNs(),2));
+        Require(!interrupted && hardware==0,"INJECTED_KEY_IS_NOT_HARDWARE");
         int reads=0;
         bool Current() {
             if (++reads==3) observer.Emit(new(InputEventKind.KeyDown,InputDeviceClass.Keyboard,
