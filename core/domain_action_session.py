@@ -510,7 +510,7 @@ def advance_live_domain_loop(state, view, send):
             return state
     if view.get('waitingRestock'):
         return state
-    if scene == 'SETTLEMENT' and state.get('phase') != 'return_dispatched':
+    if scene == 'SETTLEMENT' and state.get('phase') not in {'return_dispatched','return_waiting'}:
         state['settledMatch'] = engine.get('matchId')
         if not view.get('collectionFinished'):
             state.update(phase='collecting', reason='WAITING_WAREHOUSE_SAVE')
@@ -598,6 +598,8 @@ def _consume_live_receipt(state, view):
             state.update(phase='stopped', reason=receipt.get('reason') or status)
         elif phase == 'bid_dispatched':
             state.update(phase='round_done', finishedRound=list(state.get('bidRound') or []), reason=status)
+        elif phase == 'return_dispatched' and status == 'UNKNOWN':
+            state.update(phase='return_waiting', reason='WAITING_LOBBY_AFTER_RETURN_UNKNOWN')
         elif phase == 'entry_dispatched' and status == 'UNKNOWN':
             state.update(phase='entry_unknown',reason='ENTRY_FEE_UNKNOWN_NOT_RETRIED')
         else:
@@ -627,11 +629,12 @@ def _closed_capture_record(view):
 
 
 def _observe_saved_return(state,view):
-    if (state.get('phase')=='collecting' and view.get('publishedScene')=='LOBBY'
+    if (state.get('phase') in {'collecting','return_waiting'} and view.get('publishedScene')=='LOBBY'
             and view.get('collectionFinished') and _closed_capture_record(view)==state.get('settledMatch')):
+        method = 'OBSERVED_LOBBY_AFTER_RETURN_UNKNOWN' if state.get('phase') == 'return_waiting' else 'OBSERVED_LOBBY'
         state.update(phase='return_confirmed',reason=None,coverage=view.get('coverageStatus') or 'PARTIAL',
             savedSources=view.get('savedSources',0),scrollRequests=view.get('scrollRequests',0))
-        _complete_returned_match(state,'OBSERVED_LOBBY')  # A scene fact, never a fabricated Host receipt.
+        _complete_returned_match(state,method)  # A scene fact, never a fabricated Host receipt.
 
 
 def _dispatch_live_bid(state, view, send):

@@ -298,6 +298,27 @@ class AuthorizedLiveDomainLoopTests(unittest.TestCase):
             self.assertEqual(len(sent), 1)
             self.assertFalse(state["resendAllowed"])
 
+    def test_delayed_lobby_after_return_timeout_counts_saved_match_without_resend(self):
+        # live-one-07: return sent at 12:33:54, UNKNOWN at 12:34:10,
+        # lobby at 12:34:18. The old idle transition lost the completed match.
+        with tempfile.TemporaryDirectory() as directory:
+            state=fresh_live_domain_state()
+            state.update(phase='return_dispatched',settledMatch='settled',returnIntentId='return-1')
+            sent=[]
+            view=self.view(funds=200000,scene='SETTLEMENT',round_no=1,directory=directory,
+                sessionReceipt=dict(intentId='return-1',kind='ReturnLobby',status='UNKNOWN',reason='VISIBLE_RESULT_TIMEOUT_3S'))
+            view.update(collectionFinished=True,captureRecordKey='settled',coverageStatus='COMPLETE',savedSources=31)
+            advance_live_domain_loop(state,view,lambda _,e:sent.append(e) or True)
+            self.assertEqual(sent,[])
+            self.assertEqual(state['phase'],'return_waiting')
+            view['publishedScene']='LOBBY'
+            from domain_action_session import _observe_saved_return
+            _observe_saved_return(state,view)
+            self.assertEqual(state['matchesDone'],1)
+            self.assertEqual(state['completedRuns'][0]['returnedBy'],'OBSERVED_LOBBY_AFTER_RETURN_UNKNOWN')
+            _observe_saved_return(state,view)
+            self.assertEqual(state['matchesDone'],1)
+
     def test_lobby_waits_for_the_settled_capture_then_starts_the_next_match(self):
         with tempfile.TemporaryDirectory() as directory:
             sent = []
