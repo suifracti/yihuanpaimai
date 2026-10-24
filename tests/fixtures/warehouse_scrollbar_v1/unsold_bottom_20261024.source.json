@@ -1,0 +1,12 @@
+{
+  "source": "build/native-observation/session-5756dafefb6b4050b9502b28cc9a35f1/warehouse-sources/543b52f41fba4aa0b094ff0dd93d434a.bmp",
+  "sourceSha256": "b43b52775d0bd99db426e214cde32d50c39e5e4cb3678e876bae18f189a98c56",
+  "crop": [
+    1315,
+    211,
+    1915,
+    847
+  ],
+  "expected": "BOTTOM",
+  "reason": "physical grid and scrollbar end at y=774; old dark footer extended detected track to 846"
+}

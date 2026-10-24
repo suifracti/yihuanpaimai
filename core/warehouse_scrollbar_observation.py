@@ -208,7 +208,9 @@ def observe_warehouse_scrollbar(
         crop = frame
     else:
         h, w = frame.shape[:2]
-        x1, y1, x2, y2 = warehouse_search_roi(w, h)
+        # The dark sale footer can join the track after morphology.
+        # Endpoint geometry is confined to the known grid/scrollbar panel.
+        x1, y1, x2, y2 = warehouse_content_roi(w, h)
         crop = frame[y1:y2, x1:x2]
         origin = (x1, y1)
     if crop.size == 0:

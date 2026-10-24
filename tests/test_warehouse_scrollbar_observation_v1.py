@@ -50,6 +50,15 @@ def _paste_on_canvas(crop: np.ndarray, size=(1920, 1080)) -> np.ndarray:
 
 
 class WarehouseScrollbarObservationV1Tests(unittest.TestCase):
+    def test_unsold_real_bottom_excludes_dark_footer_from_track(self):
+        # Real SOURCE from live-ten-10; old track extended through the footer
+        # to y=846 although the physical bottom is y=774 (reported MIDDLE).
+        full = _paste_on_canvas(_load('unsold_bottom_20261024.png'))
+        for scale in (1., 2 / 3):
+            obs = observe_warehouse_scrollbar(cv2.resize(full, None, fx=scale, fy=scale))
+            self.assertEqual(obs['scrollState'], STATE_BOTTOM)
+            self.assertLessEqual(obs['trackBox'][3], 777 * scale)
+
     def test_live_white_item_border_does_not_hide_thumb(self):
         # 2026-09-08 live settlement evidence fa25907e106306b3...,
         # client crop [1315, 211, 1915, 847]. Old brightest-column
