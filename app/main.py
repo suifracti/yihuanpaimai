@@ -3267,6 +3267,12 @@ def _advance_authorized_live_domain_loop(data: Dict[str, Any], frame: Dict[str, 
         from domain_action_session import _consume_live_receipt, _observe_saved_return
         _consume_live_receipt(_LIVE_DOMAIN_LOOP, view)
         _observe_saved_return(_LIVE_DOMAIN_LOOP,view)
+        # Counting an observed return can reach the limit in this very frame.
+        # Do not restock once more before the next frame notices that count.
+        if isinstance(limit, int) and limit > 0 and _LIVE_DOMAIN_LOOP.get('matchesDone', 0) >= limit:
+            _LIVE_DOMAIN_LOOP.update(phase='stopped', reason='AUTO_AUCTION_MATCH_LIMIT')
+            _stop_authorized_live_domain_loop('AUTO_AUCTION_MATCH_LIMIT')
+            return
         from instrument_restock import advance as advance_restock, SCENES as restock_scenes
         from startup_popup_recovery import advance as recover_startup
         recovering = recover_startup(_LIVE_DOMAIN_LOOP, view, send)

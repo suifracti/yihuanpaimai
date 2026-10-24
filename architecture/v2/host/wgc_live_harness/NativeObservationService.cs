@@ -926,8 +926,9 @@ internal static class NativeObservationService
                 }
                 if (settlementCollectionClosed && scene == "SETTLEMENT" && !justClosedSettlement)
                 {
-                    // Keep watching target/focus and the exit scene, without
-                    // repeatedly publishing an already closed bill.
+                    // Bill freezing belongs to the engine. Keep publishing the
+                    // current settlement view so Main can observe saved collection
+                    // completion and dispatch ReturnLobby before the game timeout.
                     var currentTarget = monitor.Snapshot();
                     var probeFrame = new WarehouseSourceFrame(frame.Width, frame.Height, frame.Stride, frame.Pixels,
                         frame.SourceTimestampNs, frame.CaptureTimestampNs, frame.CapturedAtUtc,
@@ -938,8 +939,6 @@ internal static class NativeObservationService
                         () => IsObservationTargetUsable(monitor.Snapshot(), observationWindowMode)
                             && MatchesObservationTargetIdentity(evidenceTarget, monitor.Snapshot(), target, observationWindowMode)
                             && capture.IsClientAreaMappingCurrent());
-                    Thread.Sleep(Math.Max(intervalMs, 600));
-                    continue;
                 }
 
                 if (!firstFrameWritten)
@@ -990,7 +989,7 @@ internal static class NativeObservationService
                     latestRawPath,
                     capture,
                     observationWindowMode,
-                    settlementBusinessClosed: justClosedSettlement && scene == "SETTLEMENT"
+                    settlementBusinessClosed: settlementCollectionClosed && scene == "SETTLEMENT"
                         && !string.IsNullOrEmpty(settlementMatchId)
                         && string.Equals(settlementMatchId, nextRecordKey, StringComparison.Ordinal),
                     settlementDeadlineNs: settlementSourceDeadlineNs,

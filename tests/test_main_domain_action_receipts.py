@@ -67,6 +67,23 @@ class MainDomainActionReceiptTests(unittest.TestCase):
             self.assertNotIn('bidActionReceipt',latest)
             self.assertEqual(app_main.CURRENT_MATCH.id,'old-match')
 
+    def test_match_limit_is_checked_after_counting_return_before_restock(self):
+        state={'phase':'collecting','matchesDone':0}
+        with mock.patch.multiple(app_main, _LIVE_DOMAIN_LOOP=state,
+            _MAIN_WINDOW_HOLDER=[mock.Mock()],
+            _auto_auction_enabled=mock.Mock(return_value=True),
+            _native_domain_planning_view=mock.Mock(return_value={'scene':'LOBBY','funds':200000}),
+            _live_loop_view=mock.Mock(return_value={'publishedScene':'LOBBY'}),
+            _live_domain_mode=mock.Mock(return_value='bid'),
+            _auto_auction_settings=mock.Mock(return_value={'maxMatches':1}),
+            _stop_authorized_live_domain_loop=mock.Mock()) as patched, \
+            mock.patch('domain_action_session._consume_live_receipt'), \
+            mock.patch('domain_action_session._observe_saved_return', side_effect=lambda s,v:s.update(matchesDone=1)), \
+            mock.patch('instrument_restock.advance') as restock:
+            app_main._advance_authorized_live_domain_loop({}, {})
+            restock.assert_not_called()
+            self.assertEqual(state['reason'],'AUTO_AUCTION_MATCH_LIMIT')
+
     def test_startup_cancel_receipt_reaches_recovery_without_auction_identity(self):
         intent=dict(intentId='refill',kind='CancelKnownPopup',matchId='lobby-obs-1',
                     matchGeneration=1,observationSessionId='obs-1',round=0,factsRevision=0)
