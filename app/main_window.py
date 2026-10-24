@@ -1733,8 +1733,8 @@ def create_main_window_type(WinForms, Drawing):
                 self._game_input_previous_state = self.WindowState
                 self.Text = "异环拍卖助手"
                 self.WindowState = WinForms.FormWindowState.Minimized
-                if target_hwnd:
-                    ctypes.windll.user32.SetForegroundWindow(ctypes.c_void_p(target_hwnd))
+                # Host borrows focus only after user input becomes idle, and
+                # returns it after the click. Minimizing Main must not steal it.
                 self._game_input_ready = True
             if getattr(self, "InvokeRequired", False):
                 from System import Action
