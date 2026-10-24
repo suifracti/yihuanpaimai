@@ -257,7 +257,7 @@ public sealed class NativeDomainActionRuntime
     }
     public DomainReceipt? Poll()
     {
-        lock (gate) { var result = coordinator.Poll(); return result == null ? null : Emit(result); }
+        lock (gate) { var result = coordinator.Poll(); return result == null || result.Status == ReceiptStatus.SENT_PENDING_CONFIRMATION ? result : Emit(result); }
     }
     private DomainReceipt Emit(DomainReceipt receipt)
     {

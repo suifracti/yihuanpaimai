@@ -2,6 +2,13 @@ using NteHost.DomainActions;
 static class UnknownBidChecks {
  static void Check(bool ok,string msg) {if(!ok)throw new Exception(msg);}
  public static void Run() {
+  var wait=new Fixture(); int commits=0;
+  var runtime=new NativeDomainActionRuntime(wait.Coordinator,new NativeVisibleResultProducer(new UnconnectedGameDomainDecoder(),()=>wait.Now),
+    new DelegatedExecutionObligationPort(_=>true,_=>++commits==1),_=>{});
+  var wi=wait.Intent();runtime.Dispatch(wi);
+  wait.Now+=10_000_000;
+  var waitingFrame=new NativeDomainFrame(wait.Scope with {CapturedNs=wait.Now,SourceSequence=11},new(4,4,0,0),new byte[64],16);
+  Check(runtime.OnIndependentCapture(wi.IntentId,waitingFrame,new(1,"self"))?.Status==ReceiptStatus.SENT_PENDING_CONFIRMATION && commits==1,"WAITING_FRAME_MUST_NOT_RECOMMIT_PENDING");
   var f=new Fixture();var i=f.Intent();f.Coordinator.Dispatch(i);f.Now+=4_000_000_000;
   Check(f.Coordinator.Poll()?.Status==ReceiptStatus.UNKNOWN,"FIRST_UNKNOWN");
   Check(f.Coordinator.Dispatch(i).Status==ReceiptStatus.UNKNOWN && f.Port.Sends==1,"NO_RESEND");
