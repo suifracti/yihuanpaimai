@@ -486,7 +486,8 @@ sealed class TicketedSceneAnchorDispatch : IDisposable
         if (intent.Kind == DomainActionKind.StartNextMatch) return intent.Amount is null && intent.Round == 0;
         if (AuctionPreparation.IsPreparation(intent.Kind)) return !string.IsNullOrWhiteSpace(intent.ApprovalId)
             && (AuctionPreparation.IsLobby(intent.Kind) ? intent.Round == 0
-                && (intent.Kind is DomainActionKind.ConfirmToolRefill or DomainActionKind.ConfirmEntryFee ? intent.Amount is > 0 && intent.Amount <= intent.Budget : intent.Amount is null)
+                && (intent.Kind is DomainActionKind.ConfirmToolRefill or DomainActionKind.ConfirmEntryFee ? (intent.Kind == DomainActionKind.ConfirmEntryFee ? intent.Amount is >= 0 : intent.Amount is > 0)
+                    && intent.Amount <= intent.Budget : intent.Amount is null)
                 : intent.Amount is null && intent.Round is >= 1 and <= 5);
         return false;
     }
