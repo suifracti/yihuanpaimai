@@ -129,6 +129,9 @@ public sealed class DomainActionCoordinator
     private readonly HashSet<string> warningAttempted = new();
     private string? pending;
     private bool stopped;
+    private readonly Dictionary<(string,long), int> unknownCounts = new();
+    private readonly HashSet<string> unknownIntents = new();
+    public DomainReceipt? Receipt(string id) { lock(gate) return receipts.TryGetValue(id,out var e) ? e.Receipt : null; }
 
     public DomainActionCoordinator(Func<ActionScope?> readScope, Func<long> clock,
         IRestrictedDomainInputPort? port = null, Func<bool>? yieldRequested = null)
@@ -175,7 +178,7 @@ public sealed class DomainActionCoordinator
             receipts.Add(intent.IntentId, (intent, receipt, scope!.SourceSequence));
             if (attemptedCommit) attempted.Add((intent.MatchId, intent.Round, intent.Kind));
             if (status == ReceiptStatus.SENT_PENDING_CONFIRMATION) pending = intent.IntentId;
-            if (status == ReceiptStatus.UNKNOWN && intent.Kind == DomainActionKind.Bid) stopped = true;
+            if (status == ReceiptStatus.UNKNOWN && intent.Kind == DomainActionKind.Bid) return Stop(receipts[intent.IntentId], receipt.Reason);
             return receipt;
         }
     }
@@ -186,13 +189,14 @@ public sealed class DomainActionCoordinator
         {
             if (!receipts.TryGetValue(evidence.IntentId, out var entry))
                 throw new ArgumentException("UNKNOWN_INTENT", nameof(evidence));
-            if (entry.Receipt.Status != ReceiptStatus.SENT_PENDING_CONFIRMATION) return entry.Receipt;
+            if (entry.Receipt.Status != ReceiptStatus.SENT_PENDING_CONFIRMATION
+                && !(entry.Intent.Kind == DomainActionKind.Bid && entry.Receipt.Status == ReceiptStatus.UNKNOWN && !stopped)) return entry.Receipt;
             var i = entry.Intent;
             var current = SafeRead();
             long now = clock();
             if (current is not null && current.Window != i.Window)
                 return Stop(entry, "TARGET_IDENTITY_CHANGED");
-            if (now >= entry.Receipt.SentNs + 3_000_000_000)
+            if (entry.Receipt.Status != ReceiptStatus.UNKNOWN && now >= entry.Receipt.SentNs + 3_000_000_000)
                 return Stop(entry, "VISIBLE_RESULT_TIMEOUT_3S");
             bool matches = evidence.Kind == i.Kind && evidence.OriginMatchId == i.MatchId
                 && evidence.OriginRound == i.Round && evidence.OriginFactsRevision == i.FactsRevision
@@ -280,9 +284,16 @@ public sealed class DomainActionCoordinator
 
     private DomainReceipt Stop((DomainIntent Intent, DomainReceipt Receipt, long Sequence) entry, string reason)
     {
+        if(entry.Intent.Kind == DomainActionKind.Bid) {
+            var key=(entry.Intent.MatchId,entry.Intent.MatchGeneration);
+            if(unknownIntents.Add(entry.Intent.IntentId))
+                unknownCounts[key]=unknownCounts.GetValueOrDefault(key)+1;
+            if(unknownCounts[key]>=2) { stopped=true; reason="SECOND_BID_UNKNOWN"; }
+            if(reason is "OWN_BID_AMOUNT_MISMATCH" or "TARGET_IDENTITY_CHANGED") stopped=true;
+        }
         var result = entry.Receipt with { Status = ReceiptStatus.UNKNOWN, Reason = reason };
         receipts[entry.Intent.IntentId] = (entry.Intent, result, entry.Sequence);
-        stopped = entry.Intent.Kind == DomainActionKind.Bid; pending = null; return result;
+        pending = null; return result;
     }
     private ActionScope? SafeRead() { try { return readScope(); } catch { return null; } }
     private string Validate(DomainIntent i, ActionScope? s)

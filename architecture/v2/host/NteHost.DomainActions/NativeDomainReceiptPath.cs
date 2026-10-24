@@ -42,6 +42,7 @@ public sealed record CapturedOwnBid(int Slot, string PlayerIdentity, long? Amoun
     // The submitted button uses K/M with two decimal places. Retain its text;
     // it is a display confirmation of the already read-back exact input.
     public string? DisplayText { get; init; }
+    public bool Readable => Amount is > 0 || Regex.IsMatch(Regex.Replace(DisplayText ?? "", @"\s*[,，]\s*", ",").Trim(), @"^(?:[1-9]\d*(?:\.\d{1,2})?[KM]|[1-9]\d{0,2}(?:,\d{3})+|[1-9]\d*)$", RegexOptions.IgnoreCase);
     public bool MatchesAmount(long expected)
     {
         if (Amount is { } exact) return exact == expected;
@@ -62,7 +63,8 @@ public sealed record CapturedOwnBid(int Slot, string PlayerIdentity, long? Amoun
 public sealed record InstrumentStock(int? GoldAverage, int? PurpleCount, long? RefillCost, long? Funds);
 public sealed record DecodedDomainFrame(string Scene, int Round, string MatchId, long MatchGeneration,
     CapturedOwnBid? OwnBid, long? AmountField, IReadOnlyList<VisibleControlAnchor> Controls)
-{ public long? BidWarningAmount { get; init; }
+{ public CapturedOwnBid? OwnSeatBid { get; init; }
+  public long? BidWarningAmount { get; init; }
   public bool GoldAverageVisible { get; init; }
   public bool PurpleCountVisible { get; init; }
   public InstrumentStock? Instruments { get; init; }
@@ -143,14 +145,17 @@ public sealed class NativeVisibleResultProducer
     private readonly Func<long> clock;
     public NativeVisibleResultProducer(IGameDomainFrameDecoder decoder, Func<long> clock)
     { this.decoder = decoder; this.clock = clock; }
+    public IGameDomainFrameDecoder Decoder => decoder;
     public VisibleResult? FromCapture(DomainIntent intent, DomainReceipt pending, NativeDomainFrame frame, OwnSeatBinding? ownSeat)
     {
         var s = frame.Scope; long now = clock();
-        if (pending.Status != ReceiptStatus.SENT_PENDING_CONFIRMATION || pending.IntentId != intent.IntentId
+        if (pending.Status is not (ReceiptStatus.SENT_PENDING_CONFIRMATION or ReceiptStatus.UNKNOWN) || pending.IntentId != intent.IntentId
             || s.CapturedNs <= pending.SentNs || s.Window != intent.Window
             || s.ObservationSessionId != intent.ObservationSessionId || s.TakeoverGeneration != intent.TakeoverGeneration)
             return null;
         var view = frame.DecodeOnce(decoder);
+        if (pending.Status == ReceiptStatus.UNKNOWN && view is not null)
+            view = view with { OwnBid = view.OwnSeatBid };
         if (view == null || view.MatchId != s.MatchId || view.MatchGeneration != s.MatchGeneration || view.Round != s.Round)
             return null;
         long? accepted = null; string? newMatch = null; long newGeneration = 0;
@@ -225,14 +230,21 @@ public sealed class NativeDomainActionRuntime
         lock (gate)
         {
             if (!intents.TryGetValue(intentId, out var intent)) return null;
-            var pending = coordinator.Poll();
+            var pending = coordinator.Receipt(intentId);
             if (pending == null) return null;
-            if (pending.Status == ReceiptStatus.UNKNOWN) return Emit(pending);
+            if (pending.Status == ReceiptStatus.UNKNOWN) {
+                var own=frame.DecodeOnce(producer.Decoder)?.OwnSeatBid;
+                if (frame.Scope.MatchId != intent.MatchId || frame.Scope.MatchGeneration != intent.MatchGeneration
+                    || frame.Scope.Round != intent.Round || frame.Scope.Window != intent.Window
+                    || frame.Scope.ObservationSessionId != intent.ObservationSessionId || frame.Scope.CapturedNs <= pending.SentNs) return null;
+                if (own?.Readable == true && intent.Amount is { } expected && !own.MatchesAmount(expected))
+                    return Emit(coordinator.MarkUnknown(intentId,"OWN_BID_AMOUNT_MISMATCH"));
+            }
             if (pending.IntentId != intentId) return null;
             VisibleResult? result;
             try { result = producer.FromCapture(intent, pending, frame, ownSeat); }
             catch { result = null; }
-            return result == null ? pending : Emit(coordinator.Confirm(result));
+            return result == null ? (pending.Status == ReceiptStatus.UNKNOWN ? pending : Poll()) : Emit(coordinator.Confirm(result));
         }
     }
     public DomainReceipt? ContinueBidWarning(string intentId, long amount, ActionScope frame,

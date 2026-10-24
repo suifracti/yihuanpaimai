@@ -147,7 +147,7 @@ public sealed class SceneAnchorGameDecoder : IGameDomainFrameDecoder
             scene = "SETTLEMENT";
         else
         {
-            foreach (string name in new[] { "BID_WARNING", "ENTRY_FEE", "TOOL_REFILL_CONFIRM", "TOOL_SETUP", "TOOL_GROUPS", "LOBBY", "INSTRUMENT_GOLD_SELECTED", "INSTRUMENT_PURPLE_SELECTED", "INSTRUMENT_LIST", "AUCTION", "AUCTION_READY" })
+            foreach (string name in new[] { "BID_WARNING", "ENTRY_FEE", "TOOL_REFILL_CONFIRM", "TOOL_SETUP", "TOOL_GROUPS", "LOBBY", "INSTRUMENT_GOLD_SELECTED", "INSTRUMENT_PURPLE_SELECTED", "INSTRUMENT_LIST", "AUCTION", "AUCTION_READY", "AUCTION_WAITING" })
             {
                 var spec = Scene(catalog, name);
                 if (spec is null || !AllWitnesses(gray, frame, catalog, spec)) continue;
@@ -242,7 +242,29 @@ public sealed class SceneAnchorGameDecoder : IGameDomainFrameDecoder
         }
         return new(scene, frame.Scope.Round, frame.Scope.MatchId, frame.Scope.MatchGeneration,
             own, amount is >= 0 and <= 9_999_999 ? amount : null, controls) {
-                BidWarningAmount = warningAmount, GoldAverageVisible = goldVisible, PurpleCountVisible = purpleVisible, Instruments = stock, Sale = sale };
+                BidWarningAmount = warningAmount, GoldAverageVisible = goldVisible, PurpleCountVisible = purpleVisible, Instruments = stock, Sale = sale, OwnSeatBid = scene.StartsWith("AUCTION") ? ReadOwnSeat(frame) : null };
+    }
+
+    CapturedOwnBid? ReadOwnSeat(NativeDomainFrame frame)
+    {
+        if (catalog is null || ReadCommittedText is null) return null;
+        // The orange name plate identifies the user's seat, independently of nickname OCR.
+        int own=-1;
+        for(int slot=0;slot<4;slot++) {
+            var b=Scale(new(155,190+160*slot,330,216+160*slot),frame.Geometry.Width,frame.Geometry.Height,catalog);
+            int orange=0,total=0;
+            for(int y=b.Y;y<b.Bottom;y+=2) for(int x=b.X;x<b.Right;x+=2) {
+                int i=y*frame.Stride+x*4;var p=frame.Pixels.Span;
+                if(p[i+2]>170 && p[i+1]>55 && p[i+1]<180 && p[i]<85) orange++;
+                total++;
+            }
+            if(orange>total*.45) { if(own!=-1)return null; own=slot; }
+        }
+        if(own<0)return null;
+        var r=Scale(new(175,238+160*own,480,300+160*own),frame.Geometry.Width,frame.Geometry.Height,catalog);
+        string? text=ReadCommittedText(frame.Pixels,frame.Geometry.Width,frame.Geometry.Height,frame.Stride,r.X,r.Y,r.Right-r.X,r.Bottom-r.Y);
+        var result=new CapturedOwnBid(OwnCommittedBidSlot,OwnCommittedBidIdentity,null,true,frame.EvidenceRef) {DisplayText=text};
+        return result.Readable ? result : null;
     }
 
     void AddAmountFocus(byte[] gray, NativeDomainFrame frame, SceneSpec auction,

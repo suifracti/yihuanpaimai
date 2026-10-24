@@ -73,6 +73,7 @@ static class Program
     static void Case(string name, Action action) { action(); cases++; Console.WriteLine("PASS " + name); }
     static void Main(string[] args)
     {
+        if (args.Contains("--unknown-only")) { UnknownBidChecks.Run(); return; }
         if (args.Contains("--sale-only")) { SettlementSaleChecks.Run(args[^1]); return; }
         if (args.Contains("--observer-latency-only")) { ObserverLatencyChecks.Run(); return; }
         if (args.Contains("--courtesy-only")) { CourtesyChecks.Run(); return; }

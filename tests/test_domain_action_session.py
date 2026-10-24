@@ -225,6 +225,28 @@ class AuthorizedLiveDomainLoopTests(unittest.TestCase):
         base.update(extra)
         return base
 
+    def test_unknown_reconciliation_and_second_unknown(self):
+        from domain_action_session import _consume_live_receipt
+        state = fresh_live_domain_state()
+        state.update(phase='bid_dispatched', bidIntentId='one', bidRound=['match', 1, 1])
+        view = {'bidReceipt': {'intentId':'one','status':'UNKNOWN'}}
+        _consume_live_receipt(state, view)
+        _consume_live_receipt(state, view)
+        self.assertEqual(state['phase'], 'round_done')
+        self.assertEqual(len(state['unknownBidIntents']), 1)
+        view['bidReceipt']['status'] = 'CONFIRMED'
+        _consume_live_receipt(state, view)
+        self.assertIsNone(state['reason'])
+        state.update(phase='bid_dispatched', bidIntentId='two', bidRound=['match',1,2])
+        _consume_live_receipt(state, {'bidReceipt':{'intentId':'two','status':'UNKNOWN'}})
+        self.assertEqual(state['reason'], 'SECOND_BID_UNKNOWN')
+        self.assertEqual(state['phase'], 'stopped')
+        state.update(phase='bid_dispatched', bidIntentId='three', bidRound=['next-match',2,1])
+        _consume_live_receipt(state, {'bidReceipt':{'intentId':'three','status':'UNKNOWN'}})
+        self.assertEqual(state['phase'], 'round_done')
+        _consume_live_receipt(state, {'bidReceipt':{'intentId':'three','status':'UNKNOWN','reason':'OWN_BID_AMOUNT_MISMATCH'}})
+        self.assertEqual(state['phase'], 'stopped')
+
     def test_zero_entry_fee_is_valid_but_missing_or_negative_is_not(self):
         from domain_action_session import _dispatch_entry_fee
         for cost in (0, 5000, None, -1):
@@ -329,15 +351,15 @@ class AuthorizedLiveDomainLoopTests(unittest.TestCase):
                 fresh_live_domain_state(),
                 self.view(funds=100000, scene="AUCTION", round_no=2, directory=directory), send)
             bid_id = sent[0]["intent"]["intentId"]
-            unknown = self.view(funds=100000, scene="SETTLEMENT", round_no=2, directory=directory,
+            unknown = self.view(funds=100000, scene="AUCTION", round_no=2, directory=directory,
                                 bidReceipt=dict(intentId=bid_id, kind="Bid", status="UNKNOWN"))
             state = advance_live_domain_loop(state, unknown, send)
-            self.assertEqual(state["phase"], "stopped")
-            self.assertEqual(state["reason"], "UNKNOWN")
+            self.assertEqual(state["phase"], "round_done")
+            self.assertEqual(state["reason"], "BID_UNKNOWN_WAITING_OWN_SEAT_NO_RESEND")
             self.assertFalse(state["resendAllowed"])
             again = advance_live_domain_loop(state, unknown, send)
             self.assertEqual(len(sent), 1)
-            self.assertEqual(again["phase"], "stopped")
+            self.assertEqual(again["phase"], "round_done")
 
         with tempfile.TemporaryDirectory() as directory:
             sent = []

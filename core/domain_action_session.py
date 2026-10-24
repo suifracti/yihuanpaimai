@@ -593,7 +593,7 @@ def _consume_live_receipt(state, view):
         elif receipt.get('status') in ('UNKNOWN', 'NOT_SENT'):
             state.update(phase='idle', reason=receipt.get('reason') or receipt['status'])
         return
-    if phase == "bid_dispatched":
+    if phase in {"bid_dispatched", "round_done"}:
         receipt, intent_id = view.get("bidReceipt"), state.get("bidIntentId")
     elif phase == "return_dispatched":
         receipt, intent_id = view.get("sessionReceipt"), state.get("returnIntentId")
@@ -610,7 +610,7 @@ def _consume_live_receipt(state, view):
         state["reason"] = "WAITING_VISIBLE_RESULT"
         return
     if status == "CONFIRMED":
-        if phase == "bid_dispatched":
+        if phase in {"bid_dispatched", "round_done"}:
             state["phase"] = "round_done"
             state['finishedRound'] = list(state.get('bidRound') or [])
             state["reason"] = None
@@ -623,9 +623,16 @@ def _consume_live_receipt(state, view):
         state["resendAllowed"] = False
         return
     if status in ("UNKNOWN", "NOT_SENT"):
-        if phase == 'bid_dispatched' and status == 'UNKNOWN':
-            state.update(phase='stopped', reason=receipt.get('reason') or status)
-        elif phase == 'bid_dispatched':
+        if phase in {'bid_dispatched', 'round_done'} and status == 'UNKNOWN':
+            match = tuple((state.get('bidRound') or [])[:2])
+            seen = state.setdefault('unknownBidIntents', {})
+            seen[intent_id] = match
+            count = sum(value == match for value in seen.values())
+            if count >= 2 or receipt.get('reason') in {'SECOND_BID_UNKNOWN', 'OWN_BID_AMOUNT_MISMATCH', 'TARGET_IDENTITY_CHANGED'}:
+                state.update(phase='stopped', reason=receipt.get('reason') if count < 2 else 'SECOND_BID_UNKNOWN')
+            else:
+                state.update(phase='round_done', finishedRound=list(state.get('bidRound') or []), reason='BID_UNKNOWN_WAITING_OWN_SEAT_NO_RESEND')
+        elif phase in {'bid_dispatched', 'round_done'}:
             state.update(phase='round_done', finishedRound=list(state.get('bidRound') or []), reason=status)
         elif phase == 'return_dispatched' and status == 'UNKNOWN':
             state.update(phase='return_waiting', reason='WAITING_LOBBY_AFTER_RETURN_UNKNOWN')

@@ -3035,9 +3035,8 @@ def _native_domain_action_receipt_event(event: Dict[str, Any]) -> Optional[Dict[
         if receipt.get('status') == 'NOT_SENT' and receipt.get('reason') == 'ROUND_TIME_TOO_SHORT':
             state.update(phase='idle', reason='ROUND_TIME_TOO_SHORT',
                 skippedBidRound=[receipt.get(k) for k in ('matchId','matchGeneration','round')])
-        elif receipt.get('status') == 'UNKNOWN':
-            # Stop is independent of admitting a receipt as a committed bid fact.
-            _stop_authorized_live_domain_loop(str(receipt.get('reason') or receipt['status']))
+        elif receipt.get('status') == 'UNKNOWN' and receipt.get('reason') in {'SECOND_BID_UNKNOWN', 'OWN_BID_AMOUNT_MISMATCH', 'TARGET_IDENTITY_CHANGED'}:
+            _stop_authorized_live_domain_loop(receipt['reason'])
 
     with _MANUAL_STATE_LOCK:
         if kind == "Bid":

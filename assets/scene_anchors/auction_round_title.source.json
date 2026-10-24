@@ -1,0 +1,11 @@
+{
+  "source": "build/native-observation/session-89ac81a0e3c54830834c173fa106159d/domain-rejected-diagnostic.bmp",
+  "sha256": "6587c09b9778cdec71e6101ac06280601451d11feb10496cf7c9194181b50d7a",
+  "crop": [
+    841,
+    169,
+    936,
+    206
+  ],
+  "meaning": "Auction round title excluding variable round digit; remains when seat cards turn dark after bidding."
+}

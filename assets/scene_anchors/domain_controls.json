@@ -519,6 +519,21 @@
           "optional": true
         }
       ]
+    },
+    {
+      "scene": "AUCTION_WAITING",
+      "witnesses": [
+        {
+          "template": "auction_round_title.png",
+          "search": [
+            810,
+            150,
+            955,
+            225
+          ]
+        }
+      ],
+      "controls": []
     }
   ],
   "committedSearch": [

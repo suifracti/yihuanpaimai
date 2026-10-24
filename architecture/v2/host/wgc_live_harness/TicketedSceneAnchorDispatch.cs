@@ -30,6 +30,7 @@ sealed class TicketedSceneAnchorDispatch : IDisposable
     Func<DomainIntent, NativeDomainFrame?>? engineCapture;
     DomainIntent? current;
     DomainIntent? pending;
+    DomainIntent? reconciling;
     NativeDomainFrame? pinned;
     NativeDomainFrame? latestCapture;
     bool usePinned;
@@ -116,10 +117,11 @@ sealed class TicketedSceneAnchorDispatch : IDisposable
             (long?)match?["factsRevision"] ?? 0, 0, 0, "UNKNOWN", "", 0, window, 0,
             frame.AcquisitionSequence, frame.CaptureTimestampNs, false, false, target.IsTargetForeground,
             false, false, false)
-        { MatchGeneration = (long?)state?["lastFrame"]?["matchGeneration"] ?? 0,
+        { MatchGeneration = (long?)state?["lastFrame"]?["matchGeneration"] ?? (long?)state?["activePipelineMatchGeneration"] ?? 0,
             ObservationSessionId = sessionId };
         var held = new NativeDomainFrame(scope, geometry, frame.Pixels, frame.Stride);
         var view = held.DecodeOnce(decoder);
+        if(reconciling is not null) Observe(held); // passive same-round seat reconciliation; never sends
         var funds = SceneAnchorOcr.ReadAssets(held.Pixels, frame.Width, frame.Height, frame.Stride, view?.Scene);
         return new JsonObject { ["schemaVersion"] = "domain-planning-view.v1", ["planningOnly"] = true,
             ["inputActions"] = false, ["frameSequence"] = frameSequence,
@@ -305,11 +307,12 @@ sealed class TicketedSceneAnchorDispatch : IDisposable
             }
             if (receipt.Status == ReceiptStatus.SENT_PENDING_CONFIRMATION)
             {
+                reconciling=null;
                 pending = intent;
                 confirmationDeadlineNs = receipt.SentNs + 3_000_000_000;
                 pendingFocus = borrowed; // return after the existing visible-result check
             }
-            else if (receipt.Status == ReceiptStatus.UNKNOWN) pending = null;
+            else if (receipt.Status == ReceiptStatus.UNKNOWN) { reconciling=intent.Kind==DomainActionKind.Bid ? intent : null; pending = null; }
             return true;
             }
             finally
@@ -325,8 +328,11 @@ sealed class TicketedSceneAnchorDispatch : IDisposable
     {
         lock (gate)
         {
-            var intent = pending;
+            var intent = pending ?? reconciling;
             if (intent is null) return;
+            if(pending is null && engine is not null && (engine.Scope.MatchId!=intent.MatchId
+                || engine.Scope.MatchGeneration!=intent.MatchGeneration || engine.Scope.Round!=intent.Round))
+            { reconciling=null; return; }
             if (!InputUninterrupted())
             {
                 pendingFocus?.Dispose();
@@ -368,10 +374,11 @@ sealed class TicketedSceneAnchorDispatch : IDisposable
             }
             if (receipt?.Status == ReceiptStatus.CONFIRMED)
             {
+                reconciling=null;
                 if (receipt.Kind == DomainActionKind.ReturnLobby) settlementReturned = true;
                 pending = null;
             }
-            else if (receipt?.Status == ReceiptStatus.UNKNOWN) pending = null;
+            else if (receipt?.Status == ReceiptStatus.UNKNOWN) { reconciling=intent.Kind==DomainActionKind.Bid ? intent : null; pending = null; }
             if (pending is null)
             { pendingFocus?.Dispose(); pendingFocus = null; Volatile.Write(ref activeFocus, null); }
         }
