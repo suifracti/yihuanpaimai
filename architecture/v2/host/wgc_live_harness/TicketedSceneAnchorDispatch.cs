@@ -556,13 +556,19 @@ sealed class TicketedSceneAnchorDispatch : IDisposable
                 if (Interlocked.Exchange(ref disposed, 1) != 0) return;
                 // If the user chose a different window, never pull focus away.
                 if (original==0 || original==owner.Target || GetForegroundWindow().ToInt64()!=owner.Target) return;
-                var now=new WindowIdentityReader().Read(original);
-                if (now is not {IsPresent:true} || originalIdentity is null
-                    || now.Pid!=originalIdentity.Pid || now.ProcessInstanceToken!=originalIdentity.ProcessInstanceToken) return;
-                bool restored=owner.ActivateWindow(original);
+                bool StillBorrowed()
+                {
+                    if (GetForegroundWindow().ToInt64()!=owner.Target) return false;
+                    var now=new WindowIdentityReader().Read(original);
+                    return now is {IsPresent:true} && originalIdentity is not null
+                        && now.Pid==originalIdentity.Pid && now.ProcessInstanceToken==originalIdentity.ProcessInstanceToken;
+                }
+                int attempts=0;
+                bool restored=UserInputCourtesy.ReturnFocus(StillBorrowed,
+                    () => { attempts++; return owner.ActivateWindow(original); }, () => Thread.Sleep(50));
                 if (restored && noHardwareInput()) SetCursorPos(cursor.X,cursor.Y);
                 Console.Error.WriteLine(new JsonObject { ["type"]="domain.action.focus-return",
-                    ["target"]=original,["restored"]=restored,
+                    ["target"]=original,["restored"]=restored,["attempts"]=attempts,
                     ["activation"]=owner.LastActivation?.DeepClone(),
                     ["hardwareInterrupted"]=!noHardwareInput(),["atNs"]=ProtocolClock.NowNs() }.ToJsonString());
             }

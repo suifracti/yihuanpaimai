@@ -14,6 +14,18 @@ public sealed class UserInputCourtesy
     }
     public bool IsIdle(long nowNs) => nowNs - Interlocked.Read(ref lastInputNs) >= IdleNs;
     public bool Uninterrupted(long startedSequence) => Sequence == startedSequence;
+    // Only retry returning focus, never the game action. A different foreground
+    // window means the user has chosen where to work: leave it alone.
+    public static bool ReturnFocus(Func<bool> stillBorrowed, Func<bool> restore, Action pause)
+    {
+        for (int attempt = 0; attempt < 3; attempt++)
+        {
+            if (!stillBorrowed()) return false;
+            if (restore()) return true;
+            if (attempt < 2) pause();
+        }
+        return false;
+    }
     public static bool CanRetry(PortOutcome result, bool interrupted) => interrupted
         && !result.Completed && !(result.BidConfirmationAttempted ?? result.SideEffectAttempted);
 }
