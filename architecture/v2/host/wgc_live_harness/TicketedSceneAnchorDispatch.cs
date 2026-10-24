@@ -42,6 +42,16 @@ sealed class TicketedSceneAnchorDispatch : IDisposable
     Func<string, bool> runCancelled = _ => false;
     long inputSequence;
     string runApproval = "";
+    GameFocus.BorrowedFocus? pendingFocus;
+    GameFocus.BorrowedFocus? activeFocus;
+
+    void YieldToHardware()
+    {
+        courtesy.HardwareInput(ProtocolClock.NowNs());
+        var borrowed = Volatile.Read(ref activeFocus);
+        // Never perform window calls inside the low-level input hook.
+        if (borrowed is not null) ThreadPool.QueueUserWorkItem(_ => borrowed.Dispose());
+    }
 
     void OnObservedInput(ObservedInputEvent observed)
     {
@@ -132,7 +142,7 @@ sealed class TicketedSceneAnchorDispatch : IDisposable
         TicketedSceneAnchorDispatch? dispatch = null;
         var guard = new InputSafetyGuard(observer, focus, new Win32CursorBackend(), new Win32RawInputBackend(), null,
             new InputSafetyOptions { EnableRestrictedDomainActions = true, RestoreCursorOnCleanRelease = false,
-                HardwareYield = _ => dispatch?.courtesy.HardwareInput(ProtocolClock.NowNs()),
+                HardwareYield = _ => dispatch?.YieldToHardware(),
                 DomainYieldRequested = () => dispatch is not null && !dispatch.courtesy.Uninterrupted(dispatch.inputSequence) });
         if (!observer.Start(observed => dispatch?.OnObservedInput(observed)).Ok)
         {
@@ -232,7 +242,10 @@ sealed class TicketedSceneAnchorDispatch : IDisposable
             bool identityMatches = liveIdentity is { IsPresent: true }
                 && liveIdentity.Pid == intent!.Window.Pid
                 && liveIdentity.ProcessInstanceToken == intent.Window.ProcessInstanceToken;
-            using var borrowed = identityMatches ? focus.Borrow(() => courtesy.Uninterrupted(inputSequence)) : null;
+            var borrowed = identityMatches ? focus.Borrow(() => courtesy.Uninterrupted(inputSequence)) : null;
+            Volatile.Write(ref activeFocus, borrowed);
+            try
+            {
             if (!identityMatches || borrowed?.Activated != true)
             {
                 string reason = identityMatches ? "GAME_ACTIVATION_FAILED" : "GAME_IDENTITY_CHANGED";
@@ -278,9 +291,19 @@ sealed class TicketedSceneAnchorDispatch : IDisposable
                 continue;
             }
             if (receipt.Status == ReceiptStatus.SENT_PENDING_CONFIRMATION)
-            { pending = intent; confirmationDeadlineNs = receipt.SentNs + 3_000_000_000; }
+            {
+                pending = intent;
+                confirmationDeadlineNs = receipt.SentNs + 3_000_000_000;
+                pendingFocus = borrowed; // return after the existing visible-result check
+            }
             else if (receipt.Status == ReceiptStatus.UNKNOWN) pending = null;
             return true;
+            }
+            finally
+            {
+                if (!ReferenceEquals(pendingFocus, borrowed))
+                { borrowed?.Dispose(); Interlocked.CompareExchange(ref activeFocus, null, borrowed); }
+            }
             }
         }
     }
@@ -291,6 +314,11 @@ sealed class TicketedSceneAnchorDispatch : IDisposable
         {
             var intent = pending;
             if (intent is null) return;
+            if (!InputUninterrupted())
+            {
+                pendingFocus?.Dispose();
+                pendingFocus = null;
+            }
             engine = LobbyFrame(engine, intent);
             current = intent;
             pinned = engine;
@@ -331,6 +359,8 @@ sealed class TicketedSceneAnchorDispatch : IDisposable
                 pending = null;
             }
             else if (receipt?.Status == ReceiptStatus.UNKNOWN) pending = null;
+            if (pending is null)
+            { pendingFocus?.Dispose(); pendingFocus = null; Volatile.Write(ref activeFocus, null); }
         }
     }
 
@@ -338,6 +368,7 @@ sealed class TicketedSceneAnchorDispatch : IDisposable
     {
         if (disposed) return;
         disposed = true;
+        pendingFocus?.Dispose(); pendingFocus = null;
         try { guard.Cancel("OBSERVATION_STOPPED"); } catch { }
         try { guard.Release(); } catch { }
         observer.Stop();
@@ -498,7 +529,7 @@ sealed class TicketedSceneAnchorDispatch : IDisposable
             readonly long original;
             readonly WindowIdentity? originalIdentity;
             readonly Point cursor;
-            bool disposed;
+            int disposed;
             public bool Activated { get; }
             public BorrowedFocus(GameFocus owner, Func<bool> noHardwareInput)
             {
@@ -510,8 +541,7 @@ sealed class TicketedSceneAnchorDispatch : IDisposable
             }
             public void Dispose()
             {
-                if (disposed) return;
-                disposed=true;
+                if (Interlocked.Exchange(ref disposed, 1) != 0) return;
                 // If the user chose a different window, never pull focus away.
                 if (original==0 || original==owner.Target || GetForegroundWindow().ToInt64()!=owner.Target) return;
                 var now=new WindowIdentityReader().Read(original);
