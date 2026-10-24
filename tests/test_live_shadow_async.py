@@ -6,6 +6,7 @@ import tempfile
 import threading
 import time
 import unittest
+import subprocess
 from unittest import mock
 
 PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
@@ -21,6 +22,37 @@ def _seed(path, records):
     import json
     with open(path, "w", encoding="utf-8") as fh:
         json.dump({"version": "v0.6", "schemaVersion": 6, "records": records}, fh)
+
+
+class TestShadowRuntimeTimeout(unittest.TestCase):
+    def test_timeout_cleanup_unblocks_pipe_reader_and_allows_next_result(self):
+        proc = subprocess.Popen([sys.executable, '-u', '-c', 'import time; time.sleep(30)'],
+                                stdin=subprocess.PIPE, stdout=subprocess.PIPE,
+                                stderr=subprocess.PIPE, text=True)
+        cleanup = None
+        try:
+            with self.assertRaises(TimeoutError):
+                live_shadow._read_json_line(proc, timeout=0.1)
+            cleanup = threading.Thread(target=live_shadow._kill_runtime, args=(proc,), daemon=True)
+            cleanup.start()
+            cleanup.join(2)
+            self.assertFalse(cleanup.is_alive(), 'timeout cleanup blocked behind stdout.readline')
+            self.assertIsNotNone(proc.poll())
+        finally:
+            if proc.poll() is None:
+                proc.kill()
+                proc.wait(timeout=3)
+            if cleanup is not None:
+                cleanup.join(3)
+            for stream in (proc.stdin, proc.stdout, proc.stderr):
+                stream.close()
+        next_proc = subprocess.Popen([sys.executable, '-u', '-c', 'print(\'{"ok": true}\')'],
+                                     stdin=subprocess.PIPE, stdout=subprocess.PIPE,
+                                     stderr=subprocess.PIPE, text=True)
+        try:
+            self.assertEqual(live_shadow._read_json_line(next_proc, timeout=3), {'ok': True})
+        finally:
+            live_shadow._kill_runtime(next_proc)
 
 
 class TestLiveShadowAsync(unittest.TestCase):

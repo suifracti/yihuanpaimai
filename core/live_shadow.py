@@ -447,12 +447,8 @@ def compute_timeout_s() -> float:
 def _kill_runtime(proc: Optional[subprocess.Popen]) -> None:
     if proc is None:
         return
-    for stream in (proc.stdin, proc.stdout, proc.stderr):
-        try:
-            if stream:
-                stream.close()
-        except Exception:
-            pass
+    # A timed-out readline still owns stdout's buffered lock. End the child
+    # first so that reader sees EOF; closing the stream first can wait forever.
     if proc.poll() is None:
         try:
             proc.kill()
@@ -460,6 +456,12 @@ def _kill_runtime(proc: Optional[subprocess.Popen]) -> None:
             pass
         try:
             proc.wait(timeout=3)
+        except Exception:
+            pass
+    for stream in (proc.stdin, proc.stdout, proc.stderr):
+        try:
+            if stream:
+                stream.close()
         except Exception:
             pass
 
